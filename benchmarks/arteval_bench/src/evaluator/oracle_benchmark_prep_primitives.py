@@ -30,14 +30,11 @@ from collections.abc import Mapping, Sequence
 
 from evaluator import utils
 
-
 # ------------------------------------------------------------------------------
 # Basic types and constants
 # ------------------------------------------------------------------------------
 
-
 _CommandT = str | Sequence[str]
-
 
 # ------------------------------------------------------------------------------
 # Helper functions
@@ -48,7 +45,6 @@ def _format_command(cmd: _CommandT, *, use_shell: bool) -> str:
   """Returns a readable representation of command suitable for error messages."""
   if isinstance(cmd, str):
     return cmd if use_shell else shlex.quote(cmd)
-  # NOTE: quote() used for readability display only
   return " ".join(shlex.quote(str(arg)) for arg in cmd)
 
 
@@ -108,7 +104,8 @@ def _run_command(
   max_chars = utils.DEFAULT_MAX_CAPTURE_CHARS
   suffix = "..."
 
-  def _append_bounded(buf: list[str], cur_len: int, text: str) -> tuple[int, bool]:
+  def _append_bounded(buf: list[str], cur_len: int,
+                      text: str) -> tuple[int, bool]:
     """Append up to max_chars, return (new_len, overflowed)."""
     if cur_len >= max_chars:
       return cur_len, True
@@ -126,7 +123,7 @@ def _run_command(
 
   stdout_tail = ""
   stderr_tail = ""
-  stderr_head = "" 
+  stderr_head = ""
 
   encoding = locale.getpreferredencoding(False) or "utf-8"
   stdout_dec = codecs.getincrementaldecoder(encoding)(errors="replace")

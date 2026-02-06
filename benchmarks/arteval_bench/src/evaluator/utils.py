@@ -6,6 +6,7 @@ and helper functions for building and logging oracle results.
 
 from __future__ import annotations
 
+import abc
 import dataclasses
 import logging
 import os
@@ -27,10 +28,9 @@ DEFAULT_MAX_CAPTURE_CHARS = 32768
 
 Version = typing.Tuple[int, int, int]
 
-
 # ------------------------------------------------------------------------------
 # Shared config helpers
-# ----------------------------
+# ------------------------------------------------------------------------------
 
 
 @dataclasses.dataclass(frozen=True)
@@ -49,14 +49,17 @@ class EntryConfig:
   name: str
   home_dir: pathlib.Path
 
-  repository_paths: typing.Dict[str, pathlib.Path] = typing.field(
+  repository_paths: typing.Dict[str, pathlib.Path] = dataclasses.field(
       default_factory=dict)
-  results_paths: typing.Dict[str,
-                             pathlib.Path] = typing.field(default_factory=dict)
-  ground_truth_paths: typing.Dict[str, pathlib.Path] = typing.field(
+  results_paths: typing.Dict[str, pathlib.Path] = dataclasses.field(
+      default_factory=dict)
+  ground_truth_paths: typing.Dict[str, pathlib.Path] = dataclasses.field(
       default_factory=dict)
 
   similarity_ratio: float = 0.75
+
+  metadata: typing.Dict[str,
+                        typing.Any] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -172,9 +175,9 @@ class BaseRequirement(abc.ABC):
     raise NotImplementedError
 
 
-# ----------------------------
+# ------------------------------------------------------------------------------
 # Logging helpers
-# ----------------------------
+# ------------------------------------------------------------------------------
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -222,11 +225,9 @@ def log_result_details(logger: logging.Logger, result: CheckResult) -> None:
 
 def _is_console_handler(h: logging.Handler) -> bool:
   """Checks if a logging handler targets the standard console output."""
-  return (
-      isinstance(h, logging.StreamHandler)
-      and not isinstance(h, logging.FileHandler)
-      and getattr(h, "stream", None) in (sys.stdout, sys.stderr)
-  )
+  return (isinstance(h, logging.StreamHandler) and
+          not isinstance(h, logging.FileHandler) and
+          getattr(h, "stream", None) in (sys.stdout, sys.stderr))
 
 
 def get_logger(config: LoggerConfig,
@@ -252,9 +253,9 @@ def get_logger(config: LoggerConfig,
   return root
 
 
-# ----------------------------
-# Oracles report helpers
-# ----------------------------
+# ------------------------------------------------------------------------------
+# Oracle report helpers
+# ------------------------------------------------------------------------------
 
 
 class _RequirementLike(typing.Protocol):
@@ -364,9 +365,9 @@ def record_result(
   return score
 
 
-# ----------------------------
+# ------------------------------------------------------------------------------
 # Misc helpers
-# ----------------------------
+# ------------------------------------------------------------------------------
 
 
 def decode_text(value: object | None) -> str:

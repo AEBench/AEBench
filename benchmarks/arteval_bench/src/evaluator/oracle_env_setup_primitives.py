@@ -26,13 +26,12 @@ import pathlib
 
 from evaluator import utils
 
-
 # ------------------------------------------------------------------------------
 # Basic types and constants
 # ------------------------------------------------------------------------------
 
-
 SemanticVersion = tuple[int, int, int]
+
 
 @enum.unique
 class VersionCompare(enum.Enum):
@@ -102,7 +101,7 @@ class DependencyVersionRequirement(utils.BaseRequirement):
   Attributes:
     name: Human-readable requirement name for logs and reports.
     optional: Whether failure should be treated as a warning instead of an error.
-    command: Command argv used to query a version (e.g., ["python", "--version"]).
+    cmd: Command argv used to query a version (e.g., ["python", "--version"]).
     required_version: Minimum/required semantic version as (major, minor, patch).
     compare: Comparison operator to apply against required_version.
     version_regex: Optional regex with a capturing group for the version token.
@@ -124,7 +123,7 @@ class DependencyVersionRequirement(utils.BaseRequirement):
       raise ValueError(f"{self.name}: command must be non-empty")
     if self.timeout_seconds <= 0:
       raise ValueError(f"{self.name}: timeout_seconds must be > 0")
-    object.__setattr__(self, "command", tuple(self.cmd))
+    object.__setattr__(self, "cmd", tuple(self.cmd))
 
     if self.version_regex is not None:
       pattern = re.compile(self.version_regex, flags=re.IGNORECASE)
@@ -326,7 +325,7 @@ class FilesystemPathRequirement(utils.BaseRequirement):
     if self.path.is_dir():
       return utils.CheckResult.success()
     return utils.CheckResult.failure(f"expected directory: {self.path}")
-  
+
 
 class OracleEnvSetupBase(abc.ABC):
   """Base class for an environment setup oracle.

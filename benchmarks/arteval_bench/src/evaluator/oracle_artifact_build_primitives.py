@@ -26,7 +26,6 @@ from collections.abc import Mapping, Sequence
 
 from evaluator import utils
 
-
 # ------------------------------------------------------------------------------
 # Helper functions
 # ------------------------------------------------------------------------------
@@ -69,7 +68,6 @@ class BuildContext:
   logger: logging.Logger
 
 
-
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class BuildCommandRequirement(utils.BaseRequirement):
   """Runs a build command within a working directory.
@@ -78,14 +76,14 @@ class BuildCommandRequirement(utils.BaseRequirement):
     name: Human-readable requirement name for logs and reports.
     optional: Whether failure should be treated as a warning instead of an error.
     cwd: Base working directory.
-    command: Command argv to execute.
+    cmd: Command argv to execute.
     relative_workdir: Optional subdirectory within cwd used as the actual workdir.
     timeout_seconds: Timeout for the command, in seconds.
     env_overrides: Environment variables to override for the subprocess.
   """
 
   cwd: pathlib.Path
-  command: Sequence[str]
+  cmd: Sequence[str]
   relative_workdir: pathlib.Path | None = None
   timeout_seconds: float = 60.0
   env_overrides: Mapping[str, str] = dataclasses.field(default_factory=dict)
@@ -93,36 +91,41 @@ class BuildCommandRequirement(utils.BaseRequirement):
   def __post_init__(self) -> None:
     object.__setattr__(self, "cwd", utils.to_path(self.cwd))
     if self.relative_workdir is not None:
-      object.__setattr__(self, "relative_workdir", utils.to_path(self.relative_workdir))
+      object.__setattr__(self, "relative_workdir",
+                         utils.to_path(self.relative_workdir))
 
-    if isinstance(self.command, (str, bytes)):
-      raise TypeError(f"{self.name}: command must be a sequence of argv strings, not a single string/bytes")
+    if isinstance(self.cmd, (str, bytes)):
+      raise TypeError(
+          f"{self.name}: command must be a sequence of argv strings, not a single string/bytes"
+      )
 
-    if not self.command:
+    if not self.cmd:
       raise ValueError(f"{self.name}: command must be non-empty")
 
-    bad = [a for a in self.command if not isinstance(a, str) or a == ""]
+    bad = [a for a in self.cmd if not isinstance(a, str) or a == ""]
     if bad:
-      raise TypeError(f"{self.name}: all command argv entries must be non-empty str; bad entries: {bad!r}")
+      raise TypeError(
+          f"{self.name}: all command argv entries must be non-empty str; bad entries: {bad!r}"
+      )
 
     if self.timeout_seconds <= 0:
       raise ValueError(f"{self.name}: timeout (seconds) must be > 0")
 
-    # NOTE: Be tolerant to callers passing non-str values (e.g., Path/int) by
-    # normalizing everything to str, since subprocess env requires str->str.
     env_dict_raw = dict(self.env_overrides)
     env_dict: dict[str, str] = {}
     for k, v in env_dict_raw.items():
-      # Preserve previous strictness for obviously broken keys.
       if k is None or k == "":
-        raise TypeError(f"{self.name}: env_overrides contains an empty env var name: {k!r}")
+        raise TypeError(
+            f"{self.name}: env_overrides contains an empty env var name: {k!r}")
       env_dict[str(k)] = str(v)
 
-    # Prevent obvious "not relative" cases early.
-    if self.relative_workdir is not None and self.relative_workdir.is_absolute():
-      raise ValueError(f"{self.name}: relative_workdir must be a relative path, got: {self.relative_workdir}")
+    if self.relative_workdir is not None and self.relative_workdir.is_absolute(
+    ):
+      raise ValueError(
+          f"{self.name}: relative_workdir must be a relative path, got: {self.relative_workdir}"
+      )
 
-    object.__setattr__(self, "command", tuple(self.command))
+    object.__setattr__(self, "command", tuple(self.cmd))
     object.__setattr__(self, "env_overrides", types.MappingProxyType(env_dict))
 
   @staticmethod
@@ -134,10 +137,6 @@ class BuildCommandRequirement(utils.BaseRequirement):
     try:
       base_real = base.resolve(strict=True)
       target_real = target.resolve(strict=True)
-
-      # NOTE: Prefer pathlib semantics over string commonpath to avoid
-      # platform corner cases (drives, separators). This also avoids false
-      # positives from simple string-prefix checks.
       try:
         target_real.relative_to(base_real)
         return True
@@ -148,41 +147,37 @@ class BuildCommandRequirement(utils.BaseRequirement):
 
   @staticmethod
   def _coerce_text(x: object) -> str:
-    # NOTE: utils.decode_text may not accept str in some codebases. This helper
-    # safely handles bytes/str/None and keeps the old behavior stable.
     if x is None:
       return ""
     if isinstance(x, str):
       return x
     if isinstance(x, (bytes, bytearray, memoryview)):
       return utils.decode_text(bytes(x))
-    # Fallback: best-effort stringification
     return str(x)
 
   def _run_with_limited_output(
-    self,
-    *,
-    workdir: pathlib.Path,
-    env: Mapping[str, str],
+      self,
+      *,
+      workdir: pathlib.Path,
+      env: Mapping[str, str],
   ) -> tuple[int | None, str, str, bool]:
     """Run process while limiting captured output to avoid unbounded memory.
 
     Returns (returncode, stdout, stderr, timed_out).
     """
-    # NOTE: We run with stdout/stderr pipes in *binary* mode and decode ourselves.
-    # This avoids UnicodeDecodeError surprises while reading incrementally.
     try:
       proc = subprocess.Popen(
-        self.command,
-        cwd=workdir,
-        env=dict(env),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=False,
+          self.cmd,
+          cwd=workdir,
+          env=dict(env),
+          stdout=subprocess.PIPE,
+          stderr=subprocess.PIPE,
+          text=False,
       )
     except OSError as exc:
-      # Let caller map this to CheckResult.failure, preserving existing behavior.
-      raise
+      cmd_display = " ".join(self.cmd)
+      raise OSError(
+          f"failed to run command: {cmd_display} (cwd={workdir})") from exc
 
     assert proc.stdout is not None
     assert proc.stderr is not None
@@ -191,8 +186,6 @@ class BuildCommandRequirement(utils.BaseRequirement):
     sel.register(proc.stdout, selectors.EVENT_READ, data="stdout")
     sel.register(proc.stderr, selectors.EVENT_READ, data="stderr")
 
-    # NOTE: Cap memory usage by storing only up to a fixed number of bytes.
-    # We use 4x char cap as a conservative UTF-8 upper bound.
     byte_cap = int(utils.DEFAULT_MAX_CAPTURE_CHARS) * 4
 
     stdout_buf = bytearray()
@@ -202,12 +195,10 @@ class BuildCommandRequirement(utils.BaseRequirement):
     timed_out = False
 
     def _read_chunk(stream) -> bytes:
-      # Prefer read1 when available for buffered streams.
       if hasattr(stream, "read1"):
-        return stream.read1(8192)  # type: ignore[attr-defined]
+        return stream.read1(8192)
       return stream.read(8192)
 
-    # Read incrementally from both pipes until closed or timeout.
     while sel.get_map():
       remaining = deadline - time.monotonic()
       if remaining <= 0:
@@ -233,7 +224,6 @@ class BuildCommandRequirement(utils.BaseRequirement):
           if len(stdout_buf) < byte_cap:
             take = min(len(chunk), byte_cap - len(stdout_buf))
             stdout_buf.extend(chunk[:take])
-          # NOTE: Discard remainder to cap memory; continue draining to avoid deadlock.
         else:
           if len(stderr_buf) < byte_cap:
             take = min(len(chunk), byte_cap - len(stderr_buf))
@@ -245,8 +235,6 @@ class BuildCommandRequirement(utils.BaseRequirement):
       except Exception:
         pass
 
-      # Best-effort drain for a short period so we capture some tail output
-      # without risking hangs.
       drain_deadline = time.monotonic() + 1.0
       while sel.get_map() and time.monotonic() < drain_deadline:
         events = sel.select(timeout=0.1)
@@ -272,25 +260,26 @@ class BuildCommandRequirement(utils.BaseRequirement):
               take = min(len(chunk), byte_cap - len(stderr_buf))
               stderr_buf.extend(chunk[:take])
 
-      # Reap the process to avoid zombies.
       try:
         proc.wait(timeout=5.0)
       except Exception:
         pass
 
-      stdout = utils.truncate_text(self._coerce_text(stdout_buf), utils.DEFAULT_MAX_CAPTURE_CHARS)
-      stderr = utils.truncate_text(self._coerce_text(stderr_buf), utils.DEFAULT_MAX_CAPTURE_CHARS)
+      stdout = utils.truncate_text(self._coerce_text(stdout_buf),
+                                   utils.DEFAULT_MAX_CAPTURE_CHARS)
+      stderr = utils.truncate_text(self._coerce_text(stderr_buf),
+                                   utils.DEFAULT_MAX_CAPTURE_CHARS)
       return None, stdout, stderr, True
 
-    # Process finished or pipes closed; reap returncode.
     try:
       rc = proc.wait(timeout=5.0)
     except Exception:
-      # If something odd happens, keep behavior conservative.
       rc = proc.returncode
 
-    stdout = utils.truncate_text(self._coerce_text(stdout_buf), utils.DEFAULT_MAX_CAPTURE_CHARS)
-    stderr = utils.truncate_text(self._coerce_text(stderr_buf), utils.DEFAULT_MAX_CAPTURE_CHARS)
+    stdout = utils.truncate_text(self._coerce_text(stdout_buf),
+                                 utils.DEFAULT_MAX_CAPTURE_CHARS)
+    stderr = utils.truncate_text(self._coerce_text(stderr_buf),
+                                 utils.DEFAULT_MAX_CAPTURE_CHARS)
     return rc, stdout, stderr, False
 
   def check(self, ctx: BuildContext) -> utils.CheckResult:
@@ -307,11 +296,11 @@ class BuildCommandRequirement(utils.BaseRequirement):
       if error is not None:
         return utils.CheckResult.failure(error, cwd=workdir)
 
-      # Walidate cwd and prevent ``espacping'' (e.g., ../ or symlinks)
+      # Validate cwd and prevent ``espacping'' (e.g., ../ or symlinks)
       if not self._is_within_base_dir(base=self.cwd, target=workdir):
         return utils.CheckResult.failure(
-          f"working directory escapes base cwd: base={self.cwd} workdir={workdir}",
-          cwd=workdir,
+            f"working directory escapes base cwd: base={self.cwd} workdir={workdir}",
+            cwd=workdir,
         )
 
     env = os.environ.copy()
@@ -319,31 +308,29 @@ class BuildCommandRequirement(utils.BaseRequirement):
       env.update(self.env_overrides)
 
     try:
-      # NOTE: Avoid capture_output=True because it can buffer unbounded output
-      # and spike memory; we capture incrementally with a fixed cap.
       returncode, stdout, stderr, timed_out = self._run_with_limited_output(
-        workdir=workdir,
-        env=env,
+          workdir=workdir,
+          env=env,
       )
     except OSError as exc:
       return utils.CheckResult.failure(
-        f"failed to run command: {exc}",
-        stdout="",
-        stderr=str(exc),
-        returncode=None,
-        timed_out=False,
-        cwd=workdir,
+          f"failed to run command: {exc}",
+          stdout="",
+          stderr=str(exc),
+          returncode=None,
+          timed_out=False,
+          cwd=workdir,
       )
 
     if timed_out:
       # Handle case when stdout/stderr is None
       return utils.CheckResult.failure(
-        f"command timed out after {self.timeout_seconds}s",
-        stdout=stdout,
-        stderr=stderr,
-        returncode=None,
-        timed_out=True,
-        cwd=workdir,
+          f"command timed out after {self.timeout_seconds}s",
+          stdout=stdout,
+          stderr=stderr,
+          returncode=None,
+          timed_out=True,
+          cwd=workdir,
       )
 
     if returncode != 0:
@@ -352,19 +339,19 @@ class BuildCommandRequirement(utils.BaseRequirement):
       if detail:
         msg = f"{msg}: {detail}"
       return utils.CheckResult.failure(
-        msg,
-        stdout=stdout,
-        stderr=stderr,
-        returncode=returncode,
-        timed_out=False,
-        cwd=workdir,
+          msg,
+          stdout=stdout,
+          stderr=stderr,
+          returncode=returncode,
+          timed_out=False,
+          cwd=workdir,
       )
 
     return utils.CheckResult.success(
-      stdout=stdout,
-      stderr=stderr,
-      returncode=returncode,
-      cwd=workdir,
+        stdout=stdout,
+        stderr=stderr,
+        returncode=returncode,
+        cwd=workdir,
     )
 
 

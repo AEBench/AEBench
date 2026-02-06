@@ -34,68 +34,127 @@ Using WASABI's [agent evaluator](data/benchmark/sosp24_wasabi/wasabi/_agent_eval
 
 1. An `_agent_eval/` package which contains all benchmark-specific code and does *not* modify your original artifact logic.
 
-2. One oracle module per stage, implemented in four distinct Python files each checking one of the four canonical stages of artifact evaluation. A typical oracle module looks as follows (simplified):
+2. One oracle module per stage. In this benchmark, each stage is typically implemented as a **derived oracle class** that overrides `requirements()` and returns an ordered list of programmatic checks (requirements). The base oracle handles running requirements, producing a structured report, printing a PASS/FAIL summary, and returning `True`/`False` from `run(verbose=...)`.
+
+  A typical `_agent_eval/` layout looks like:
+
+   ```text
+   _agent_eval/
+   ├── main.py
+   ├── oracle_env_setup.py
+   ├── oracle_build_install.py
+   ├── oracle_prep_benchmark.py
+   ├── oracle_run_experiments.py
+   └── refs/
+       ├── datasets.ref.json
+       └── results.ref.json
+   ```
+
+   The `refs/` directory stores machine-checkable ground truth (e.g., dataset manifests/checksums, expected metric tables, or summaries of deterministic outputs) used by benchmark-prep and experiment-runs checks.
+
+   Here is a simplified environment setup oracle (one dependency/version requirement):
+
    ```python
-   # _agent_eval/env_setup.py
-   import subprocess
+   # _agent_eval/oracle_env_setup.py
+   import sys
+   from collections.abc import Sequence
+
+   from evaluator.oracle_env_setup_primitives import (
+       DependencyVersionRequirement,
+       OracleEnvSetupBase,
+       VersionCompare,
+   )
+
+   class OracleEnvSetup(OracleEnvSetupBase):
+       def __init__(self, *, config, logger):
+           super().__init__(logger=logger)
+           self._config = config
+
+       def requirements(self) -> Sequence[DependencyVersionRequirement]:
+           return (
+               DependencyVersionRequirement(
+                   name="python_version",
+                   cmd=(sys.executable, "--version"),
+                   required_version=(3, 10, 0),
+                   compare=VersionCompare.GEQ,
+                   timeout_seconds=5.0,
+               ),
+           )
+   ```
+
+   Also, note that each oracle should be:
+   - Non-interactive, meaning not expecting input or prompt interactions.
+   - Idempotent, meaning safe to run multiple times without side-effects.
+   - Time-bounded, meaning every command has a timeout.
+   - Binary, meaning it returns pass/fail (as `True`/`False`) for the stage.
+
+  For more details, check out this [how-to guide](src/evaluator/HOWTO.md)
+
+1. A single `main.py` orchestrator, the entrypoint used by ArtEvalBench, which constructs an `EntryConfig`, invokes the four oracles in order, and returns an overall score (an integer between 0 and 4):
+
+   ```python
+   # _agent_eval/main.py
+   import os
    from pathlib import Path
 
-   def check() -> bool:
-       # Example: verify virtualenv exists
-       if not Path("venv").exists():
-           print("Missing venv/ directory")
-           return False
+   from evaluator.utils import EntryConfig, LoggerConfig, get_logger, record_result
 
-       # Example: verify Python version inside the venv
-       proc = subprocess.run(
-           ["venv/bin/python", "--version"],
-           capture_output=True,
-           text=True,
+   from oracle_env_setup import OracleEnvSetup
+   from oracle_build_install import OracleBuildInstall
+   from oracle_prep_benchmark import OraclePrepBenchmark
+   from oracle_run_experiments import OracleRunExperiments
+
+   CONFIG = EntryConfig(
+       name="my-artifact",
+       home_dir=Path.home() / "artevalbench" / "my-artifact",
+       repository_paths={
+           "my-artifact": Path.home() / "artevalbench" / "my-artifact" / "repo",
+       },
+       results_paths={
+           "results": Path.home() / "artevalbench" / "my-artifact" / "repo" / "outputs" / "results.json",
+       },
+       ground_truth_paths={
+           "datasets": Path.home() / "artevalbench" / "my-artifact" / "_agent_eval" / "refs" / "datasets.ref.json",
+           "results": Path.home() / "artevalbench" / "my-artifact" / "_agent_eval" / "refs" / "results.ref.json",
+       },
+       similarity_ratio=0.75,
+   )
+
+   def main(argv: list[str]) -> int:
+       verbose = "--verbose" in argv
+       logger = get_logger(
+           LoggerConfig(root_name=os.environ.get("EVAL_LOGGER_NAME", "ARTEVAL-EVAL"))
        )
-       print(proc.stdout.strip())
-       return proc.returncode == 0 and proc.stdout.startswith("Python 3.10")
-    ```
-    Also, note that each oracle should be:
-    - Non-interactive, meaning not expecting input or prompt interactions.
-    - Idempotent, meaning safe to run multiple times without side-effects.
-    - It returns `True` or `False` based on the validation outcome and prints a brief diagnostic message.
 
-3. A single `main.py` orchestrator, the entrypoint used by ArtEvalBench, which invokes the four oracle modules, runs them in order, and returns an overall score (an integer between 0 and 4):
-    ```python
-    # _agent_eval/main.py
-    from . import env_setup, build_install, prep_benchmark, run_experiments
+       results: dict[str, int] = {}
+       score = 0
 
-    def main() -> int:
-        score = 0
-        stages = [
-            ("env_setup", env_setup.check),
-            ("build_install", build_install.check),
-            ("prep_benchmark", prep_benchmark.check),
-            ("run_experiments", run_experiments.check),
-        ]
+       score += record_result(
+           results, "env_setup",
+           OracleEnvSetup(config=CONFIG, logger=logger).run(verbose=verbose),
+       )
+       score += record_result(
+           results, "build_install",
+           OracleBuildInstall(config=CONFIG, logger=logger).run(verbose=verbose),
+       )
+       score += record_result(
+           results, "prep_benchmark",
+           OraclePrepBenchmark(config=CONFIG, logger=logger).run(verbose=verbose),
+       )
+       score += record_result(
+           results, "run_experiments",
+           OracleRunExperiments(config=CONFIG, logger=logger).run(verbose=verbose),
+       )
 
-        for name, check in stages:
-            try:
-                ok = bool(check())
-            except Exception as e:
-                print(f"[{name}] FAILED with exception: {e}")
-                ok = False
+       logger.info("Stage scores: %s", results)
+       logger.info("FINAL_SCORE %d/4", score)
+       return score
 
-            if ok:
-                print(f"[{name}] PASSED")
-                score += 1
-            else:
-                print(f"[{name}] FAILED")
+   if __name__ == "__main__":
+       raise SystemExit(main([]))
+   ```
 
-        print(f"FINAL_SCORE {score}/4")
-        return score
-
-    if __name__ == "__main__":
-        raise SystemExit(main())
-    ```
-
-    Note that the `ArtEvalBench` framework will invoke `main.py` to run the oracles in order, compute the agent's score for this particular artifact, and store it into a JSON file that aggregates these outcomes for the entire benchmark.
-
+   Note that the `ArtEvalBench` framework will invoke `main.py` to run the oracles in order, compute the agent's score for this particular artifact, and store it into a JSON file that aggregates these outcomes for the entire benchmark.
 
 ## Benchmark Setup
 
@@ -105,10 +164,10 @@ To run the benchmark:
 
 1. Execute the `run.sh` script with your model:
 
- ```sh
- ./run.sh <model_name>
- # Example: ./run.sh claude-sonnet-4-5-20250929
- ```
+```sh
+./run.sh <model_name>
+# Example: ./run.sh claude-sonnet-4-5-20250929
+```
 
 2. Configure your LLM endpoint in `env.toml`:
 * For Azure/OpenAI models: Set `AZURE_API_KEY`, `AZURE_API_BASE`, `AZURE_API_VERSION`
@@ -116,7 +175,6 @@ To run the benchmark:
 * For self-hosted models: Configure `OPENAI_API_TYPE` and `OPENAI_BASE_URL`
 
 3. Results will be saved to `outputs/` with timestamp and model information
-
 
 #### » Supported Agents
 

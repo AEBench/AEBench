@@ -22,17 +22,20 @@ import enum
 import math
 import typing
 
+from collections import Counter
 from collections.abc import Callable, Sequence
 
 from evaluator import utils
-
 
 # ---------------------------------------------------------------------------
 # Basic types and constants
 # ---------------------------------------------------------------------------
 
-
 _CmpT = typing.TypeVar("_CmpT")
+
+# Numerical tolerance for treating very small norms/variances as zero.
+_EPS = 1e-12
+
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class Compared(typing.Generic[_CmpT]):
@@ -79,27 +82,43 @@ def _require_all_finite(values: Sequence[float], *, label: str) -> None:
 def _jaccard_set_similarity(left: Sequence[float],
                             right: Sequence[float]) -> float:
   """Jaccard similarity treating inputs as sets (order/duplicates ignored)."""
+  _require_all_finite(left, label="jaccard_set_similarity.left")
+  _require_all_finite(right, label="jaccard_set_similarity.right")
 
-  def _normalize(x: float) -> object:
-    if _is_nan(x):
-      return ("nan",)
-    return x
+  a = set(left)
+  b = set(right)
 
-  left_norm = [_normalize(x) for x in left]
-  right_norm = [_normalize(x) for x in right]
-
-  a = set(left_norm)
-  b = set(right_norm)
-
-  if len(a) != len(left_norm):
-    raise ValueError("jaccard_set_similarity: left input contains duplicates (multiset not allowed)")
-  if len(b) != len(right_norm):
-    raise ValueError("jaccard_set_similarity: right input contains duplicates (multiset not allowed)")
+  if len(a) != len(left):
+    raise ValueError(
+        "jaccard_set_similarity: left input contains duplicates; "
+        "use jaccard_multiset_similarity if duplicates are meaningful")
+  if len(b) != len(right):
+    raise ValueError(
+        "jaccard_set_similarity: right input contains duplicates; "
+        "use jaccard_multiset_similarity if duplicates are meaningful")
 
   union = a | b
   if not union:
     return 1.0
   return len(a & b) / len(union)
+
+
+def _jaccard_multiset_similarity(left: Sequence[float],
+                                 right: Sequence[float]) -> float:
+  """Jaccard similarity treating inputs as multisets (duplicates preserved)."""
+  _require_all_finite(left, label="jaccard_multiset_similarity.left")
+  _require_all_finite(right, label="jaccard_multiset_similarity.right")
+
+  a = Counter(left)
+  b = Counter(right)
+  keys = set(a) | set(b)
+
+  den = sum(max(a[k], b[k]) for k in keys)
+  if den == 0:
+    return 1.0
+
+  num = sum(min(a[k], b[k]) for k in keys)
+  return num / den
 
 
 def _dot_product(left: Sequence[float], right: Sequence[float]) -> float:
@@ -129,9 +148,9 @@ def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
     norm_left += a * a
     norm_right += b * b
 
-  if norm_left == 0.0 and norm_right == 0.0:
+  if norm_left <= _EPS and norm_right <= _EPS:
     return 1.0
-  if norm_left == 0.0 or norm_right == 0.0:
+  if norm_left <= _EPS or norm_right <= _EPS:
     return 0.0
   return dot / (math.sqrt(norm_left) * math.sqrt(norm_right))
 
@@ -169,9 +188,9 @@ def _pearson_similarity(left: Sequence[float], right: Sequence[float]) -> float:
     var_left += da * da
     var_right += db * db
 
-  if var_left == 0.0 and var_right == 0.0:
+  if var_left <= _EPS and var_right <= _EPS:
     return 1.0 if list(left) == list(right) else 0.0
-  if var_left == 0.0 or var_right == 0.0:
+  if var_left <= _EPS or var_right <= _EPS:
     return 0.0
 
   return cov / (math.sqrt(var_left) * math.sqrt(var_right))
@@ -210,8 +229,9 @@ def _min_max_similarity(left: Sequence[float], right: Sequence[float]) -> float:
 
 
 def _numbers_equal(a: float, b: float, *, nan_equal: bool) -> bool:
-  if nan_equal and _is_nan(a) and _is_nan(b):
-    return True
+  del nan_equal  # Non-finite inputs are rejected by policy.
+  if not math.isfinite(a) or not math.isfinite(b):
+    raise ValueError(f"numbers_equal: non-finite input: a={a!r}, b={b!r}")
   return a == b
 
 
@@ -225,11 +245,10 @@ def _default_numeric_similarity(a: float, b: float, *,
     - NaN vs NaN => 1.0, NaN vs non-NaN => 0.0
     - +inf vs +inf or -inf vs -inf => 1.0, otherwise 0.0
   """
-  if _is_nan(a) or _is_nan(b):
-    return 1.0 if (_is_nan(a) and _is_nan(b)) else 0.0
-
-  if math.isinf(a) or math.isinf(b):
-    return 1.0 if a == b else 0.0
+  # Uniform policy: reject non-finite inputs across the entire file.
+  if not math.isfinite(a) or not math.isfinite(b):
+    raise ValueError(
+        f"default_numeric_similarity: non-finite input: a={a!r}, b={b!r}")
 
   denom = max(abs(a), abs(b), abs_epsilon)
   score = 1.0 - (abs(a - b) / denom)
@@ -239,7 +258,6 @@ def _default_numeric_similarity(a: float, b: float, *,
   if score > 1.0:
     return 1.0
   return score
-
 
 
 def _elementwise_similarity_scores(
@@ -252,6 +270,9 @@ def _elementwise_similarity_scores(
   _require_equal_lengths(observed,
                          reference,
                          label="elementwise_similarity_scores")
+  _require_all_finite(observed, label="elementwise_similarity_scores.observed")
+  _require_all_finite(reference,
+                      label="elementwise_similarity_scores.reference")
   if abs_epsilon <= 0:
     raise ValueError(f"elementwise_similarity_scores: abs_epsilon must be > 0")
 
@@ -273,6 +294,8 @@ def _elementwise_equal(
     nan_equal: bool,
 ) -> list[Compared[bool]]:
   _require_equal_lengths(observed, reference, label="elementwise_equal")
+  _require_all_finite(observed, label="elementwise_equal.observed")
+  _require_all_finite(reference, label="elementwise_equal.reference")
   out: list[Compared[bool]] = []
   for a, b in zip(observed, reference, strict=True):
     out.append(
@@ -334,6 +357,7 @@ class SimilarityMetric(enum.Enum):
   """List-level metric identifier for computing a single similarity score."""
 
   JACCARD_SET = "jaccard_set"
+  JACCARD_MULTISET = "jaccard_multiset"
   DOT_PRODUCT = "dot_product"
   COSINE = "cosine"
   PEARSON = "pearson"
@@ -351,6 +375,8 @@ class SimilarityMetrics:
   ) -> float:
     if metric == SimilarityMetric.JACCARD_SET:
       return _jaccard_set_similarity(left, right)
+    if metric == SimilarityMetric.JACCARD_MULTISET:
+      return _jaccard_multiset_similarity(left, right)
     if metric == SimilarityMetric.DOT_PRODUCT:
       return _dot_product(left, right)
     if metric == SimilarityMetric.COSINE:
@@ -407,6 +433,10 @@ class ElementwiseMetrics:
     if not math.isfinite(threshold):
       raise ValueError(
           f"similarity_threshold: threshold must be finite, got {threshold!r}")
+    if not (0.0 <= threshold <= 1.0):
+      raise ValueError(
+          f"similarity_threshold: threshold must be in [0, 1], got {threshold!r}"
+      )
 
     out: list[Compared[bool]] = []
     for s in scores:
@@ -417,7 +447,7 @@ class ElementwiseMetrics:
     return out
 
 
-@dataclasses.dataclass(...)
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentRunsContext:
   """Context passed to experiment-run requirements.
 
@@ -449,6 +479,20 @@ class ListSimilarityRequirement(utils.BaseRequirement):
   def __post_init__(self) -> None:
     if not math.isfinite(self.min_similarity):
       raise ValueError(f"{self.name}: min_similarity must be finite")
+
+    if self.metric in (SimilarityMetric.JACCARD_SET,
+                       SimilarityMetric.JACCARD_MULTISET,
+                       SimilarityMetric.MIN_MAX):
+      if not (0.0 <= self.min_similarity <= 1.0):
+        raise ValueError(
+            f"{self.name}: {self.metric.value} min_similarity must be in [0, 1], "
+            f"got {self.min_similarity!r}")
+    if self.metric in (SimilarityMetric.COSINE, SimilarityMetric.PEARSON):
+      if not (-1.0 <= self.min_similarity <= 1.0):
+        raise ValueError(
+            f"{self.name}: {self.metric.value} min_similarity must be in [-1, 1], "
+            f"got {self.min_similarity!r}")
+
     object.__setattr__(self, "observed", tuple(self.observed))
     object.__setattr__(self, "reference", tuple(self.reference))
 
@@ -458,7 +502,7 @@ class ListSimilarityRequirement(utils.BaseRequirement):
       score = SimilarityMetrics.compute(self.metric, self.observed,
                                         self.reference)
     except ValueError as exc:
-      return utils.CheckResult.failure(str(exc))
+      return utils.CheckResult.failure(f"{self.name}: {exc}")
 
     if score < self.min_similarity:
       return utils.CheckResult.failure(
@@ -498,7 +542,7 @@ class ElementwiseEqualityRequirement(utils.BaseRequirement):
                                        self.reference,
                                        nan_equal=self.nan_equal)
     except ValueError as exc:
-      return utils.CheckResult.failure(str(exc))
+      return utils.CheckResult.failure(f"{self.name}: {exc}")
 
     if all(c.result for c in comps):
       return utils.CheckResult.success()
@@ -534,6 +578,9 @@ class ElementwiseSimilarityThresholdRequirement(utils.BaseRequirement):
   def __post_init__(self) -> None:
     if not math.isfinite(self.threshold):
       raise ValueError(f"{self.name}: threshold must be finite")
+    if not (0.0 <= self.threshold <= 1.0):
+      raise ValueError(
+          f"{self.name}: threshold must be in [0, 1], got {self.threshold!r}")
     if self.abs_epsilon <= 0:
       raise ValueError(f"{self.name}: abs_epsilon must be > 0")
     if self.max_mismatches_to_report <= 0:
@@ -550,7 +597,7 @@ class ElementwiseSimilarityThresholdRequirement(utils.BaseRequirement):
           abs_epsilon=self.abs_epsilon,
       )
     except ValueError as exc:
-      return utils.CheckResult.failure(str(exc))
+      return utils.CheckResult.failure(f"{self.name}: {exc}")
 
     if all(s.result >= self.threshold for s in scores):
       return utils.CheckResult.success()

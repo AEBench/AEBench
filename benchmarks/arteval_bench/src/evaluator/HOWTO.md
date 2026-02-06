@@ -1,15 +1,15 @@
 # Agent Evaluator Primitives
 
-This bundle provides primitives for four oracles that verify if an AI agent can succesfully evaluating a set of artifacts, namely setting up, building code, downloading datasets and runing experiments end-to-end. Each oracle corresponds to one stage of the artifact evaluation (AE) process and encodes minimal, objective, and programatically verifiable success criteria. Oracles are designed to be idempotent (safe to run multiple times), non-interactive (no blocking events like I/O actions or manual intervention), and produce a binary outcome (either "pass" or "fail").  
+This utility provides building blocks for four validation oracles that check whether an AI agent can evaluate artifacts end-to-end: set up the environment, build or install the main code modules, download and prepare datasets/benchmarks, and run the experiments. Each oracle matches one cannonical stage of the artifact evaluation (AE) process and defines simple, objective checks that can be verified programatically. The oracles are idempotent (i.e., safe to run multiple times), non-interactive (i.e., no prompts or manual steps), and return a clear result (i.e. "pass" or "fail").  
 
-The oracles verify four canonical stages of the AE process:
+The four canonical stages of the AE process that these oracles validate are as follows:
 
 1. Environment setup: check required tools/dependencies exist and meet version constraints; confirm key environment variables and required files/directories are present.
 2. Artifact build: run build/install commands and fail if they do not complete successfully.
 3. Benchmark preparation: check datasets/benchmarks/tools are present and usable; optionally run quick commands and check for expected output signatures.
 4. Experiment runs: compare observed to reference values using similarity or elementwise checks within cutomizable tolerance thresholds.
 
-Each artifact includes a self-contained oracles in a `_agent_eval/` directory. These scripts extend the base primitives descrived above to create specialized oracles that assert success criteria at each AE stage.
+Each artifact includes a self-contained oracles in a `_agent_eval/` directory. This extra code extends the base primitives described above to create specialized oracles that assert success criteria at each AE stage.
 
 ## Implementing agent evaluators
 
