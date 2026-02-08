@@ -8,20 +8,19 @@ Validates:
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Mapping, Sequence
 
-from evaluator.utils import EntryConfig, logger
+from evaluator import utils
+from evaluator.utils import EntryConfig
 from evaluator.oracle_env_setup_primitives import (
   DependencyVersionRequirement,
   FilesystemPathRequirement,
   OracleEnvSetupBase,
   PathType,
-  Requirement,
   VersionCompare,
 )
-
-_REPO_KEY = "egwalker"
 
 
 def _required_path(paths: Mapping[str, Path], key: str, *, label: str) -> Path:
@@ -35,57 +34,54 @@ def _required_path(paths: Mapping[str, Path], key: str, *, label: str) -> Path:
 class OracleEnvSetup(OracleEnvSetupBase):
   """Validates environment prerequisites for EGWALKER."""
 
-  def __init__(self, *, config: EntryConfig, logger: logger) -> None:
+  def __init__(self, *, config: EntryConfig, logger: logging.Logger) -> None:
     super().__init__(logger)
     self._config = config
 
-  def requirements(self) -> Sequence[Requirement]:
+  def requirements(self) -> Sequence[utils.BaseRequirement]:
     repo_root = _required_path(
-      self._config.repository_paths, self._config.name, label="repository_paths")
+      self._config.repository_paths, self._config.name, label="repository_paths"
+    )
 
-    reqs: list[Requirement] = [
-      # Tooling.
+    reqs: list[utils.BaseRequirement] = [
       DependencyVersionRequirement(
-        name="rustc",
-        command=("rustc", "--version"),
-        required_version=(1, 78, 0),
-        compare=VersionCompare.GEQ,
+        name = "rustc",
+        cmd = ("rustc", "--version"),
+        required_version = (1, 83, 0),
+        compare = VersionCompare.GEQ,
       ),
       DependencyVersionRequirement(
-        name="cargo",
-        command=("cargo", "--version"),
-        required_version=(1, 0, 0),
-        compare=VersionCompare.GEQ,
+        name = "cargo",
+        cmd = ("cargo", "--version"),
+        required_version = (1, 0, 0),
+        compare = VersionCompare.GEQ,
       ),
       DependencyVersionRequirement(
-        name="node",
-        command=("node", "--version"),
-        required_version=(0, 0, 0),
-        compare=VersionCompare.GEQ,
+        name = "node",
+        cmd = ("node", "--version"),
+        required_version = (0, 0, 0),
+        compare = VersionCompare.GEQ,
       ),
       DependencyVersionRequirement(
-        name="make",
-        command=("make", "--version"),
-        required_version=(0, 0, 0),
-        compare=VersionCompare.GEQ,
-        optional=True,
+        name = "make",
+        cmd = ("make", "--version"),
+        required_version = (0, 0, 0),
+        compare = VersionCompare.GEQ,
+        optional = True,
       ),
-
-      # Repo directory.
       FilesystemPathRequirement(
-        name="repo_root_exists",
-        path=repo_root,
-        path_type=PathType.DIRECTORY,
+        name = "repo_root_exists",
+        path = repo_root,
+        path_type = PathType.DIRECTORY,
       ),
     ]
 
-    # Reference files (required).
     for key, ref_path in sorted(self._config.ground_truth_paths.items()):
       reqs.append(
         FilesystemPathRequirement(
-          name=f"reference_{key}_exists",
-          path=ref_path,
-          path_type=PathType.FILE,
+          name = f"reference_{key}_exists",
+          path = ref_path,
+          path_type = PathType.FILE,
         )
       )
 
