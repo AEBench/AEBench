@@ -22,10 +22,9 @@ from oracle_experiment_runs import OracleExperimentRuns
 
 def _resolve_workspace_paths() -> tuple[Path, Path, Path]:
   """Resolve and validate _agent_eval/ and wasabi/ locations.
-
-  Priority:
-    1) Environment variables: _AGENT_EVAL_DIR and _WASABI_HOME
-    2) Derive from this file location assuming _agent_eval/ and wasabi/ are siblings
+  This expectes that either:
+    (1) _agent_eval/ and wasabi/ are located in the same root directory; or
+    (2) _AGENT_EVAL_DIR and _WASABI_HOME are set by the user
   """
   try:
     env_agent_eval = os.environ.get("_AGENT_EVAL_DIR")
