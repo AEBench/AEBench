@@ -1,138 +1,95 @@
-#!/usr/bin/env python3
-"""Environment setup oracle for the ANVIL bundle.
+"""Environment setup oracle for ANVIL (OSDI'24).
 
-This implementation uses evaluator.oracle_env_setup_primitives for consistent
-reporting and verbose failure logging.
+Validates:
+  - Required workspace and repository directories exist
+  - Required reference (ground-truth) files exist
+  - Required external tooling is available and satisfies minimum version constraints
 """
 
 from __future__ import annotations
 
-import dataclasses
-import logging
-import shutil
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+import logging
 
-from evaluator.utils import CheckResult, EntryConfig
+from evaluator.utils import EntryConfig
 from evaluator.oracle_env_setup_primitives import (
     DependencyVersionRequirement,
-    EnvironmentVariableRequirement,
-    EnvQuantifier,
     FilesystemPathRequirement,
     OracleEnvSetupBase,
     PathType,
-    Requirement,
     VersionCompare,
 )
 
 
-@dataclasses.dataclass(frozen = True, slots = True, kw_only = True)
-class ExecutableOnPathRequirement(Requirement):
-  """Checks that an executable is present on PATH (no version constraint)."""
-
-  executable: str
-
-  def __post_init__(self) -> None:
-    if not self.executable:
-      raise ValueError(f"{self.name}: executable must be non-empty")
-
-  def check(self) -> CheckResult:
-    if shutil.which(self.executable) is None:
-      return CheckResult.failure(f"not found on PATH: {self.executable!r}")
-    return CheckResult.success()
+def _required_path(paths: Mapping[str, Path], key: str, *, label: str) -> Path:
+  """Fetches a required path from an EntryConfig mapping with a clear error."""
+  try:
+    return paths[key]
+  except KeyError as exc:
+    raise ValueError(f"Missing {label}[{key!r}] in EntryConfig") from exc
 
 
 class OracleEnvSetup(OracleEnvSetupBase):
-  """Validates environment prerequisites for the ANVIL bundle."""
+  """Validates that the ANVIL workspace and dependencies are present."""
+
+  _ORACLE_NAME = "EnvironmentSetup"
 
   def __init__(self, *, config: EntryConfig, logger: logging.Logger) -> None:
-    super().__init__(logger = logger)
+    super().__init__(logger=logger)
     self._config = config
 
-  def requirements(self) -> Sequence[Requirement]:
-    home_dir = self._config.home_dir
-    venv_dir = home_dir / ".venv"
-    go_root = Path.home() / "go"
-    go_bin = go_root / "bin"
+  def requirements(
+      self
+  ) -> Sequence[FilesystemPathRequirement | DependencyVersionRequirement]:
+    cfg = self._config
 
-    reqs: list[Requirement] = [
-        # Check dependencies
-        DependencyVersionRequirement(
-          name = "docker",
-          command = ("docker", "--version"),
-          required_version = (24, 0, 0),
-          compare = VersionCompare.GEQ,
-        ),
-        DependencyVersionRequirement(
-          name = "go",
-          command = ("go", "version"),
-          required_version = (1, 22, 0),
-          compare = VersionCompare.GEQ,
-          version_regex = r"go(\d+\.\d+(?:\.\d+)?)",
-        ),
-        DependencyVersionRequirement(
-            name = "python3",
-            command = ("python3", "--version"),
-            required_version = (3, 10, 0),
-            compare = VersionCompare.GEQ,
-            version_regex = r"Python\s+([0-9.]+)",
-        ),
-        DependencyVersionRequirement(
-          name = "pip3",
-          command = ("pip3", "--version"),
-          required_version = (24, 0, 0),
-          compare = VersionCompare.GEQ,
-        ),
-        DependencyVersionRequirement(
-            name = "kind",
-            command = ("kind", "version"),
-            required_version = (0, 20, 0),
-            compare = VersionCompare.GEQ,
-            version_regex = r"v([0-9.]+)",
-        ),
-        DependencyVersionRequirement(
-            name = "kubectl",
-            command = ("kubectl", "version", "--client", "--short"),
-            required_version = (1, 22, 9),
-            compare = VersionCompare.GEQ,
-            version_regex = r"Client Version:\s+v?([0-9.]+)",
-        ),
+    if not cfg.repository_paths:
+      raise ValueError("EntryConfig.repository_paths must be non-empty")
+    if not cfg.ground_truth_paths:
+      raise ValueError("EntryConfig.ground_truth_paths must be non-empty")
 
-        # Check directory structure
+    anvil_repo = _required_path(cfg.repository_paths,
+                                "osdi24-anvil",
+                                label="repository_paths")
+    acto_repo = _required_path(cfg.repository_paths,
+                               "osdi24-acto-dependency",
+                               label="repository_paths")
+
+    table3_ref = _required_path(cfg.ground_truth_paths,
+                                "table3",
+                                label="ground_truth_paths")
+
+    return (
+        # Workspace and repository directory layout
         FilesystemPathRequirement(
-            name = "venv_exists",
-            path = venv_dir,
-            path_type = PathType.DIRECTORY,
+            name="home_dir",
+            path=cfg.home_dir,
+            path_type=PathType.DIRECTORY,
         ),
         FilesystemPathRequirement(
-            name = "go_root_exists",
-            path = go_root,
-            path_type = PathType.DIRECTORY,
+            name="repo_osdi24_anvil",
+            path=anvil_repo,
+            path_type=PathType.DIRECTORY,
+        ),
+        FilesystemPathRequirement(
+            name="repo_osdi24_acto_dependency",
+            path=acto_repo,
+            path_type=PathType.DIRECTORY,
         ),
 
-        # Check PATH contents
-        EnvironmentVariableRequirement(
-            name = "PATH_contains_go_root",
-            env_var = "PATH",
-            expected = str(go_root),
-            quantifier = EnvQuantifier.CONTAINS,
+        # Reference artifacts used for evaluation
+        FilesystemPathRequirement(
+            name="ref_table3",
+            path=table3_ref,
+            path_type=PathType.FILE,
         ),
-        EnvironmentVariableRequirement(
-            name = "PATH_contains_go_bin",
-            env_var = "PATH",
-            expected = str(go_bin),
-            quantifier = EnvQuantifier.CONTAINS,
+
+        # Tooling dependencies
+        DependencyVersionRequirement(
+            name="python3_version",
+            cmd=("python3", "--version"),
+            required_version=(3, 10, 0),
+            compare=VersionCompare.GEQ,
         ),
-    ]
-
-    # Check that the repo root directory is present
-    for key, repo_root in sorted(self._config.repository_paths.items()):
-      reqs.append(
-          FilesystemPathRequirement(
-              name = f"repo_exists:{key}",
-              path = repo_root,
-              path_type = PathType.DIRECTORY,
-          )
-      )
-
-    return reqs
+    )
