@@ -1,3 +1,12 @@
+"""Experiment runs oracle for Wasabi (SOSP'24).
+
+Validates:
+  - Required results and ground-truth inputs are present
+  - Bug reports can be parsed from the configured results directory
+  - Parsed bug reports can be mapped to the expected benchmark categories
+  - Observed bug coverage matches the provided ground-truth dataset within the configured similarity threshold
+"""
+
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path

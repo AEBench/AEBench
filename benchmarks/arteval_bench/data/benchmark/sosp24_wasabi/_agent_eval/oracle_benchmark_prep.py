@@ -1,4 +1,12 @@
-#!/usr/bin/env python3
+"""Experiment runs oracle for Wasabi (SOSP'24).
+
+Validates:
+  - Required benchmark repositories and application directories are present
+  - Each benchmark is checked out at the expected commit
+  - Benchmark build configuration enables the expected weaving/instrumentation plugin
+  - Compiled outputs contain expected AspectJ weaving markers
+"""
+
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path

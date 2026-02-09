@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runs environment setup checks for WASABI."""
+"""Runs environment setup, build, benchmark prep, and experiment runs checks for WASABI."""
 
 from __future__ import annotations
 

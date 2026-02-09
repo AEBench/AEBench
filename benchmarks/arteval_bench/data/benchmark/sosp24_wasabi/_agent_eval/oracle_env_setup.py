@@ -1,10 +1,9 @@
-#!/usr/bin/env python3
-"""Environment setup oracle for WASABI.
+"""Environment setup oracle for Wasabi (SOSP'24).
 
-This oracle reuses the shared env-setup primitives to validate:
-  * Toolchain dependencies and versions referenced by the WASABI README.
-  * Environment variables WASABI_ROOT_DIR and JAVA_HOME (exact string match).
-  * Updated directory structure for the flattened WASABI repo layout.
+Validates:
+  - The required dependencies and other prerequisits are correctly installed
+  - The workspace and key environment variables are set up correctly
+  - Expected directories, directory layout and configuration files are present
 """
 
 from __future__ import annotations

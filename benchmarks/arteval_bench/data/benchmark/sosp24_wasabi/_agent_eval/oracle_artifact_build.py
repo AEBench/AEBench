@@ -1,4 +1,12 @@
-#!/usr/bin/env python3
+"""Artifact build oracle for Wasabi (SOSP'24).
+
+Validates:
+  - Required repository and metadata inputs are present
+  - Project structure is Maven-based and modules can be identified from POMs
+  - The configured primary module (WASABI) produces a compilable binary artifact
+  - The primary module (WASABI) is present both as a build output and as an installed Maven artifact
+"""
+
 import dataclasses
 import fnmatch
 import hashlib
