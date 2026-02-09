@@ -1,13 +1,8 @@
-"""Artifact build oracle for the Eurosys'25 EGWALKER artifact.
+"""Artifact build oracle for EGWALKER (EuroSys'25).
 
 Validates:
   - Repository working directory exists.
   - Build commands execute successfully (captures stdout/stderr/return code).
-
-This implementation maximizes reuse of the base primitives:
-  - Uses OracleArtifactBuildBase orchestration unchanged.
-  - Expresses all checks as BuildCommandRequirement instances.
-  - Avoids re-implementing command execution, output truncation, or cwd-escape logic.
 """
 
 from __future__ import annotations

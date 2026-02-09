@@ -1,12 +1,9 @@
-#!/usr/bin/env python3
-"""Experiment runs oracle for the EuroSys'25 EGWALKER artifact.
+"""Experiment runs oracle for EGWALKER (EuroSys'25).
 
-This oracle compares experiment-produced timings against reference timings.
-
-Design goal:
-- Keep artifact-specific parsing/alignment here.
-- Delegate *all numeric comparison logic* (similarity scoring + mismatch reporting)
-  to evaluator.oracle_experiment_runs_primitives base requirements.
+Validates:
+  - Timing results file can be read and parsed.
+  - Ground-truth reference timings file exists and can be read.
+  - Observed timings meet the configured similarity threshold against reference timings.
 """
 
 from __future__ import annotations

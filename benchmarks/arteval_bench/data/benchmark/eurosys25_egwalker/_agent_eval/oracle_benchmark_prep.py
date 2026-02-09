@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Benchmark preparation oracle for _agent_eval bundles.
+"""Benchmark preparation oracle for EGWALKER (EuroSys'25).
 
 Validates:
   - Dataset manifest JSON is readable and well-formed.

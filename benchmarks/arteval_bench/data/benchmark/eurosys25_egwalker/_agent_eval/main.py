@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runs environment setup, build, benchmark prep, and experiment runs checks for EGWALKER."""
+"""Runs environment setup, build, benchmark prep, and experiment runs checks for EGWALKER (EuroSys'25)."""
 
 from __future__ import annotations
 

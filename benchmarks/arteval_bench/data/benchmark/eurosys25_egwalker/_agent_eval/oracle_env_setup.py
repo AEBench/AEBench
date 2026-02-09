@@ -1,4 +1,4 @@
-"""Environment setup oracle for the Eurosys'25 EGWALKER bundle.
+"""Environment setup oracle for EGWALKER (EuroSys'25).
 
 Validates:
   - Required tools and minimum versions where applicable.
