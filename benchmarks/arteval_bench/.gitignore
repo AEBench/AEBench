@@ -117,3 +117,6 @@ a.out
 # Build directories
 build/
 cmake-build-*/
+
+# Duplicate task list copies (canonical: arteval_tasks.jsonl)
+data/benchmark/arteval_tasks copy*.jsonl

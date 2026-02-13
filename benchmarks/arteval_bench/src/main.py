@@ -30,7 +30,7 @@ def main(file_path, model, agent, save_path):
                 logger.info(f'Skipping invalid JSON line: {line}')
                 continue
 
-            deployment = item.get('docker_env', None)
+            deployment = item.get('docker_env', None) or item.get('docer_env', None)
             project_path = f"./data/benchmark/{item.get('artifact_dir', None)}"
             task_file = item.get('artifact_readme', None)
             task_id = item.get('artifact_id', None)
