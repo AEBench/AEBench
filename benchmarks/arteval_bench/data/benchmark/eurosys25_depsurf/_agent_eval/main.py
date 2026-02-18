@@ -43,7 +43,7 @@ def _resolve_workspace_paths() -> tuple[Path, Path]:
     if not agent_eval_dir.exists() or not agent_eval_dir.is_dir():
       raise RuntimeError(
           f"Invalid _agent_eval dir: {agent_eval_dir}\n"
-          f"This runner expects _agent_eval/ and DepSurf/ to be located in the same root directory.\n"
+          f"This expects _agent_eval/ and DepSurf/ to be located in the same root directory.\n"
           f"Set _AGENT_EVAL_DIR to the directory containing main.py if needed.")
 
     depsurf_repo_root = depsurf_home / "DepSurf"
