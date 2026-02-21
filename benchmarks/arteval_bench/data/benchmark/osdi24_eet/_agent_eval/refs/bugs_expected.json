@@ -1,0 +1,7 @@
+{
+  "mysql": 16,
+  "postgres": 9,
+  "sqlite": 10,
+  "clickhouse": 21,
+  "tidb": 10
+}
