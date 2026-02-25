@@ -65,50 +65,73 @@ def setup_claude_settings_on_host():
     logger.info(f"Created {settings_file} with 48-hour timeout configuration.")
 
 
+def _is_ae_agent_path(agent_path) -> bool:
+    """True if agent_path points to the ae_agent agent (same flow: agent + evaluation script)."""
+    if not agent_path:
+        return False
+    p = (agent_path or "").rstrip(os.sep)
+    return p.endswith("ae_agent") or os.path.basename(p) == "ae_agent"
+
+
 async def run_eval_on_host(project_path, task_id, task, model, agent_path, test_method, save_path):
     """Run evaluation directly on host machine (no Docker container).
-    
-    This is useful for tasks that require Kind clusters or other Docker-in-Docker
-    scenarios that don't work well in nested containers.
+
+    When agent is ae_agent, delegates to ae_agent.run_agent_then_eval (agent run + evaluation script),
+    same flow as claude_sdk. Otherwise uses inline Claude SDK + test_method.
     """
     logger.info("=" * 80)
     logger.info("Running evaluation directly on HOST MACHINE (not in Docker)")
     logger.info("=" * 80)
-    
-    # Check prerequisites
+
+    if _is_ae_agent_path(agent_path):
+        logger.info("Using ae_agent flow: run agent then evaluation script.")
+        try:
+            from agents.ae_agent.run_eval import _run_agent_then_eval_async
+        except ImportError:
+            _src = os.path.dirname(os.path.abspath(__file__))
+            if _src not in sys.path:
+                sys.path.insert(0, _src)
+            from agents.ae_agent.run_eval import _run_agent_then_eval_async
+        result = await _run_agent_then_eval_async(
+            project_path=project_path,
+            task_id=task_id,
+            task=task,
+            model=model,
+            test_method=test_method,
+            save_path=save_path,
+            timeout_ms=None,
+            skip_prereq_check=False,
+        )
+        return result
+
+    # Original flow: inline Claude SDK then test_method (e.g. claude_sdk or default)
     import shutil
-    
+
     if not shutil.which("docker"):
         raise RuntimeError("Docker is not installed on host")
-    
-    # Check if Docker is running
+
     result = subprocess.run(["docker", "ps"], capture_output=True, timeout=10)
     if result.returncode != 0:
         raise RuntimeError("Docker is not running on host")
-    
-    # Check API key
+
     if not os.environ.get("ANTHROPIC_API_KEY"):
         raise RuntimeError("ANTHROPIC_API_KEY environment variable is not set")
-    
-    # Setup Claude settings
+
     setup_claude_settings_on_host()
-    
-    # Ensure project path is absolute
+
     project_path = os.path.abspath(project_path)
     if not os.path.isdir(project_path):
         raise RuntimeError(f"Project path does not exist: {project_path}")
-    
+
     logger.info(f"Project path: {project_path}")
     logger.info(f"Task ID: {task_id}")
     logger.info(f"Model: {model}")
-    
-    # Import Claude Agent SDK
+
     try:
         from claude_agent_sdk import query, ClaudeAgentOptions
     except ImportError as e:
         raise RuntimeError(f"claude_agent_sdk not installed: {e}. Install with: pip install claude-agent-sdk")
-    
-    # Build system prompt for host execution
+
     system_prompt = f"""You are an experienced software engineer completing an artifact evaluation task.
 
 ENVIRONMENT SETUP (HOST MACHINE - NOT DOCKER):
@@ -143,70 +166,62 @@ IMPORTANT GUIDELINES:
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
         allowed_tools=["Read", "Write", "Bash"],
-        setting_sources=["user"],  # Load ~/.claude/settings.json for timeout config
+        setting_sources=["user"],
     )
-    
-    # Set environment variables
+
     os.environ['BASH_MAX_TIMEOUT_MS'] = '172800000'
     os.environ['BASH_DEFAULT_TIMEOUT_MS'] = '172800000'
-    
+
     logger.info("Starting Claude Agent SDK (Host Mode)...")
-    
+
     message_count = 0
     run_results_output = ""
-    
+
     try:
         async for message in query(
             prompt=f"Please start the artifact evaluation task. Begin by changing to the artifact directory at {project_path} and examining its contents.",
             options=options
         ):
             message_count += 1
-            
             if message_count % 10 == 0:
                 logger.info(f"[Progress] Processed {message_count} messages...")
-            
-            # Log each message
             msg_str = str(message)
             logger.info(msg_str)
-            
             if 'ResultMessage' in msg_str or 'TextBlock' in msg_str:
                 run_results_output = msg_str
-        
         logger.info(f"Claude Agent SDK execution completed. Total messages: {message_count}")
-        
     except Exception as e:
         logger.error(f"Claude Agent SDK execution failed: {e}")
         import traceback
         traceback.print_exc()
         run_results_output = f"Error: {e}"
-    
-    # Run evaluation (test_method)
+
     logger.info("Running evaluation script...")
     try:
-        # Change to project directory and run test
         eval_cmd = f"cd {project_path} && {test_method}"
         eval_result = subprocess.run(
             eval_cmd,
             shell=True,
             capture_output=True,
             text=True,
-            timeout=300  # 5 minute timeout for evaluation
+            timeout=300
         )
         test_output = eval_result.stdout.strip()
         logger.info(f"Evaluation output: {test_output}")
-        
         result = {
+            'task_id': task_id,
             'task': task,
             'project_path': project_path,
             'agent_run_results': run_results_output,
             'test_method': test_method,
-            'score': int(test_output) if test_output.isdigit() else 0,
+            'score': _parse_eval_score(test_output),
             'status': 'success',
             'run_on_host': True,
         }
     except Exception as e:
         logger.error(f"Error running test method: {e}")
         result = {
+            'task_id': task_id,
             'task': task,
             'project_path': project_path,
             'agent_run_results': run_results_output,
@@ -215,7 +230,7 @@ IMPORTANT GUIDELINES:
             'status': f'error: {str(e)}',
             'run_on_host': True,
         }
-    
+
     return result
 
 

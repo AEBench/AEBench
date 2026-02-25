@@ -6,7 +6,10 @@ import os
 import sys
 from datetime import datetime
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+_src_dir = os.path.dirname(os.path.abspath(__file__))
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
+sys.path.append(os.path.abspath(os.path.join(_src_dir, '../../../')))
 
 from sdk.logger import logger
 from sdk.utils import set_llm_endpoint_from_config
@@ -113,12 +116,13 @@ if __name__ == '__main__':
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         save_path = os.path.join('./outputs', f'env_setup_project__{str_model_name}__{args.agent}__{timestamp}')
 
+    _src_dir = os.path.dirname(os.path.abspath(__file__))
     if agent == 'claudecode':
-        agent = './src/agents/claudecode'
+        agent = os.path.join(_src_dir, 'agents', 'claudecode')
     elif agent == 'claude_sdk':
-        agent = './src/agents/claude_sdk'
+        agent = os.path.join(_src_dir, 'agents', 'claude_sdk')
     elif agent == 'ae_agent' or agent == 'ae-agent':
-        agent = './src/agents/ae_agent'
+        agent = os.path.join(_src_dir, 'agents', 'ae_agent')
     save_path = os.path.abspath(os.path.expanduser(save_path))
     os.makedirs(save_path, exist_ok=True)
 

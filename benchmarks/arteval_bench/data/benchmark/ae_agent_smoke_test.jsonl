@@ -1,0 +1,2 @@
+{"artifact_id": "ae_agent_smoke_host", "artifact_dir": "ae_agent_smoke", "artifact_readme": "ae_agent_smoke/README.md", "evaluator": "python3 _agent_eval/check.py", "expected_score": 1, "run_on_host": true}
+{"artifact_id": "ae_agent_smoke_docker", "artifact_dir": "ae_agent_smoke", "artifact_readme": "ae_agent_smoke/README.md", "docker_env": "bastoica/ae-agent-ubuntu24.04:latest", "evaluator": "python3 _agent_eval/check.py", "expected_score": 1, "run_on_host": false}
