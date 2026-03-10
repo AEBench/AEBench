@@ -1,149 +1,186 @@
-# System Intelligence Benchmark: A Benchmark Suite for Evaluating LLM's System Capabilities
+# ArtEvalBench
 
-System Intelligence Benchmark is a comprehensive benchmark suite for evaluating the performance of Large Language Models (LLMs) and AI systems across critical system capabilities. It features tutorial, example benchmarks and offers both CLI tools and an SDK for further development.
+`ArtEvalBench` is a benchmark for evaluating AI agents against Artifact Evaluation (AE) tasks ([why artifact evaluation?](WHY.md)). We believe that, despite the complexity of the AE process, AI agents can be succesfully trained to automatically evaluate artifacts that accompany research papers.
 
-## Benchmark Overview
-A benchmark is a standard or point of reference against which things may be compared or assessed. In the context of AI and LLMs, benchmarks are essential for evaluating model capabilities, guiding research directions, and measuring progress. 
+## Contributor's guide
 
-### Benchmark Framework
+#### » Overview and high-level structure
 
-To advance benchmark development, we propose the System Intelligence Benchmark, a modular and extensible framework designed to support diverse research domains and problem types. As shown in the below figure, the framework comprises four abstractions: task set, environment, executor, and evaluator. Each task is associated with a specific environment, wherein the executor generates a solution that is subsequently assessed by the evaluator, which returns the evaluation metrics. This design enables the flexible integration of heterogeneous agents and their systematic evaluation. Additionally, the framework includes built-in executors (agents), evaluators (methodologies and grading rubrics), and tutorials. In an ideal case, users need only supply tasks that represent specific capabilities, select an evaluator, and quickly create and run a new benchmark. You can see [benchmark_abstraction.md](doc/benchmark_abstract.md) for details.
+To train and improve AE agents in a principled way, we introduce `ArtEvalBench`, a curated collection of artifacts accompanying peer-reviewed papers. To ensure a fair comparison, we include artifacts that have already been evaluated in an official AE process and awarded all three badges by the committee. Each entry includes the original artifact (instructions, code, scripts, datasets/benchmarks, etc.), the original paper, and a collection of "oracle" scripts that define objective checkpoints at four canonical stages: environment setup, build/install, benchmark preparation, and experiment execution.
 
-<img src="doc/benchmark.png" alt="Dashboard Screenshot" width="600"/>
+`ArtEvalBench` is designed to evaluate agents on capability (which stages they complete), efficiency (wall-clock time and intervention count), and fidelity (how closely reproduced results match those reported).
 
-The benchmark framework is **still under development**. If you have any questions, feel free to open an issue or contact us directly.  
+To check those capabilities, each artifact includes four oracle scripts that encode minimal, verifiable success criteria for each of the four stages. The oracles are invoked non-interactively and must be idempotent. Conceptually, these four stages correspond to:
 
-### Benchmarks
+1. **Environment setup.** verifies presence and versions of required tools, libraries, or other dependencies; confirms hardware availability when applicable; and checks that configurations are portable rather than hardcoded or tied to a specific machine.
+2. **Build (and install) the artifact.** confirms a complete build (or install) operation from a specified version, with expected binaries/modules present; running tests, when available, or simple validation commands like invoking `--help` or equivalent.
+3. **Benchmark preparation.** asserts that datasets/benchmarks are present and checksums match; verifies that necessary third-party tools compile and the artifact's instrumentation/monitoring hooks are enabled, if applicable.
+4. **Experiment runs.** executes each experiment according to the authors' guidelines; checks that the artifact produces the expected metrics, logs, files, figures, etc.; provides an initial assessment relative to specified tolerance bounds.
 
-System Intelligence Benchmark currently includes the following example benchmarks. Each benchmark assesses specific capabilities across multiple levels within a given research direction. Some benchmarks are still under development — we're actively updating them. Stay tuned!
+#### » Adding a new artifact
 
-- **System Exam Benchmark** ([benchmarks/course_exam_bench/](benchmarks/course_exam_bench/)) - Tests LLM understanding of system concepts through university course exams (54 questions across 4 exams)
-- **System Lab Benchmark** ([benchmarks/course_lab_bench/](benchmarks/course_lab_bench/)) - Assesses AI capability on practical system course labs and projects 
-- **System Artifact Benchmark** ([benchmarks/arteval_bench/](benchmarks/arteval_bench/)) - Evaluates AI performance on artifact evaluation
-- **System Modeling Benchmark** ([benchmarks/sysmobench/](benchmarks/sysmobench/)) - Evaluates an agent's ability to produce correct TLA+ models for real-world concurrent and distributed systems, covering system capabilities across system comprehension, abstraction, and potentially tool fluency.
-- **Example Benchmark** ([benchmarks/example_bench/](benchmarks/example_bench/)) - Template and reference implementation for creating new benchmarks
+Adding to the benchmark requires users to include a new entry into `ArtEvalBench` [schema file](data/benchmark/arteval_tasks.jsonl), where:
+- `artifact_id` is a unique identifier for the artifact;
+- `artifact_dir` the artifact directory within `data/benchmark/`;
+- `artifact_readme` is the path to the artifact's README file that contains the step-by-step guide for preparing, installing, and running experiments;
+- `artifact_url` the URL to the original artifact; 
+- `evaluator` is a path to the evaluator's `main.py` entrypoint;
+- `expected_score` is the total expected score for this artifact, which defaults to 4 as the agent is evaluated on it succesfully completing the four canonical AE stages (!!NOTE!! We encourage users not to change this value, unless they opt for another universal metric for artifact evaluation).
+- `docker_evn` (optional) points to a Docker image on Docker Hub.
 
-## Quick Start
-### Repo Structure
+It also requires users to extend the artifact they plan to add with a self-contained evaluator in an `_agent_eval/` directory. This evaluator encodes *minimal*, objective success criteria for the four canonical AE stages and is what the benchmark actually calls.
 
-- **Benchmarks** (`benchmarks/`) - Contains individual benchmark implementations, each with its own source code, tests, and configuration
-- **CLI Tools** (`cli/`) - Command-line interface for running benchmarks and managing evaluations
-- **SDK** (`sdk/`) - Software development kit providing evaluators, LLM interfaces, and utility functions
-- **Documentation** (`doc/`) - Guides and documentation for using and contributing to SysCapBench
+Using WASABI's [agent evaluator](data/benchmark/sosp24_wasabi/wasabi/_agent_eval/) as a template, users will therefore need to extend the artifact with:
 
-### Prerequisites
+1. An `_agent_eval/` package which contains all benchmark-specific code and does *not* modify your original artifact logic.
 
-- Python 3.9+
-- Docker (optional, for containerized execution)
+2. One oracle module per stage. In this benchmark, each stage is typically implemented as a **derived oracle class** that overrides `requirements()` and returns an ordered list of programmatic checks (requirements). The base oracle handles running requirements, producing a structured report, printing a PASS/FAIL summary, and returning `True`/`False` from `run(verbose=...)`.
 
-> Docker images currently only support x86_64/AMD64 architecture. ARM64 (Apple Silicon M1/M2/M3) is not yet supported
+  A typical `_agent_eval/` layout looks like:
 
-### Installation
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/sys-intelligence/system-intelligence-benchmark.git
-   cd system-intelligence-benchmark
+   ```text
+   _agent_eval/
+   ├── main.py
+   ├── oracle_env_setup.py
+   ├── oracle_build_install.py
+   ├── oracle_prep_benchmark.py
+   ├── oracle_run_experiments.py
+   └── refs/
+       ├── datasets.ref.json
+       └── results.ref.json
    ```
 
-2. Install dependencies for a specific benchmark:
+   The `refs/` directory stores machine-checkable ground truth (e.g., dataset manifests/checksums, expected metric tables, or summaries of deterministic outputs) used by benchmark-prep and experiment-runs checks.
 
-   ```bash
-   cd cli
-   ./install.sh
+   Here is a simplified environment setup oracle (one dependency/version requirement):
+
+   ```python
+   # _agent_eval/oracle_env_setup.py
+   import sys
+   from collections.abc import Sequence
+
+   from evaluator.oracle_env_setup_primitives import (
+       DependencyVersionRequirement,
+       OracleEnvSetupBase,
+       VersionCompare,
+   )
+
+   class OracleEnvSetup(OracleEnvSetupBase):
+       def __init__(self, *, config, logger):
+           super().__init__(logger=logger)
+           self._config = config
+
+       def requirements(self) -> Sequence[DependencyVersionRequirement]:
+           return (
+               DependencyVersionRequirement(
+                   name="python_version",
+                   cmd=(sys.executable, "--version"),
+                   required_version=(3, 10, 0),
+                   compare=VersionCompare.GEQ,
+                   timeout_seconds=5.0,
+               ),
+           )
    ```
-3. Each benchmark includes an `env.toml` file for configuration. You should add your own llm endpoint url and key there.
 
-### Running Benchmarks
+   Also, note that each oracle should be:
+   - Non-interactive, meaning not expecting input or prompt interactions.
+   - Idempotent, meaning safe to run multiple times without side-effects.
+   - Time-bounded, meaning every command has a timeout.
+   - Binary, meaning it returns pass/fail (as `True`/`False`) for the stage.
 
-#### Run All Benchmarks
+  For more details, check out this [how-to guide](src/evaluator/HOWTO.md)
 
-To run all benchmarks sequentially:
+1. A single `main.py` orchestrator, the entrypoint used by ArtEvalBench, which constructs an `EntryConfig`, invokes the four oracles in order, and returns an overall score (an integer between 0 and 4):
 
-```bash
-cd cli
-./run_all_local.sh <model_name>
-```
+   ```python
+   # _agent_eval/main.py
+   import os
+   from pathlib import Path
 
-#### Run a Single Benchmark
+   from evaluator.utils import EntryConfig, LoggerConfig, get_logger, record_result
 
-To run just one benchmark locally:
+   from oracle_env_setup import OracleEnvSetup
+   from oracle_build_install import OracleBuildInstall
+   from oracle_prep_benchmark import OraclePrepBenchmark
+   from oracle_run_experiments import OracleRunExperiments
 
-```bash
-cd benchmarks/<benchmark_name>
-./install.sh  # Only needed the first time
+   CONFIG = EntryConfig(
+       name="my-artifact",
+       home_dir=Path.home() / "artevalbench" / "my-artifact",
+       repository_paths={
+           "my-artifact": Path.home() / "artevalbench" / "my-artifact" / "repo",
+       },
+       results_paths={
+           "results": Path.home() / "artevalbench" / "my-artifact" / "repo" / "outputs" / "results.json",
+       },
+       ground_truth_paths={
+           "datasets": Path.home() / "artevalbench" / "my-artifact" / "_agent_eval" / "refs" / "datasets.ref.json",
+           "results": Path.home() / "artevalbench" / "my-artifact" / "_agent_eval" / "refs" / "results.ref.json",
+       },
+       similarity_ratio=0.75,
+   )
+
+   def main(argv: list[str]) -> int:
+       verbose = "--verbose" in argv
+       logger = get_logger(
+           LoggerConfig(root_name=os.environ.get("EVAL_LOGGER_NAME", "ARTEVAL-EVAL"))
+       )
+
+       results: dict[str, int] = {}
+       score = 0
+
+       score += record_result(
+           results, "env_setup",
+           OracleEnvSetup(config=CONFIG, logger=logger).run(verbose=verbose),
+       )
+       score += record_result(
+           results, "build_install",
+           OracleBuildInstall(config=CONFIG, logger=logger).run(verbose=verbose),
+       )
+       score += record_result(
+           results, "prep_benchmark",
+           OraclePrepBenchmark(config=CONFIG, logger=logger).run(verbose=verbose),
+       )
+       score += record_result(
+           results, "run_experiments",
+           OracleRunExperiments(config=CONFIG, logger=logger).run(verbose=verbose),
+       )
+
+       logger.info("Stage scores: %s", results)
+       logger.info("FINAL_SCORE %d/4", score)
+       return score
+
+   if __name__ == "__main__":
+       raise SystemExit(main([]))
+   ```
+
+   Note that the `ArtEvalBench` framework will invoke `main.py` to run the oracles in order, compute the agent's score for this particular artifact, and store it into a JSON file that aggregates these outcomes for the entire benchmark.
+
+## Benchmark Setup
+
+#### » Run the benchmark
+
+To run the benchmark:
+
+1. Execute the `run.sh` script with your model:
+
+```sh
 ./run.sh <model_name>
+# Example: ./run.sh claude-sonnet-4-5-20250929
 ```
 
-#### Output Format
+2. Configure your LLM endpoint in `env.toml`:
+* For Azure/OpenAI models: Set `AZURE_API_KEY`, `AZURE_API_BASE`, `AZURE_API_VERSION`
+* For Anthropic models: Set `ANTHROPIC_API_KEY`
+* For self-hosted models: Configure `OPENAI_API_TYPE` and `OPENAI_BASE_URL`
 
-Benchmarks generate standardized outputs in `cli/outputs/{benchmark_name}__{model_name}__{agent}_{timestamp}/`:
+3. Results will be saved to `outputs/` with timestamp and model information
 
-- `result.jsonl`: Detailed evaluation results
-- `summary.json`: Aggregated performance metrics
-- Test-specific breakdowns and comparisons
+#### » Supported Agents
 
-You can find more detailed usage guides in the CLI [README.md](cli/README.md).
+The benchmark supports multiple AI agents:
+- **Claude Code**: Anthropic's code assistant
+- **Mini SWE Agent**: The compact version of [SWE-agent](https://github.com/SWE-agent) assistant
+- **OpenHands**: Open-source coding agent
 
-## Contribute to Benchmarks
-
-We welcome community contributions to enrich existing benchmarks (e.g., by adding more exam problems to the System Exam benchmark and more system artifacts to System Artifact and System Modeling benchmark), port your existing benchmarks, and more importantly to create new system intelligence benchmarks with our framework. See below for detailed instructions. We believe that such collective community efforts will advance AI to its next level and help realize System Intelligence, unlocking the potential of AI-driven computing system innovations. If you are interested in contributing or already have good system benchmarks, please let us know. We have set up a [slack channel](https://join.slack.com/t/sys-intelligence/shared_invite/zt-3hpkgr2aa-NnuPxUbyHr45S89DFi_N1A) at sys-intelligence.slack.com.
-
-> [!NOTE] 
-> We suggest getting starting by walking through the basic concept of a AI benchmark: [Benchmark Abstraction](doc/benchmark_abstract.md). After understanding the basic concept, you can decide whether to Contribute to Existing Benchmarks, Porting Existing Benchmarks, or  Creating New Benchmarks.
-
-### Contribute to Existing Benchmarks
-The easiest way to contribute is to add more tasks to existing benchmarks. Currently, the following two are highly recommended. You can simply follow the provided guidelines to submit your data—once that’s done, you’re all set.
-- **SystemExam**: If you are a professor teaching one or more courses, we highly recommend contributing **more exam problems** to SystemExam (see [this doc](https://github.com/sys-intelligence/system-intelligence-benchmark/tree/main/benchmarks/course_exam_bench#how-to-extend-the-benchmark) for step-by-step guidance).
-- **SystemArtifact**: If you are a researcher submitting artifacts, or an AE chair involved in artifact evaluation, we highly recommend contributing **more system artifacts** to SystemArtifact (see [this doc](https://github.com/sys-intelligence/system-intelligence-benchmark/blob/main/benchmarks/arteval_bench/README.md) for step-by-step guidance).
-
-In addition, you can also help review the existing benchmarks to propose improvement ideas or directly enhance them—for example, by adding more advanced evaluators or incorporating improved metrics.
-
-### Porting Existing Benchmarks
-> [!NOTE]
-> See [porting_benchmark.md](doc/porting_benchmark.md) for step-by-step guidelines.
-
-For integrating existing, independently-developed benchmark projects while maintaining synchronization with upstream:
-
-- Use Git Subtree/Submodule to incorporate upstream code
-- Write a bridge layer to connect upstream evaluators with framework SDK
-- Configure bidirectional sync for pulling updates and contributing fixes
-
-**Example:** [SysMoBench](benchmarks/sysmobench/) - ported from [SysSpecBench](https://github.com/specula-org/SysSpecBench)
-
-### Creating New Benchmarks
-> [!NOTE]
-> See [custom_benchmark.md](doc/creating_benchmark.md) for step-by-step guidelines.
-
-To create a new benchmark, follow these steps:
-1. Create a new benchmark directory in `benchmarks/`
-   1. Based on your specific requirements, select and copy an example benchmark as a starting point
-   2. Update the `src/main.py` file with your specific evaluation logic (your executor and evaluator)
-   3. Add test cases in the `tests/` directory
-2. Update the README.md with benchmark-specific details
-3. Implement `install.sh` and `run.sh` scripts
-4. Update the benchmark list in `run_all_local.sh` and `run_docker.sh` if needed
-
-## Contributing
-
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
-
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
-
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
-
-## Trademarks
-
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 
-trademarks or logos is subject to and must follow 
-[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
-Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
-Any use of third-party trademarks or logos are subject to those third-party's policies.
-
+To add your own agent to the benchmark, see [add_agents.md](add_agents.md).
