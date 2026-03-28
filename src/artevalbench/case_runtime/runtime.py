@@ -6,7 +6,7 @@ from ..cache import protected_git_checkout_paths, resolve_git_bundle_artifact
 from ..models import ArchiveSource, GitSource, LocalSource, OverlaySource, TaskSpec
 from ..project_config import ArtifactMode, ProjectConfigState, load_project_config
 from .loader import load_case_spec
-from .models import CaseSpec, UpstreamSourceType
+from ..domain.models import CaseSpec, UpstreamSourceType
 
 
 class CaseRuntimeError(RuntimeError):

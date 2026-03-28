@@ -12,7 +12,7 @@ from typing import Iterator
 
 from ..models import RunResult
 from .loader import load_case_spec
-from .models import (
+from ..domain.models import (
     CaseRunResult,
     CaseSpec,
     OracleContext,

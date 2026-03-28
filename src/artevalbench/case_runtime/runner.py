@@ -10,7 +10,7 @@ from ..infrastructure.config import AppContext, resolve_settings
 from ..models import LiveLayoutMode, LiveViewMode, PromptProfile, RunOptions, UiMode
 from ..project_config import ProjectConfigState, load_project_config
 from ..run_control import RunControl, activate_interrupt_handler
-from .models import CaseRunResult
+from ..domain.models import CaseRunResult
 
 if TYPE_CHECKING:
 	from ..display_textual import TextualDashboardDisplay

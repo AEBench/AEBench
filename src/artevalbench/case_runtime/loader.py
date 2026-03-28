@@ -8,7 +8,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-from .models import CaseSpec
+from ..domain.models import CaseSpec
 
 _ORACLE_DIRNAME = "oracle"
 _REFS_DIRNAME = "refs"

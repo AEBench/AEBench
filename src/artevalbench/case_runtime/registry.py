@@ -17,8 +17,8 @@ from ..project_config import (
 )
 from ..utils import safe_name
 from .manifest import write_case_spec
-from .models import CaseSpec
-from .oracle_templates import render_oracle_template_set
+from ..domain.models import CaseSpec
+from .oracle_templates import render_placeholder_oracle_files
 
 _DEFAULT_BUNDLES_DIR = "bundles"
 
@@ -240,19 +240,16 @@ def _git_remote_url(root: Path) -> str | None:
 
 
 def render_placeholder_oracle(case_id: str) -> str:
-	return render_placeholder_oracle_files(case_id)["custom.py"]
+	return _render_placeholder_oracle_files(case_id)["custom.py"]
 
 
 def write_placeholder_oracle_package(oracle_dir: Path, case_id: str) -> None:
-	for relative_path, content in render_placeholder_oracle_files(case_id).items():
+	for relative_path, content in _render_placeholder_oracle_files(case_id).items():
 		(oracle_dir / relative_path).write_text(content, encoding="utf-8")
 
 
-def render_placeholder_oracle_files(case_id: str) -> dict[str, str]:
-	return render_oracle_template_set(
-	 "placeholder",
-	 replacements={"__CASE_ID__": case_id},
-	)
+def _render_placeholder_oracle_files(case_id: str) -> dict[str, str]:
+	return render_placeholder_oracle_files(case_id)
 
 
 def _todo_case_card(case_id: str) -> dict[str, str]:

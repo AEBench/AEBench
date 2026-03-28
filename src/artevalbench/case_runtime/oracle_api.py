@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
 
-from .models import OracleContext, OracleFailureMode, OraclePhaseResult, OracleResult, OracleStatus
+from ..domain.models import OracleContext, OracleFailureMode, OraclePhaseResult, OracleResult, OracleStatus
 
 _PHASE_SEGMENT_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 _PHASE_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$")
@@ -127,6 +127,8 @@ def execute_oracle_phases(
     *,
     phases: Sequence[DiscoveredPhase],
     failure_mode: OracleFailureMode | str = OracleFailureMode.FAIL_FAST,
+    on_phase_start: Callable[[DiscoveredPhase], None] | None = None,
+    on_phase_finish: Callable[[DiscoveredPhase, OraclePhaseResult], None] | None = None,
 ) -> OracleResult:
     mode = OracleFailureMode(failure_mode)
     if not phases:
@@ -137,6 +139,8 @@ def execute_oracle_phases(
     results: list[OraclePhaseResult] = []
     failed_phases: list[str] = []
     for index, phase_def in enumerate(phases):
+        if on_phase_start is not None:
+            on_phase_start(phase_def)
         try:
             outcome = phase_def.func(context)
             if outcome is None:
@@ -147,22 +151,24 @@ def execute_oracle_phases(
                     raise ValueError("phase success summaries must not be empty")
             else:
                 raise TypeError("phase functions must return None or a summary string")
-            results.append(
-                OraclePhaseResult(
-                    phase=phase_def.name,
-                    status=OracleStatus.SUCCESS,
-                    summary=summary,
-                )
+            phase_result = OraclePhaseResult(
+                phase=phase_def.name,
+                status=OracleStatus.SUCCESS,
+                summary=summary,
             )
+            results.append(phase_result)
+            if on_phase_finish is not None:
+                on_phase_finish(phase_def, phase_result)
         except OraclePhaseError as exc:
-            results.append(
-                OraclePhaseResult(
-                    phase=phase_def.name,
-                    status=OracleStatus.ERROR,
-                    summary=exc.summary,
-                    error=exc.error or str(exc),
-                )
+            phase_result = OraclePhaseResult(
+                phase=phase_def.name,
+                status=OracleStatus.ERROR,
+                summary=exc.summary,
+                error=exc.error or str(exc),
             )
+            results.append(phase_result)
+            if on_phase_finish is not None:
+                on_phase_finish(phase_def, phase_result)
             failed_phases.append(phase_def.name)
             if mode == OracleFailureMode.FAIL_FAST:
                 results.extend([
@@ -175,14 +181,15 @@ def execute_oracle_phases(
                 ])
                 break
         except Exception as exc:
-            results.append(
-                OraclePhaseResult(
-                    phase=phase_def.name,
-                    status=OracleStatus.ERROR,
-                    summary="phase raised an unexpected exception",
-                    error=f"{type(exc).__name__}: {exc}",
-                )
+            phase_result = OraclePhaseResult(
+                phase=phase_def.name,
+                status=OracleStatus.ERROR,
+                summary="phase raised an unexpected exception",
+                error=f"{type(exc).__name__}: {exc}",
             )
+            results.append(phase_result)
+            if on_phase_finish is not None:
+                on_phase_finish(phase_def, phase_result)
             failed_phases.append(phase_def.name)
             if mode == OracleFailureMode.FAIL_FAST:
                 results.extend([
