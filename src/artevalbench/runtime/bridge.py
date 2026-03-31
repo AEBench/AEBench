@@ -156,7 +156,7 @@ def _wrapper_script(*, python_executable: str, mode: str, shell_name: str) -> st
     return (
         "#!/bin/sh\n"
         f'exec "{python_executable}" '
-        "-m artevalbench.infrastructure.bridge "
+        "-m artevalbench.runtime.bridge "
         f'--mode "{mode}" --shell-name "{shell_name}" -- "$@"\n'
     )
 

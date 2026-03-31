@@ -1,4 +1,4 @@
-from .infrastructure.events import (
+from .runtime.events import (
  CompositeEventSink,
  ConsoleEventSink,
  EventSink,

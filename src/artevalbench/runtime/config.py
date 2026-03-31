@@ -4,7 +4,7 @@ import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Mapping
+from typing import Any, Callable, Mapping
 
 from ..project_config import ProjectConfigState
 from ..settings import AgentKind, LogLevel, LogRenderer
@@ -74,6 +74,51 @@ class ResolvedSettings:
 class AppContext:
     project_state: ProjectConfigState
     settings: ResolvedSettings
+    extensions: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class PluginRegistry:
+    """Registry for runtime extension points and named factory overrides."""
+
+    _factories: dict[str, Callable[..., Any]] = field(default_factory=dict, init=False)
+    _metadata: dict[str, dict[str, str]] = field(default_factory=dict, init=False)
+
+    def register(
+        self,
+        name: str,
+        factory: Callable[..., Any],
+        *,
+        description: str = "",
+        version: str = "1.0",
+    ) -> None:
+        self._factories[name] = factory
+        self._metadata[name] = {"description": description, "version": version}
+
+    def get(self, name: str) -> Callable[..., Any] | None:
+        return self._factories.get(name)
+
+    def names(self) -> list[str]:
+        return sorted(self._factories)
+
+    def metadata(self, name: str) -> dict[str, str]:
+        return dict(self._metadata.get(name, {}))
+
+    def build(self, name: str, **kwargs: Any) -> Any:
+        factory = self._factories.get(name)
+        if factory is None:
+            raise KeyError(f"no plugin registered under {name!r}")
+        return factory(**kwargs)
+
+
+_default_registry: PluginRegistry | None = None
+
+
+def get_plugin_registry() -> PluginRegistry:
+    global _default_registry
+    if _default_registry is None:
+        _default_registry = PluginRegistry()
+    return _default_registry
 
 
 def resolve_settings(
