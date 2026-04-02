@@ -21,7 +21,7 @@ from .domain.models import (
 )
 from .config import AppContext
 from .log import get_logger, print_console
-from .reporting import persist_result, task_paths_for, write_summary, write_task_report
+from .runtime.reporting import persist_result, task_paths_for, write_summary, write_task_report
 from .utils import safe_name
 
 logger: FilteringBoundLogger = get_logger(__name__)
