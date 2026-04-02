@@ -7,7 +7,7 @@ from pathlib import Path
 from pydantic import ValidationError
 from structlog.typing import FilteringBoundLogger
 
-from .application.task_service import TaskRunService
+from .runtime.task_runner import TaskRunner as TaskRunService
 from .domain.models import (
  AgentResult,
  PromptProfile,
@@ -19,7 +19,7 @@ from .domain.models import (
  RuntimeResult,
  TaskStatus,
 )
-from .runtime.config import AppContext
+from .config import AppContext
 from .log import get_logger, print_console
 from .reporting import persist_result, task_paths_for, write_summary, write_task_report
 from .utils import safe_name

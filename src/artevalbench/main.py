@@ -7,7 +7,7 @@ from typing import Annotated
 import typer
 
 from .app import run_app
-from .application.benchmark_service import BenchmarkRunResult
+from .runtime.benchmark_runner import BenchmarkRunResult
 from .cache import git_cache_status, prune_git_cache
 from .case_runtime.authoring import (
  apply_authoring_answers,
@@ -29,7 +29,7 @@ from .case_runtime.registry import (
 from .case_runtime.runner import run_case
 from .case_runtime.runtime import export_case_dirs
 from .case_runtime.scaffold import BundleScaffoldError, scaffold_case_bundle
-from .runtime.config import AppContext, resolve_settings
+from .config import AppContext, resolve_settings
 from .log import configure_logging, print_console
 from .models import LiveLayoutMode, LiveViewMode, PromptProfile, RunOptions, RuntimeMode, UiMode
 from .project_config import ArtifactMode, ProjectConfigState, load_project_config
