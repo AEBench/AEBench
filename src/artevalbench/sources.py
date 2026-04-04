@@ -11,7 +11,7 @@ from typing import BinaryIO, cast
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
-from .cache import ensure_git_checkout, touch_git_checkout
+from .git import ensure_git_checkout, touch_git_checkout
 from .models import ArchiveSource, GitSource, LocalSource, OverlaySource, RuntimeMode, TaskSpec
 from .project_config import ProjectConfigState, load_project_config
 from .utils import resolve_ephemeral_workspace_root, safe_name

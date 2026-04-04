@@ -19,7 +19,7 @@ from .domain.models import (
  RuntimeResult,
  TaskStatus,
 )
-from .config import AppContext
+from .config import AppState
 from .log import get_logger, print_console
 from .reporting import persist_result, task_paths_for, write_summary, write_task_report
 from .utils import safe_name
@@ -33,7 +33,7 @@ class TaskParseError(ValueError):
 
 def run_app(
  *,
- context: AppContext,
+ context: AppState,
  input_file: Path,
  save_path: Path,
  options: RunOptions,

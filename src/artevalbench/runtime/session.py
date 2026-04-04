@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..config import AppContext as Config
+from ..config import AppState as Config
 from ..domain.models import PromptBundle, RunSpec as TaskConfig
 from ..run_control import RunControl
 from .backend import BenchRuntime

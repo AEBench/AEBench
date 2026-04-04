@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from ..evaluator import artifact_dir_for, has_local_artifact
 from ..evaluator.loader import load_case_spec
-from ..cache.git import protected_git_checkout_paths, resolve_git_bundle_artifact
+from ..git import protected_git_checkout_paths, resolve_git_bundle_artifact
 from ..domain.models import ArchiveSource, SourceSpec as BenchSource, GitSource, LocalSource, OverlaySource, UpstreamSourceType
 from ..project_config import ArtifactMode, load_project_config
 
