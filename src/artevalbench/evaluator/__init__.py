@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..domain.models import (
+from ..models import (
     CaseSpec,
     OracleContext,
     OracleFailureMode,

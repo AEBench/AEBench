@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ...domain.models import CaseSpec
+from ...models import CaseSpec
 from ..constants import CASE_MANIFEST_FILENAME
 
 

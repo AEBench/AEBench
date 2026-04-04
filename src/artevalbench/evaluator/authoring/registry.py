@@ -17,7 +17,7 @@ from ...project_config import (
 )
 from ...utils import safe_name
 from .case_spec import write_case_spec
-from ...domain.models import CaseSpec
+from ...models import CaseSpec
 from .templates import render_placeholder_oracle_files
 
 _DEFAULT_BUNDLES_DIR = "bundles"

@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 import click
 import typer
 
-from ...cache import ensure_git_checkout, protected_git_checkout_paths
+from ...git import ensure_git_checkout, protected_git_checkout_paths
 from ...constants import default_docker_image, default_timeout_ms
 from ...log import print_console
 from ...models import ArchiveSource, LocalSource, PromptProfile, RuntimeMode
@@ -193,7 +193,7 @@ def apply_authoring_answers(
     *,
     write_instructions: bool,
 ) -> "CaseSpec":
-    from ...domain.models import CaseSpec, OracleFailureMode, OraclePhaseName, OracleScoreMode
+    from ...models import CaseSpec, OracleFailureMode, OraclePhaseName, OracleScoreMode
 
     case = load_case_spec(bundle_dir)
     payload = case.model_dump(mode="json")
@@ -271,7 +271,7 @@ def scaffold_case_bundle(
     instruction_path: str = "README.md",
     prompt_profile: PromptProfile = PromptProfile.ARTIFACT_EVAL_V1,
 ) -> Path:
-    from ...domain.models import CaseSpec, UpstreamSourceType, UpstreamSpec
+    from ...models import CaseSpec, UpstreamSourceType, UpstreamSpec
 
     bundle_root = (
         target_root or project_state.config.resolve_bundles_dir(project_state.root)
@@ -363,7 +363,7 @@ def scaffold_case_bundle(
 
 
 def _classify_source(source: str) -> SourceDescriptor:
-    from ...domain.models import UpstreamSourceType
+    from ...models import UpstreamSourceType
 
     path = Path(source).expanduser()
     if path.exists():
@@ -384,7 +384,7 @@ def _classify_source(source: str) -> SourceDescriptor:
 
 
 def _build_upstream_spec(descriptor: SourceDescriptor) -> "UpstreamSpec":
-    from ...domain.models import UpstreamSourceType, UpstreamSpec
+    from ...models import UpstreamSourceType, UpstreamSpec
 
     if descriptor.source_type == UpstreamSourceType.LOCAL:
         return UpstreamSpec(source_type=descriptor.source_type, path=descriptor.value)
@@ -403,7 +403,7 @@ def _materialize_source(
     ref: str | None = None,
     project_state: ProjectConfigState | None = None,
 ) -> None:
-    from ...domain.models import UpstreamSourceType
+    from ...models import UpstreamSourceType
 
     with tempfile.TemporaryDirectory(prefix="ae_bundle_materialize_") as tmpdir:
         temp_root = Path(tmpdir) / "materialized"
@@ -517,7 +517,7 @@ def _default_expected_output_text(case_id: str) -> str:
 
 
 def _canonical_oracle_phases() -> list[str]:
-    from ...domain.models import OraclePhaseName
+    from ...models import OraclePhaseName
 
     return [
         OraclePhaseName.ENV_SETUP.value,

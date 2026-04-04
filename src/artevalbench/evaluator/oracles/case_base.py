@@ -3,7 +3,7 @@ from __future__ import annotations
 import types
 from pathlib import Path
 
-from ...domain.models import OracleContext
+from ...models import OracleContext
 from ..constants import REFS_DIRNAME
 from .artifact_build_checks import OracleArtifactBuildBase
 from .benchmark_prep_checks import OracleBenchmarkPrepBase

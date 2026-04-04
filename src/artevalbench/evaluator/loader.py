@@ -8,7 +8,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib  # type: ignore[no-redef]
 
-from ..domain.models import CaseSpec
+from ..models import CaseSpec
 from .constants import CASE_MANIFEST_FILENAME, ORACLE_DIRNAME, REFS_DIRNAME
 
 
