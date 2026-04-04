@@ -6,11 +6,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from ..domain.models import (
+    _Model,
     AgentResult,
-    CaseCardSpec,
+    CaseCardSpec as CasePlan,
     CaseRunResult,
     CaseStatus,
     OracleResult,
@@ -26,7 +27,7 @@ from .case_runner import CaseRunner
 from .cases import expand_case_dirs, resolve_case_dir
 
 
-class BenchmarkSummary(BaseModel):
+class BenchmarkSummary(_Model):
     run_label: str
     model_name: str
     agent_kind: str
@@ -45,7 +46,7 @@ class BenchmarkSummary(BaseModel):
     status: str
 
 
-class BenchmarkRunResult(BaseModel):
+class BenchmarkRunResult(_Model):
     output_dir: str
     case_results_path: str
     summary_path: str
@@ -106,7 +107,7 @@ class BenchmarkRunner:
                         case_dir=str(case_root),
                         artifact_dir="",
                         output_dir="",
-                        case_card=CaseCardSpec(
+                        case_brief=CasePlan(
                             core_claim="n/a",
                             acceptable_evidence="n/a",
                             allowed_tolerance="n/a",
@@ -288,7 +289,7 @@ def write_benchmark_outputs(
             f.write(cr.model_dump_json())
             f.write("\n")
 
-    sp.write_text(json.dumps(summary.model_dump(), indent=2), encoding="utf-8")
+    sp.write_text(json.dumps(summary.to_json_dict(), indent=2), encoding="utf-8")
     mp.write_text(
         render_benchmark_summary_markdown(summary, case_results, expected_scores=expected_scores),
         encoding="utf-8",
@@ -329,7 +330,7 @@ def render_benchmark_summary_markdown(
             if case_result.oracle_result.score is not None and expected_score is not None
             else "n/a"
         )
-        claim = _compact_text(case_result.case_card.core_claim, max_length=96).replace("|", "\\|")
+        claim = _compact_text(case_result.case_brief.core_claim, max_length=96).replace("|", "\\|")
         lines.append(
             f"| `{case_result.id}` | {claim} | "
             f"`{case_result.status.value}` | `{case_result.oracle_result.status.value}` | "
@@ -387,6 +388,13 @@ def _summarize(
         phase_ratio=phase_ratio,
         status=status,
     )
+
+
+def _read_case_run_result(case_output_dir: Path) -> CaseRunResult:
+    path = case_output_dir / "case_result.json"
+    if not path.is_file():
+        raise RuntimeError(f"missing case_result.json under {case_output_dir}")
+    return CaseRunResult.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def _load_expected_scores(

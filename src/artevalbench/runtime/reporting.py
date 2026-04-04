@@ -15,9 +15,7 @@ from ..constants import (
     TOOL_OUTPUT_DIRNAME,
     TRANSCRIPT_BASENAME,
 )
-import json
-
-from ..domain.models import PromptBundle, RunResult, SummaryResult, TaskStatus
+from ..domain.models import PromptBundle, RunResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,13 +58,6 @@ def write_prompt_file(prompt_path: Path, prompt_bundle: PromptBundle) -> None:
     )
 
 
-def persist_result(output_dir: Path, result: RunResult) -> None:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    with (output_dir / "result.jsonl").open("a", encoding="utf-8") as handle:
-        handle.write(result.model_dump_json())
-        handle.write("\n")
-
-
 def append_run_result(output_dir: Path, result: RunResult) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     with (output_dir / "result.jsonl").open("a", encoding="utf-8") as handle:
@@ -106,19 +97,3 @@ def write_task_report(report_path: Path, result: RunResult, agent_summary: str) 
         lines.extend(["", "## Error", "", result.error])
     lines.extend(["", "## Agent Summary", "", agent_summary])
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def write_summary(output_dir: Path, results: list[RunResult]) -> SummaryResult:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    summary = SummaryResult(
-        total=len(results),
-        success=sum(1 for r in results if r.status == TaskStatus.SUCCESS),
-        error=sum(1 for r in results if r.status == TaskStatus.ERROR),
-        interrupted=sum(1 for r in results if r.status == TaskStatus.INTERRUPTED),
-        skipped=sum(1 for r in results if r.status == TaskStatus.SKIPPED),
-    )
-    (output_dir / "summary.json").write_text(
-        json.dumps(summary.model_dump(mode="json"), indent=2),
-        encoding="utf-8",
-    )
-    return summary

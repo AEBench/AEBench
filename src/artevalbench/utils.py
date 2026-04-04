@@ -51,6 +51,12 @@ def preserve_failed_workspace() -> bool:
 	return get_settings().preserve_failed_workspace
 
 
+def send_event(listener, event) -> None:
+	"""Null-safe event emit: calls listener.emit(event) if listener supports it."""
+	if listener is not None and hasattr(listener, "emit"):
+		listener.emit(event)
+
+
 class Tee:
 	def __init__(self, stream: TextIO, log_path: Path) -> None:
 		self._stream = stream
@@ -98,9 +104,3 @@ class Tee:
 		if not isinstance(value, int):
 			raise io.UnsupportedOperation("underlying stream does not support fileno")
 		return value
-
-
-def send_event(listener, event) -> None:
-	"""Null-safe event emit: calls listener.emit(event) if listener supports it."""
-	if listener is not None and hasattr(listener, "emit"):
-		listener.emit(event)

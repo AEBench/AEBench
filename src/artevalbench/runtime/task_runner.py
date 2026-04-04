@@ -114,7 +114,7 @@ class TaskRunner:
 
             task_text = prepend_case_card(
                 read_instruction_text(workspace_path, spec.instructions_path),
-                spec.case_card,
+                spec.case_brief,
             )
             task_text = append_summary_instruction(task_text, summary_path.name)
 

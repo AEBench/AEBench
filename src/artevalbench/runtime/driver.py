@@ -215,8 +215,8 @@ def get_agent(settings: Config) -> Agent:
 
     if agent_type == AgentType.MCP_CLIENT:
         return CliAgent(
-            argv=list(agent.cli_argv),
-            env=dict(agent.cli_env),
+            argv=list(agent.mcp_argv),
+            env=dict(agent.mcp_env),
             name=AgentType.MCP_CLIENT.value,
         )
 

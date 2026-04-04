@@ -130,7 +130,7 @@ class CaseRunner:
                     case_dir=str(case_root),
                     artifact_dir=str(artifact_dir_for(case_root)),
                     output_dir=str(output_dir),
-                    case_card=case.case_card,
+                    case_brief=case.case_brief,
                     runtime_result=runtime_result,
                     oracle_result=oracle_result,
                 )

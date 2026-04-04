@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from ..evaluator import artifact_dir_for, has_local_artifact
 from ..evaluator.loader import load_case_spec
 from ..cache.git import protected_git_checkout_paths, resolve_git_bundle_artifact
-from ..domain.models import ArchiveSource, GitSource, LocalSource, OverlaySource, SourceSpec as BenchSource, UpstreamSourceType
+from ..domain.models import ArchiveSource, SourceSpec as BenchSource, GitSource, LocalSource, OverlaySource, UpstreamSourceType
 from ..project_config import ArtifactMode, load_project_config
 
 if TYPE_CHECKING:
@@ -88,7 +88,7 @@ def task_from_case_spec(
 ) -> TaskConfig:
     state = project_state or load_project_config(case_dir)
     source = _task_source_from_case(case_dir.resolve(), case, project_state=state)
-    return case.run.model_copy(update={"source": source, "case_card": case.case_card})
+    return case.run.model_copy(update={"source": source, "case_brief": case.case_brief})
 
 
 def export_case_dirs(

@@ -59,7 +59,9 @@ class SubprocessOracleRunner:
             context_path = tmp_root / "context.json"
             result_path = tmp_root / "oracle.json"
 
-            if hasattr(runtime_result, "model_dump"):
+            if hasattr(runtime_result, "to_json_dict"):
+                runtime_payload = runtime_result.to_json_dict()
+            elif hasattr(runtime_result, "model_dump"):
                 runtime_payload = runtime_result.model_dump()
             else:
                 runtime_payload = runtime_result
@@ -126,7 +128,7 @@ def _worker() -> int:
         output_dir=Path(payload["output_dir"]).resolve(),
     )
     Path(args.result_file).write_text(
-        json.dumps(result.model_dump(), indent=2),
+        json.dumps(result.to_json_dict(), indent=2),
         encoding="utf-8",
     )
     return 0
