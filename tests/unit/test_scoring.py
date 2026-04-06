@@ -5,19 +5,19 @@ from pathlib import Path
 
 import pytest
 
-from artevalbench.evaluator.oracles.case_base import (
+from evaluator.oracles.case_base import (
 	CaseOracleArtifactBuildBase,
 	CaseOracleEnvSetupBase,
 )
-from artevalbench.evaluator.oracles.discovery import (
+from evaluator.oracles.discovery import (
 	ARTIFACT_BUILD,
 	ENV_SETUP,
 	ORACLE_PHASE_PRIORITIES,
 	DiscoveredPhase,
 )
-from artevalbench.evaluator.oracles.execution import run_phases
-from artevalbench.evaluator.oracles.env_setup_checks import FilesystemPathCheck
-from artevalbench.models import OracleInput, OracleFailureMode, OracleStatus
+from evaluator.oracles.execution import run_phases
+from evaluator.oracles.env_setup_checks import FilesystemPathCheck
+from models import OracleInput, OracleFailureMode, OracleStatus
 
 
 class _PassEnvSetup(CaseOracleEnvSetupBase):

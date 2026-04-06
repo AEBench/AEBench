@@ -1,12 +1,12 @@
-"""Prompt template rendering tests."""
+"""Prompt template generation tests."""
 from __future__ import annotations
 
 import pytest
 
-from artevalbench.models import PromptProfile, RuntimeMode
-from artevalbench.prompting import build_prompt_bundle
+from models import PromptProfile, RuntimeMode
+from prompting import build_prompt_bundle
 
-from artevalbench.models import PromptArgs
+from models import PromptArgs
 
 
 def _docker_ctx(**overrides) -> PromptArgs:

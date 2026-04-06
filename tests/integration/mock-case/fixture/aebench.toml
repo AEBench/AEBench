@@ -1,0 +1,6 @@
+# Workspace configuration for the mock end-to-end integration test.
+# case_runs_dir is relative so all output lands inside tmp_path, never in ~/.cache.
+case_runs_dir = "case-runs"
+
+[agent]
+agent_type = "mock"

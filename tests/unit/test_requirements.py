@@ -1,17 +1,17 @@
-"""Check class tests: CheckResult, FilesystemPathCheck, DependencyVersionCheck."""
+"""Oracle internal check logic tests."""
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from artevalbench.evaluator.oracles.env_setup_checks import (
+from evaluator.oracles.env_setup_checks import (
 	DependencyVersionCheck,
 	FilesystemPathCheck,
 	PathType,
 	VersionCompare,
 )
-from artevalbench.evaluator.oracles.utils import CheckResult, CheckOutcome
+from evaluator.oracles.utils import CheckResult, CheckOutcome
 
 
 

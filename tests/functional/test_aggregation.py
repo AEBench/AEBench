@@ -1,4 +1,4 @@
-"""Result aggregation tests: pass ratio, phase score, markdown, output files."""
+"""AEBench results aggregation 9e.g., pass raito, phase score, output reports) tests."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from artevalbench.models import (
+from models import (
 	AgentResult,
 	CasePlan,
 	CaseRunResult,
@@ -19,7 +19,7 @@ from artevalbench.models import (
 	RunResult,
 	TaskStatus,
 )
-from artevalbench.runtime.benchmark_runner import (
+from runtime.benchmark_runner import (
 	_summarize,
 	render_benchmark_summary_markdown,
 	write_benchmark_outputs,

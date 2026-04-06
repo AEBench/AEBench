@@ -1,0 +1,6 @@
+{
+  "cases_dir": "bundles",
+  "cases": {
+    "mock_apt_case": { "path": "bundles/mock_apt_case" }
+  }
+}

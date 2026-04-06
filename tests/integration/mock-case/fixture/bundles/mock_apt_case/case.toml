@@ -1,0 +1,33 @@
+id = "mock_apt_case"
+
+[case_brief]
+core_claim = "apt-get install zip completes without errors on a Debian-based system."
+acceptable_evidence = "All four oracle phases return no failing requirements."
+allowed_tolerance = "n/a"
+
+[run]
+id = "mock_apt_case"
+
+[run.instructions]
+path = "README.md"
+
+[run.runtime]
+mode = "local"
+timeout_ms = 60000
+
+[run.artifact_requirements]
+docker = false
+compose = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "fail_fast"
+placeholder = false
+
+[upstream]
+source_type = "local"

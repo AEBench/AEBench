@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from artevalbench.evaluator.oracles.discovery import (
+from evaluator.oracles.discovery import (
 	ARTIFACT_BUILD,
 	BENCHMARK_PREP,
 	ENV_SETUP,
@@ -32,25 +32,25 @@ def _make_case(tmp_path: Path) -> tuple[Path, Path]:
 
 
 _ENV_SETUP = """\
-	from artevalbench.evaluator.oracles.case_base import CaseOracleEnvSetupBase
+	from evaluator.oracles.case_base import CaseOracleEnvSetupBase
 	class OracleEnvSetup(CaseOracleEnvSetupBase):
 		def requirements(self): return []
 """
 
 _ARTIFACT_BUILD = """\
-	from artevalbench.evaluator.oracles.case_base import CaseOracleArtifactBuildBase
+	from evaluator.oracles.case_base import CaseOracleArtifactBuildBase
 	class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 		def requirements(self): return []
 """
 
 _BENCHMARK_PREP = """\
-	from artevalbench.evaluator.oracles.case_base import CaseOracleBenchmarkPrepBase
+	from evaluator.oracles.case_base import CaseOracleBenchmarkPrepBase
 	class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 		def requirements(self): return []
 """
 
 _EXPERIMENT_RUNS = """\
-	from artevalbench.evaluator.oracles.case_base import CaseOracleExperimentRunsBase
+	from evaluator.oracles.case_base import CaseOracleExperimentRunsBase
 	class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 		def requirements(self): return []
 """
@@ -98,7 +98,7 @@ def test_phase_priority_ordering(tmp_path: Path) -> None:
 def test_non_oracle_class_ignored(tmp_path: Path) -> None:
 	case_dir, oracle_dir = _make_case(tmp_path)
 	content = """\
-		from artevalbench.evaluator.oracles.case_base import CaseOracleEnvSetupBase
+		from evaluator.oracles.case_base import CaseOracleEnvSetupBase
 
 		class CommonUtils:
 			def helper(self): pass
@@ -118,7 +118,7 @@ def test_non_oracle_class_ignored(tmp_path: Path) -> None:
 def test_abstract_base_not_discovered(tmp_path: Path) -> None:
 	case_dir, oracle_dir = _make_case(tmp_path)
 	content = """\
-		from artevalbench.evaluator.oracles.case_base import CaseOracleEnvSetupBase
+		from evaluator.oracles.case_base import CaseOracleEnvSetupBase
 
 		class OracleEnvSetup(CaseOracleEnvSetupBase):
 			def requirements(self): return []

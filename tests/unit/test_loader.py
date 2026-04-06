@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from artevalbench.evaluator.loader import CaseBundleError, load_case_spec
+from evaluator.loader import CaseBundleError, load_case_spec
 
 
 def _write(path: Path, content: str) -> None:
@@ -32,7 +32,7 @@ _MINIMAL_TOML = """\
 """
 
 _ORACLE_STUB = """\
-	from artevalbench.evaluator.oracles.case_base import CaseOracleEnvSetupBase
+	from evaluator.oracles.case_base import CaseOracleEnvSetupBase
 	class OracleEnvSetup(CaseOracleEnvSetupBase):
 		def requirements(self): return []
 """
