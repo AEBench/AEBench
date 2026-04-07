@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "cases_dir": "cases",
+  "default_source": {
+    "url": "git@github.com:sys-intelligence/ArtEvalBench.git",
+    "ref": null,
+    "bundles_subdir": "cases"
+  },
+  "cases": {
+    "eurosys25_depsurf": {
+      "path": "cases/eurosys25_depsurf"
+    },
+    "eurosys25_egwalker": {
+      "path": "cases/eurosys25_egwalker"
+    },
+    "osdi24_anvil": {
+      "path": "cases/osdi24_anvil"
+    },
+    "osdi24_eet": {
+      "path": "cases/osdi24_eet"
+    },
+    "osdi25_neutrino": {
+      "path": "cases/osdi25_neutrino"
+    },
+    "sosp23_acto": {
+      "path": "cases/sosp23_acto"
+    },
+    "sosp24_wasabi": {
+      "path": "cases/sosp24_wasabi"
+    }
+  }
+}

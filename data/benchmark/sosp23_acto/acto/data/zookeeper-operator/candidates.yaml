@@ -1,6 +1,0 @@
-spec:
-  replicas: 
-    candidates:
-      - 1
-      - 2
-      - 3
