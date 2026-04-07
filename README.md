@@ -1,186 +1,308 @@
-# ArtEvalBench
+# AEBench
 
-`ArtEvalBench` is a benchmark for evaluating AI agents against Artifact Evaluation (AE) tasks ([why artifact evaluation?](WHY.md)). We believe that, despite the complexity of the AE process, AI agents can be succesfully trained to automatically evaluate artifacts that accompany research papers.
+AEBench is a benchmark for evaluating AI agents on Artifact Evaluation (AE) tasks. It packages official AE cases as versioned cases, runs them through a shared runtime, and records benchmark-level results in a reproducible way. For context on why this benchmark exists, see [WHY.md](WHY.md).
 
-## Contributor's guide
+## Overview
 
-#### » Overview and high-level structure
+The current repository is organized around three layers:
 
-To train and improve AE agents in a principled way, we introduce `ArtEvalBench`, a curated collection of artifacts accompanying peer-reviewed papers. To ensure a fair comparison, we include artifacts that have already been evaluated in an official AE process and awarded all three badges by the committee. Each entry includes the original artifact (instructions, code, scripts, datasets/benchmarks, etc.), the original paper, and a collection of "oracle" scripts that define objective checkpoints at four canonical stages: environment setup, build/install, benchmark preparation, and experiment execution.
+- `cases.json`: the versioned catalog of official case ids
+- `cases/<case_id>/`: case content for each official case
+- `src/`: the runtime, CLI, reporting, and Docker execution logic
 
-`ArtEvalBench` is designed to evaluate agents on capability (which stages they complete), efficiency (wall-clock time and intervention count), and fidelity (how closely reproduced results match those reported).
+Each case contains the artifact instructions, oracle entrypoint, and reference data needed to score a case. The benchmark still supports low-level JSONL runtime tasks, but case workflows are the primary authoring and execution path.
 
-To check those capabilities, each artifact includes four oracle scripts that encode minimal, verifiable success criteria for each of the four stages. The oracles are invoked non-interactively and must be idempotent. Conceptually, these four stages correspond to:
+## Quick Start
 
-1. **Environment setup.** verifies presence and versions of required tools, libraries, or other dependencies; confirms hardware availability when applicable; and checks that configurations are portable rather than hardcoded or tied to a specific machine.
-2. **Build (and install) the artifact.** confirms a complete build (or install) operation from a specified version, with expected binaries/modules present; running tests, when available, or simple validation commands like invoking `--help` or equivalent.
-3. **Benchmark preparation.** asserts that datasets/benchmarks are present and checksums match; verifies that necessary third-party tools compile and the artifact's instrumentation/monitoring hooks are enabled, if applicable.
-4. **Experiment runs.** executes each experiment according to the authors' guidelines; checks that the artifact produces the expected metrics, logs, files, figures, etc.; provides an initial assessment relative to specified tolerance bounds.
+Requirements:
 
-#### » Adding a new artifact
+- Python 3.11+
+- `ANTHROPIC_API_KEY` for the default Claude SDK driver
+- Docker for official benchmark runs
 
-Adding to the benchmark requires users to include a new entry into `ArtEvalBench` [schema file](data/benchmark/arteval_tasks.jsonl), where:
-- `artifact_id` is a unique identifier for the artifact;
-- `artifact_dir` the artifact directory within `data/benchmark/`;
-- `artifact_readme` is the path to the artifact's README file that contains the step-by-step guide for preparing, installing, and running experiments;
-- `artifact_url` the URL to the original artifact; 
-- `evaluator` is a path to the evaluator's `main.py` entrypoint;
-- `expected_score` is the total expected score for this artifact, which defaults to 4 as the agent is evaluated on it succesfully completing the four canonical AE stages (!!NOTE!! We encourage users not to change this value, unless they opt for another universal metric for artifact evaluation).
-- `docker_evn` (optional) points to a Docker image on Docker Hub.
+Install the project:
 
-It also requires users to extend the artifact they plan to add with a self-contained evaluator in an `_agent_eval/` directory. This evaluator encodes *minimal*, objective success criteria for the four canonical AE stages and is what the benchmark actually calls.
+```bash
+git clone https://github.com/sys-intelligence/AEBench.git
+cd AEBench
 
-Using WASABI's [agent evaluator](data/benchmark/sosp24_wasabi/wasabi/_agent_eval/) as a template, users will therefore need to extend the artifact with:
-
-1. An `_agent_eval/` package which contains all benchmark-specific code and does *not* modify your original artifact logic.
-
-2. One oracle module per stage. In this benchmark, each stage is typically implemented as a **derived oracle class** that overrides `requirements()` and returns an ordered list of programmatic checks (requirements). The base oracle handles running requirements, producing a structured report, printing a PASS/FAIL summary, and returning `True`/`False` from `run(verbose=...)`.
-
-  A typical `_agent_eval/` layout looks like:
-
-   ```text
-   _agent_eval/
-   ├── main.py
-   ├── oracle_env_setup.py
-   ├── oracle_build_install.py
-   ├── oracle_prep_benchmark.py
-   ├── oracle_run_experiments.py
-   └── refs/
-       ├── datasets.ref.json
-       └── results.ref.json
-   ```
-
-   The `refs/` directory stores machine-checkable ground truth (e.g., dataset manifests/checksums, expected metric tables, or summaries of deterministic outputs) used by benchmark-prep and experiment-runs checks.
-
-   Here is a simplified environment setup oracle (one dependency/version requirement):
-
-   ```python
-   # _agent_eval/oracle_env_setup.py
-   import sys
-   from collections.abc import Sequence
-
-   from evaluator.oracle_env_setup_primitives import (
-       DependencyVersionRequirement,
-       OracleEnvSetupBase,
-       VersionCompare,
-   )
-
-   class OracleEnvSetup(OracleEnvSetupBase):
-       def __init__(self, *, config, logger):
-           super().__init__(logger=logger)
-           self._config = config
-
-       def requirements(self) -> Sequence[DependencyVersionRequirement]:
-           return (
-               DependencyVersionRequirement(
-                   name="python_version",
-                   cmd=(sys.executable, "--version"),
-                   required_version=(3, 10, 0),
-                   compare=VersionCompare.GEQ,
-                   timeout_seconds=5.0,
-               ),
-           )
-   ```
-
-   Also, note that each oracle should be:
-   - Non-interactive, meaning not expecting input or prompt interactions.
-   - Idempotent, meaning safe to run multiple times without side-effects.
-   - Time-bounded, meaning every command has a timeout.
-   - Binary, meaning it returns pass/fail (as `True`/`False`) for the stage.
-
-  For more details, check out this [how-to guide](src/evaluator/HOWTO.md)
-
-1. A single `main.py` orchestrator, the entrypoint used by ArtEvalBench, which constructs an `EntryConfig`, invokes the four oracles in order, and returns an overall score (an integer between 0 and 4):
-
-   ```python
-   # _agent_eval/main.py
-   import os
-   from pathlib import Path
-
-   from evaluator.utils import EntryConfig, LoggerConfig, get_logger, record_result
-
-   from oracle_env_setup import OracleEnvSetup
-   from oracle_build_install import OracleBuildInstall
-   from oracle_prep_benchmark import OraclePrepBenchmark
-   from oracle_run_experiments import OracleRunExperiments
-
-   CONFIG = EntryConfig(
-       name="my-artifact",
-       home_dir=Path.home() / "artevalbench" / "my-artifact",
-       repository_paths={
-           "my-artifact": Path.home() / "artevalbench" / "my-artifact" / "repo",
-       },
-       results_paths={
-           "results": Path.home() / "artevalbench" / "my-artifact" / "repo" / "outputs" / "results.json",
-       },
-       ground_truth_paths={
-           "datasets": Path.home() / "artevalbench" / "my-artifact" / "_agent_eval" / "refs" / "datasets.ref.json",
-           "results": Path.home() / "artevalbench" / "my-artifact" / "_agent_eval" / "refs" / "results.ref.json",
-       },
-       similarity_ratio=0.75,
-   )
-
-   def main(argv: list[str]) -> int:
-       verbose = "--verbose" in argv
-       logger = get_logger(
-           LoggerConfig(root_name=os.environ.get("EVAL_LOGGER_NAME", "ARTEVAL-EVAL"))
-       )
-
-       results: dict[str, int] = {}
-       score = 0
-
-       score += record_result(
-           results, "env_setup",
-           OracleEnvSetup(config=CONFIG, logger=logger).run(verbose=verbose),
-       )
-       score += record_result(
-           results, "build_install",
-           OracleBuildInstall(config=CONFIG, logger=logger).run(verbose=verbose),
-       )
-       score += record_result(
-           results, "prep_benchmark",
-           OraclePrepBenchmark(config=CONFIG, logger=logger).run(verbose=verbose),
-       )
-       score += record_result(
-           results, "run_experiments",
-           OracleRunExperiments(config=CONFIG, logger=logger).run(verbose=verbose),
-       )
-
-       logger.info("Stage scores: %s", results)
-       logger.info("FINAL_SCORE %d/4", score)
-       return score
-
-   if __name__ == "__main__":
-       raise SystemExit(main([]))
-   ```
-
-   Note that the `ArtEvalBench` framework will invoke `main.py` to run the oracles in order, compute the agent's score for this particular artifact, and store it into a JSON file that aggregates these outcomes for the entire benchmark.
-
-## Benchmark Setup
-
-#### » Run the benchmark
-
-To run the benchmark:
-
-1. Execute the `run.sh` script with your model:
-
-```sh
-./run.sh <model_name>
-# Example: ./run.sh claude-sonnet-4-5-20250929
+pip install -e ".[dev]"
 ```
 
-2. Configure your LLM endpoint in `env.toml`:
-* For Azure/OpenAI models: Set `AZURE_API_KEY`, `AZURE_API_BASE`, `AZURE_API_VERSION`
-* For Anthropic models: Set `ANTHROPIC_API_KEY`
-* For self-hosted models: Configure `OPENAI_API_TYPE` and `OPENAI_BASE_URL`
+Build the repo-owned runtime image used by official Docker runs:
 
-3. Results will be saved to `outputs/` with timestamp and model information
+```bash
+docker build -f docker/agent/Dockerfile -t aebench-agent:latest .
+```
 
-#### » Supported Agents
+## Running The Benchmark
 
-The benchmark supports multiple AI agents:
-- **Claude Code**: Anthropic's code assistant
-- **Mini SWE Agent**: The compact version of [SWE-agent](https://github.com/SWE-agent) assistant
-- **OpenHands**: Open-source coding agent
+Run the full official catalog:
 
-To add your own agent to the benchmark, see [add_agents.md](add_agents.md).
+```bash
+export ANTHROPIC_API_KEY=...
+aebench run --output-dir outputs/benchmark/official-baseline
+```
+
+Run a subset of official cases:
+
+```bash
+aebench run sosp24_wasabi osdi24_anvil --output-dir outputs/benchmark/official-subset
+```
+
+Run a single case directly:
+
+```bash
+aebench case run sosp24_wasabi
+```
+
+Run the low-level runtime with an explicit JSONL task file:
+
+```bash
+aebench runtime run --input-file /path/to/tasks.jsonl
+```
+
+Official benchmark runs default to Docker runtime. Case-level workflows can still use local runtime where appropriate.
+
+Each benchmark run writes:
+
+- `benchmark_results.jsonl`: one machine-readable record per case
+- `benchmark_summary.json`: aggregate run metrics and run-level metadata
+- `benchmark_summary.md`: a human-readable review view that joins lightweight case context from the existing cases
+
+If you run official cases individually, you can still aggregate them into the same benchmark summary format:
+
+```bash
+aebench case summarize \
+  outputs/case-runs \
+  --output-dir outputs/benchmark/official-baseline \
+  --run-label official-baseline
+```
+
+For the recommended baseline workflow, including how to aggregate per-case outputs from CI artifacts or local runs, see [docs/howtos/run_benchmark.md](docs/howtos/run_benchmark.md).
+
+
+## Adding a New Artifact or "Cases"
+
+New benchmark cases are added as cases rather than through the legacy benchmark-workspace layout.
+
+Common entrypoints:
+
+```bash
+aebench init
+aebench case init --blank --id my-case
+aebench case init https://github.com/org/repo.git --id my-case --ref main
+aebench case export my-case --output /tmp/tasks.jsonl
+```
+
+For the first-time authoring walkthrough, including the current interactive wizard on `case init`, `case.toml` fields, registry behavior, and oracle implementation, see [docs/howtos/add_case.md](docs/howtos/add_case.md).
+
+### Authoring Entry Points
+
+Initialize a workspace:
+
+```bash
+aebench init
+```
+
+Create a new empty case:
+
+```bash
+aebench case init --blank --id my-case
+```
+
+Create a new case from a source:
+
+```bash
+aebench case init ./path/to/artifact --id my-case
+aebench case init https://github.com/org/repo.git --id my-case --ref main
+aebench case init https://example.com/archive.tar.gz --id my-case
+```
+
+When `case init` runs in an interactive terminal, it opens the authoring wizard by default unless you pass `--no-prompt`.
+
+### Common Commands
+
+Run a case:
+
+```bash
+aebench case run my-case
+aebench case run cases/my-case
+```
+
+Export one or more cases to low-level runtime JSONL:
+
+```bash
+aebench case export my-case --output /tmp/tasks.jsonl
+aebench case export cases --output /tmp/all-tasks.jsonl
+```
+
+Run the official benchmark catalog:
+
+```bash
+aebench run
+aebench run sosp24_wasabi osdi24_anvil
+```
+
+### `case.toml`
+
+Minimal example:
+
+```toml
+id = "demo-case"
+
+[case_brief]
+core_claim = "Summarize the clean-baseline claim this case should validate."
+acceptable_evidence = "Describe what should count as success for this case."
+allowed_tolerance = "n/a"
+
+[run]
+id = "demo-case"
+
+[run.instructions]
+path = "README.md"
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 120000
+gpu = false
+interactive = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "fail_fast"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/org/repo.git"
+ref = "deadbeef..."
+```
+
+## Agent Drivers
+
+The runtime currently supports built-in drivers for Claude SDK, mock, Python,
+CLI, remote, and MCP-capable clients.
+
+Adding or modifying an agent driver is a code-level integration inside `src/artevalbench`.
+
+## Adding Or Modifying An Agent Driver
+
+Agent integrations plug into a single runtime path:
+
+`TaskRunner → RunSession → Agent → RuntimeBackend`
+
+If you only want to add a new benchmark case, you usually do not need to touch the driver layer.
+
+### Current Drivers
+
+The runtime currently exposes these driver kinds:
+
+- `claude_sdk`: the default production driver
+- `mock`: a test-only driver for smoke and offline workflow checks
+- `python`: load a driver factory from Python
+- `cli`: launch an external CLI through the runtime
+- `remote`: call an external HTTP endpoint
+- `mcp_client`: launch an MCP-capable client
+
+Driver selection is resolved from project and user configuration and exposed as `[agent]` configuration. In this repo, `[agent]` means "agent driver configuration".
+
+### Architecture
+
+The runtime is built around four classes:
+
+- `AppState`
+  Top-level context. Holds project config and all runtime settings. Every runner receives one.
+- `TaskRunner`
+  Creates the workspace, builds the prompt, starts the backend and agent, collects results.
+- `RunSession`
+  Frozen dataclass carrying per-run state (workspace paths, prompt, runtime backend handle) shared between backend and agent.
+- `Agent`
+  Implements `prepare()`, `execute()`, and `cleanup()` for a specific driver kind.
+- `RuntimeBackend`
+  Implements `prepare()`, `collect_artifacts()`, `cleanup()`, and `runtime_result()` for `local` and `docker` runtimes.
+
+### How To Add A Driver
+
+1. Add the new type to the `AgentType` enum in `src/settings.py`.
+
+2. Implement the `Agent` protocol in `src/runtime/driver.py`:
+
+```python
+class MyAgent:
+    name: str = "my_agent"
+
+    def prepare(self, session, listener=None) -> None:
+        pass
+
+    def execute(self, request: AgentRequest, session, listener=None) -> AgentResult:
+        # session.host_workspace — workspace path on host
+        # session.runtime_workspace — workspace path inside the container
+        # request.system_prompt, request.initial_prompt — prompts
+        # request.timeout_ms — timeout
+        ...
+        return AgentResult(
+            model=request.model,
+            exit_code=0,
+            output="Agent summary here",
+            message_count=42,
+        )
+
+    def cleanup(self, session, listener=None) -> None:
+        pass
+```
+
+3. Register it in `get_agent()` in `src/runtime/driver.py`:
+
+```python
+if agent_type == AgentType.MY_AGENT:
+    return MyAgent()
+```
+
+4. Update config loading in `src/settings.py` and `src/project_config.py` if the new driver needs config or environment inputs.
+
+### Tests To Add
+
+At minimum, update or add:
+
+- coverage for `get_agent()` with the new driver type
+- smoke coverage if the driver can run offline
+
+### Practical Advice
+
+- Prefer drivers over ad hoc wrappers or one-off scripts.
+- Keep driver-specific config shaping in one place.
+- Do not introduce driver-specific assumptions into case bundles.
+- If a driver is test-only, keep it off the production default path.
+- See [docs/howtos/add_agent.md](docs/howtos/add_agent.md) for the full walkthrough, including the CLI and Python agent options that may save you from writing a custom class at all.
+
+
+## Runtime Backends
+
+Most new integrations only need a driver. Add or modify a `RuntimeBackend` only if the runtime itself changes.
+
+- `LocalRuntime`
+  Runs commands directly on the host. Used when `runtime.mode = "local"`.
+- `DockerRuntime`
+  Owns container lifecycle, workspace mounting, and artifact collection. Used when `runtime.mode = "docker"`.
+
+If a driver needs different container or host behavior, express it through the runtime backend and keep the driver itself environment-agnostic.
+
+## Development and Testing
+
+Useful commands:
+
+```bash
+uv run python -m pytest
+uv run python -m pytest tests/unit/
+uv run python -m pytest tests/functional/
+uv run python -m pytest tests/integration/
+uv run python -m pytest -m sanity
+uv run --group dev mypy src
+uv run --group dev ruff check src tests
+uv run --group dev ruff format --check src tests
+```
