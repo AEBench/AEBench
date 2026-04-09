@@ -6,8 +6,8 @@ AEBench supports multiple agent backends. This guide covers all the ways to plug
 
 `TaskRunner` assembles two things and passes them to the agent:
 
-1. **`AgentRequest`** — model name, system prompt, initial prompt, timeout, agent-specific options
-2. **`RunSession`** — workspace paths, runtime context (local vs Docker), infrastructure handles
+1. **`AgentRequest`**: model name, system prompt, initial prompt, timeout, agent-specific options
+2. **`RunSession`**: workspace paths, runtime context (local vs Docker), infrastructure handles
 
 The agent translates these into actual model calls and returns an `AgentResult` with exit code, output text, and message count.
 
@@ -114,10 +114,10 @@ class MyAgent:
         pass
 
     def execute(self, request: AgentRequest, session, listener=None) -> AgentResult:
-        # session.host_workspace — workspace path on host
-        # session.runtime_workspace — workspace path inside the container
-        # request.system_prompt, request.initial_prompt — prompts
-        # request.timeout_ms — timeout
+        # session.host_workspace: workspace path on host
+        # session.runtime_workspace: workspace path inside the container
+        # request.system_prompt, request.initial_prompt: prompts
+        # request.timeout_ms: timeout
         ...
         return AgentResult(
             model=request.model,
@@ -146,13 +146,13 @@ And add `MY_AGENT = "my_agent"` to the `AgentType` enum in `settings.py`.
 
 The `session` argument passed to `prepare()` and `execute()` is a `RunSession` frozen dataclass. Key attributes:
 
-- `host_workspace` — workspace path on the host
-- `runtime_workspace` — workspace path inside the container (`"/repo"` for Docker)
-- `host_refs` / `runtime_refs` — refs directory paths
-- `summary_path` — where the agent should write its summary
-- `task_id` — shortcut for `run_spec.id`
-- `timeout_ms` — shortcut for `run_spec.runtime.timeout_ms`
-- `runtime_backend` — the active runtime backend (Docker or local); use it to run commands inside the container
+- `host_workspace`: workspace path on the host
+- `runtime_workspace`: workspace path inside the container (`"/repo"` for Docker)
+- `host_refs` / `runtime_refs`: refs directory paths
+- `summary_path`: where the agent should write its summary
+- `task_id`: shortcut for `run_spec.id`
+- `timeout_ms`: shortcut for `run_spec.runtime.timeout_ms`
+- `runtime_backend`: the active runtime backend (Docker or local); use it to run commands inside the container
 
 ## 8. Testing
 

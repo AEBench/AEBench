@@ -26,8 +26,8 @@ BaseCheck                  (abstract, in oracles/utils.py)
     └── ... (custom checks for specific cases)
 
 OracleEnvSetupBase         (abstract, in oracles/env_setup_checks.py)
-    └── CaseOracleEnvSetupBase     ← inherit from this one
-            └── OracleEnvSetup     ← your concrete class
+    └── CaseOracleEnvSetupBase     # inherit from this one
+            └── OracleEnvSetup     # your concrete class
 
 OracleArtifactBuildBase    (abstract)
     └── CaseOracleArtifactBuildBase
@@ -48,21 +48,21 @@ The `CaseOracleXxxBase` classes add path helpers (`self.workspace_path(...)`, `s
 
 Each oracle gets instantiated with an `OracleInput` containing the relevant directories:
 
-- `case_dir` — root of the case bundle (where `case.toml` lives)
-- `artifact_dir` — the vendored artifact directory (`case_dir/artifact/`)
-- `workspace_dir` — where the agent worked (the temp workspace copy)
-- `output_dir` — where run outputs get stored
-- `runtime_result` — result of the agent run (can be `None` if oracle runs standalone)
+- `case_dir`: root of the case bundle (where `case.toml` lives)
+- `artifact_dir`: the vendored artifact directory (`case_dir/artifact/`)
+- `workspace_dir`: where the agent worked (the temp workspace copy)
+- `output_dir`: where run outputs get stored
+- `runtime_result`: result of the agent run (can be `None` if oracle runs standalone)
 
 `_CaseOracleBase` stores these as resolved paths and exposes helper methods:
 
 ```python
-self.workspace_path()              # → workspace_dir
-self.workspace_path("src")         # → workspace_dir / "src"
-self.artifact_path("data")         # → artifact_dir / "data"
-self.ref_path("timings.ref.json")  # → case_dir / "refs" / "timings.ref.json"
-self.case_path("oracles")          # → case_dir / "oracles"
-self.output_path("results.json")   # → output_dir / "results.json"
+self.workspace_path()              # workspace_dir
+self.workspace_path("src")         # workspace_dir / "src"
+self.artifact_path("data")         # artifact_dir / "data"
+self.ref_path("timings.ref.json")  # case_dir / "refs" / "timings.ref.json"
+self.case_path("oracles")          # case_dir / "oracles"
+self.output_path("results.json")   # output_dir / "results.json"
 ```
 
 For backwards compatibility, `self.paths.workspace_dir` also works (used by existing case oracles).
@@ -72,7 +72,7 @@ For backwards compatibility, `self.paths.workspace_dir` also works (used by exis
 The discovery system (`oracles/discovery.py`) imports every `.py` file from the case's `oracles/` directory, finds non-abstract subclasses of the four base classes, and sorts them by priority:
 
 ```
-ENV_SETUP (100) → ARTIFACT_BUILD (200) → BENCHMARK_PREP (300) → EXPERIMENT_RUNS (400)
+ENV_SETUP (100) ARTIFACT_BUILD (200) BENCHMARK_PREP (300) EXPERIMENT_RUNS (400)
 ```
 
 Some rules:
@@ -96,34 +96,34 @@ If `report().ok` is True, the phase passes. If not, it fails. With `failure_mode
 A **check** is a frozen dataclass inheriting from `BaseCheck`. It represents one specific thing to verify. You declare checks in `requirements()` and the base class runs them automatically.
 
 Every check has:
-- `name` — unique identifier within the phase (e.g., `"rustc"`, `"dataset_file_exists"`)
-- `optional` — if True, failure is a warning not an error
+- `name`: unique identifier within the phase (e.g., `"rustc"`, `"dataset_file_exists"`)
+- `optional`: if True, failure is a warning not an error
 
 The `check()` method returns a `CheckResult`:
-- `ok` — whether the check passed
-- `message` — human-readable description
-- `stdout`, `stderr` — captured output (for command-based checks)
-- `returncode` — process exit code
-- `timed_out` — whether a timeout was hit
+- `ok`: whether the check passed
+- `message`: human-readable description
+- `stdout`, `stderr`: captured output (for command-based checks)
+- `returncode`: process exit code
+- `timed_out`: whether a timeout was hit
 
 ### Built-in check types
 
 **Environment setup (`env_setup_checks.py`):**
-- `DependencyVersionCheck` — runs a command (like `rustc --version`), parses the version, fails if not meeting the required version
-- `EnvironmentVariableCheck` — checks an env var is set and matches (exact, contains, or regex)
-- `FilesystemPathCheck` — checks a path exists and optionally that its a file or directory
+- `DependencyVersionCheck`: runs a command (like `rustc --version`), parses the version, fails if not meeting the required version
+- `EnvironmentVariableCheck`: checks an env var is set and matches (exact, contains, or regex)
+- `FilesystemPathCheck`: checks a path exists and optionally that its a file or directory
 
 **Artifact build (`artifact_build_checks.py`):**
-- `BuildCommandCheck` — runs a build command with a timeout, fails on non-zero exit. Streams output to a bounded buffer to avoid running out of memory on large builds.
+- `BuildCommandCheck`: runs a build command with a timeout, fails on non-zero exit. Streams output to a bounded buffer to avoid running out of memory on large builds.
 
 **Benchmark prep (`benchmark_prep_checks.py`):**
-- `BenchmarkCommandCheck` — runs a setup command and optionally checks output against a signature string
-- `BenchmarkCheck` — backward-compatible wrapper that combines path check + command check
+- `BenchmarkCommandCheck`: runs a setup command and optionally checks output against a signature string
+- `BenchmarkCheck`: backward-compatible wrapper that combines path check + command check
 
 **Experiment runs (`experiment_runs_checks.py`):**
-- `ListSimilarityCheck` — compares observed and reference float sequences using Pearson correlation (or other metrics); fails if below a threshold
-- `ElementwiseEqualityCheck` — compares sequences element-by-element
-- `ElementwiseSimilarityThresholdCheck` — element-wise comparison with per-element tolerance
+- `ListSimilarityCheck`: compares observed and reference float sequences using Pearson correlation (or other metrics); fails if below a threshold
+- `ElementwiseEqualityCheck`: compares sequences element-by-element
+- `ElementwiseSimilarityThresholdCheck`: element-wise comparison with per-element tolerance
 
 ## 7. Scoring
 
@@ -134,10 +134,10 @@ The oracle score is simply the number of phases that passed:
 - At the benchmark level, `phase_ratio` = total points / total possible points
 
 A case's status will be:
-- `SUCCESS` — all phases passed
-- `ERROR` — at least one phase failed or the runtime crashed
-- `INTERRUPTED` — agent was interrupted before the oracle ran
-- `PENDING` — oracle was not reached (runtime failed)
+- `SUCCESS`: all phases passed
+- `ERROR`: at least one phase failed or the runtime crashed
+- `INTERRUPTED`: agent was interrupted before the oracle ran
+- `PENDING`: oracle was not reached (runtime failed)
 
 ## 8. Running the oracle standalone
 

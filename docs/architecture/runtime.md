@@ -7,8 +7,8 @@ How AEBench prepares a workspace, launches an agent, and records the result.
 ### AppState
 
 `AppState` is the top-level context object. It holds two things:
-- `project_state` — the resolved project configuration (which cases exist, where outputs go, etc.)
-- `settings` — all runtime parameters (model, agent type, timeouts, docker image, etc.)
+- `project_state`: the resolved project configuration (which cases exist, where outputs go, etc.)
+- `settings`: all runtime parameters (model, agent type, timeouts, docker image, etc.)
 
 Every runner (`BenchmarkRunner`, `CaseRunner`) receives an `AppState`. The CLI creates one at the start of each command via `_build_context()`.
 
@@ -36,7 +36,7 @@ Handles the lower-level details of running one agent task:
 4. Builds the full prompt (system + initial prompt) via Jinja2 templates
 5. Starts the runtime backend (Docker container or local)
 6. Starts the agent
-7. Calls `Agent.execute()` — the agent does its work here
+7. Calls `Agent.execute()`: the agent does its work here
 8. Collects artifacts and cleans up in a `finally` block
 9. Returns a `RunResult`
 
@@ -48,14 +48,14 @@ A frozen dataclass holding all per-task state that gets shared between the runti
 
 A backend controls where and how commands run. Selected by `runtime.mode` in `case.toml`.
 
-**LocalRuntime** — runs commands directly on the host. The workspace directory is used as-is, no containers. Used when `runtime.mode = "local"`.
+**LocalRuntime**: runs commands directly on the host. The workspace directory is used as-is, no containers. Used when `runtime.mode = "local"`.
 
-**DockerRuntime** — starts a Docker container with the workspace mounted at `/repo` and refs at `/refs:ro`. The agent interacts with the container. Container is force-removed on cleanup.
+**DockerRuntime**: starts a Docker container with the workspace mounted at `/repo` and refs at `/refs:ro`. The agent interacts with the container. Container is force-removed on cleanup.
 
 Key Docker parameters from `case.toml` or settings:
-- `runtime.image` — Docker image. Falls back to `AEBENCH_DEFAULT_DOCKER_IMAGE`
-- `runtime.gpu = true` — passes `--gpus all` to `docker run`
-- `runtime.timeout_ms` — agent timeout in ms
+- `runtime.image`: Docker image. Falls back to `AEBENCH_DEFAULT_DOCKER_IMAGE`
+- `runtime.gpu = true`: passes `--gpus all` to `docker run`
+- `runtime.timeout_ms`: agent timeout in ms
 
 ## 3. Agents
 
@@ -76,11 +76,11 @@ All agents return an `AgentResult` with `model`, `exit_code`, `output`, and `mes
 
 ```plaintext
 AEBENCH_EPHEMERAL_WORKSPACE_ROOT/
-└── ae_workspace_<safe_id>_<random>/   ← tempdir
-    └── workspace/                     ← actual workspace, populated from source
-        ├── README.md                  ← agent reads this
+└── ae_workspace_<safe_id>_<random>/   # tempdir
+    └── workspace/                     # actual workspace, populated from source
+        ├── README.md                  # agent reads this
         ├── <source files>
-        └── <safe_id>_summary.md       ← agent writes its summary here
+        └── <safe_id>_summary.md       # agent writes its summary here
 ```
 
 A fresh workspace is created for every run. If `--cleanup-workspace` is passed and the task succeeded, the temp directory gets deleted after the oracle finishes. If the task failed and `AEBENCH_PRESERVE_FAILED_WORKSPACE=true`, the directory is kept for inspection.
@@ -101,8 +101,8 @@ The `artifact_mode` setting in `aebench.toml` controls wheter the system prefers
 ## 6. Prompting
 
 The agent receives two prompts:
-- **System prompt** — environment info (local vs Docker), task text, timeout rules, output instructions, and any `prompt_append` additions
-- **Initial prompt** — a short imperative telling the agent to start working
+- **System prompt**: environment info (local vs Docker), task text, timeout rules, output instructions, and any `prompt_append` additions
+- **Initial prompt**: a short imperative telling the agent to start working
 
 The prompt profile (`PromptProfile`) controls which templates get used. `artifact-eval-v1` auto-selects the local or Docker template based on runtime mode.
 
@@ -112,13 +112,13 @@ Rendered prompts are written to `<output_dir>/<safe_id>_prompt.md` so users can 
 
 Every task run writes these files to its output directory:
 
-- `case_result.json` — full `CaseRunResult` (runtime + oracle results)
-- `<safe_id>_report.md` — human-readable summary with status and timings
-- `<safe_id>_prompt.md` — the exact prompts sent to the agent
-- `<safe_id>.log` — captured stdout/stderr from the agent
-- `transcript.jsonl` — full conversation transcript (if the agent supports it)
-- `runner.log` — infrastructure-level log messages
-- `result.jsonl` — `RunResult` in JSON Lines format
-- `oracle_result.json` — full oracle result
+- `case_result.json`: full `CaseRunResult` (runtime + oracle results)
+- `<safe_id>_report.md`: human-readable summary with status and timings
+- `<safe_id>_prompt.md`: the exact prompts sent to the agent
+- `<safe_id>.log`: captured stdout/stderr from the agent
+- `transcript.jsonl`: full conversation transcript (if the agent supports it)
+- `runner.log`: infrastructure-level log messages
+- `result.jsonl`: `RunResult` in JSON Lines format
+- `oracle_result.json`: full oracle result
 
 For benchmark runs, the output directory additionally contains `benchmark_results.jsonl`, `benchmark_summary.json`, and `benchmark_summary.md`.

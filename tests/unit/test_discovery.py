@@ -1,4 +1,5 @@
 """Oracle phase discovery tests."""
+
 from __future__ import annotations
 
 import textwrap
@@ -11,6 +12,7 @@ from evaluator.oracles.discovery import (
 	BENCHMARK_PREP,
 	ENV_SETUP,
 	EXPERIMENT_RUNS,
+	DiscoveredPhase,
 	OracleLoadError,
 	discover_oracle_phases,
 	phase_key_to_string,
@@ -144,7 +146,7 @@ def test_no_oracle_implementations_raises(tmp_path: Path) -> None:
 	case_dir, oracle_dir = _make_case(tmp_path)
 	_write_oracle(oracle_dir, "common.py", "class CommonUtils: pass\n")
 
-	with pytest.raises(OracleLoadError, match="no oracle base-class implementations"):
+	with pytest.raises(OracleLoadError, match="no oracle phase implementations"):
 		discover_oracle_phases(case_dir)
 
 
@@ -179,3 +181,146 @@ def test_phase_string_to_key_valid() -> None:
 def test_phase_string_to_key_invalid(bad: str) -> None:
 	with pytest.raises(ValueError):
 		phase_string_to_key(bad)
+
+
+# Decorator-based discovery
+
+_DECORATOR_ENV_SETUP = """\
+	from evaluator.oracles.discovery import env_setup
+	from models import OracleInput
+	from evaluator.oracles.utils import Checkable
+	from collections.abc import Sequence
+
+	@env_setup
+	def _(context: OracleInput) -> Sequence[Checkable]:
+		return []
+"""
+
+_DECORATOR_ARTIFACT_BUILD = """\
+	from evaluator.oracles.discovery import artifact_build
+	from models import OracleInput
+	from evaluator.oracles.utils import Checkable
+	from collections.abc import Sequence
+
+	@artifact_build
+	def _(context: OracleInput) -> Sequence[Checkable]:
+		return []
+"""
+
+
+def test_discover_decorator_based_phase(tmp_path: Path) -> None:
+	case_dir, oracle_dir = _make_case(tmp_path)
+	_write_oracle(oracle_dir, "env_setup.py", _DECORATOR_ENV_SETUP)
+
+	phases = discover_oracle_phases(case_dir)
+
+	assert len(phases) == 1
+	assert phases[0].key == ENV_SETUP
+
+
+def test_discover_mixed_class_and_decorator(tmp_path: Path) -> None:
+	case_dir, oracle_dir = _make_case(tmp_path)
+	_write_oracle(oracle_dir, "env_setup.py", _DECORATOR_ENV_SETUP)
+	_write_oracle(oracle_dir, "artifact_build.py", _ARTIFACT_BUILD)
+
+	phases = discover_oracle_phases(case_dir)
+
+	assert len(phases) == 2
+	assert [p.key for p in phases] == [ENV_SETUP, ARTIFACT_BUILD]
+
+
+def test_duplicate_decorator_and_class_for_same_phase_raises(tmp_path: Path) -> None:
+	case_dir, oracle_dir = _make_case(tmp_path)
+	_write_oracle(oracle_dir, "env_setup_cls.py", _ENV_SETUP)
+	_write_oracle(oracle_dir, "env_setup_dec.py", _DECORATOR_ENV_SETUP)
+
+	with pytest.raises(OracleLoadError, match="duplicate"):
+		discover_oracle_phases(case_dir)
+
+
+def test_discover_multiple_decorator_phases(tmp_path: Path) -> None:
+	case_dir, oracle_dir = _make_case(tmp_path)
+	_write_oracle(oracle_dir, "env_setup.py", _DECORATOR_ENV_SETUP)
+	_write_oracle(oracle_dir, "artifact_build.py", _DECORATOR_ARTIFACT_BUILD)
+
+	phases = discover_oracle_phases(case_dir)
+
+	assert len(phases) == 2
+	assert [p.key for p in phases] == [ENV_SETUP, ARTIFACT_BUILD]
+
+
+# Phase key enforcement
+
+
+def test_unknown_phase_key_rejected() -> None:
+	"""DiscoveredPhase rejects phase keys outside the four standard phases."""
+	from collections.abc import Sequence
+
+	from evaluator.oracles.utils import Checkable
+	from models import OracleInput
+
+	def _noop(context: OracleInput) -> Sequence[Checkable]:
+		return []
+
+	with pytest.raises(ValueError, match="unknown oracle phase key"):
+		DiscoveredPhase(
+			key=("custom_extra_phase",),
+			priority=999,
+			requirements=_noop,
+			qualname="custom_extra_phase",
+		)
+
+
+def test_known_phase_keys_accepted() -> None:
+	"""DiscoveredPhase accepts all four standard phase keys."""
+	from collections.abc import Sequence
+
+	from evaluator.oracles.utils import Checkable
+	from models import OracleInput
+
+	def _noop(context: OracleInput) -> Sequence[Checkable]:
+		return []
+
+	for key in (ENV_SETUP, ARTIFACT_BUILD, BENCHMARK_PREP, EXPERIMENT_RUNS):
+		phase = DiscoveredPhase(
+			key=key,
+			priority=100,
+			requirements=_noop,
+			qualname="test",
+		)
+		assert phase.key == key
+
+
+def test_manually_constructed_extra_oracle_phase_rejected(tmp_path: Path) -> None:
+	"""A module-level DiscoveredPhase with an unknown key fails at import time."""
+	case_dir, oracle_dir = _make_case(tmp_path)
+	# Write all four standard phases so discovery doesn't fail for other reasons
+	_write_oracle(oracle_dir, "env_setup.py", _ENV_SETUP)
+	_write_oracle(oracle_dir, "artifact_build.py", _ARTIFACT_BUILD)
+	_write_oracle(oracle_dir, "benchmark_prep.py", _BENCHMARK_PREP)
+	_write_oracle(oracle_dir, "experiment_runs.py", _EXPERIMENT_RUNS)
+	# Write a module that manually constructs a DiscoveredPhase with a bad key
+	_write_oracle(
+		oracle_dir,
+		"extra.py",
+		"""\
+		from evaluator.oracles.discovery import DiscoveredPhase
+		from collections.abc import Sequence
+		from evaluator.oracles.utils import Checkable
+		from models import OracleInput
+
+		def _noop(context: OracleInput) -> Sequence[Checkable]:
+			return []
+
+		# This should fail at construction time
+		custom = DiscoveredPhase(
+			key=("my_custom_phase",),
+			priority=500,
+			requirements=_noop,
+			qualname="custom",
+		)
+	""",
+	)
+
+	with pytest.raises(OracleLoadError, match="failed to import"):
+		discover_oracle_phases(case_dir)

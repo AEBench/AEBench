@@ -24,7 +24,7 @@ The goal is to reduce reviewer effort on mechanical tasks so attention can shift
 
 ## Background
 
-#### » The artifact evaluation process
+#### The artifact evaluation process
 
 Most conferences award badges to incentivize high-quality artifacts that support the paper's claims by asking authors to participate in a multi-stage evaluation process where reviewers attempt to download, install, and operate the artifacts themselves. The following summarizes the widely used criteria for each badge:
 
@@ -36,7 +36,7 @@ Most conferences award badges to incentivize high-quality artifacts that support
 
 Further reading and a detailed description of criteria for each badge can be found [here](https://sysartifacts.github.io/eurosys2026/badges) and [here](https://sysartifacts.github.io/evaluator-guide.html).
 
-#### » What makes AE challenging in practice?
+#### What makes AE challenging in practice?
 
 Reproducibility and reusability can be obstructed by multiple factors including, but not limited to: (i) environment drift (e.g., legacy libraries no longer available, drivers mismatch in newer OS versions); (ii) undocumented or implicit build assumptions (e.g., hard-coded compiler flags, directory paths, IPs, or reliance on OS-wide libraries that differ across distributions); (iii) brittle preprocessing of third-party benchmarks or datasets (e.g., broken download URL, non-deterministic compilation steps that silently invalidate subsequent stages); and (iv) unspecified results tolerance bounds that complicate validation for non-deterministic experiments (e.g., performance claims without clarifying what constitutes an acceptable deviation when running within a similar SW/HW setup).
 

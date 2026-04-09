@@ -82,9 +82,9 @@ aebench run --output-dir ./my-benchmark-results
 ```
 
 Cases are run sequentially. When finished, the output directory will contain:
-- `benchmark_results.jsonl` — one case result per line
-- `benchmark_summary.json` — aggregated stats (pass counts, scores, timings)
-- `benchmark_summary.md` — human-readable Markdown table
+- `benchmark_results.jsonl`: one case result per line
+- `benchmark_summary.json`: aggregated stats (pass counts, scores, timings)
+- `benchmark_summary.md`: human-readable Markdown table
 
 ## 5. Re-summarizing existing results
 
@@ -121,17 +121,17 @@ This lower-level interface skips the case-level oracle and writes only `RunResul
 
 Each case declares an `expected_score` in `case.toml` (usually 4, one per phase). The oracle awards one point for each passing phase:
 
-- **4/4** — full reproduction
-- **3/4** — partial; usually means experiment runs failed (the hardest phase)
-- **2/4** — build succeeded but benchmark prep failed
-- **1/4** — only environment setup passed
-- **0/4** — nothing passed (or the agent crashed before oracle ran)
+- **4/4**: full reproduction
+- **3/4**: partial; usually means experiment runs failed (the hardest phase)
+- **2/4**: build succeeded but benchmark prep failed
+- **1/4**: only environment setup passed
+- **0/4**: nothing passed (or the agent crashed before oracle ran)
 
 At the benchmark level two aggregate metrics are reported:
 - `case_pass_ratio` = cases where all phases passed / total cases
 - `phase_ratio` = total points / total possible points (more informative when full reproduction is rare)
 
-By default evaluation uses `failure_mode = "fail_fast"`: if phase N fails, phases N+1 through 4 are marked PENDING. This reflects the real dependency chain — you cant run experiments if the build failed.
+By default evaluation uses `failure_mode = "fail_fast"`: if phase N fails, phases N+1 through 4 are marked PENDING. This reflects the real dependency chain: you cant run experiments if the build failed.
 
 ## 9. Configuration
 

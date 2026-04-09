@@ -1,7 +1,11 @@
-"""Environment setup oracle for mock_apt_case — always passes."""
+"""Environment setup oracle (always passes)."""
+
+from typing import Sequence
+
+from evaluator.oracles import utils
 from evaluator.oracles.case_base import CaseOracleEnvSetupBase
 
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
-    def requirements(self):
-        return []
+	def requirements(self) -> Sequence[utils.BaseCheck]:
+		return []

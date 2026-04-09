@@ -1,4 +1,4 @@
-# Mock Apt Case — Artifact Instructions
+# Artifact Instructions
 
 This case validates that a minimal package installation succeeds.
 

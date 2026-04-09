@@ -194,7 +194,7 @@ Adding or modifying an agent driver is a code-level integration inside `src/arte
 
 Agent integrations plug into a single runtime path:
 
-`TaskRunner → RunSession → Agent → RuntimeBackend`
+`TaskRunner -> RunSession -> Agent -> RuntimeBackend`
 
 If you only want to add a new benchmark case, you usually do not need to touch the driver layer.
 
@@ -240,10 +240,10 @@ class MyAgent:
         pass
 
     def execute(self, request: AgentRequest, session, listener=None) -> AgentResult:
-        # session.host_workspace — workspace path on host
-        # session.runtime_workspace — workspace path inside the container
-        # request.system_prompt, request.initial_prompt — prompts
-        # request.timeout_ms — timeout
+        # session.host_workspace: workspace path on host
+        # session.runtime_workspace: workspace path inside the container
+        # request.system_prompt, request.initial_prompt: prompts
+        # request.timeout_ms: timeout
         ...
         return AgentResult(
             model=request.model,

@@ -25,13 +25,30 @@ from runtime.oracle_runner import DirectOracleRunner, SubprocessOracleRunner
 
 
 _FIXTURE_ORACLE = textwrap.dedent("""\
-	from evaluator.oracles.case_base import CaseOracleArtifactBuildBase
+	from evaluator.oracles.case_base import (
+		CaseOracleArtifactBuildBase,
+		CaseOracleBenchmarkPrepBase,
+		CaseOracleEnvSetupBase,
+		CaseOracleExperimentRunsBase,
+	)
 	from evaluator.oracles.env_setup_checks import FilesystemPathCheck
+
+	class OracleEnvSetup(CaseOracleEnvSetupBase):
+		def requirements(self):
+			return []
 
 	class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 		def requirements(self):
 			built_txt = self.paths.workspace_dir / "built.txt"
 			return [FilesystemPathCheck(name="built_txt", path=built_txt)]
+
+	class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
+		def requirements(self):
+			return []
+
+	class OracleExperimentRuns(CaseOracleExperimentRunsBase):
+		def requirements(self):
+			return []
 """)
 
 
@@ -44,7 +61,9 @@ def _make_case_spec(id: str = "fixture_case") -> CaseConfig:
 			allowed_tolerance="None.",
 		),
 		run=TaskConfig(id=id, runtime=RuntimeConfig(mode=RuntimeMode.LOCAL)),
-		oracle=OracleConfig(phases=["artifact_build"]),
+		oracle=OracleConfig(
+			phases=["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+		),
 	)
 
 
@@ -108,7 +127,7 @@ def test_direct_oracle_runner_passes_on_valid_workspace(
 	)
 
 	assert result.status == OracleStatus.SUCCESS
-	assert result.score == 1
+	assert result.score == 4
 
 
 @pytest.mark.sanity
@@ -127,7 +146,7 @@ def test_direct_oracle_runner_fails_on_empty_workspace(
 	)
 
 	assert result.status == OracleStatus.ERROR
-	assert result.score == 0
+	assert result.score == 1  # env_setup passes (no checks); artifact_build fails
 
 
 @pytest.mark.sanity
@@ -163,8 +182,9 @@ def test_direct_runner_phase_list_populated(
 		case=spec,
 	)
 
-	assert len(result.phases) == 1
-	assert result.phases[0].phase == "artifact_build"
+	assert len(result.phases) == 4
+	phase_names = [p.phase for p in result.phases]
+	assert "artifact_build" in phase_names
 
 
 @pytest.fixture()

@@ -135,7 +135,7 @@ def test_empty_case_list_zero_ratio() -> None:
 def test_phase_ratio_computed_correctly() -> None:
 	results = [_case_result("a", oracle_score=2), _case_result("b", oracle_score=4)]
 	summary = _summarize_results(results, {"a": 4, "b": 4})
-	# total_score=6, total_expected=8 → 0.75
+	# total_score=6, total_expected=8 which is 0.75
 	assert abs(summary.phase_ratio - 0.75) < 1e-9
 
 

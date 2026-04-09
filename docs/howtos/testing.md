@@ -68,7 +68,7 @@ uv run python -m pytest tests/unit/
 
 ### Functional tests
 
-Exercise a full component end-to-end with the real filesystem. Use stub oracle classes and pre-built model objects — no agents or Docker needed.
+Exercise a full component end-to-end with the real filesystem. Use stub oracle classes and pre-built model objects: no agents or Docker needed.
 
 ```bash
 uv run python -m pytest tests/functional/
