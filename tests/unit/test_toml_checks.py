@@ -134,6 +134,22 @@ class FakeRuntimeExecutor(RuntimeCheckExecutor):
 		self.calls.append(("run_process_capture", cmd))
 		return ProcResult(returncode=0, stdout="", stderr="", timed_out=False)
 
+	def path_exists(self, path: Path) -> bool:
+		self.calls.append(("path_exists", path))
+		return path.exists()
+
+	def path_is_file(self, path: Path) -> bool:
+		self.calls.append(("path_is_file", path))
+		return path.is_file()
+
+	def path_is_dir(self, path: Path) -> bool:
+		self.calls.append(("path_is_dir", path))
+		return path.is_dir()
+
+	def read_file_text(self, path: Path, encoding: str = "utf-8") -> str:
+		self.calls.append(("read_file_text", path))
+		return path.read_text(encoding=encoding)
+
 	def close(self) -> None:
 		self.calls.append(("close", None))
 

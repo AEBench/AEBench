@@ -1,0 +1,34 @@
+id = "golf"
+
+[case_brief]
+core_claim = ""
+acceptable_evidence = ""
+allowed_tolerance = "Results may vary across environments but must preserve the reference trend."
+
+[run]
+id = "golf"
+
+[run.instructions]
+path = "README.md"
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 14400000
+gpu = false
+interactive = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "fail_fast"
+placeholder = false
+
+[upstream]
+source_type = "git"
+url = "https://github.com/VladSaioc/ASPLOS-artifact-2025"
+ref = "552a9ded0552467669e4f9a954f4bb8a4e692d77"
+resolved_at = "2026-04-11T02:02:17.900240+00:00"

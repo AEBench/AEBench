@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "howto_rules": [
+    "Inherit from CaseOracleXxxBase classes for each phase",
+    "Use find_repo_root pattern with RepoRootLocatedCheck fallback",
+    "Use FilesystemPathCheck for verifying output directories and files",
+    "Use DependencyVersionCheck for tool version checks",
+    "Use BuildCommandCheck with explicit timeout for build steps",
+    "Keep checks non-interactive, idempotent, time-bounded",
+    "All subprocess calls must include explicit timeout argument"
+  ],
+  "example_patterns": [
+    "egwalker common.py: find_repo_root with marker files, RepoRootLocatedCheck, load_json_file",
+    "egwalker env_setup.py: DependencyVersionCheck for toolchain, FilesystemPathCheck for repo root and refs",
+    "egwalker artifact_build.py: BuildCommandCheck with verify/command mode env var pattern",
+    "egwalker benchmark_prep.py: DatasetManifestCheck against refs JSON",
+    "egwalker experiment_runs.py: TimingsJSONSimilarityCheck with Pearson correlation"
+  ],
+  "borrowed_structure": {
+    "common.py": "find_repo_root, RepoRootLocatedCheck, load_json_file from egwalker",
+    "env_setup.py": "DependencyVersionCheck pattern from egwalker",
+    "artifact_build.py": "verify/command mode pattern from egwalker",
+    "benchmark_prep.py": "Trivially passes since plan has no benchmark_prep steps; checks repo data dir existence",
+    "experiment_runs.py": "FilesystemPathCheck for output dirs and files from MILP, simulator, and plot steps"
+  },
+  "artifact_specific_adaptations": [
+    "PPipe has no explicit build_artifact steps in the plan; the Java simulator build (env-004) is checked in artifact_build as the main build output",
+    "benchmark_prep is empty in the plan; we check that the bundled data/ directory exists as a minimal validation",
+    "experiment_runs checks output directories from 11 steps: MILP outputs, simulator logs, and plot figures",
+    "Gurobi license check via gurobipy import or gurobi_cl command (optional since license may be configured at runtime)",
+    "git-lfs tracked files check via data/ directory presence"
+  ],
+  "env_requirements": {
+    "python": ">=3.12",
+    "java": ">=11.0.0",
+    "git": ">=2.0.0",
+    "git_lfs": ">=2.0.0"
+  },
+  "build_steps": [
+    "cd cluster-sim && ./gradlew installDist"
+  ],
+  "benchmark_assets": [
+    "data/maf_traces/",
+    "data/models/",
+    "data/model_list.txt"
+  ],
+  "experiment_outputs": {
+    "run-001": "outputs/prepartition_mappings/",
+    "run-002": "outputs/plans/maf19/",
+    "run-003": "outputs/plans/maf21/",
+    "run-004": "outputs/plans/ablation/",
+    "run-005": "outputs/cluster-logs/maf19/logs.csv",
+    "run-006": "outputs/cluster-logs/maf21/logs.csv",
+    "run-007": "outputs/cluster-logs/ablation/logs.csv",
+    "run-008": "outputs/ (fig6)",
+    "run-009": "outputs/ (fig7)",
+    "run-010": "outputs/ (fig8)",
+    "run-011": "outputs/ (fig10)"
+  },
+  "reference_templates": {},
+  "plan_summary": "PPipe artifact: MILP solver for partition plans, Java discrete-event simulator, and plotting scripts. 4 env setup steps, 0 build steps (Java build moved to env-004), 0 benchmark prep steps, 11 experiment run steps.",
+  "step_coverage": {
+    "env-001": "Covered: git/git-lfs version checks + repo root existence",
+    "env-002": "Covered: Python version check + requirements.txt existence",
+    "env-003": "Covered: Gurobi license check (optional - may not be available at oracle time)",
+    "env-004": "Covered: Java version check (build itself checked in artifact_build)",
+    "run-001": "Covered: outputs/prepartition_mappings/ directory existence",
+    "run-002": "Covered: outputs/plans/maf19/ directory existence",
+    "run-003": "Covered: outputs/plans/maf21/ directory existence",
+    "run-004": "Covered: outputs/plans/ablation/ directory existence",
+    "run-005": "Covered: outputs/cluster-logs/maf19/logs.csv file existence",
+    "run-006": "Covered: outputs/cluster-logs/maf21/logs.csv file existence",
+    "run-007": "Covered: outputs/cluster-logs/ablation/logs.csv file existence",
+    "run-008": "Covered: fig6 output file existence check",
+    "run-009": "Covered: fig7 output file existence check",
+    "run-010": "Covered: fig8 output file existence check",
+    "run-011": "Covered: fig10 output file existence check"
+  },
+  "step_gaps": [
+    "env-003: Cannot fully verify Gurobi license validity without running the solver; marked optional",
+    "run-008 to run-011: Exact figure filenames unknown from plan; checked as glob pattern on outputs/ for PDF/PNG files"
+  ],
+  "step_augmentations": [
+    "artifact_build: Added check for cluster-sim Gradle installDist output directory as the main build verification",
+    "benchmark_prep: Added minimal data/ directory existence check even though plan has no benchmark_prep steps",
+    "experiment_runs: Added non-empty directory checks for MILP output dirs to verify content was produced"
+  ]
+}

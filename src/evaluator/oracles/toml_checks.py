@@ -84,6 +84,7 @@ def _build_check(
 			name=decl.name,
 			path=pathlib.Path(_resolve(decl.path, variables)),
 			path_type=path_type,
+			executor=executor,
 			optional=decl.optional,
 		)
 
@@ -146,6 +147,7 @@ def _build_check(
 			reference_path=(
 				pathlib.Path(_resolve(decl.reference, variables)) if decl.reference else None
 			),
+			executor=executor,
 			optional=decl.optional,
 		)
 
@@ -189,29 +191,35 @@ class DotAccessDict:
 		return f"DotAccessDict({self._data!r})"
 
 
-def _load_data_file(path: pathlib.Path) -> DotAccessDict:
+def _load_data_file(
+	path: pathlib.Path,
+	*,
+	executor: utils.RuntimeCheckExecutor | None = None,
+) -> DotAccessDict:
 	"""Load a JSON or CSV file into a DotAccessDict."""
 	suffix = path.suffix.lower()
+	text = utils.check_read_file_text(path, executor=executor)
+
 	if suffix == ".json":
-		with path.open(encoding="utf-8") as fh:
-			data = json.load(fh)
+		data = json.loads(text)
 		if not isinstance(data, dict):
 			return DotAccessDict({"_root": data})
 		return DotAccessDict(data)
 
 	if suffix == ".csv":
-		with path.open(encoding="utf-8", newline="") as fh:
-			reader = csv.DictReader(fh)
-			columns: dict[str, list[float]] = {}
-			for row in reader:
-				for key, raw_value in row.items():
-					if key is None:
-						continue
-					col = columns.setdefault(key, [])
-					try:
-						col.append(float(raw_value))
-					except (ValueError, TypeError):
-						col.append(float("nan"))
+		import io
+
+		reader = csv.DictReader(io.StringIO(text))
+		columns: dict[str, list[float]] = {}
+		for row in reader:
+			for key, raw_value in row.items():
+				if key is None:
+					continue
+				col = columns.setdefault(key, [])
+				try:
+					col.append(float(raw_value))
+				except (ValueError, TypeError):
+					col.append(float("nan"))
 		return DotAccessDict(columns)
 
 	raise ValueError(f"unsupported data file format: {path.suffix}")
@@ -248,13 +256,18 @@ class ExpressionCheck(utils.BaseCheck):
 	expr: str
 	observed_path: pathlib.Path | None = None
 	reference_path: pathlib.Path | None = None
+	executor: utils.RuntimeCheckExecutor | None = dataclasses.field(
+		default=None,
+		repr=False,
+		compare=False,
+	)
 
 	def check(self) -> utils.CheckResult:
 		names: dict[str, Any] = {}
 
 		if self.observed_path is not None:
 			try:
-				names["obs"] = _load_data_file(self.observed_path)
+				names["obs"] = _load_data_file(self.observed_path, executor=self.executor)
 			except Exception as exc:
 				return utils.CheckResult.failure(
 					f"failed to load observed file {self.observed_path}: {exc}"
@@ -262,7 +275,7 @@ class ExpressionCheck(utils.BaseCheck):
 
 		if self.reference_path is not None:
 			try:
-				names["ref"] = _load_data_file(self.reference_path)
+				names["ref"] = _load_data_file(self.reference_path, executor=self.executor)
 			except Exception as exc:
 				return utils.CheckResult.failure(
 					f"failed to load reference file {self.reference_path}: {exc}"

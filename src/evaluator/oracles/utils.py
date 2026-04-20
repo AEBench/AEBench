@@ -207,6 +207,18 @@ class RuntimeCheckExecutor(Protocol):
 	) -> ProcResult:
 		raise NotImplementedError
 
+	def path_exists(self, path: pathlib.Path) -> bool:
+		raise NotImplementedError
+
+	def path_is_file(self, path: pathlib.Path) -> bool:
+		raise NotImplementedError
+
+	def path_is_dir(self, path: pathlib.Path) -> bool:
+		raise NotImplementedError
+
+	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
+		raise NotImplementedError
+
 	def close(self) -> None:
 		raise NotImplementedError
 
@@ -293,6 +305,47 @@ def run_check_process_capture(
 	)
 
 
+def check_path_exists(
+	path: pathlib.Path,
+	*,
+	executor: RuntimeCheckExecutor | None = None,
+) -> bool:
+	if executor is not None:
+		return executor.path_exists(path)
+	return path.exists()
+
+
+def check_path_is_file(
+	path: pathlib.Path,
+	*,
+	executor: RuntimeCheckExecutor | None = None,
+) -> bool:
+	if executor is not None:
+		return executor.path_is_file(path)
+	return path.is_file()
+
+
+def check_path_is_dir(
+	path: pathlib.Path,
+	*,
+	executor: RuntimeCheckExecutor | None = None,
+) -> bool:
+	if executor is not None:
+		return executor.path_is_dir(path)
+	return path.is_dir()
+
+
+def check_read_file_text(
+	path: pathlib.Path,
+	*,
+	encoding: str = "utf-8",
+	executor: RuntimeCheckExecutor | None = None,
+) -> str:
+	if executor is not None:
+		return executor.read_file_text(path, encoding)
+	return path.read_text(encoding=encoding)
+
+
 class LocalRuntimeCheckExecutor:
 	path_separator = os.pathsep
 
@@ -317,6 +370,18 @@ class LocalRuntimeCheckExecutor:
 		if env is not None and name in env:
 			return env[name]
 		return os.environ.get(name)
+
+	def path_exists(self, path: pathlib.Path) -> bool:
+		return path.exists()
+
+	def path_is_file(self, path: pathlib.Path) -> bool:
+		return path.is_file()
+
+	def path_is_dir(self, path: pathlib.Path) -> bool:
+		return path.is_dir()
+
+	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
+		return path.read_text(encoding=encoding)
 
 	def run_process_capture(
 		self,
@@ -372,6 +437,19 @@ class SessionRuntimeCheckExecutor:
 			return None
 		return str(cwd)
 
+	def _run_test(self, flag: str, path: pathlib.Path) -> bool:
+		translated = self._translate_cwd(path) or str(path)
+		try:
+			result = self._runtime_backend.run_process(
+				["test", flag, translated],
+				cwd=self._translate_cwd(None),
+				env=None,
+				timeout=5.0,
+			)
+			return result.returncode == 0
+		except (OSError, RuntimeError, subprocess.TimeoutExpired):
+			return False
+
 	def resolve_executable(
 		self,
 		executable: str,
@@ -395,6 +473,27 @@ class SessionRuntimeCheckExecutor:
 			cwd=self._translate_cwd(None),
 			env=None if env is None else dict(env),
 		)
+
+	def path_exists(self, path: pathlib.Path) -> bool:
+		return self._run_test("-e", path)
+
+	def path_is_file(self, path: pathlib.Path) -> bool:
+		return self._run_test("-f", path)
+
+	def path_is_dir(self, path: pathlib.Path) -> bool:
+		return self._run_test("-d", path)
+
+	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
+		translated = self._translate_cwd(path) or str(path)
+		result = self._runtime_backend.run_process(
+			["cat", translated],
+			cwd=self._translate_cwd(None),
+			env=None,
+			timeout=10.0,
+		)
+		if result.returncode != 0:
+			raise OSError(f"failed to read {path}: {(result.stderr or '').strip()}")
+		return result.stdout or ""
 
 	def run_process_capture(
 		self,
@@ -594,6 +693,46 @@ class DockerRuntimeCheckExecutor:
 			return None
 		return result.stdout.removesuffix("\n")
 
+	def _run_test(self, flag: str, path: pathlib.Path) -> bool:
+		translated = self._translate_cwd(path)
+		target = translated or str(path)
+		try:
+			result = self._docker_exec(
+				cmd=["test", flag, target],
+				cwd=self._default_cwd,
+				env=None,
+				timeout_seconds=5.0,
+			)
+			return result.returncode == 0
+		except (OSError, RuntimeError, subprocess.TimeoutExpired):
+			return False
+
+	def path_exists(self, path: pathlib.Path) -> bool:
+		return self._run_test("-e", path)
+
+	def path_is_file(self, path: pathlib.Path) -> bool:
+		return self._run_test("-f", path)
+
+	def path_is_dir(self, path: pathlib.Path) -> bool:
+		return self._run_test("-d", path)
+
+	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
+		_ = encoding  # Docker cat returns bytes decoded as utf-8 by subprocess
+		translated = self._translate_cwd(path)
+		target = translated or str(path)
+		try:
+			result = self._docker_exec(
+				cmd=["cat", target],
+				cwd=self._default_cwd,
+				env=None,
+				timeout_seconds=10.0,
+			)
+		except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+			raise OSError(f"failed to read {path} in container: {exc}") from exc
+		if result.returncode != 0:
+			raise OSError(f"failed to read {path} in container: {(result.stderr or '').strip()}")
+		return result.stdout or ""
+
 	def run_process_capture(
 		self,
 		*,
@@ -711,6 +850,18 @@ class UnavailableRuntimeCheckExecutor:
 		encoding: str | None = None,
 		on_chunk: Callable[[str, str], None] | None = None,
 	) -> ProcResult:
+		raise RuntimeError(self._message)
+
+	def path_exists(self, path: pathlib.Path) -> bool:
+		raise RuntimeError(self._message)
+
+	def path_is_file(self, path: pathlib.Path) -> bool:
+		raise RuntimeError(self._message)
+
+	def path_is_dir(self, path: pathlib.Path) -> bool:
+		raise RuntimeError(self._message)
+
+	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
 		raise RuntimeError(self._message)
 
 	def close(self) -> None:

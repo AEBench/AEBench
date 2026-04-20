@@ -1,0 +1,12 @@
+{
+  "clientServer": {"manual_proof": 93, "sync_proof": 40},
+  "ringLeaderElection": {"manual_proof": 191, "sync_proof": 63},
+  "simplifiedLeaderElection": {"manual_proof": 136, "sync_proof": 94},
+  "twoPhaseCommit": {"manual_proof": 184, "sync_proof": 133},
+  "paxos": {"manual_proof": 856, "sync_proof": 557},
+  "flexPaxos": {"manual_proof": 856, "sync_proof": 554},
+  "distributedLock": {"manual_proof": 64, "sync_proof": 31},
+  "shardedKv": {"manual_proof": 172, "sync_proof": 61},
+  "shardedKvBatched": {"manual_proof": 172, "sync_proof": 31},
+  "lockServer": {"manual_proof": 267, "sync_proof": 44}
+}

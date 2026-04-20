@@ -1,0 +1,86 @@
+{
+  "howto_rules": [
+    "Inherit from CaseOracleXxxBase classes for each phase",
+    "Use find_repo_root pattern to gracefully handle missing workspace",
+    "Return RepoRootLocatedCheck when repo root is not found",
+    "Keep checks idempotent, non-interactive, and time-bounded",
+    "All subprocess calls must have explicit timeout",
+    "Use FilesystemPathCheck for file/directory existence",
+    "Use DependencyVersionCheck for tool version verification",
+    "Put shared helpers in common.py"
+  ],
+  "example_patterns": [
+    "egwalker find_repo_root with marker files",
+    "egwalker RepoRootLocatedCheck dataclass",
+    "egwalker verify/command build mode via env var",
+    "egwalker FilesystemPathCheck for build outputs",
+    "egwalker custom dataclass checks for domain-specific validation"
+  ],
+  "borrowed_structure": {
+    "common.py": "find_repo_root, RepoRootLocatedCheck, load helpers from egwalker",
+    "env_setup.py": "DependencyVersionCheck for docker, FilesystemPathCheck for repo root",
+    "artifact_build.py": "FilesystemPathCheck for infrastructure files and result outputs",
+    "benchmark_prep.py": "FilesystemPathCheck for test suite directories",
+    "experiment_runs.py": "Custom check dataclasses for results parsing, similar to egwalker TimingsJSONSimilarityCheck"
+  },
+  "artifact_specific_adaptations": [
+    "Docker-based workflow: check Docker installation instead of language toolchains",
+    "Results are produced inside Docker container and may be copied to workspace",
+    "Custom parsing for Golf results file format (tab-separated aggregated report)",
+    "Custom validation for results-perf.csv (CSV with specific columns)",
+    "Search multiple locations for results files since agent may copy them to different paths",
+    "Threshold-based checks (detection rate > 90%) instead of correlation-based"
+  ],
+  "env_requirements": [
+    "Docker >= 26.0.0 (recommended 26.1.4)",
+    "x86-64 architecture recommended",
+    "10 cores, 32 GB RAM, 20 GB disk"
+  ],
+  "build_steps": [
+    "Dockerfile must exist in repo root",
+    "run.sh must exist in repo root",
+    "Results files (results, results-perf.csv, results.tex) produced after ./run.sh"
+  ],
+  "benchmark_assets": [
+    "tester/tests/deadlock/ directory with microbenchmark suites",
+    "tester/tests/correct/ directory with correct examples"
+  ],
+  "experiment_outputs": [
+    "results: microbenchmark coverage report with aggregated detection rate",
+    "results-perf.csv: performance overhead CSV",
+    "results.tex: box plot TeX file"
+  ],
+  "reference_templates": [],
+  "plan_summary": "Golf artifact uses Docker to build baseline and Golf Go runtimes and run microbenchmarks. Oracle checks Docker availability, repo infrastructure, test suite presence, and validates experiment outputs (detection rate > 90%, valid CSV, TeX file exists).",
+  "step_coverage": {
+    "env-001": "covered_optional: hardware requirements noted but not enforceable programmatically",
+    "env-002": "covered: DependencyVersionCheck for docker",
+    "env-003": "not_covered: Apple Silicon Colima setup is platform-specific, not applicable to Linux oracle",
+    "build-001": "covered: check results files exist as evidence of successful run.sh execution",
+    "build-002": "covered_indirect: baseline Go binary built inside Docker, verified by results existence",
+    "build-003": "covered_indirect: Golf Go binary built inside Docker, verified by results existence",
+    "build-004": "covered_indirect: testing harness built inside Docker, verified by results existence",
+    "prep-001": "covered: FilesystemPathCheck for tester/tests/deadlock/ and tester/tests/correct/",
+    "prep-002": "not_checked: BASELINE env var is set inside Docker container only",
+    "prep-003": "not_checked: GOLF env var is set inside Docker container only",
+    "run-001": "covered: parse results file, check structure and aggregated detection rate",
+    "run-002": "covered: parse results-perf.csv, validate CSV structure and column presence",
+    "run-003": "covered: check results.tex file exists",
+    "run-004": "covered: aggregated detection rate > 90% parsed from results file",
+    "run-005": "covered_partial: CSV values validated for reasonable ranges"
+  },
+  "step_gaps": [
+    "env-003: Colima/Apple Silicon setup cannot be verified on Linux hosts",
+    "prep-002: $BASELINE env var only exists inside Docker container, not on host",
+    "prep-003: $GOLF env var only exists inside Docker container, not on host",
+    "build-002/003/004: individual binary builds happen inside Docker; only verifiable indirectly via results"
+  ],
+  "step_augmentations": [
+    "Added Dockerfile existence check (not explicitly in plan but required for Docker-based workflow)",
+    "Added run.sh existence check (infrastructure validation)",
+    "Added search across multiple workspace locations for results files",
+    "Added CSV column structure validation for results-perf.csv",
+    "Added check that results file contains no cgo-examples entries (plan run-001 requirement)",
+    "Added check that total go instructions count is 121 (plan run-001 requirement)"
+  ]
+}

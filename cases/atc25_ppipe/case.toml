@@ -1,0 +1,34 @@
+id = "PPipe"
+
+[case_brief]
+core_claim = ""
+acceptable_evidence = ""
+allowed_tolerance = "Results may vary across environments but must preserve the reference trend."
+
+[run]
+id = "PPipe"
+
+[run.instructions]
+path = "README.md"
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 14400000
+gpu = false
+interactive = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "fail_fast"
+placeholder = false
+
+[upstream]
+source_type = "git"
+url = "https://github.com/JonnyKong/PPipe"
+ref = "03cd8df0f226f204c4795a4edbf9986aaa2fa247"
+resolved_at = "2026-04-11T02:03:23.344085+00:00"

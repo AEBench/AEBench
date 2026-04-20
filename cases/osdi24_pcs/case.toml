@@ -1,0 +1,34 @@
+id = "PCS"
+
+[case_brief]
+core_claim = ""
+acceptable_evidence = ""
+allowed_tolerance = "Results may vary across environments but must preserve the reference trend."
+
+[run]
+id = "PCS"
+
+[run.instructions]
+path = "README.md"
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 14400000
+gpu = false
+interactive = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "fail_fast"
+placeholder = false
+
+[upstream]
+source_type = "git"
+url = "https://github.com/abdullahfsm/PCS"
+ref = "762ba599f85968b6be5ed35c9ced40da93f87071"
+resolved_at = "2026-04-11T02:11:09.980616+00:00"

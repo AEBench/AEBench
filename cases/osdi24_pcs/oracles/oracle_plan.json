@@ -1,0 +1,86 @@
+{
+  "howto_rules": [
+    "Inherit from CaseOracleXxxBase classes for each phase",
+    "Use find_repo_root pattern with RepoRootLocatedCheck fallback",
+    "Put shared helpers in common.py",
+    "Keep checks idempotent, non-interactive, time-bounded",
+    "All subprocess calls must have explicit timeout",
+    "Use typed placeholders for unknown ref values"
+  ],
+  "example_patterns": [
+    "RepoRootLocatedCheck with configurable markers",
+    "find_repo_root scanning workspace and immediate children",
+    "DependencyVersionCheck for tool versions",
+    "FilesystemPathCheck for expected outputs",
+    "load_json_file helper for safe JSON loading",
+    "BuildCommandCheck / BenchmarkCommandCheck for running commands",
+    "InvalidBuildModeCheck for invalid env modes"
+  ],
+  "borrowed_structure": {
+    "common.py": "find_repo_root, load_json_file, RepoRootLocatedCheck from egwalker",
+    "env_setup.py": "DependencyVersionCheck + FilesystemPathCheck pattern from egwalker",
+    "artifact_build.py": "verify/command mode pattern from egwalker, checking pip packages installed",
+    "benchmark_prep.py": "FilesystemPathCheck for data directories from egwalker",
+    "experiment_runs.py": "FilesystemPathCheck for output CSV files, verify simulation outputs exist"
+  },
+  "artifact_specific_adaptations": [
+    "No compiled build artifacts - Python-only project with pip install",
+    "Build phase checks that setup.sh was run (venv, pip packages, ray)",
+    "Benchmark prep checks data directory and PCS config files exist",
+    "Experiment runs verifies CSV output files from simulation scripts",
+    "Toy example produces CSVs in new_data/ directory",
+    "Figure scripts produce .pkl files in new_data/",
+    "Jupyter notebooks are interactive - skip notebook execution checks",
+    "reproduce.py is interactive with GUI - cannot verify non-interactively",
+    "Simulation scripts have long runtimes, use verify mode by default"
+  ],
+  "env_requirements": {
+    "python3": ">= 3.10.0",
+    "pip": ">= 0.0.0",
+    "ray": "present on PATH or importable"
+  },
+  "build_steps": [
+    "Verify setup.sh has been run: requirements installed, ray importable"
+  ],
+  "benchmark_assets": [
+    "data/PCS_configs/ directory with .pkl config files",
+    "simulation/ directory with sim.py and utils/"
+  ],
+  "experiment_outputs": {
+    "toy_example": "new_data/ CSV files for FIFO, SRSF, PCS variants on themis1",
+    "workload2": "new_data/ CSV files for traces 0e4a51, ee9e8c",
+    "workload3": "new_data/ CSV files for gavel trace",
+    "figure9_data": "new_data/timing_expt.pkl",
+    "figure10_data": "new_data/size_error_expt.pkl"
+  },
+  "reference_templates": {},
+  "plan_summary": "PCS is a simulation-based GPU scheduler evaluation. Environment requires Python 3.10+ with pip packages. No compilation needed. Experiments run simulations producing CSV and PKL output files. Checks verify environment, package installation, data assets, and simulation output existence.",
+  "step_coverage": {
+    "env-001": "DependencyVersionCheck for python3 >= 3.10",
+    "env-002": "Covered by artifact_build phase (verify pip packages installed)",
+    "run-002": "FilesystemPathCheck for FIFO_toy_result.csv (optional, only if single sim was run)",
+    "run-004": "FilesystemPathCheck for new_data/ CSV files from toy example",
+    "run-005": "FilesystemPathCheck for new_data/ CSV files from workload2",
+    "run-007": "FilesystemPathCheck for new_data/ CSV files from workload3",
+    "run-009": "FilesystemPathCheck for new_data/timing_expt.pkl",
+    "run-011": "FilesystemPathCheck for new_data/size_error_expt.pkl"
+  },
+  "step_gaps": {
+    "run-001": "Jupyter notebook regenerate_plots.ipynb is interactive, cannot verify non-interactively; checked notebook file existence instead",
+    "run-003": "Summary statistics output is stdout-only, no persistent file to check; checked result_summary.py script existence instead",
+    "run-006": "Jupyter notebook figure7_plot.ipynb is interactive, cannot verify non-interactively; checked notebook file existence instead",
+    "run-008": "Jupyter notebook figure8_plot.ipynb is interactive, cannot verify non-interactively; checked notebook file existence instead",
+    "run-010": "Jupyter notebook figure9a_plot.ipynb is interactive, cannot verify non-interactively; checked notebook file existence instead",
+    "run-012": "Jupyter notebook figure10_plot.ipynb is interactive, cannot verify non-interactively; checked notebook file existence instead",
+    "run-013": "reproduce.py is interactive with GUI (Pareto front), cannot verify non-interactively; checked script existence instead"
+  },
+  "step_augmentations": {
+    "aug-001": "Added check for simulation/ directory existence in benchmark_prep",
+    "aug-002": "Added check for data/PCS_configs/ directory existence in benchmark_prep",
+    "aug-003": "Added check for requirements.txt existence in benchmark_prep",
+    "aug-004": "Added check for key Python packages importable (numpy, pandas, scipy, ray, matplotlib, seaborn) in artifact_build",
+    "aug-005": "Added NonEmptyFileCheck for CSV and PKL output files to verify they have content",
+    "aug-006": "Added notebook file existence checks for gap steps (run-001, run-006, run-008, run-010, run-012)",
+    "aug-007": "Added reproduce.py and result_summary.py script existence checks for gap steps (run-003, run-013)"
+  }
+}
