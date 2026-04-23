@@ -1,0 +1,728 @@
+"""Public oracle check primitives."""
+
+from __future__ import annotations
+
+import dataclasses
+import enum
+import os
+import pathlib
+import re
+import shlex
+from collections import Counter
+from collections.abc import Callable, Mapping, Sequence
+import math
+from typing import Generic, TypeVar
+
+from ..constants import DEFAULT_ORACLE_CHECK_TIMEOUT
+from . import utils
+
+SemanticVersion = tuple[int, int, int]
+_ResultT = TypeVar("_ResultT")
+_EPSILON = 1e-12
+
+
+class EnvMatchMode(enum.Enum):
+    EXACT = "exact"
+    CONTAINS = "contains"
+    REGEX = "regex"
+
+
+class PathKind(enum.Enum):
+    ANY = "any"
+    FILE = "file"
+    DIRECTORY = "directory"
+
+
+class SimilarityMetric(enum.Enum):
+    JACCARD_SET = "jaccard_set"
+    JACCARD_MULTISET = "jaccard_multiset"
+    COSINE = "cosine"
+    PEARSON = "pearson"
+    MIN_MAX = "min_max"
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class Comparison(Generic[_ResultT]):
+    observed: float
+    reference: float
+    result: _ResultT
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class VersionCheck(utils.BaseCheck):
+    cmd: Sequence[str]
+    min_version: SemanticVersion | None = None
+    max_version: SemanticVersion | None = None
+    version_regex: str | None = None
+    timeout_seconds: float = DEFAULT_ORACLE_CHECK_TIMEOUT
+    executor: utils.RuntimeCheckExecutor | None = dataclasses.field(default=None, repr=False, compare=False)
+
+    _compiled_version_regex: re.Pattern[str] | None = dataclasses.field(init=False, repr=False, default=None)
+
+    def __post_init__(self) -> None:
+        if not self.cmd:
+            raise ValueError(f"{self.name}: cmd must be non-empty")
+        if self.timeout_seconds <= 0:
+            raise ValueError(f"{self.name}: timeout_seconds must be > 0")
+
+        object.__setattr__(self, "cmd", tuple(self.cmd))
+        object.__setattr__(self, "min_version", self._validate_version(self.min_version, "min_version"))
+        object.__setattr__(self, "max_version", self._validate_version(self.max_version, "max_version"))
+
+        if self.min_version is None and self.max_version is None:
+            raise ValueError(f"{self.name}: provide at least one of min_version or max_version")
+        if self.min_version is not None and self.max_version is not None and self.min_version > self.max_version:
+            raise ValueError(f"{self.name}: min_version must be <= max_version")
+        if self.version_regex is not None:
+            object.__setattr__(self, "_compiled_version_regex", self._compile_regex(self.version_regex))
+
+    def _validate_version(self, value: SemanticVersion | None, field_name: str) -> SemanticVersion | None:
+        if value is None:
+            return None
+        try:
+            major, minor, patch = value
+        except (TypeError, ValueError):
+            raise ValueError(f"{self.name}: {field_name} must be a 3-part version tuple") from None
+        if not all(isinstance(part, int) for part in (major, minor, patch)):
+            raise ValueError(f"{self.name}: {field_name} must be a 3-part version tuple")
+        return major, minor, patch
+
+    def _compile_regex(self, pattern: str) -> re.Pattern[str]:
+        try:
+            return re.compile(pattern, flags=re.IGNORECASE)
+        except re.error as exc:
+            raise ValueError(f"{self.name}: invalid version_regex: {exc}") from exc
+
+    def _parse_version(self, text: str) -> SemanticVersion | None:
+        match = re.search(r"(?:^|\s)v?(\d+)\.(\d+)(?:\.(\d+))?", text)
+        if match is None:
+            return None
+        patch = 0 if match.group(3) is None else int(match.group(3))
+        return int(match.group(1)), int(match.group(2)), patch
+
+    def _format_version(self, version: SemanticVersion) -> str:
+        return ".".join(str(part) for part in version)
+
+    def _format_requirement(self) -> str:
+        if self.min_version is not None and self.max_version is not None:
+            if self.min_version == self.max_version:
+                return f"== {self._format_version(self.min_version)}"
+            return f">= {self._format_version(self.min_version)} and <= {self._format_version(self.max_version)}"
+        if self.min_version is not None:
+            return f">= {self._format_version(self.min_version)}"
+        assert self.max_version is not None
+        return f"<= {self._format_version(self.max_version)}"
+
+    def check(self) -> utils.CheckResult:
+        executable = self.cmd[0]
+        try:
+            resolved = utils.resolve_check_executable(executable, executor=self.executor)
+        except (RuntimeError, ValueError) as exc:
+            return utils.CheckResult.failure(str(exc))
+        if resolved is None:
+            return utils.CheckResult.failure(f"{executable!r} was not found on PATH")
+
+        try:
+            proc = utils.run_check_process_capture(
+                cmd=(resolved, *self.cmd[1:]),
+                cwd=None,
+                env=None,
+                timeout_seconds=self.timeout_seconds,
+                capture_limit_chars=utils.DEFAULT_MAX_CAPTURE_CHARS,
+                executor=self.executor,
+            )
+        except (OSError, RuntimeError) as exc:
+            return utils.CheckResult.failure(f"failed to run {executable!r}: {exc}", stderr=str(exc))
+
+        if proc.timed_out:
+            return utils.CheckResult.failure(
+                f"{executable!r} timed out after {self.timeout_seconds}s",
+                stdout=proc.stdout,
+                stderr=proc.stderr,
+                timed_out=True,
+            )
+        if proc.returncode != 0:
+            detail = "\n".join(part for part in (proc.stdout, proc.stderr) if part).strip() or f"rc={proc.returncode}"
+            return utils.CheckResult.failure(
+                f"{executable!r} version check failed: {detail}",
+                stdout=proc.stdout,
+                stderr=proc.stderr,
+                returncode=proc.returncode,
+            )
+
+        version_text = "\n".join(part for part in (proc.stdout, proc.stderr) if part).strip()
+        if self._compiled_version_regex is not None:
+            match = self._compiled_version_regex.search(version_text)
+            if match is None:
+                return utils.CheckResult.failure(
+                    "version_regex did not match command output",
+                    stdout=proc.stdout,
+                    stderr=proc.stderr,
+                    returncode=proc.returncode,
+                )
+            if match.lastindex not in (None, 1):
+                return utils.CheckResult.failure(
+                    "version_regex must contain at most one capture group",
+                    stdout=proc.stdout,
+                    stderr=proc.stderr,
+                    returncode=proc.returncode,
+                )
+            version_text = match.group(1) if match.lastindex == 1 else match.group(0)
+
+        found_version = self._parse_version(version_text)
+        if found_version is None:
+            return utils.CheckResult.failure(
+                f"could not parse a version from {executable!r} output",
+                stdout=proc.stdout,
+                stderr=proc.stderr,
+                returncode=proc.returncode,
+            )
+        if self.min_version is not None and found_version < self.min_version:
+            return utils.CheckResult.failure(
+                f"{executable!r} version {self._format_version(found_version)} does not satisfy {self._format_requirement()}",
+                stdout=proc.stdout,
+                stderr=proc.stderr,
+                returncode=proc.returncode,
+            )
+        if self.max_version is not None and found_version > self.max_version:
+            return utils.CheckResult.failure(
+                f"{executable!r} version {self._format_version(found_version)} does not satisfy {self._format_requirement()}",
+                stdout=proc.stdout,
+                stderr=proc.stderr,
+                returncode=proc.returncode,
+            )
+        return utils.CheckResult.success(stdout=proc.stdout, stderr=proc.stderr, returncode=proc.returncode)
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class EnvVarCheck(utils.BaseCheck):
+    env_var: str
+    expected: str
+    match_mode: EnvMatchMode = EnvMatchMode.EXACT
+    executor: utils.RuntimeCheckExecutor | None = dataclasses.field(default=None, repr=False, compare=False)
+
+    _pattern: re.Pattern[str] | None = dataclasses.field(init=False, repr=False, default=None)
+
+    def __post_init__(self) -> None:
+        if not self.env_var:
+            raise ValueError(f"{self.name}: env_var cannot be empty")
+        if self.match_mode == EnvMatchMode.CONTAINS and not self.expected:
+            raise ValueError(f"{self.name}: expected cannot be empty for contains mode")
+        if self.match_mode == EnvMatchMode.REGEX:
+            try:
+                pattern = re.compile(self.expected)
+            except re.error as exc:
+                raise ValueError(f"{self.name}: invalid regex: {exc}") from exc
+            object.__setattr__(self, "_pattern", pattern)
+
+    def check(self) -> utils.CheckResult:
+        try:
+            actual = utils.read_check_env_var(self.env_var, executor=self.executor)
+        except (RuntimeError, ValueError) as exc:
+            return utils.CheckResult.failure(str(exc))
+        if actual is None:
+            return utils.CheckResult.failure(f"{self.env_var} is not set")
+        if self.match_mode == EnvMatchMode.EXACT:
+            if actual == self.expected:
+                return utils.CheckResult.success()
+            return utils.CheckResult.failure(f"{self.env_var} expected {self.expected!r}, got {actual!r}")
+        if self.match_mode == EnvMatchMode.CONTAINS:
+            if self.expected in actual:
+                return utils.CheckResult.success()
+            return utils.CheckResult.failure(f"{self.env_var} does not contain {self.expected!r}")
+        assert self._pattern is not None
+        if self._pattern.search(actual):
+            return utils.CheckResult.success()
+        return utils.CheckResult.failure(f"{self.env_var} does not match regex {self.expected!r}")
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class PathCheck(utils.BaseCheck):
+    path: utils.PathLike
+    kind: PathKind = PathKind.ANY
+    executor: utils.RuntimeCheckExecutor | None = dataclasses.field(default=None, repr=False, compare=False)
+
+    _path_text: str = dataclasses.field(init=False, repr=False, default="")
+
+    def __post_init__(self) -> None:
+        path_text = os.fspath(self.path).strip()
+        if not path_text:
+            raise ValueError(f"{self.name}: path cannot be empty")
+        object.__setattr__(self, "_path_text", path_text)
+
+    def _path(self) -> pathlib.Path:
+        return utils.path_from_user_input(self._path_text)
+
+    def check(self) -> utils.CheckResult:
+        path = self._path()
+        if not utils.check_path_exists(path, executor=self.executor):
+            label = "path"
+            if self.kind == PathKind.FILE:
+                label = "file"
+            elif self.kind == PathKind.DIRECTORY:
+                label = "directory"
+            return utils.CheckResult.failure(f"{label} not found: {self._path_text}")
+        if self.kind == PathKind.ANY:
+            return utils.CheckResult.success()
+        if self.kind == PathKind.FILE:
+            if utils.check_path_is_file(path, executor=self.executor):
+                return utils.CheckResult.success()
+            return utils.CheckResult.failure(f"expected a file: {self._path_text}")
+        if utils.check_path_is_dir(path, executor=self.executor):
+            return utils.CheckResult.success()
+        return utils.CheckResult.failure(f"expected a directory: {self._path_text}")
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class CommandCheck(utils.BaseCheck):
+    cmd: str | Sequence[str]
+    cwd: utils.PathLike | None = None
+    timeout_seconds: float = DEFAULT_ORACLE_CHECK_TIMEOUT
+    env: Mapping[str, str] = dataclasses.field(default_factory=dict)
+    use_shell: bool = False
+    signature: str | None = None
+    executor: utils.RuntimeCheckExecutor | None = dataclasses.field(default=None, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        if self.timeout_seconds <= 0:
+            raise ValueError(f"{self.name}: timeout_seconds must be > 0")
+        if isinstance(self.cmd, (list, tuple)):
+            if not self.cmd:
+                raise ValueError(f"{self.name}: cmd must be non-empty")
+            bad_args = [arg for arg in self.cmd if not isinstance(arg, str) or not arg]
+            if bad_args:
+                raise TypeError(f"{self.name}: all argv entries must be non-empty strings")
+            object.__setattr__(self, "cmd", tuple(self.cmd))
+        elif isinstance(self.cmd, str):
+            if not self.cmd.strip():
+                raise ValueError(f"{self.name}: cmd must be non-empty")
+            if not self.use_shell:
+                raise ValueError(f"{self.name}: string cmd requires use_shell=True")
+        else:
+            raise TypeError(f"{self.name}: cmd must be a string or sequence of strings")
+
+        clean_env: dict[str, str] = {}
+        for key, value in dict(self.env).items():
+            if not isinstance(key, str) or not key:
+                raise TypeError(f"{self.name}: env contains an empty variable name")
+            clean_env[key] = str(value)
+        object.__setattr__(self, "env", clean_env)
+        if self.cwd is not None:
+            object.__setattr__(self, "cwd", utils.path_from_user_input(self.cwd))
+        if self.signature is not None and not self.signature.strip():
+            object.__setattr__(self, "signature", None)
+
+    def _cwd(self) -> pathlib.Path | None:
+        return None if self.cwd is None else pathlib.Path(self.cwd)
+
+    def _display_cmd(self) -> str:
+        if isinstance(self.cmd, str):
+            return self.cmd
+        return " ".join(shlex.quote(arg) for arg in self.cmd)
+
+    def check(self) -> utils.CheckResult:
+        cwd = self._cwd()
+        if cwd is not None:
+            if not utils.check_path_exists(cwd, executor=self.executor):
+                return utils.CheckResult.failure(f"working directory not found: {cwd}", cwd=cwd)
+            if not utils.check_path_is_dir(cwd, executor=self.executor):
+                return utils.CheckResult.failure(f"working directory is not a directory: {cwd}", cwd=cwd)
+
+        signature = self.signature
+        stdout_seen = signature is None
+        stderr_seen = signature is None
+        carry_len = 0 if signature is None else max(len(signature) - 1, 0)
+        stdout_tail = ""
+        stderr_tail = ""
+
+        def on_chunk(stream_name: str, text: str) -> None:
+            nonlocal stdout_seen, stderr_seen, stdout_tail, stderr_tail
+            if signature is None:
+                return
+            if stream_name == "stdout" and not stdout_seen:
+                haystack = stdout_tail + text
+                stdout_seen = signature in haystack
+                stdout_tail = haystack[-carry_len:] if carry_len else ""
+            elif stream_name == "stderr" and not stderr_seen:
+                haystack = stderr_tail + text
+                stderr_seen = signature in haystack
+                stderr_tail = haystack[-carry_len:] if carry_len else ""
+
+        try:
+            proc = utils.run_check_process_capture(
+                cmd=self.cmd,
+                cwd=cwd,
+                env=self.env or None,
+                timeout_seconds=float(self.timeout_seconds),
+                use_shell=self.use_shell,
+                capture_limit_chars=utils.DEFAULT_MAX_CAPTURE_CHARS,
+                drain_after_kill=False,
+                on_chunk=on_chunk,
+                executor=self.executor,
+            )
+        except (OSError, RuntimeError) as exc:
+            return utils.CheckResult.failure(
+                f"failed to run command: {self._display_cmd()}: {exc}",
+                stderr=str(exc),
+                cwd=cwd,
+            )
+
+        if proc.timed_out:
+            return utils.CheckResult.failure(
+                f"command timed out after {self.timeout_seconds}s: {self._display_cmd()}",
+                stdout=proc.stdout,
+                stderr=proc.stderr,
+                timed_out=True,
+                cwd=cwd,
+            )
+        if proc.returncode != 0:
+            return utils.CheckResult.failure(
+                f"command failed (rc={proc.returncode}): {self._display_cmd()}",
+                stdout=proc.stdout,
+                stderr=proc.stderr,
+                returncode=proc.returncode,
+                cwd=cwd,
+            )
+        if signature is not None and not (stdout_seen or stderr_seen):
+            return utils.CheckResult.failure(
+                f"signature not found: {signature!r}: {self._display_cmd()}",
+                stdout=proc.stdout,
+                stderr=proc.stderr,
+                returncode=proc.returncode,
+                cwd=cwd,
+            )
+        return utils.CheckResult.success(
+            stdout=proc.stdout,
+            stderr=proc.stderr,
+            returncode=proc.returncode,
+            cwd=cwd,
+        )
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class TextFileEqualityCheck(utils.BaseCheck):
+    observed_path: utils.PathLike
+    reference_path: utils.PathLike
+    executor: utils.RuntimeCheckExecutor | None = dataclasses.field(default=None, repr=False, compare=False)
+
+    def check(self) -> utils.CheckResult:
+        observed_path = utils.path_from_user_input(self.observed_path)
+        reference_path = utils.path_from_user_input(self.reference_path)
+        if not utils.check_path_is_file(observed_path, executor=self.executor):
+            return utils.CheckResult.failure(f"observed file missing: {observed_path}")
+        if not utils.check_path_is_file(reference_path, executor=self.executor):
+            return utils.CheckResult.failure(f"reference file missing: {reference_path}")
+        try:
+            observed = utils.check_read_file_text(observed_path, executor=self.executor)
+            reference = utils.check_read_file_text(reference_path, executor=self.executor)
+        except OSError as exc:
+            return utils.CheckResult.failure(f"failed to read file: {exc}")
+        if observed == reference:
+            return utils.CheckResult.success("file contents match reference")
+        preview_limit = 200
+        observed_preview = observed[:preview_limit] + ("..." if len(observed) > preview_limit else "")
+        reference_preview = reference[:preview_limit] + ("..." if len(reference) > preview_limit else "")
+        return utils.CheckResult.failure(
+            f"content mismatch ({len(reference)} vs {len(observed)} chars): expected={reference_preview!r} observed={observed_preview!r}"
+        )
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class ListSimilarityCheck(utils.BaseCheck):
+    observed: Sequence[float]
+    reference: Sequence[float]
+    metric: SimilarityMetric = SimilarityMetric.PEARSON
+    min_similarity: float = 1.0
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.min_similarity):
+            raise ValueError(f"{self.name}: min_similarity must be finite")
+        if self.metric in {SimilarityMetric.JACCARD_SET, SimilarityMetric.JACCARD_MULTISET, SimilarityMetric.MIN_MAX}:
+            if not 0.0 <= self.min_similarity <= 1.0:
+                raise ValueError(f"{self.name}: {self.metric.value} min_similarity must be in [0, 1]")
+        if self.metric in {SimilarityMetric.COSINE, SimilarityMetric.PEARSON}:
+            if not -1.0 <= self.min_similarity <= 1.0:
+                raise ValueError(f"{self.name}: {self.metric.value} min_similarity must be in [-1, 1]")
+        object.__setattr__(self, "observed", tuple(self.observed))
+        object.__setattr__(self, "reference", tuple(self.reference))
+
+    def check(self) -> utils.CheckResult:
+        try:
+            score = compute_similarity(self.metric, self.observed, self.reference)
+        except ValueError as exc:
+            return utils.CheckResult.failure(f"{self.name}: {exc}")
+        if score < self.min_similarity:
+            return utils.CheckResult.failure(
+                f"{self.metric.value} similarity {score:.6f} < min_similarity {self.min_similarity:.6f}"
+            )
+        return utils.CheckResult.success()
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class ElementwiseEqualityCheck(utils.BaseCheck):
+    observed: Sequence[float]
+    reference: Sequence[float]
+    max_mismatches_to_report: int = 10
+
+    def __post_init__(self) -> None:
+        if self.max_mismatches_to_report <= 0:
+            raise ValueError(f"{self.name}: max_mismatches_to_report must be > 0")
+        object.__setattr__(self, "observed", tuple(self.observed))
+        object.__setattr__(self, "reference", tuple(self.reference))
+
+    def check(self) -> utils.CheckResult:
+        try:
+            comparisons = elementwise_equal(self.observed, self.reference)
+        except ValueError as exc:
+            return utils.CheckResult.failure(f"{self.name}: {exc}")
+        if all(comparison.result for comparison in comparisons):
+            return utils.CheckResult.success()
+        detail = _summarize_boolean_mismatches(comparisons, max_items=self.max_mismatches_to_report)
+        message = "elementwise equality check failed"
+        if detail:
+            message = f"{message}\n{detail}"
+        return utils.CheckResult.failure(message)
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class ElementwiseSimilarityThresholdCheck(utils.BaseCheck):
+    observed: Sequence[float]
+    reference: Sequence[float]
+    threshold: float
+    abs_epsilon: float = 1e-12
+    max_mismatches_to_report: int = 10
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.threshold):
+            raise ValueError(f"{self.name}: threshold must be finite")
+        if not 0.0 <= self.threshold <= 1.0:
+            raise ValueError(f"{self.name}: threshold must be in [0, 1]")
+        if self.abs_epsilon <= 0:
+            raise ValueError(f"{self.name}: abs_epsilon must be > 0")
+        if self.max_mismatches_to_report <= 0:
+            raise ValueError(f"{self.name}: max_mismatches_to_report must be > 0")
+        object.__setattr__(self, "observed", tuple(self.observed))
+        object.__setattr__(self, "reference", tuple(self.reference))
+
+    def check(self) -> utils.CheckResult:
+        try:
+            scores = elementwise_similarity_scores(
+                self.observed,
+                self.reference,
+                abs_epsilon=self.abs_epsilon,
+            )
+        except ValueError as exc:
+            return utils.CheckResult.failure(f"{self.name}: {exc}")
+        if all(score.result >= self.threshold for score in scores):
+            return utils.CheckResult.success()
+        detail = _summarize_threshold_mismatches(
+            scores,
+            threshold=self.threshold,
+            max_items=self.max_mismatches_to_report,
+        )
+        message = f"elementwise similarity below threshold {self.threshold:.6f}"
+        if detail:
+            message = f"{message}\n{detail}"
+        return utils.CheckResult.failure(message)
+
+
+def compute_similarity(metric: SimilarityMetric, left: Sequence[float], right: Sequence[float]) -> float:
+    if metric == SimilarityMetric.JACCARD_SET:
+        return _jaccard_set_similarity(left, right)
+    if metric == SimilarityMetric.JACCARD_MULTISET:
+        return _jaccard_multiset_similarity(left, right)
+    if metric == SimilarityMetric.COSINE:
+        return _cosine_similarity(left, right)
+    if metric == SimilarityMetric.PEARSON:
+        return _pearson_similarity(left, right)
+    if metric == SimilarityMetric.MIN_MAX:
+        return _min_max_similarity(left, right)
+    raise ValueError(f"unsupported similarity metric: {metric!r}")
+
+
+def elementwise_equal(observed: Sequence[float], reference: Sequence[float]) -> list[Comparison[bool]]:
+    _require_equal_lengths(observed, reference, label="elementwise_equal")
+    _require_all_finite(observed, label="elementwise_equal.observed")
+    _require_all_finite(reference, label="elementwise_equal.reference")
+    return [Comparison(observed=a, reference=b, result=a == b) for a, b in zip(observed, reference, strict=True)]
+
+
+def elementwise_similarity_scores(
+    observed: Sequence[float],
+    reference: Sequence[float],
+    *,
+    similarity_fn: Callable[[float, float], float] | None = None,
+    abs_epsilon: float = 1e-12,
+) -> list[Comparison[float]]:
+    _require_equal_lengths(observed, reference, label="elementwise_similarity_scores")
+    _require_all_finite(observed, label="elementwise_similarity_scores.observed")
+    _require_all_finite(reference, label="elementwise_similarity_scores.reference")
+    if abs_epsilon <= 0:
+        raise ValueError("elementwise_similarity_scores: abs_epsilon must be > 0")
+    if similarity_fn is None:
+        similarity_fn = lambda a, b: _default_numeric_similarity(a, b, abs_epsilon=abs_epsilon)
+    return [Comparison(observed=a, reference=b, result=similarity_fn(a, b)) for a, b in zip(observed, reference, strict=True)]
+
+
+def elementwise_similarity_threshold(
+    observed: Sequence[float],
+    reference: Sequence[float],
+    *,
+    threshold: float,
+    similarity_fn: Callable[[float, float], float] | None = None,
+    abs_epsilon: float = 1e-12,
+) -> list[Comparison[bool]]:
+    if not math.isfinite(threshold):
+        raise ValueError("elementwise_similarity_threshold: threshold must be finite")
+    if not 0.0 <= threshold <= 1.0:
+        raise ValueError("elementwise_similarity_threshold: threshold must be in [0, 1]")
+    return [
+        Comparison(observed=score.observed, reference=score.reference, result=score.result >= threshold)
+        for score in elementwise_similarity_scores(
+            observed,
+            reference,
+            similarity_fn=similarity_fn,
+            abs_epsilon=abs_epsilon,
+        )
+    ]
+
+
+def _require_equal_lengths(left: Sequence[float], right: Sequence[float], *, label: str) -> None:
+    if len(left) != len(right):
+        raise ValueError(f"{label}: length mismatch: left has {len(left)}, right has {len(right)}")
+
+
+def _require_all_finite(values: Sequence[float], *, label: str) -> None:
+    for index, value in enumerate(values):
+        if not math.isfinite(value):
+            raise ValueError(f"{label}: non-finite value at index {index}: {value!r}")
+
+
+def _jaccard_set_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    _require_all_finite(left, label="jaccard_set_similarity.left")
+    _require_all_finite(right, label="jaccard_set_similarity.right")
+    left_set = set(left)
+    right_set = set(right)
+    if len(left_set) != len(left):
+        raise ValueError("jaccard_set_similarity: left input contains duplicates; use jaccard_multiset")
+    if len(right_set) != len(right):
+        raise ValueError("jaccard_set_similarity: right input contains duplicates; use jaccard_multiset")
+    union = left_set | right_set
+    if not union:
+        return 1.0
+    return len(left_set & right_set) / len(union)
+
+
+def _jaccard_multiset_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    _require_all_finite(left, label="jaccard_multiset_similarity.left")
+    _require_all_finite(right, label="jaccard_multiset_similarity.right")
+    left_counter = Counter(left)
+    right_counter = Counter(right)
+    keys = set(left_counter) | set(right_counter)
+    denominator = sum(max(left_counter[key], right_counter[key]) for key in keys)
+    if denominator == 0:
+        return 1.0
+    numerator = sum(min(left_counter[key], right_counter[key]) for key in keys)
+    return numerator / denominator
+
+
+def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    _require_equal_lengths(left, right, label="cosine_similarity")
+    _require_all_finite(left, label="cosine_similarity.left")
+    _require_all_finite(right, label="cosine_similarity.right")
+    dot = 0.0
+    left_norm = 0.0
+    right_norm = 0.0
+    for a, b in zip(left, right, strict=True):
+        dot += a * b
+        left_norm += a * a
+        right_norm += b * b
+    if left_norm <= _EPSILON and right_norm <= _EPSILON:
+        return 1.0
+    if left_norm <= _EPSILON or right_norm <= _EPSILON:
+        return 0.0
+    return dot / (math.sqrt(left_norm) * math.sqrt(right_norm))
+
+
+def _pearson_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    _require_equal_lengths(left, right, label="pearson_similarity")
+    if len(left) < 2:
+        raise ValueError(f"pearson_similarity: need at least 2 samples, got {len(left)}")
+    _require_all_finite(left, label="pearson_similarity.left")
+    _require_all_finite(right, label="pearson_similarity.right")
+    mean_left = sum(left) / len(left)
+    mean_right = sum(right) / len(right)
+    covariance = 0.0
+    left_var = 0.0
+    right_var = 0.0
+    for a, b in zip(left, right, strict=True):
+        left_delta = a - mean_left
+        right_delta = b - mean_right
+        covariance += left_delta * right_delta
+        left_var += left_delta * left_delta
+        right_var += right_delta * right_delta
+    if left_var <= _EPSILON and right_var <= _EPSILON:
+        return 1.0 if tuple(left) == tuple(right) else 0.0
+    if left_var <= _EPSILON or right_var <= _EPSILON:
+        return 0.0
+    return covariance / (math.sqrt(left_var) * math.sqrt(right_var))
+
+
+def _min_max_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    _require_equal_lengths(left, right, label="min_max_similarity")
+    _require_all_finite(left, label="min_max_similarity.left")
+    _require_all_finite(right, label="min_max_similarity.right")
+    numerator = 0.0
+    denominator = 0.0
+    for index, (a, b) in enumerate(zip(left, right, strict=True)):
+        if a < 0.0 or b < 0.0:
+            raise ValueError(f"min_max_similarity: negative value at index {index}: left={a!r}, right={b!r}")
+        numerator += min(a, b)
+        denominator += max(a, b)
+    if denominator == 0.0:
+        return 1.0
+    return numerator / denominator
+
+
+def _default_numeric_similarity(a: float, b: float, *, abs_epsilon: float) -> float:
+    if not math.isfinite(a) or not math.isfinite(b):
+        raise ValueError(f"default_numeric_similarity: non-finite input: a={a!r}, b={b!r}")
+    denominator = max(abs(a), abs(b), abs_epsilon)
+    return max(0.0, min(1.0, 1.0 - (abs(a - b) / denominator)))
+
+
+def _summarize_boolean_mismatches(comparisons: Sequence[Comparison[bool]], *, max_items: int) -> str:
+    lines: list[str] = []
+    total_bad = 0
+    for index, comparison in enumerate(comparisons):
+        if comparison.result:
+            continue
+        total_bad += 1
+        if len(lines) < max_items:
+            lines.append(f"[{index}] observed={comparison.observed!r}, reference={comparison.reference!r}")
+    if not lines:
+        return ""
+    suffix = f"\n... ({total_bad - len(lines)} more)" if total_bad > len(lines) else ""
+    return "mismatches:\n" + "\n".join(lines) + suffix
+
+
+def _summarize_threshold_mismatches(
+    comparisons: Sequence[Comparison[float]],
+    *,
+    threshold: float,
+    max_items: int,
+) -> str:
+    lines: list[str] = []
+    total_bad = 0
+    for index, comparison in enumerate(comparisons):
+        if comparison.result >= threshold:
+            continue
+        total_bad += 1
+        if len(lines) < max_items:
+            lines.append(
+                f"[{index}] score={comparison.result:.6f} observed={comparison.observed!r}, reference={comparison.reference!r}"
+            )
+    if not lines:
+        return ""
+    suffix = f"\n... ({total_bad - len(lines)} more)" if total_bad > len(lines) else ""
+    return "mismatches:\n" + "\n".join(lines) + suffix

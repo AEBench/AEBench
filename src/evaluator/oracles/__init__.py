@@ -1,1 +1,52 @@
-"""Oracle sub-package: case base classes, discovery, execution, and requirement primitives."""
+from .bases import (
+    CaseOracleArtifactBuildBase,
+    CaseOracleBenchmarkPrepBase,
+    CaseOracleEnvSetupBase,
+    CaseOracleExperimentRunsBase,
+)
+from .checks import (
+    CommandCheck,
+    Comparison,
+    ElementwiseEqualityCheck,
+    ElementwiseSimilarityThresholdCheck,
+    EnvMatchMode,
+    EnvVarCheck,
+    ListSimilarityCheck,
+    PathCheck,
+    PathKind,
+    SimilarityMetric,
+    TextFileEqualityCheck,
+    VersionCheck,
+    compute_similarity,
+    elementwise_equal,
+    elementwise_similarity_scores,
+    elementwise_similarity_threshold,
+)
+from .discovery import OracleLoadError, discover_oracle_classes
+from .execution import run_oracle
+
+__all__ = [
+    "CaseOracleArtifactBuildBase",
+    "CaseOracleBenchmarkPrepBase",
+    "CaseOracleEnvSetupBase",
+    "CaseOracleExperimentRunsBase",
+    "CommandCheck",
+    "Comparison",
+    "ElementwiseEqualityCheck",
+    "ElementwiseSimilarityThresholdCheck",
+    "EnvMatchMode",
+    "EnvVarCheck",
+    "ListSimilarityCheck",
+    "OracleLoadError",
+    "PathCheck",
+    "PathKind",
+    "SimilarityMetric",
+    "TextFileEqualityCheck",
+    "VersionCheck",
+    "compute_similarity",
+    "discover_oracle_classes",
+    "elementwise_equal",
+    "elementwise_similarity_scores",
+    "elementwise_similarity_threshold",
+    "run_oracle",
+]

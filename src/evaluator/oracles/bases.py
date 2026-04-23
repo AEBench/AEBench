@@ -1,0 +1,228 @@
+from __future__ import annotations
+
+import abc
+import logging
+from pathlib import Path
+from collections.abc import Mapping, Sequence
+
+from models import OracleInput
+
+from ..constants import DEFAULT_ORACLE_CHECK_TIMEOUT, REFS_DIRNAME
+from .checks import (
+    CommandCheck,
+    EnvMatchMode,
+    EnvVarCheck,
+    PathCheck,
+    PathKind,
+    TextFileEqualityCheck,
+    VersionCheck,
+    elementwise_equal,
+    elementwise_similarity_scores,
+    elementwise_similarity_threshold,
+    compute_similarity,
+)
+from . import utils
+
+
+class _OraclePhaseBase(abc.ABC):
+    phase_label = "OraclePhase"
+
+    def __init__(self, *, context: OracleInput, logger: logging.Logger) -> None:
+        self._context = context
+        self._logger = logger
+
+    @property
+    def context(self) -> OracleInput:
+        return self._context
+
+    @property
+    def logger(self) -> logging.Logger:
+        return self._logger
+
+    @abc.abstractmethod
+    def requirements(self) -> Sequence[utils.BaseCheck]:
+        raise NotImplementedError
+
+    def report(self) -> utils.OracleReport:
+        return utils.build_oracle_report(logger=self._logger, requirements=self.requirements)
+
+    def run(self, *, verbose: bool = False) -> bool:
+        report = self.report()
+        return utils.log_oracle_report(self._logger, label=self.phase_label, report=report, verbose=verbose)
+
+
+class _CaseOracleBase(_OraclePhaseBase):
+    def __init__(self, *, context: OracleInput, logger: logging.Logger) -> None:
+        super().__init__(context=context, logger=logger)
+        self._case_dir = Path(context.case_dir).expanduser().resolve(strict=False)
+        self._artifact_dir = Path(context.artifact_dir).expanduser().resolve(strict=False)
+        self._workspace_dir = Path(context.workspace_dir).expanduser().resolve(strict=False)
+        self._output_dir = Path(context.output_dir).expanduser().resolve(strict=False)
+        self._refs_dir = (self._case_dir / REFS_DIRNAME).expanduser().resolve(strict=False)
+        self._executor = context.runtime_executor
+
+    @property
+    def executor(self) -> utils.RuntimeCheckExecutor | None:
+        return self._executor
+
+    def case_path(self, *parts: str | Path) -> Path:
+        return self._case_dir.joinpath(*parts) if parts else self._case_dir
+
+    def artifact_path(self, *parts: str | Path) -> Path:
+        return self._artifact_dir.joinpath(*parts) if parts else self._artifact_dir
+
+    def workspace_path(self, *parts: str | Path) -> Path:
+        return self._workspace_dir.joinpath(*parts) if parts else self._workspace_dir
+
+    def output_path(self, *parts: str | Path) -> Path:
+        return self._output_dir.joinpath(*parts) if parts else self._output_dir
+
+    def ref_path(self, *parts: str | Path) -> Path:
+        return self._refs_dir.joinpath(*parts) if parts else self._refs_dir
+
+    def version_check(
+        self,
+        *,
+        name: str,
+        cmd: Sequence[str],
+        min_version: tuple[int, int, int] | None = None,
+        max_version: tuple[int, int, int] | None = None,
+        version_regex: str | None = None,
+        timeout_seconds: float = DEFAULT_ORACLE_CHECK_TIMEOUT,
+        optional: bool = False,
+    ) -> VersionCheck:
+        return VersionCheck(
+            name=name,
+            optional=optional,
+            cmd=cmd,
+            min_version=min_version,
+            max_version=max_version,
+            version_regex=version_regex,
+            timeout_seconds=timeout_seconds,
+            executor=self._executor,
+        )
+
+    def env_var_check(
+        self,
+        *,
+        name: str,
+        env_var: str,
+        expected: str,
+        match_mode: EnvMatchMode = EnvMatchMode.EXACT,
+        optional: bool = False,
+    ) -> EnvVarCheck:
+        return EnvVarCheck(
+            name=name,
+            optional=optional,
+            env_var=env_var,
+            expected=expected,
+            match_mode=match_mode,
+            executor=self._executor,
+        )
+
+    def path_check(
+        self,
+        *,
+        name: str,
+        path: str | Path,
+        kind: PathKind = PathKind.ANY,
+        optional: bool = False,
+    ) -> PathCheck:
+        return PathCheck(
+            name=name,
+            optional=optional,
+            path=path,
+            kind=kind,
+            executor=self._executor,
+        )
+
+    def command_check(
+        self,
+        *,
+        name: str,
+        cmd: str | Sequence[str],
+        cwd: str | Path | None = None,
+        timeout_seconds: float,
+        env: Mapping[str, str] | None = None,
+        use_shell: bool = False,
+        signature: str | None = None,
+        optional: bool = False,
+    ) -> CommandCheck:
+        return CommandCheck(
+            name=name,
+            optional=optional,
+            cmd=cmd,
+            cwd=cwd,
+            timeout_seconds=timeout_seconds,
+            env={} if env is None else env,
+            use_shell=use_shell,
+            signature=signature,
+            executor=self._executor,
+        )
+
+    def text_file_equal(
+        self,
+        *,
+        name: str,
+        observed_path: str | Path,
+        reference_path: str | Path,
+        optional: bool = False,
+    ) -> TextFileEqualityCheck:
+        return TextFileEqualityCheck(
+            name=name,
+            optional=optional,
+            observed_path=observed_path,
+            reference_path=reference_path,
+            executor=self._executor,
+        )
+
+    def read_text(self, path: str | Path, *, encoding: str = "utf-8") -> str:
+        return utils.check_read_file_text(utils.path_from_user_input(path), encoding=encoding, executor=self._executor)
+
+    def path_exists(self, path: str | Path) -> bool:
+        return utils.check_path_exists(utils.path_from_user_input(path), executor=self._executor)
+
+    def is_file(self, path: str | Path) -> bool:
+        return utils.check_path_is_file(utils.path_from_user_input(path), executor=self._executor)
+
+    def is_dir(self, path: str | Path) -> bool:
+        return utils.check_path_is_dir(utils.path_from_user_input(path), executor=self._executor)
+
+    def run_command(
+        self,
+        *,
+        cmd: str | Sequence[str],
+        cwd: str | Path | None = None,
+        env: Mapping[str, str] | None = None,
+        timeout_seconds: float,
+        use_shell: bool = False,
+    ) -> utils.ProcResult:
+        return utils.run_check_process_capture(
+            cmd=cmd,
+            cwd=None if cwd is None else utils.path_from_user_input(cwd),
+            env=env,
+            timeout_seconds=timeout_seconds,
+            use_shell=use_shell,
+            executor=self._executor,
+        )
+
+
+class CaseOracleEnvSetupBase(_CaseOracleBase):
+    phase_label = "EnvironmentSetup"
+
+
+class CaseOracleArtifactBuildBase(_CaseOracleBase):
+    phase_label = "ArtifactBuild"
+
+
+class CaseOracleBenchmarkPrepBase(_CaseOracleBase):
+    phase_label = "BenchmarkPrep"
+
+
+class CaseOracleExperimentRunsBase(_CaseOracleBase):
+    phase_label = "ExperimentRuns"
+
+    similarity = staticmethod(compute_similarity)
+    elementwise_equal = staticmethod(elementwise_equal)
+    elementwise_similarity_scores = staticmethod(elementwise_similarity_scores)
+    elementwise_similarity_threshold = staticmethod(elementwise_similarity_threshold)
