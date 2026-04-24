@@ -1,0 +1,111 @@
+"""Validate the structure of an AEBench case bundle."""
+
+from __future__ import annotations
+
+import inspect
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from evaluator.constants import ARTIFACT_SUBDIR, CASE_MANIFEST_FILENAME, ORACLE_DIRNAME, REFS_DIRNAME
+from evaluator.loader import CaseBundleError, load_case_spec
+from evaluator.oracles.discovery import OracleLoadError, discover_oracle_classes
+
+_PHASE_CLASS_NAMES = {
+    "OracleEnvSetup",
+    "OracleArtifactBuild",
+    "OracleBenchmarkPrep",
+    "OracleExperimentRuns",
+}
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationIssue:
+    code: str
+    path: str
+    message: str
+    severity: str = "error"
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationResult:
+    issues: tuple[ValidationIssue, ...]
+
+    @property
+    def ok(self) -> bool:
+        return not any(issue.severity == "error" for issue in self.issues)
+
+
+def validate_case_bundle(case_dir: Path) -> ValidationResult:
+    root = case_dir.resolve()
+    issues: list[ValidationIssue] = []
+
+    _require_file(root / CASE_MANIFEST_FILENAME, "missing_case_toml", issues)
+    _require_dir(root / ARTIFACT_SUBDIR, "missing_artifact_dir", issues)
+    _require_dir(root / REFS_DIRNAME, "missing_refs_dir", issues)
+    _require_dir(root / ORACLE_DIRNAME, "missing_oracles_dir", issues)
+
+    if (root / CASE_MANIFEST_FILENAME).is_file():
+        try:
+            load_case_spec(root)
+        except CaseBundleError as exc:
+            issues.append(
+                ValidationIssue(
+                    code="invalid_case_spec",
+                    path=str(root / CASE_MANIFEST_FILENAME),
+                    message=str(exc),
+                )
+            )
+
+    if (root / ORACLE_DIRNAME).is_dir():
+        try:
+            discovered = discover_oracle_classes(root)
+        except OracleLoadError as exc:
+            issues.append(
+                ValidationIssue(
+                    code="invalid_oracles",
+                    path=str(root / ORACLE_DIRNAME),
+                    message=str(exc),
+                )
+            )
+        else:
+            names = {phase.cls.__name__ for phase in discovered}
+            missing = sorted(_PHASE_CLASS_NAMES - names)
+            if missing:
+                issues.append(
+                    ValidationIssue(
+                        code="missing_oracle_phase_classes",
+                        path=str(root / ORACLE_DIRNAME),
+                        message="missing classes: " + ", ".join(missing),
+                    )
+                )
+            _warn_on_old_decorator_style(root, issues)
+
+    return ValidationResult(issues=tuple(issues))
+
+
+def _require_file(path: Path, code: str, issues: list[ValidationIssue]) -> None:
+    if not path.is_file():
+        issues.append(ValidationIssue(code=code, path=str(path), message="required file is missing"))
+
+
+def _require_dir(path: Path, code: str, issues: list[ValidationIssue]) -> None:
+    if not path.is_dir():
+        issues.append(ValidationIssue(code=code, path=str(path), message="required directory is missing"))
+
+
+def _warn_on_old_decorator_style(case_dir: Path, issues: list[ValidationIssue]) -> None:
+    for py_file in (case_dir / ORACLE_DIRNAME).glob("*.py"):
+        if py_file.name == "__init__.py":
+            continue
+        text = py_file.read_text(encoding="utf-8")
+        if "@env_setup" in text or "@artifact_build" in text or "@benchmark_prep" in text or "@experiment_runs" in text:
+            issues.append(
+                ValidationIssue(
+                    code="old_decorator_oracle_style",
+                    path=str(py_file),
+                    message="decorator-style oracle phases are no longer supported",
+                    severity="warning",
+                )
+            )
