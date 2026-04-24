@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
+CASE_MANIFEST_FILENAME = "case.toml"
 
-ORACLE_DIRNAME: str = "oracles"
+ARTIFACT_DIRNAME = "artifact"
+ORACLE_DIRNAME = "oracles"
+REFS_DIRNAME = "refs"
 
-REFS_DIRNAME: str = "refs"
+ORACLE_RESULT_FILENAME = "oracle_result.json"
 
-
-CASE_MANIFEST_FILENAME: str = "case.toml"
-ORACLE_RESULT_FILENAME: str = "oracle_result.json"
-
-
-DEFAULT_ORACLE_CHECK_TIMEOUT: float = 5.0
-
-DEFAULT_ORACLE_BUILD_TIMEOUT: float = 60.0
-
-SUBPROCESS_WAIT_TIMEOUT: float = 5.0
+DEFAULT_ORACLE_CHECK_TIMEOUT = 5.0
+DEFAULT_ORACLE_BUILD_TIMEOUT = 60.0
+SUBPROCESS_WAIT_TIMEOUT = 5.0

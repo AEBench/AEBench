@@ -1,4 +1,4 @@
-"""Case-spec loading and bundle validation."""
+"""Case bundle loading and validation."""
 
 from __future__ import annotations
 
@@ -8,41 +8,34 @@ from pathlib import Path
 if sys.version_info >= (3, 11):
     import tomllib
 else:  # pragma: no cover
-    import tomli as tomllib  # type: ignore[no-redef]
+    import tomli as tomllib
 
 from models import CaseConfig
 
-from .constants import CASE_MANIFEST_FILENAME, ORACLE_DIRNAME, REFS_DIRNAME
+from .constants import ARTIFACT_DIRNAME, CASE_MANIFEST_FILENAME, ORACLE_DIRNAME, REFS_DIRNAME
 
 
 class CaseBundleError(ValueError):
     pass
 
 
-def _resolve_oracle_dir(case_dir: Path) -> Path:
-    oracle_dir = case_dir / ORACLE_DIRNAME
-    if oracle_dir.is_dir():
-        return oracle_dir
+def load_case_spec(case_dir: Path) -> CaseConfig:
+    """Load and validate a case bundle."""
+    case_root = case_dir.expanduser().resolve()
 
-    raise CaseBundleError(
-        f"missing {ORACLE_DIRNAME}/ directory in {case_dir}"
-    )
+    if not case_root.is_dir():
+        raise CaseBundleError(f"case directory does not exist: {case_root}")
 
-
-def _has_visible_python_files(root: Path) -> bool:
-    for path in root.rglob("*.py"):
-        if "__pycache__" in path.parts:
-            continue
-        if any(part.startswith(".") for part in path.parts):
-            continue
-        return True
-    return False
+    case = _read_case_toml(case_root)
+    _validate_instructions_path(case_root, case)
+    _validate_required_dirs(case_root)
+    return case
 
 
-def _read_case_spec(case_dir: Path) -> CaseConfig:
-    toml_path = case_dir / CASE_MANIFEST_FILENAME
+def _read_case_toml(case_root: Path) -> CaseConfig:
+    toml_path = case_root / CASE_MANIFEST_FILENAME
     if not toml_path.is_file():
-        raise CaseBundleError(f"case.toml not found in {case_dir}")
+        raise CaseBundleError(f"{CASE_MANIFEST_FILENAME} not found in {case_root}")
 
     try:
         with toml_path.open("rb") as fh:
@@ -53,48 +46,44 @@ def _read_case_spec(case_dir: Path) -> CaseConfig:
     try:
         return CaseConfig.model_validate(data)
     except Exception as exc:
-        raise CaseBundleError(f"invalid case.toml in {case_dir}: {exc}") from exc
+        raise CaseBundleError(f"invalid {CASE_MANIFEST_FILENAME} in {case_root}: {exc}") from exc
 
 
-def _validate_case_paths(case_dir: Path, case: CaseConfig) -> None:
-    artifact_dir = (case_dir / "artifact").resolve(strict=False)
-
-    instructions_path = case.run.instructions_path.strip()
+def _validate_instructions_path(case_root: Path, case: CaseConfig) -> None:
+    instructions_path = case.run.instructions.path.strip()
     if not instructions_path:
-        raise CaseBundleError("run.instructions_path must be non-empty")
+        raise CaseBundleError("run.instructions.path must be non-empty")
 
-    candidate = (artifact_dir / instructions_path).resolve(strict=False)
+    artifact_root = (case_root / ARTIFACT_DIRNAME).resolve(strict=False)
+    candidate = (artifact_root / instructions_path).resolve(strict=False)
+
     try:
-        candidate.relative_to(artifact_dir)
+        candidate.relative_to(artifact_root)
     except ValueError as exc:
-        raise CaseBundleError(
-            "run.instructions_path must stay within artifact/"
-        ) from exc
+        raise CaseBundleError("run.instructions.path must stay within artifact/") from exc
 
 
-def _validate_evaluator_bundle(case_dir: Path) -> None:
-    refs_dir = case_dir / REFS_DIRNAME
+def _validate_required_dirs(case_root: Path) -> None:
+    refs_dir = case_root / REFS_DIRNAME
     if not refs_dir.is_dir():
-        raise CaseBundleError(f"missing refs/ directory in {case_dir}")
+        raise CaseBundleError(f"missing {REFS_DIRNAME}/ directory in {case_root}")
 
-    oracle_dir = _resolve_oracle_dir(case_dir)
-    if not _has_visible_python_files(oracle_dir):
-        raise CaseBundleError(
-            f"oracle directory contains no Python files: {oracle_dir}"
-        )
+    oracle_dir = case_root / ORACLE_DIRNAME
+    if not oracle_dir.is_dir():
+        raise CaseBundleError(f"missing {ORACLE_DIRNAME}/ directory in {case_root}")
+
+    if not _contains_visible_python_file(oracle_dir):
+        raise CaseBundleError(f"{ORACLE_DIRNAME}/ contains no Python files: {oracle_dir}")
 
 
-def load_case_spec(case_dir: Path) -> CaseConfig:
-    """Load and validate a case bundle from case_dir."""
-    case_dir = case_dir.resolve()
-
-    if not case_dir.is_dir():
-        raise CaseBundleError(f"case directory does not exist: {case_dir}")
-
-    case = _read_case_spec(case_dir)
-    _validate_case_paths(case_dir, case)
-    _validate_evaluator_bundle(case_dir)
-    return case
+def _contains_visible_python_file(root: Path) -> bool:
+    for path in root.rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+        if any(part.startswith(".") for part in path.relative_to(root).parts):
+            continue
+        return True
+    return False
 
 
 __all__ = ["CaseBundleError", "load_case_spec"]

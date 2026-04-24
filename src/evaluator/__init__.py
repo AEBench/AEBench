@@ -1,14 +1,13 @@
-"""Case-spec loading, oracle discovery, and phase execution."""
+"""Evaluator package public API."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from constants import ARTIFACT_SUBDIR
 from models import (
     CaseConfig,
-    OracleInput,
     OracleFailureMode,
+    OracleInput,
     OraclePhaseName,
     OraclePhaseResult,
     OracleResult,
@@ -16,25 +15,26 @@ from models import (
     OracleStatus,
 )
 
+from .constants import ARTIFACT_DIRNAME
 from .loader import CaseBundleError, load_case_spec
 
 
 def artifact_dir_for(case_dir: Path) -> Path:
-    return (case_dir.resolve() / ARTIFACT_SUBDIR).resolve(strict=False)
+    return (case_dir.expanduser().resolve() / ARTIFACT_DIRNAME).resolve(strict=False)
 
 
 def has_local_artifact(case_dir: Path) -> bool:
     artifact_dir = artifact_dir_for(case_dir)
-    if not artifact_dir.exists():
-        return False
-    return any(not entry.name.startswith(".") for entry in artifact_dir.iterdir())
+    return artifact_dir.is_dir() and any(
+        not entry.name.startswith(".") for entry in artifact_dir.iterdir()
+    )
 
 
 __all__ = [
     "CaseBundleError",
     "CaseConfig",
-    "OracleInput",
     "OracleFailureMode",
+    "OracleInput",
     "OraclePhaseName",
     "OraclePhaseResult",
     "OracleResult",
