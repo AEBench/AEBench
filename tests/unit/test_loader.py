@@ -32,7 +32,7 @@ _MINIMAL_TOML = """\
 """
 
 _ORACLE_STUB = """\
-	from evaluator.oracles.case_base import CaseOracleEnvSetupBase
+	from evaluator.oracles.bases import CaseOracleEnvSetupBase
 	class OracleEnvSetup(CaseOracleEnvSetupBase):
 		def requirements(self): return []
 """

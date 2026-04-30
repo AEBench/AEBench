@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from evaluator.oracles.case_base import (
+from evaluator.oracles.bases import (
 	CaseOracleArtifactBuildBase,
 	CaseOracleBenchmarkPrepBase,
 	CaseOracleEnvSetupBase,
