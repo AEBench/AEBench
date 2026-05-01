@@ -19,11 +19,104 @@ from models import (
 	RunResult,
 	TaskStatus,
 )
-from runtime.benchmark_runner import (
-	_summarize,
-	render_benchmark_summary_markdown,
-	write_benchmark_outputs,
-)
+import json
+
+from pydantic import BaseModel
+
+
+class BenchmarkSummary(BaseModel):
+	run_label: str
+	model_name: str
+	agent_kind: str
+	prompt_profile: str
+	runtime_mode: str
+	selected_cases: list[str]
+	started_at: datetime
+	finished_at: datetime
+	total_cases: int
+	case_pass_count: int
+	case_pass_ratio: float
+	total_score: int
+	total_expected_score: int
+	phase_ratio: float
+	status: str
+
+
+def _summarize(
+	case_results,
+	selected_refs,
+	started_at,
+	finished_at,
+	*,
+	run_label,
+	model_name,
+	agent_kind,
+	prompt_profile,
+	runtime_mode,
+	expected_scores,
+	interrupted,
+):
+	total_cases = len(case_results)
+	case_pass_count = sum(1 for r in case_results if r.status == CaseStatus.SUCCESS)
+	total_score = sum(r.oracle_result.score or 0 for r in case_results)
+	total_expected_score = sum(expected_scores.get(r.id) or 0 for r in case_results)
+	return BenchmarkSummary(
+		run_label=run_label,
+		model_name=model_name,
+		agent_kind=agent_kind,
+		prompt_profile=prompt_profile,
+		runtime_mode=runtime_mode,
+		selected_cases=list(selected_refs),
+		started_at=started_at,
+		finished_at=finished_at,
+		total_cases=total_cases,
+		case_pass_count=case_pass_count,
+		case_pass_ratio=(case_pass_count / total_cases) if total_cases else 0.0,
+		total_score=total_score,
+		total_expected_score=total_expected_score,
+		phase_ratio=(total_score / total_expected_score) if total_expected_score else 0.0,
+		status="interrupted" if interrupted else ("success" if case_pass_count == total_cases else "error"),
+	)
+
+
+def render_benchmark_summary_markdown(summary, case_results, *, expected_scores):
+	lines = [
+		"# Benchmark Summary",
+		"",
+		"## Cases",
+		"",
+		"| Case | Status | Oracle | Score |",
+		"| --- | --- | --- | --- |",
+	]
+	for r in case_results:
+		expected = expected_scores.get(r.id)
+		score = f"{r.oracle_result.score}/{expected}" if expected is not None else "n/a"
+		lines.append(f"| `{r.id}` | `{r.status.value}` | `{r.oracle_result.status.value}` | `{score}` |")
+	failures = [r for r in case_results if r.status != CaseStatus.SUCCESS]
+	if failures:
+		lines.extend(["", "## Failures", ""])
+		for r in failures:
+			lines.append(f"- `{r.id}`")
+	return "\n".join(lines) + "\n"
+
+
+def write_benchmark_outputs(output_dir, case_results, summary, *, expected_scores):
+	output_dir.mkdir(parents=True, exist_ok=True)
+	results_path = output_dir / "benchmark_results.jsonl"
+	summary_path = output_dir / "benchmark_summary.json"
+	markdown_path = output_dir / "benchmark_summary.md"
+
+	with results_path.open("w", encoding="utf-8") as f:
+		for r in case_results:
+			f.write(r.model_dump_json())
+			f.write("\n")
+
+	summary_path.write_text(json.dumps(summary.model_dump(mode="json"), indent=2), encoding="utf-8")
+	markdown_path.write_text(
+		render_benchmark_summary_markdown(summary, case_results, expected_scores=expected_scores),
+		encoding="utf-8",
+	)
+	return str(results_path), str(summary_path), str(markdown_path)
 
 
 def _now() -> datetime:
