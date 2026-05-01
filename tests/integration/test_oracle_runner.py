@@ -25,7 +25,7 @@ from runtime.oracle_runner import DirectOracleRunner, SubprocessOracleRunner
 
 
 _FIXTURE_ORACLE = textwrap.dedent("""\
-	from evaluator.oracles.case_base import (
+	from evaluator.oracles.bases import (
 		CaseOracleArtifactBuildBase,
 		CaseOracleBenchmarkPrepBase,
 		CaseOracleEnvSetupBase,
