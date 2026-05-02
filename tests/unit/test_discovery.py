@@ -110,12 +110,20 @@ def test_ignores_non_oracle_classes(tmp_path: Path) -> None:
                 return []
         """,
     )
+    write_oracle(oracle_dir, "artifact_build.py", ARTIFACT_BUILD)
+    write_oracle(oracle_dir, "benchmark_prep.py", BENCHMARK_PREP)
+    write_oracle(oracle_dir, "experiment_runs.py", EXPERIMENT_RUNS)
 
     classes = discover_oracle_classes(case_dir)
 
-    assert len(classes) == 1
-    assert classes[0].name == "env_setup"
-    assert classes[0].cls.__name__ == "OracleEnvSetup"
+    assert len(classes) == 4
+    assert "Helper" not in [item.cls.__name__ for item in classes]
+    assert [item.name for item in classes] == [
+        "env_setup",
+        "artifact_build",
+        "benchmark_prep",
+        "experiment_runs",
+    ]
 
 
 def test_imported_base_classes_are_not_discovered(tmp_path: Path) -> None:
