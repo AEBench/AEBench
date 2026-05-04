@@ -1,0 +1,331 @@
+Metadata-Version: 2.4
+Name: aebench
+Version: 0.1.0
+Summary: Bundle-native artifact-evaluation benchmark runner with isolated Docker execution
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: claude-agent-sdk==0.1.24
+Requires-Dist: anyio>=4.8.0
+Requires-Dist: aiohttp>=3.9.0
+Requires-Dist: docker>=7.1.0
+Requires-Dist: dulwich>=0.22.8
+Requires-Dist: Jinja2>=3.1.6
+Requires-Dist: mcp<2,>=1.26.0
+Requires-Dist: pydantic>=2.10.6
+Requires-Dist: pydantic-settings>=2.8.1
+Requires-Dist: rich>=14.0.0
+Requires-Dist: swe-rex>=1.2.1
+Requires-Dist: structlog>=25.4.0
+Requires-Dist: tenacity>=9.0.0
+Requires-Dist: textual>=1.0.0
+Requires-Dist: tomli>=2.2.1; python_version < "3.11"
+Requires-Dist: typer>=0.16.0
+
+# AEBench
+
+AEBench is a benchmark for evaluating AI agents on Artifact Evaluation (AE) tasks. It packages official AE cases as versioned cases, runs them through a shared runtime, and records benchmark-level results in a reproducible way. For context on why this benchmark exists, see [WHY.md](WHY.md).
+
+## Overview
+
+The current repository is organized around three layers:
+
+- `cases.json`: the versioned catalog of official case ids
+- `cases/<case_id>/`: case content for each official case
+- `src/`: the runtime, CLI, reporting, and Docker execution logic
+
+Each case contains the artifact instructions, oracle entrypoint, and reference data needed to score a case. The benchmark still supports low-level JSONL runtime tasks, but case workflows are the primary authoring and execution path.
+
+## Quick Start
+
+Requirements:
+
+- Python 3.11+
+- `ANTHROPIC_API_KEY` for the default Claude SDK driver
+- Docker for official benchmark runs
+
+Install the project:
+
+```bash
+git clone https://github.com/sys-intelligence/AEBench.git
+cd AEBench
+
+pip install -e ".[dev]"
+```
+
+Build the repo-owned runtime image used by official Docker runs:
+
+```bash
+docker build -f docker/agent/Dockerfile -t aebench-agent:latest .
+```
+
+## Running The Benchmark
+
+Run the full official catalog:
+
+```bash
+export ANTHROPIC_API_KEY=...
+aebench run --output-dir outputs/benchmark/official-baseline
+```
+
+Run a subset of official cases:
+
+```bash
+aebench run sosp24_wasabi osdi24_anvil --output-dir outputs/benchmark/official-subset
+```
+
+Run a single case directly:
+
+```bash
+aebench case run sosp24_wasabi
+```
+
+Run the low-level runtime with an explicit JSONL task file:
+
+```bash
+aebench runtime run --input-file /path/to/tasks.jsonl
+```
+
+Official benchmark runs default to Docker runtime. Case-level workflows can still use local runtime where appropriate.
+
+Each benchmark run writes:
+
+- `benchmark_results.jsonl`: one machine-readable record per case
+- `benchmark_summary.json`: aggregate run metrics and run-level metadata
+- `benchmark_summary.md`: a human-readable review view that joins lightweight case context from the existing cases
+
+If you run official cases individually, you can still aggregate them into the same benchmark summary format:
+
+```bash
+aebench case summarize \
+  outputs/case-runs \
+  --output-dir outputs/benchmark/official-baseline \
+  --run-label official-baseline
+```
+
+For the recommended baseline workflow, including how to aggregate per-case outputs from CI artifacts or local runs, see [docs/howtos/run_benchmark.md](docs/howtos/run_benchmark.md).
+
+
+## Adding a New Artifact or "Cases"
+
+New benchmark cases are added as cases rather than through the legacy benchmark-workspace layout.
+
+Common entrypoints:
+
+```bash
+aebench init
+aebench case init --blank --id my-case
+aebench case init https://github.com/org/repo.git --id my-case --ref main
+aebench case export my-case --output /tmp/tasks.jsonl
+```
+
+For the first-time authoring walkthrough, including the current interactive wizard on `case init`, `case.toml` fields, registry behavior, and oracle implementation, see [docs/howtos/add_case.md](docs/howtos/add_case.md).
+
+### Authoring Entry Points
+
+Initialize a workspace:
+
+```bash
+aebench init
+```
+
+Create a new empty case:
+
+```bash
+aebench case init --blank --id my-case
+```
+
+Create a new case from a source:
+
+```bash
+aebench case init ./path/to/artifact --id my-case
+aebench case init https://github.com/org/repo.git --id my-case --ref main
+aebench case init https://example.com/archive.tar.gz --id my-case
+```
+
+When `case init` runs in an interactive terminal, it opens the authoring wizard by default unless you pass `--no-prompt`.
+
+### Common Commands
+
+Run a case:
+
+```bash
+aebench case run my-case
+aebench case run cases/my-case
+```
+
+Export one or more cases to low-level runtime JSONL:
+
+```bash
+aebench case export my-case --output /tmp/tasks.jsonl
+aebench case export cases --output /tmp/all-tasks.jsonl
+```
+
+Run the official benchmark catalog:
+
+```bash
+aebench run
+aebench run sosp24_wasabi osdi24_anvil
+```
+
+### `case.toml`
+
+Minimal example:
+
+```toml
+id = "demo-case"
+
+[case_brief]
+core_claim = "Summarize the clean-baseline claim this case should validate."
+acceptable_evidence = "Describe what should count as success for this case."
+allowed_tolerance = "n/a"
+
+[run]
+id = "demo-case"
+
+[run.instructions]
+path = "README.md"
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 120000
+gpu = false
+interactive = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "fail_fast"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/org/repo.git"
+ref = "deadbeef..."
+```
+
+## Agent Drivers
+
+The runtime currently supports built-in drivers for Claude SDK, mock, Python,
+CLI, remote, and MCP-capable clients.
+
+Adding or modifying an agent driver is a code-level integration inside `src/artevalbench`.
+
+## Adding Or Modifying An Agent Driver
+
+Agent integrations plug into a single runtime path:
+
+`TaskRunner -> RunSession -> Agent -> RuntimeBackend`
+
+If you only want to add a new benchmark case, you usually do not need to touch the driver layer.
+
+### Current Drivers
+
+The runtime currently exposes these driver kinds:
+
+- `claude_sdk`: the default production driver
+- `mock`: a test-only driver for smoke and offline workflow checks
+- `python`: load a driver factory from Python
+- `cli`: launch an external CLI through the runtime
+- `remote`: call an external HTTP endpoint
+- `mcp_client`: launch an MCP-capable client
+
+Driver selection is resolved from project and user configuration and exposed as `[agent]` configuration. In this repo, `[agent]` means "agent driver configuration".
+
+### Architecture
+
+The runtime is built around four classes:
+
+- `AppState`
+  Top-level context. Holds project config and all runtime settings. Every runner receives one.
+- `TaskRunner`
+  Creates the workspace, builds the prompt, starts the backend and agent, collects results.
+- `RunSession`
+  Frozen dataclass carrying per-run state (workspace paths, prompt, runtime backend handle) shared between backend and agent.
+- `Agent`
+  Implements `prepare()`, `execute()`, and `cleanup()` for a specific driver kind.
+- `RuntimeBackend`
+  Implements `prepare()`, `collect_artifacts()`, `cleanup()`, and `runtime_result()` for `local` and `docker` runtimes.
+
+### How To Add A Driver
+
+1. Add the new type to the `AgentType` enum in `src/settings.py`.
+
+2. Implement the `Agent` protocol in `src/runtime/driver.py`:
+
+```python
+class MyAgent:
+    name: str = "my_agent"
+
+    def prepare(self, session, listener=None) -> None:
+        pass
+
+    def execute(self, request: AgentRequest, session, listener=None) -> AgentResult:
+        # session.host_workspace: workspace path on host
+        # session.runtime_workspace: workspace path inside the container
+        # request.system_prompt, request.initial_prompt: prompts
+        # request.timeout_ms: timeout
+        ...
+        return AgentResult(
+            model=request.model,
+            exit_code=0,
+            output="Agent summary here",
+            message_count=42,
+        )
+
+    def cleanup(self, session, listener=None) -> None:
+        pass
+```
+
+3. Register it in `get_agent()` in `src/runtime/driver.py`:
+
+```python
+if agent_type == AgentType.MY_AGENT:
+    return MyAgent()
+```
+
+4. Update config loading in `src/settings.py` and `src/project_config.py` if the new driver needs config or environment inputs.
+
+### Tests To Add
+
+At minimum, update or add:
+
+- coverage for `get_agent()` with the new driver type
+- smoke coverage if the driver can run offline
+
+### Practical Advice
+
+- Prefer drivers over ad hoc wrappers or one-off scripts.
+- Keep driver-specific config shaping in one place.
+- Do not introduce driver-specific assumptions into case bundles.
+- If a driver is test-only, keep it off the production default path.
+- See [docs/howtos/add_agent.md](docs/howtos/add_agent.md) for the full walkthrough, including the CLI and Python agent options that may save you from writing a custom class at all.
+
+
+## Runtime Backends
+
+Most new integrations only need a driver. Add or modify a `RuntimeBackend` only if the runtime itself changes.
+
+- `LocalRuntime`
+  Runs commands directly on the host. Used when `runtime.mode = "local"`.
+- `DockerRuntime`
+  Owns container lifecycle, workspace mounting, and artifact collection. Used when `runtime.mode = "docker"`.
+
+If a driver needs different container or host behavior, express it through the runtime backend and keep the driver itself environment-agnostic.
+
+## Development and Testing
+
+Useful commands:
+
+```bash
+uv run python -m pytest
+uv run python -m pytest tests/unit/
+uv run python -m pytest tests/functional/
+uv run python -m pytest tests/integration/
+uv run python -m pytest -m sanity
+uv run --group dev mypy src
+uv run --group dev ruff check src tests
+uv run --group dev ruff format --check src tests
+```

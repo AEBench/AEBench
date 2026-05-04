@@ -8,6 +8,7 @@ from contextvars import ContextVar
 from typing import TYPE_CHECKING, TextIO, cast
 
 import structlog
+from rich.console import Console
 
 if TYPE_CHECKING:
     from structlog.typing import FilteringBoundLogger
@@ -16,17 +17,15 @@ _INFRA_CAPTURE_ACTIVE: ContextVar[bool] = ContextVar("_INFRA_CAPTURE_ACTIVE", de
 
 
 def _stderr() -> TextIO:
-    s = sys.__stderr__
-    if s is None:
+    stream = sys.__stderr__
+    if stream is None:
         raise RuntimeError("sys.__stderr__ is not available")
-    return cast(TextIO, s)
+    return cast(TextIO, stream)
 
 
 class _DisplayAwareStderr:
-    """Stderr wrapper that routes to active display listener."""
-
     def __init__(self) -> None:
-        self._buffer: str = ""
+        self._buffer = ""
 
     def write(self, text: str) -> int:
         if _INFRA_CAPTURE_ACTIVE.get():
@@ -54,23 +53,20 @@ class _DisplayAwareStderr:
         return _stderr().fileno()
 
     def _drain_buffer(self) -> None:
-        from console.dashboard import DisplayKind, DisplayPanel, send_display_event, has_active_display_sink
-
         if not self._buffer:
             return
+        try:
+            from console.dashboard import DisplayKind, DisplayPanel, has_active_display_sink, send_display_event
+        except Exception:
+            has_active_display_sink = lambda: False  # type: ignore[assignment]
 
-        if has_active_display_sink():
+        if "has_active_display_sink" in locals() and has_active_display_sink():
             for line in self._buffer.splitlines():
                 if line.strip():
-                    send_display_event(
-                        kind=DisplayKind.START.value,
-                        panel=DisplayPanel.INFRA.value,
-                        text=line.rstrip(),
-                    )
+                    send_display_event(kind=DisplayKind.START.value, panel=DisplayPanel.INFRA.value, text=line.rstrip())
         else:
             _stderr().write(self._buffer)
             _stderr().flush()
-
         self._buffer = ""
 
 
@@ -90,22 +86,10 @@ def activate_infra_capture() -> Iterator[None]:
         _INFRA_CAPTURE_ACTIVE.reset(token)
 
 
-def configure_logging(
-    *,
-    log_level: str = "info",
-    log_renderer: str = "console",
-) -> None:
+def configure_logging(*, log_level: str = "info", log_renderer: str = "console") -> None:
     level = _to_logging_level(log_level)
-    if log_renderer == "json":
-        renderer: structlog.typing.Processor = structlog.processors.JSONRenderer()
-    else:
-        renderer = structlog.dev.ConsoleRenderer()
-
-    logging.basicConfig(
-        level=level,
-        handlers=[logging.StreamHandler(cast(TextIO, _DISPLAY_AWARE_STDERR))],
-        force=True,
-    )
+    renderer: structlog.typing.Processor = structlog.processors.JSONRenderer() if log_renderer == "json" else structlog.dev.ConsoleRenderer()
+    logging.basicConfig(level=level, handlers=[logging.StreamHandler(cast(TextIO, _DISPLAY_AWARE_STDERR))], force=True)
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
@@ -126,31 +110,26 @@ def get_logger(name: str = "") -> FilteringBoundLogger:
     return cast("FilteringBoundLogger", structlog.get_logger(name))
 
 
-def get_console():
-    from rich.console import Console
-
+def get_console() -> Console:
     return Console(file=sys.stdout)
 
 
 def print_console(text: str, *, markup: bool = False) -> None:
-    from console.dashboard import DisplayKind, DisplayPanel, send_display_event, has_active_display_sink
-    from rich.text import Text
-
-    if has_active_display_sink():
-        plain = Text.from_markup(text).plain if markup else text
-        send_display_event(
-            kind=DisplayKind.START.value,
-            panel=DisplayPanel.STATUS.value,
-            text=plain,
-        )
-    else:
-        get_console().print(text, markup=markup)
+    try:
+        from rich.text import Text
+        from console.dashboard import DisplayKind, DisplayPanel, has_active_display_sink, send_display_event
+        if has_active_display_sink():
+            send_display_event(kind=DisplayKind.START.value, panel=DisplayPanel.STATUS.value, text=Text.from_markup(text).plain if markup else text)
+            return
+    except Exception:
+        pass
+    get_console().print(text, markup=markup)
 
 
 def _to_logging_level(log_level: str) -> int:
-    mapping = {
+    return {
         "debug": logging.DEBUG,
+        "info": logging.INFO,
         "warning": logging.WARNING,
         "error": logging.ERROR,
-    }
-    return mapping.get(log_level.lower(), logging.INFO)
+    }.get(log_level.lower(), logging.INFO)

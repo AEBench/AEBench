@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import stat
+import subprocess
 import tarfile
 import tempfile
 import zipfile
@@ -21,25 +22,33 @@ def prepare_workspace(task: TaskConfig, input_file: Path, workspace_root: Path) 
     input_dir = input_file.resolve().parent
     project_state = load_project_config(input_dir)
     workspace_root.mkdir(parents=True, exist_ok=True)
-
     target_dir = workspace_root / safe_name(task.id)
-    source = task.require_source()
+    return _materialize(task.require_source(), input_dir, target_dir, project_state=project_state)
 
-    if isinstance(source, OverlaySource):
-        return _prepare_overlay_source(source, input_dir, target_dir, project_state=project_state)
+
+def _materialize(
+    source: LocalSource | GitSource | ArchiveSource | OverlaySource,
+    input_dir: Path,
+    target_dir: Path,
+    *,
+    project_state: ProjectState | None,
+) -> Path:
     if isinstance(source, LocalSource):
         return _copy_local_source(source, input_dir, target_dir)
     if isinstance(source, GitSource):
         return _prepare_git_source(source, target_dir, project_state=project_state)
     if isinstance(source, ArchiveSource):
         return _prepare_archive_source(source, input_dir, target_dir)
-
+    if isinstance(source, OverlaySource):
+        base = _materialize(source.base, input_dir, target_dir, project_state=project_state)
+        _merge_tree(_local_source_root(source.overlay, input_dir), base)
+        return base
     raise TypeError(f"unsupported source type: {type(source)!r}")
 
 
-def _prepare_local_source(source: LocalSource, input_dir: Path) -> Path:
-    path = Path(source.path)
-    root = path if path.is_absolute() else (input_dir / path)
+def _local_source_root(source: LocalSource, input_dir: Path) -> Path:
+    root = Path(source.path)
+    root = root if root.is_absolute() else input_dir / root
     root = root.resolve()
     if source.subdir:
         root = _resolve_subdir_under(root, source.subdir, "local source")
@@ -49,66 +58,36 @@ def _prepare_local_source(source: LocalSource, input_dir: Path) -> Path:
 
 
 def _copy_local_source(source: LocalSource, input_dir: Path, target_dir: Path) -> Path:
-    root = _prepare_local_source(source, input_dir)
-    if target_dir.exists():
-        shutil.rmtree(target_dir)
+    root = _local_source_root(source, input_dir)
+    _replace_dir(target_dir)
     shutil.copytree(root, target_dir, symlinks=False)
     return target_dir
 
 
-def _prepare_git_source(
-    source: GitSource,
-    target_dir: Path,
-    *,
-    project_state: ProjectState | None = None,
-) -> Path:
-    if target_dir.exists():
-        shutil.rmtree(target_dir)
-
-    resolved = ensure_git_checkout(source.url, source.ref, project_state=project_state)
-    _clone_cached_checkout(resolved.repo_store, resolved.resolved_ref, target_dir)
-    touch_git_checkout(resolved.checkout_path)
+def _prepare_git_source(source: GitSource, target_dir: Path, *, project_state: ProjectState | None) -> Path:
+    _replace_dir(target_dir)
+    checkout = ensure_git_checkout(source.url, source.ref, project_state=project_state)
+    _clone_cached_checkout(checkout.repo_store, checkout.resolved_ref, target_dir)
+    touch_git_checkout(checkout.checkout_path)
     return _resolve_subdir_under(target_dir, source.subdir, "git source") if source.subdir else target_dir
 
 
 def _clone_cached_checkout(repo_store: Path, resolved_ref: str, target_dir: Path) -> None:
-    import subprocess
-
-    parent = target_dir.parent
-    parent.mkdir(parents=True, exist_ok=True)
-
-    result = subprocess.run(
-        ["git", "clone", "--no-checkout", str(repo_store), str(target_dir)],
-        capture_output=True,
-        text=True,
-        timeout=600,
-        check=False,
-    )
+    target_dir.parent.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(["git", "clone", "--no-checkout", str(repo_store), str(target_dir)], capture_output=True, text=True, timeout=600, check=False)
     if result.returncode != 0:
         raise RuntimeError(f"git clone from cache failed: {result.stderr or result.stdout}")
-
-    checkout = subprocess.run(
-        ["git", "-C", str(target_dir), "checkout", resolved_ref],
-        capture_output=True,
-        text=True,
-        timeout=180,
-        check=False,
-    )
-    if checkout.returncode == 0:
-        return
-
-    shutil.rmtree(target_dir, ignore_errors=True)
-    raise RuntimeError(f"git checkout {resolved_ref} failed: {checkout.stderr or checkout.stdout}")
+    checkout = subprocess.run(["git", "-C", str(target_dir), "checkout", resolved_ref], capture_output=True, text=True, timeout=180, check=False)
+    if checkout.returncode != 0:
+        shutil.rmtree(target_dir, ignore_errors=True)
+        raise RuntimeError(f"git checkout {resolved_ref} failed: {checkout.stderr or checkout.stdout}")
 
 
 def _prepare_archive_source(source: ArchiveSource, input_dir: Path, target_dir: Path) -> Path:
-    if target_dir.exists():
-        shutil.rmtree(target_dir)
+    _replace_dir(target_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
-
     archive_path = _fetch_archive(source, input_dir)
-    local_archive_path = _local_archive_path(source, input_dir)
-
+    local_path = _local_archive_path(source, input_dir)
     try:
         if zipfile.is_zipfile(archive_path):
             _extract_zip_archive(archive_path, target_dir)
@@ -117,9 +96,8 @@ def _prepare_archive_source(source: ArchiveSource, input_dir: Path, target_dir: 
         else:
             raise RuntimeError("unsupported archive format")
     finally:
-        if archive_path != local_archive_path and archive_path.exists():
+        if archive_path != local_path and archive_path.exists():
             archive_path.unlink()
-
     return _resolve_extracted_root(target_dir, source.subdir)
 
 
@@ -136,10 +114,8 @@ def _fetch_archive(source: ArchiveSource, input_dir: Path) -> Path:
         if not path.is_file():
             raise RuntimeError(f"archive source not found: {path}")
         return path
-
     if source.url is None:
         raise RuntimeError("archive source must include path or url")
-
     fd, temp_name = tempfile.mkstemp(prefix="ae_archive_", suffix=_archive_temp_suffix(source.url))
     os.close(fd)
     temp_path = Path(temp_name)
@@ -153,33 +129,19 @@ def _archive_temp_suffix(url: str) -> str:
     return suffix if suffix.startswith(".") else f".{suffix}"
 
 
-def _safe_join_under(root: Path, member_name: str) -> Path:
-    target = (root / member_name.replace("\\", "/")).resolve()
-    root_resolved = root.resolve()
-    try:
-        target.relative_to(root_resolved)
-    except ValueError as exc:
-        raise RuntimeError(f"archive contains unsafe path: {member_name}") from exc
-    return target
-
-
 def _extract_zip_archive(archive_path: Path, target_dir: Path) -> None:
     with zipfile.ZipFile(archive_path) as handle:
         for info in handle.infolist():
-            mode = (info.external_attr >> 16) & 0o170000
-            if mode == stat.S_IFLNK:
+            if ((info.external_attr >> 16) & 0o170000) == stat.S_IFLNK:
                 raise RuntimeError(f"archive contains symlink entry: {info.filename}")
-
             target = _safe_join_under(target_dir, info.filename)
             if info.is_dir():
                 target.mkdir(parents=True, exist_ok=True)
-                _apply_mode_from_zip(target, info)
-                continue
-
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with handle.open(info, "r") as src, target.open("wb") as out:
-                shutil.copyfileobj(src, out)
-            _apply_mode_from_zip(target, info)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with handle.open(info, "r") as src, target.open("wb") as out:
+                    shutil.copyfileobj(src, out)
+            _apply_zip_mode(target, info)
 
 
 def _extract_tar_archive(archive_path: Path, target_dir: Path) -> None:
@@ -189,26 +151,50 @@ def _extract_tar_archive(archive_path: Path, target_dir: Path) -> None:
                 raise RuntimeError(f"archive contains symlink entry: {member.name}")
             if not (member.isdir() or member.isfile()):
                 raise RuntimeError(f"archive contains unsupported entry type: {member.name}")
-
             target = _safe_join_under(target_dir, member.name)
             if member.isdir():
                 target.mkdir(parents=True, exist_ok=True)
                 os.chmod(target, member.mode & 0o7777)
                 continue
-
             target.parent.mkdir(parents=True, exist_ok=True)
             reader = handle.extractfile(member)
-            if reader is None:
-                continue
-            with reader, target.open("wb") as out:
-                shutil.copyfileobj(reader, out)
-            os.chmod(target, member.mode & 0o7777)
+            if reader is not None:
+                with reader, target.open("wb") as out:
+                    shutil.copyfileobj(reader, out)
+                os.chmod(target, member.mode & 0o7777)
 
 
-def _apply_mode_from_zip(target: Path, info: zipfile.ZipInfo) -> None:
-    perm = (info.external_attr >> 16) & 0o7777
-    if perm:
-        os.chmod(target, perm)
+def _merge_tree(source_root: Path, target_root: Path) -> None:
+    for entry in source_root.iterdir():
+        if entry.is_symlink():
+            raise RuntimeError(f"overlay source contains symlink: {entry}")
+        target = target_root / entry.name
+        if entry.is_dir():
+            if target.is_file() or target.is_symlink():
+                target.unlink()
+            shutil.copytree(entry, target, dirs_exist_ok=True, symlinks=False)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.is_dir() and not target.is_symlink():
+                shutil.rmtree(target)
+            elif target.exists() or target.is_symlink():
+                target.unlink()
+            shutil.copy2(entry, target)
+
+
+def _safe_join_under(root: Path, member_name: str) -> Path:
+    target = (root / member_name.replace("\\", "/")).resolve()
+    try:
+        target.relative_to(root.resolve())
+    except ValueError as exc:
+        raise RuntimeError(f"archive contains unsafe path: {member_name}") from exc
+    return target
+
+
+def _apply_zip_mode(target: Path, info: zipfile.ZipInfo) -> None:
+    mode = (info.external_attr >> 16) & 0o7777
+    if mode:
+        os.chmod(target, mode)
 
 
 def _resolve_extracted_root(extract_dir: Path, subdir: str | None) -> Path:
@@ -217,75 +203,27 @@ def _resolve_extracted_root(extract_dir: Path, subdir: str | None) -> Path:
         if not target.is_dir():
             raise RuntimeError(f"archive subdir does not exist: {subdir}")
         return target
-
     entries = [entry for entry in extract_dir.iterdir() if entry.name != "__MACOSX"]
-    if len(entries) == 1 and entries[0].is_dir():
-        return entries[0]
-    return extract_dir
+    return entries[0] if len(entries) == 1 and entries[0].is_dir() else extract_dir
 
 
-def _prepare_overlay_source(
-    source: OverlaySource,
-    input_dir: Path,
-    target_dir: Path,
-    *,
-    project_state: ProjectState | None = None,
-) -> Path:
-    base_root = _copy_base_source(
-        source.base,
-        input_dir,
-        target_dir,
-        project_state=project_state,
-    )
-    overlay_root = _prepare_local_source(source.overlay, input_dir)
-    _merge_tree(overlay_root, base_root)
-    return base_root
-
-
-def _copy_base_source(
-    source: LocalSource | GitSource | ArchiveSource,
-    input_dir: Path,
-    target_dir: Path,
-    *,
-    project_state: ProjectState | None = None,
-) -> Path:
-    if isinstance(source, LocalSource):
-        return _copy_local_source(source, input_dir, target_dir)
-    if isinstance(source, GitSource):
-        return _prepare_git_source(source, target_dir, project_state=project_state)
-    if isinstance(source, ArchiveSource):
-        return _prepare_archive_source(source, input_dir, target_dir)
-    raise TypeError(f"unsupported base source type: {type(source)!r}")
-
-
-def _merge_tree(source_root: Path, target_root: Path) -> None:
-    for entry in source_root.iterdir():
-        if entry.is_symlink():
-            raise RuntimeError(
-                f"overlay source contains symlink: {entry.name} -> {os.readlink(entry)}"
-            )
-        target = target_root / entry.name
-        if entry.is_dir():
-            if target.is_file() or target.is_symlink():
-                target.unlink()
-            shutil.copytree(entry, target, dirs_exist_ok=True, symlinks=False)
-            continue
-
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if target.is_dir() and not target.is_symlink():
-            shutil.rmtree(target)
-        elif target.is_symlink() or target.is_file():
-            target.unlink()
-        shutil.copy2(entry, target)
-
-
-def _resolve_subdir_under(root: Path, subdir: str, label: str) -> Path:
-    relative = Path(subdir)
-    if relative.is_absolute() or ".." in relative.parts:
+def _resolve_subdir_under(root: Path, subdir: str | None, label: str) -> Path:
+    if subdir is None:
+        return root
+    rel = Path(subdir)
+    if rel.is_absolute() or ".." in rel.parts:
         raise RuntimeError(f"{label} subdir escapes source root: {subdir}")
-    target = (root / relative).resolve()
+    target = (root / rel).resolve()
     try:
         target.relative_to(root.resolve())
     except ValueError as exc:
         raise RuntimeError(f"{label} subdir escapes source root: {subdir}") from exc
     return target
+
+
+def _replace_dir(path: Path) -> None:
+    if path.exists() or path.is_symlink():
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink()

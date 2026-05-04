@@ -16,25 +16,24 @@ class InterruptState(str, Enum):
 
 class RunControl:
     def __init__(self, *, grace_period_seconds: float = 10.0) -> None:
-        self._grace_period_seconds = grace_period_seconds
         self._lock = threading.RLock()
         self._state = InterruptState.RUNNING
         self._request_count = 0
-        self._requested_at_monotonic: float | None = None
+        self._requested_at: float | None = None
+        self._grace_period_seconds = grace_period_seconds
 
     def request_interrupt(self) -> InterruptState:
         with self._lock:
             return self._advance_state()
 
     def request_interrupt_from_signal(self) -> InterruptState:
-        """Signal-safe interrupt, no lock -- GIL makes state transitions safe."""
         return self._advance_state()
 
     def _advance_state(self) -> InterruptState:
         self._request_count += 1
         if self._state == InterruptState.RUNNING:
             self._state = InterruptState.GRACEFUL_STOP_REQUESTED
-            self._requested_at_monotonic = time.monotonic()
+            self._requested_at = time.monotonic()
         elif self._state == InterruptState.GRACEFUL_STOP_REQUESTED:
             self._state = InterruptState.FORCE_STOP_REQUESTED
         return self._state
@@ -67,20 +66,15 @@ class RunControl:
 
     def grace_period_exceeded(self, now: float | None = None) -> bool:
         with self._lock:
-            if self._state != InterruptState.GRACEFUL_STOP_REQUESTED:
+            if self._state != InterruptState.GRACEFUL_STOP_REQUESTED or self._requested_at is None:
                 return False
-            if self._requested_at_monotonic is None:
-                return False
-            current = time.monotonic() if now is None else now
-            return (current - self._requested_at_monotonic) >= self._grace_period_seconds
+            return ((time.monotonic() if now is None else now) - self._requested_at) >= self._grace_period_seconds
 
     def state_label(self) -> str:
         state = self.interrupt_state
         if state == InterruptState.RUNNING:
             return "running"
-        if state == InterruptState.GRACEFUL_STOP_REQUESTED:
-            return "stopping"
-        return "force-stop"
+        return "stopping" if state == InterruptState.GRACEFUL_STOP_REQUESTED else "force-stop"
 
 
 @contextmanager
@@ -88,13 +82,13 @@ def activate_interrupt_handler(control: RunControl) -> Iterator[None]:
     previous_sigint = signal.getsignal(signal.SIGINT)
     previous_sigterm = signal.getsignal(signal.SIGTERM)
 
-    def _handle_signal(_signum: int, _frame: object | None) -> None:
+    def handle_signal(_signum: int, _frame: object | None) -> None:
         control.request_interrupt_from_signal()
-        if control._request_count >= 3:
+        if control.request_count >= 3:
             raise KeyboardInterrupt
 
-    signal.signal(signal.SIGINT, _handle_signal)
-    signal.signal(signal.SIGTERM, _handle_signal)
+    signal.signal(signal.SIGINT, handle_signal)
+    signal.signal(signal.SIGTERM, handle_signal)
     try:
         yield
     finally:

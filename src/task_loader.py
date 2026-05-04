@@ -7,15 +7,14 @@ from constants import SUMMARY_INSTRUCTION
 
 
 def read_instruction_text(workspace_path: Path, instruction_path: str) -> str:
-    target = (workspace_path / instruction_path).resolve()
+    root = workspace_path.resolve()
+    target = (root / instruction_path).resolve()
     try:
-        target.relative_to(workspace_path.resolve())
+        target.relative_to(root)
     except ValueError as exc:
         raise ValueError(f"instruction path escapes workspace: {instruction_path}") from exc
     if not target.is_file():
-        raise FileNotFoundError(
-            f"instruction file not found inside workspace: {instruction_path}"
-        )
+        raise FileNotFoundError(f"instruction file not found inside workspace: {instruction_path}")
     return target.read_text(encoding="utf-8")
 
 
@@ -33,5 +32,3 @@ def prepend_case_brief(task_text: str, case_brief: Any) -> str:
         f"- Allowed Tolerance: {case_brief.allowed_tolerance}\n\n"
         f"{task_text.lstrip()}"
     )
-
-

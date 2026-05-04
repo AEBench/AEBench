@@ -5,8 +5,17 @@ DEFAULT_DOCKER_IMAGE: str = "aebench-agent:latest"
 DEFAULT_MODEL: str = "claude-sonnet-4-5-20250929"
 DEFAULT_PROMPT_PROFILE: str = "artifact-eval-v1"
 DEFAULT_OUTPUTS_DIR: str = "./outputs"
+DEFAULT_AGENT_MAX_BUFFER_SIZE: int = 8 * 1024 * 1024
 
 ARTIFACT_SUBDIR: str = "artifact"
+CASE_MANIFEST_FILENAME: str = "case.toml"
+ORACLE_DIRNAME: str = "oracles"
+REFS_DIRNAME: str = "refs"
+ORACLE_RESULT_FILENAME: str = "oracle_result.json"
+
+DEFAULT_ORACLE_CHECK_TIMEOUT: float = 5.0
+DEFAULT_ORACLE_BUILD_TIMEOUT: float = 60.0
+SUBPROCESS_WAIT_TIMEOUT: float = 5.0
 
 SUMMARY_BASENAME_TEMPLATE = "aebench_summary_{safe_id}.md"
 PROMPT_BASENAME_TEMPLATE = "aebench_prompt_{safe_id}.md"
@@ -24,7 +33,7 @@ LIVE_RENDERED_BASENAME = "agent_rendered.log"
 
 SUMMARY_INSTRUCTION = (
     "\n\nAt the end, write a brief summary of what you did and the result to "
-    "{basename} in the artifact root (so it can be included in the report)."
+    "{basename} in the artifact root so it can be included in the report."
 )
 
 DEFAULT_TASK_TEMPLATE = (
@@ -36,7 +45,6 @@ DEFAULT_TASK_TEMPLATE = (
 
 LOG_OUTPUT_TRUNCATE_BYTES = 50_000
 AGENT_SUMMARY_FALLBACK_MAX = 8_000
-DEFAULT_AGENT_MAX_BUFFER_SIZE = 8 * 1024 * 1024
 DISPLAY_TOOL_OUTPUT_INLINE_BYTES = 32 * 1024
 DISPLAY_TOOL_OUTPUT_HEAD_LINES = 20
 DISPLAY_TOOL_OUTPUT_TAIL_LINES = 20
