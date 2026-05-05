@@ -1,0 +1,113 @@
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.dmypy.json
+dmypy.json
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# uv / pip / package manager caches
+.uv-cache/
+pip-wheel-metadata/
+*.egg-info/
+.eggs/
+
+# Test / coverage output
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# Build / packaging artifacts
+build/
+dist/
+site/
+*.egg
+*.whl
+*.tar.gz
+
+# Native binaries / compiled artifacts
+*.so
+*.dylib
+*.dll
+*.exe
+*.o
+*.obj
+*.a
+*.lib
+*.pyd
+*.pyz
+*.bin
+
+# Logs / temp files
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+.cache/
+tmp/
+temp/
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/editor local state
+.vscode/
+.idea/
+*.code-workspace
+
+# AI agent local configs, state, and work directories
+.codex/
+.claude/
+.cursor/
+.openhands/
+.agent/
+.agents/
+.agent-work/
+agent-work/
+agent_logs/
+agent_logs*/
+.agent_logs/
+.agent_state/
+.agent_cache/
+.agent_history/
+.agent_scratch/
+.agent_tmp/
+BUGS.md
+AGENT_NOTES.md
+AGENT_SCRATCH.md
+TODO.agent.md
+*.agent.md
+*.scratch.md
