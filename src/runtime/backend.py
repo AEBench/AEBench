@@ -35,6 +35,20 @@ class BenchRuntime(Protocol):
 
     def prepare(self, session: RunSession) -> None: ...
 
+    def _docker_run_command(self, session: RunSession) -> list[str]:
+        cmd = [
+            "docker", "run", "-d", "--init",
+            "--name", self.container_name,
+            "-v", f"{session.host_workspace}:/repo",
+            "-w", "/repo",
+        ]
+        if session.host_refs is not None:
+            cmd.extend(["-v", f"{session.host_refs}:/refs:ro"])
+        if self.gpu or bool(getattr(session.run_spec.runtime, "gpu", False)):
+            cmd.extend(["--gpus", "all"])
+        cmd.extend([self.resolved_image or self.image or "", "sleep", "infinity"])
+        return cmd
+
     def run_process(
         self,
         cmd: list[str],
@@ -103,14 +117,7 @@ class DockerRuntime:
         self.saved_image = None
         self.container_name = f"aebench-{safe_name(session.task_id)}-{uuid.uuid4().hex[:8]}"
 
-        cmd = [
-            "docker", "run", "-d", "--init",
-            "--name", self.container_name,
-            "-v", f"{session.host_workspace}:/repo",
-            "-w", "/repo",
-        ]
-        if session.host_refs is not None:
-            cmd.extend(["-v", f"{session.host_refs}:/refs:ro"])
+        cmd = self._docker_run_command(session)
         if self.gpu or bool(getattr(session.run_spec.runtime, "gpu", False)):
             cmd.extend(["--gpus", "all"])
         cmd.extend([image, "sleep", "infinity"])
@@ -270,25 +277,19 @@ class LocalRuntime:
         stdin_text: str | None = None,
         timeout: float | None = None,
     ) -> subprocess.CompletedProcess[str]:
-        run_env = os.environ.copy()
-        if env:
-            run_env.update(env)
         return subprocess.run(
             cmd,
             input=stdin_text,
             capture_output=True,
             text=True,
             cwd=cwd or self.workspace,
-            env=run_env,
+            env=_merged_env(env),
             timeout=timeout,
             check=False,
         )
 
     def open_shell(self, *, cwd: str | None = None, env: dict[str, str] | None = None) -> int:
-        run_env = os.environ.copy()
-        if env:
-            run_env.update(env)
-        return subprocess.call([os.environ.get("SHELL", "bash")], cwd=cwd or self.workspace, env=run_env)
+        return subprocess.call([os.environ.get("SHELL", "bash")], cwd=cwd or self.workspace, env=_merged_env(env))
 
     def resolve_executable(
         self,

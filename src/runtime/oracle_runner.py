@@ -71,22 +71,46 @@ class SubprocessOracleRunner:
             tmp_root = Path(tmpdir)
             context_path = tmp_root / "context.json"
             result_path = tmp_root / "oracle.json"
-            runtime_payload = runtime_result.model_dump(mode="json") if hasattr(runtime_result, "model_dump") else runtime_result
-            context_path.write_text(
-                json.dumps({"case_dir": str(case_root), "output_dir": str(output_dir.resolve()), "runtime_result": runtime_payload}, indent=2),
-                encoding="utf-8",
-            )
-            proc = subprocess.run(
-                [sys.executable, "-m", "runtime.oracle_runner", "--worker", "--case-file", str(context_path), "--result-file", str(result_path)],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+            _write_worker_context(context_path, case_root=case_root, output_dir=output_dir, runtime_result=runtime_result)
+            proc = subprocess.run(_worker_command(context_path, result_path), capture_output=True, text=True, check=False)
             if proc.returncode != 0:
-                return OracleResult(status=OracleStatus.ERROR, score=0, summary="Oracle subprocess failed.", error=(proc.stderr or proc.stdout).strip())
+                return OracleResult(
+                    status=OracleStatus.ERROR,
+                    score=0,
+                    summary="Oracle subprocess failed.",
+                    error=(proc.stderr or proc.stdout).strip(),
+                )
             if not result_path.is_file():
-                return OracleResult(status=OracleStatus.ERROR, score=0, summary="Oracle subprocess did not write a result file.", error="missing oracle result output")
+                return OracleResult(
+                    status=OracleStatus.ERROR,
+                    score=0,
+                    summary="Oracle subprocess did not write a result file.",
+                    error="missing oracle result output",
+                )
             return OracleResult.model_validate_json(result_path.read_text(encoding="utf-8"))
+
+
+def _write_worker_context(path: Path, *, case_root: Path, output_dir: Path, runtime_result: Any) -> None:
+    runtime_payload = runtime_result.model_dump(mode="json") if hasattr(runtime_result, "model_dump") else runtime_result
+    payload = {
+        "case_dir": str(case_root),
+        "output_dir": str(output_dir.resolve()),
+        "runtime_result": runtime_payload,
+    }
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _worker_command(context_path: Path, result_path: Path) -> list[str]:
+    return [
+        sys.executable,
+        "-m",
+        "runtime.oracle_runner",
+        "--worker",
+        "--case-file",
+        str(context_path),
+        "--result-file",
+        str(result_path),
+    ]
 
 
 def _worker() -> int:

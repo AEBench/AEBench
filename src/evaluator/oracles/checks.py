@@ -541,9 +541,7 @@ def compute_similarity(metric: SimilarityMetric, left: Sequence[float], right: S
 
 
 def elementwise_equal(observed: Sequence[float], reference: Sequence[float]) -> list[Comparison[bool]]:
-    _require_equal_lengths(observed, reference, label="elementwise_equal")
-    _require_all_finite(observed, label="elementwise_equal.observed")
-    _require_all_finite(reference, label="elementwise_equal.reference")
+    _validate_numeric_sequence_pair(observed, reference, label="elementwise_equal")
     return [Comparison(observed=a, reference=b, result=a == b) for a, b in zip(observed, reference, strict=True)]
 
 
@@ -554,9 +552,7 @@ def elementwise_similarity_scores(
     similarity_fn: Callable[[float, float], float] | None = None,
     abs_epsilon: float = 1e-12,
 ) -> list[Comparison[float]]:
-    _require_equal_lengths(observed, reference, label="elementwise_similarity_scores")
-    _require_all_finite(observed, label="elementwise_similarity_scores.observed")
-    _require_all_finite(reference, label="elementwise_similarity_scores.reference")
+    _validate_numeric_sequence_pair(observed, reference, label="elementwise_similarity_scores")
     if abs_epsilon <= 0:
         raise ValueError("elementwise_similarity_scores: abs_epsilon must be > 0")
     if similarity_fn is None:

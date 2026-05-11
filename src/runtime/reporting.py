@@ -38,7 +38,7 @@ class TaskPaths:
 def task_paths_for(output_dir: Path, safe_id: str) -> TaskPaths:
     return TaskPaths(
         log_path=output_dir / LOG_BASENAME_TEMPLATE.format(safe_id=safe_id),
-        report_path=output_dir / REPORT_BASENAME_TEMPLATE.format(safe_id=safe_id),
+        report_path=output_dir / f"{safe_id}_report.md",
         prompt_path=output_dir / PROMPT_BASENAME_TEMPLATE.format(safe_id=safe_id),
         transcript_path=output_dir / TRANSCRIPT_BASENAME,
         rendered_log_path=output_dir / RENDERED_LOG_BASENAME,
@@ -83,6 +83,19 @@ def write_case_result(output_dir: Path, result: CaseRunResult) -> Path:
     path = output_dir / "case_result.json"
     path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
     return path
+
+
+def _append_jsonl(path: Path, record: object) -> None:
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(record.model_dump_json())
+        handle.write("\n")
+
+
+def _write_jsonl(path: Path, records: Sequence[object]) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        for record in records:
+            handle.write(record.model_dump_json())
+            handle.write("\n")
 
 
 def read_agent_summary(summary_path: Path, result: RunResult) -> str:
@@ -139,67 +152,19 @@ def write_benchmark_outputs(
             fh.write("\n")
 
     summary_path.write_text(json.dumps(summary.model_dump(mode="json"), indent=2), encoding="utf-8")
-    markdown_path.write_text(
-        render_benchmark_summary_markdown(summary, case_results, expected_scores=expected_scores),
-        encoding="utf-8",
-    )
+    markdown_path.write_text(render_benchmark_summary_markdown(summary, case_results, expected_scores=expected_scores), encoding="utf-8")
     return str(results_path), str(summary_path), str(markdown_path)
 
 
-def render_benchmark_summary_markdown(
-    summary: object,
-    case_results: Sequence[CaseRunResult],
-    *,
-    expected_scores: dict[str, int | None],
-) -> str:
-    lines = [
-        "# Benchmark Summary",
-        "",
-        f"- Run label: `{summary.run_label}`",
-        f"- Status: `{summary.status}`",
-        f"- Model: `{summary.model_name}`",
-        f"- Agent driver: `{summary.agent_kind}`",
-        f"- Prompt profile: `{summary.prompt_profile}`",
-        f"- Runtime mode: `{summary.runtime_mode}`",
-        f"- Started: `{summary.started_at.isoformat()}`",
-        f"- Finished: `{summary.finished_at.isoformat()}`",
-        f"- Selected cases: `{summary.total_cases}`",
-        f"- Case pass ratio: `{summary.case_pass_count}/{summary.total_cases}` (`{summary.case_pass_ratio:.3f}`)",
-        f"- Phase score: `{summary.total_score}/{summary.total_expected_score}` (`{summary.phase_ratio:.3f}`)",
-        "",
-        "## Cases",
-        "",
-        "| Case | Claim | Case status | Oracle | Score | Output dir |",
-        "| --- | --- | --- | --- | --- | --- |",
-    ]
-
+def render_benchmark_summary_markdown(summary: object, case_results: Sequence[CaseRunResult], *, expected_scores: dict[str, int | None]) -> str:
+    lines = ["# Benchmark Summary", "", "## Cases", "", "| Case | Claim | Case status | Oracle | Score | Output dir |", "| --- | --- | --- | --- | --- | --- |"]
     for result in case_results:
         expected = expected_scores.get(result.id)
         score = result.oracle_result.score
         score_text = f"{score}/{expected}" if score is not None and expected is not None else "n/a"
         claim = _compact_text(result.case_brief.core_claim, max_length=96).replace("|", "\\|")
-        lines.append(
-            f"| `{result.id}` | {claim} | `{result.status.value}` | "
-            f"`{result.oracle_result.status.value}` | `{score_text}` | `{result.output_dir or 'n/a'}` |"
-        )
-
-    failures = [result for result in case_results if result.status != CaseStatus.SUCCESS]
-    if failures:
-        lines.extend(["", "## Failures", ""])
-        for result in failures:
-            lines.append(f"- `{result.id}`: {_failure_detail(result)}")
-
+        lines.append(f"| `{result.id}` | {claim} | `{result.status.value}` | `{result.oracle_result.status.value}` | `{score_text}` | `{result.output_dir or 'n/a'}` |")
     return "\n".join(lines) + "\n"
-
-
-def _failure_detail(result: CaseRunResult) -> str:
-    error = result.oracle_result.error or result.runtime_result.error
-    if error:
-        return _compact_text(error)
-    for phase in result.oracle_result.phases:
-        if phase.status == OracleStatus.ERROR:
-            return _compact_text(phase.error or phase.summary or "oracle phase failed")
-    return "case failed"
 
 
 def _compact_text(value: str, *, max_length: int = 240) -> str:

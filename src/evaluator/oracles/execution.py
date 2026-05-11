@@ -17,6 +17,18 @@ from .discovery import DiscoveredOracleClass, OracleLoadError, discover_oracle_c
 _SKIPPED_PHASE_SUMMARY = "skipped because a previous phase failed"
 
 
+def _phase_result_from_report(name: str, report: utils.OracleReport) -> OraclePhaseResult:
+    status = OracleStatus.SUCCESS if report.ok else OracleStatus.ERROR
+    summary = "all checks passed" if report.ok else "one or more checks failed"
+    checks = report.results
+    return OraclePhaseResult(
+        phase=name,
+        status=status,
+        summary=summary,
+        checks=checks,
+    )
+
+
 def run_oracle_classes(
     context: OracleInput,
     *,
@@ -33,24 +45,7 @@ def run_oracle_classes(
             instance = definition.cls(context=context, logger=logger)
             report = instance.report()
             utils.log_oracle_report(logger, label=definition.name, report=report, verbose=False)
-            if report.ok:
-                passed = report.passed_count
-                total = len(report.results)
-                summary = f"{definition.name} passed ({passed}/{total} checks)" if total else f"{definition.name} passed"
-                phase_result = OraclePhaseResult(phase=definition.name, status=OracleStatus.SUCCESS, summary=summary)
-            else:
-                messages = [
-                    entry.message
-                    for entry in report.results
-                    if entry.outcome == utils.CheckOutcome.FAILED and entry.message
-                ]
-                phase_result = OraclePhaseResult(
-                    phase=definition.name,
-                    status=OracleStatus.ERROR,
-                    summary=f"{definition.name} failed",
-                    error="; ".join(messages) if messages else "one or more checks failed",
-                )
-                failed_phases.append(definition.name)
+            phase_result = _phase_result_from_report(definition.name, report)
         except Exception as exc:
             phase_result = OraclePhaseResult(
                 phase=definition.name,
@@ -62,14 +57,7 @@ def run_oracle_classes(
 
         results.append(phase_result)
         if phase_result.status != OracleStatus.SUCCESS and mode == OracleFailureMode.FAIL_FAST:
-            for pending in classes[index + 1 :]:
-                results.append(
-                    OraclePhaseResult(
-                        phase=pending.name,
-                        status=OracleStatus.PENDING,
-                        summary=_SKIPPED_PHASE_SUMMARY,
-                    )
-                )
+            results.extend(_pending_phase_result(pending.name) for pending in classes[index + 1 :])
             break
 
     score = sum(1 for result in results if result.status == OracleStatus.SUCCESS)
@@ -80,6 +68,10 @@ def run_oracle_classes(
         phases=results,
         error=None if not failed_phases else f"oracle failed phases: {', '.join(failed_phases)}",
     )
+
+
+def _pending_phase_result(name: str) -> OraclePhaseResult:
+    return OraclePhaseResult(phase=name, status=OracleStatus.PENDING, summary=_SKIPPED_PHASE_SUMMARY)
 
 
 def _resolve_workspace_dir(
