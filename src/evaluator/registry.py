@@ -95,7 +95,8 @@ def infer_upstream_config(source: str, ref: str | None = None) -> UpstreamConfig
             requested_ref=ref,
         )
 
-    if _looks_like_git_source(source, ref=ref):
+    parsed = urlparse(source)
+    if source.startswith("git@") or source.endswith(".git") or parsed.scheme in {"ssh", "git"}:
         return UpstreamConfig(
             source_type=UpstreamSourceType.GIT,
             url=source,
@@ -103,7 +104,6 @@ def infer_upstream_config(source: str, ref: str | None = None) -> UpstreamConfig
             requested_ref=ref,
         )
 
-    parsed = urlparse(source)
     if parsed.scheme in {"http", "https"}:
         return UpstreamConfig(
             source_type=UpstreamSourceType.ARCHIVE,
@@ -141,18 +141,6 @@ def _write_registry(path: Path, registry: BundleRegistry) -> None:
         json.dumps(registry.model_dump(mode="json", by_alias=True), indent=2) + "\n",
         encoding="utf-8",
     )
-
-
-def _looks_like_git_source(source: str, *, ref: str | None) -> bool:
-    if source.startswith("git@") or source.endswith(".git"):
-        return True
-
-    parsed = urlparse(source)
-    if parsed.scheme in {"ssh", "git"}:
-        return True
-
-    return ref is not None and parsed.scheme in {"http", "https"}
-
 
 __all__ = [
     "WorkspaceInitResult",

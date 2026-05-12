@@ -86,8 +86,7 @@ def _clone_cached_checkout(repo_store: Path, resolved_ref: str, target_dir: Path
 def _prepare_archive_source(source: ArchiveSource, input_dir: Path, target_dir: Path) -> Path:
     _replace_dir(target_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
-    archive_path = _fetch_archive(source, input_dir)
-    local_path = _local_archive_path(source, input_dir)
+    archive_path, local_path = _fetch_archive(source, input_dir)
     try:
         if zipfile.is_zipfile(archive_path):
             _extract_zip_archive(archive_path, target_dir)
@@ -101,19 +100,13 @@ def _prepare_archive_source(source: ArchiveSource, input_dir: Path, target_dir: 
     return _resolve_extracted_root(target_dir, source.subdir)
 
 
-def _local_archive_path(source: ArchiveSource, input_dir: Path) -> Path:
-    if source.path is None:
-        return Path()
-    path = Path(source.path)
-    return path if path.is_absolute() else (input_dir / path).resolve()
-
-
-def _fetch_archive(source: ArchiveSource, input_dir: Path) -> Path:
+def _fetch_archive(source: ArchiveSource, input_dir: Path) -> tuple[Path, Path]:
     if source.path is not None:
-        path = _local_archive_path(source, input_dir)
-        if not path.is_file():
-            raise RuntimeError(f"archive source not found: {path}")
-        return path
+        path = Path(source.path)
+        local_path = path if path.is_absolute() else (input_dir / path).resolve()
+        if not local_path.is_file():
+            raise RuntimeError(f"archive source not found: {local_path}")
+        return local_path, local_path
     if source.url is None:
         raise RuntimeError("archive source must include path or url")
     fd, temp_name = tempfile.mkstemp(prefix="ae_archive_", suffix=_archive_temp_suffix(source.url))
@@ -121,7 +114,7 @@ def _fetch_archive(source: ArchiveSource, input_dir: Path) -> Path:
     temp_path = Path(temp_name)
     with urlopen(source.url, timeout=180) as src, temp_path.open("wb") as out:
         shutil.copyfileobj(cast(BinaryIO, src), out)
-    return temp_path
+    return temp_path, temp_path
 
 
 def _archive_temp_suffix(url: str) -> str:

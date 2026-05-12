@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from constants import DEFAULT_DOCKER_IMAGE
-from evaluator.constants import ARTIFACT_SUBDIR, REFS_DIRNAME
+from evaluator.constants import ARTIFACT_DIRNAME, REFS_DIRNAME
 from models import (
     CaseConfig,
     CasePlan,
@@ -63,7 +63,7 @@ def create_case_bundle(case_dir: Path, options: CaseInitOptions, *, overwrite: b
         raise FileExistsError(f"case directory is not empty: {case_dir}")
 
     case_dir.mkdir(parents=True, exist_ok=True)
-    (case_dir / ARTIFACT_SUBDIR).mkdir(exist_ok=True)
+    (case_dir / ARTIFACT_DIRNAME).mkdir(exist_ok=True)
     (case_dir / REFS_DIRNAME).mkdir(exist_ok=True)
 
     if options.quick_check:
@@ -77,15 +77,9 @@ def create_case_bundle(case_dir: Path, options: CaseInitOptions, *, overwrite: b
             overwrite=overwrite,
         )
 
-    case = _new_case_config(options)
-    write_case_spec(case, case_dir)
-    return case
-
-
-def _new_case_config(options: CaseInitOptions) -> CaseConfig:
     runtime_image = options.runtime_image if options.runtime_mode == RuntimeMode.DOCKER else None
-    case = CaseConfig(id=options.case_id)
-    return case.model_copy(
+    base_case = CaseConfig(id=options.case_id)
+    case = base_case.model_copy(
         update={
             "case_brief": CasePlan(
                 core_claim=f"Validate the artifact evaluation contract for {options.case_id}.",
@@ -97,12 +91,12 @@ def _new_case_config(options: CaseInitOptions) -> CaseConfig:
                 ),
                 allowed_tolerance="n/a",
             ),
-            "run": case.run.model_copy(
+            "run": base_case.run.model_copy(
                 update={
-                    "instructions": case.run.instructions.model_copy(
+                    "instructions": base_case.run.instructions.model_copy(
                         update={"path": options.instruction_path}
                     ),
-                    "runtime": case.run.runtime.model_copy(
+                    "runtime": base_case.run.runtime.model_copy(
                         update={"mode": options.runtime_mode, "image": runtime_image}
                     ),
                 }
@@ -121,6 +115,8 @@ def _new_case_config(options: CaseInitOptions) -> CaseConfig:
             ),
         }
     )
+    write_case_spec(case, case_dir)
+    return case
 
 
 def _write_quick_check_files(case_dir: Path, options: CaseInitOptions) -> None:

@@ -48,12 +48,4 @@ def cleanup_workspace(workspace: Path | str, *, keep: bool) -> None:
 # Backward-compatible aliases for old call sites during migration.
 create_workspace_root = create_workspace
 bundle_refs_path = refs_dir_for_case_manifest
-
-
-def cleanup_workspace_tree(
-    workspace_path: Path | str,
-    *,
-    preserve: bool,
-    preserve_failed_workspace: bool,
-) -> None:
-    cleanup_workspace(workspace_path, keep=preserve and preserve_failed_workspace)
+cleanup_workspace_tree = cleanup_workspace

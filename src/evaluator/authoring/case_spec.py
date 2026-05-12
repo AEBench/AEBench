@@ -51,8 +51,6 @@ def case_spec_to_toml(case: CaseConfig) -> str:
             lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
-
-
 def _toml_value(value: Any) -> str:
     if isinstance(value, Enum):
         return json.dumps(value.value)
