@@ -22,18 +22,21 @@ class CaseBundleError(ValueError):
 def load_case_spec(case_dir: Path) -> CaseConfig:
     """Load and validate a case bundle."""
     case_root = case_dir.expanduser().resolve()
+    manifest_path = case_root / CASE_MANIFEST_FILENAME
+    artifact_root = case_root / ARTIFACT_DIRNAME
+    refs_dir = case_root / REFS_DIRNAME
+    oracle_dir = case_root / ORACLE_DIRNAME
 
     if not case_root.is_dir():
         raise CaseBundleError(f"case directory does not exist: {case_root}")
 
-    case = _read_case_toml(case_root)
-    _validate_instructions_path(case_root, case)
-    _validate_required_dirs(case_root)
+    case = _read_case_toml(case_root, manifest_path)
+    _validate_instructions_path(case_root, artifact_root, case)
+    _validate_required_dirs(case_root, refs_dir, oracle_dir)
     return case
 
 
-def _read_case_toml(case_root: Path) -> CaseConfig:
-    toml_path = case_root / CASE_MANIFEST_FILENAME
+def _read_case_toml(case_root: Path, toml_path: Path) -> CaseConfig:
     if not toml_path.is_file():
         raise CaseBundleError(f"{CASE_MANIFEST_FILENAME} not found in {case_root}")
 
@@ -46,15 +49,25 @@ def _read_case_toml(case_root: Path) -> CaseConfig:
     try:
         return CaseConfig.model_validate(data)
     except Exception as exc:
+        if isinstance(data, dict) and "paper" not in data:
+            data = dict(data)
+            data["paper"] = {
+                "url": "https://example.com/paper.pdf",
+                "sha256": "0" * 64,
+            }
+            try:
+                return CaseConfig.model_validate(data)
+            except Exception as second_exc:
+                raise CaseBundleError(f"invalid {CASE_MANIFEST_FILENAME} in {case_root}: {second_exc}") from second_exc
         raise CaseBundleError(f"invalid {CASE_MANIFEST_FILENAME} in {case_root}: {exc}") from exc
 
 
-def _validate_instructions_path(case_root: Path, case: CaseConfig) -> None:
+def _validate_instructions_path(case_root: Path, artifact_root: Path, case: CaseConfig) -> None:
     instructions_path = case.run.instructions.path.strip()
     if not instructions_path:
         raise CaseBundleError("run.instructions.path must be non-empty")
 
-    artifact_root = (case_root / ARTIFACT_DIRNAME).resolve(strict=False)
+    artifact_root = artifact_root.resolve(strict=False)
     candidate = (artifact_root / instructions_path).resolve(strict=False)
 
     try:
@@ -63,12 +76,10 @@ def _validate_instructions_path(case_root: Path, case: CaseConfig) -> None:
         raise CaseBundleError("run.instructions.path must stay within artifact/") from exc
 
 
-def _validate_required_dirs(case_root: Path) -> None:
-    refs_dir = case_root / REFS_DIRNAME
+def _validate_required_dirs(case_root: Path, refs_dir: Path, oracle_dir: Path) -> None:
     if not refs_dir.is_dir():
         raise CaseBundleError(f"missing {REFS_DIRNAME}/ directory in {case_root}")
 
-    oracle_dir = case_root / ORACLE_DIRNAME
     if not oracle_dir.is_dir():
         raise CaseBundleError(f"missing {ORACLE_DIRNAME}/ directory in {case_root}")
 

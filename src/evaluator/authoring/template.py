@@ -8,6 +8,14 @@ from evaluator.constants import ORACLE_DIRNAME
 
 _EXPECTED_RESULT = "expected_result.txt"
 _DEFAULT_OUTPUT = "demo-output/result.txt"
+_TEMPLATE_FILENAMES = (
+    "__init__.py",
+    "case_constants.py",
+    "env_setup.py",
+    "artifact_build.py",
+    "benchmark_prep.py",
+    "experiment_runs.py",
+)
 
 
 def write_oracle_templates(
@@ -35,15 +43,15 @@ def write_oracle_templates(
 
 
 def render_oracle_templates(*, instruction_path: str, expected_output_path: str) -> dict[str, str]:
-    constants_py = f'''\
+    constants_py = f"""\
 from __future__ import annotations
 
 INSTRUCTION_PATH = {instruction_path!r}
 EXPECTED_OUTPUT_PATH = {expected_output_path!r}
 EXPECTED_RESULT_REF = {_EXPECTED_RESULT!r}
-'''
+"""
 
-    env_setup_py = '''\
+    env_setup_py = """\
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -62,9 +70,9 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
                 kind="file",
             ),
         )
-'''
+"""
 
-    artifact_build_py = '''\
+    artifact_build_py = """\
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -83,9 +91,9 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
                 kind="dir",
             ),
         )
-'''
+"""
 
-    benchmark_prep_py = '''\
+    benchmark_prep_py = """\
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -104,9 +112,9 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
                 kind="file",
             ),
         )
-'''
+"""
 
-    experiment_runs_py = '''\
+    experiment_runs_py = """\
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -125,13 +133,14 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
                 reference_path=self.ref_path(EXPECTED_RESULT_REF),
             ),
         )
-'''
+"""
 
-    return {
-        "__init__.py": '"""Case-local oracle package."""\n',
+    rendered = {
+        "__init__.py": """"Case-local oracle package."""\n",
         "case_constants.py": constants_py,
         "env_setup.py": env_setup_py,
         "artifact_build.py": artifact_build_py,
         "benchmark_prep.py": benchmark_prep_py,
         "experiment_runs.py": experiment_runs_py,
     }
+    return {name: rendered[name] for name in _TEMPLATE_FILENAMES}
