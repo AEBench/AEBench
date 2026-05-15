@@ -118,10 +118,13 @@ def _resolve_profile(context: PromptArgs) -> PromptProfile:
     profile = PromptProfile(context.prompt_profile)
     if profile == PromptProfile.ARTIFACT_EVAL_V1:
         return PromptProfile.ARTIFACT_EVAL_LOCAL_V1 if context.runtime_mode == RuntimeMode.LOCAL else PromptProfile.ARTIFACT_EVAL_DOCKER_V1
-    if context.runtime_mode == RuntimeMode.LOCAL and profile == PromptProfile.ARTIFACT_EVAL_DOCKER_V1:
-        raise ValueError("docker prompt profile cannot be used with runtime.mode='local'")
-    if context.runtime_mode == RuntimeMode.DOCKER and profile == PromptProfile.ARTIFACT_EVAL_LOCAL_V1:
-        raise ValueError("local prompt profile cannot be used with runtime.mode='docker'")
+
+    profile_runtime = {
+        PromptProfile.ARTIFACT_EVAL_LOCAL_V1: RuntimeMode.LOCAL,
+        PromptProfile.ARTIFACT_EVAL_DOCKER_V1: RuntimeMode.DOCKER,
+    }.get(profile)
+    if profile_runtime is not None and profile_runtime != context.runtime_mode:
+        raise ValueError(f"{profile_runtime.value} prompt profile cannot be used with runtime.mode='{context.runtime_mode.value}'")
     return profile
 
 
