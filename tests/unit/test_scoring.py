@@ -1,208 +1,177 @@
-"""Oracle phase scoring and failure mode tests."""
-
 from __future__ import annotations
 
-from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
-import pytest
-
-from evaluator.oracles.case_base import (
-	CaseOracleArtifactBuildBase,
-	CaseOracleBenchmarkPrepBase,
-	CaseOracleEnvSetupBase,
-	CaseOracleExperimentRunsBase,
-)
-from evaluator.oracles.discovery import (
-	ARTIFACT_BUILD,
-	BENCHMARK_PREP,
-	ENV_SETUP,
-	EXPERIMENT_RUNS,
-	DiscoveredPhase,
-)
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck
-from evaluator.oracles.execution import run_phases
-from evaluator.oracles.utils import BaseCheck
+from evaluator.oracles.discovery import DiscoveredOracleClass
+from evaluator.oracles import execution as oracle_execution
+from evaluator.oracles.utils import CheckEntry, CheckOutcome
 from models import OracleFailureMode, OracleInput, OracleStatus
 
 
-class _PassEnvSetup(CaseOracleEnvSetupBase):
-	def requirements(self) -> Sequence[BaseCheck]:
-		return []
+@dataclass
+class PhaseResult:
+    phase: str
+    status: OracleStatus
+    summary: str = ''
+    error: str | None = None
+    checks: list[str] | None = None
 
 
-class _FailEnvSetup(CaseOracleEnvSetupBase):
-	def requirements(self) -> Sequence[BaseCheck]:
-		return [
-			FilesystemPathCheck(
-				name="nonexistent",
-				path=Path("/tmp/__nonexistent_for_scoring_test_xyz__"),
-			)
-		]
+@dataclass
+class OracleResult:
+    status: OracleStatus
+    score: int | None = None
+    summary: str = ''
+    phases: list[PhaseResult] = None
+    error: str | None = None
 
 
-class _PassArtifactBuild(CaseOracleArtifactBuildBase):
-	def requirements(self) -> Sequence[BaseCheck]:
-		return []
+class DummyReport:
+    def __init__(self, ok: bool, label: str):
+        self.ok = ok
+        self.results = [CheckEntry(name=label, outcome=CheckOutcome.PASSED, message='ok')]
 
 
-class _FailArtifactBuild(CaseOracleArtifactBuildBase):
-	def requirements(self) -> Sequence[BaseCheck]:
-		return [
-			FilesystemPathCheck(
-				name="nonexistent_artifact",
-				path=Path("/tmp/__nonexistent_artifact_xyz__"),
-			)
-		]
+class DummyPhase:
+    def __init__(self, context, logger, *, ok: bool, label: str):
+        self.context = context
+        self.logger = logger
+        self._ok = ok
+        self._label = label
+
+    def report(self):
+        return DummyReport(self._ok, self._label)
 
 
-class _PassBenchmarkPrep(CaseOracleBenchmarkPrepBase):
-	def requirements(self) -> Sequence[BaseCheck]:
-		return []
+class PassingPhase(DummyPhase):
+    def __init__(self, context, logger):
+        super().__init__(context, logger, ok=True, label='pass')
 
 
-class _PassExperimentRuns(CaseOracleExperimentRunsBase):
-	def requirements(self) -> Sequence[BaseCheck]:
-		return []
+class FailingPhase(DummyPhase):
+    def __init__(self, context, logger):
+        super().__init__(context, logger, ok=False, label='fail')
 
 
-class _FailBenchmarkPrep(CaseOracleBenchmarkPrepBase):
-	def requirements(self) -> Sequence[BaseCheck]:
-		return [
-			FilesystemPathCheck(
-				name="nonexistent_prep",
-				path=Path("/tmp/__nonexistent_prep_xyz__"),
-			)
-		]
+class RuntimeErrorPhase(DummyPhase):
+    def __init__(self, context, logger):
+        raise RuntimeError('boom')
 
 
-class _FailExperimentRuns(CaseOracleExperimentRunsBase):
-	def requirements(self) -> Sequence[BaseCheck]:
-		return [
-			FilesystemPathCheck(
-				name="nonexistent_runs",
-				path=Path("/tmp/__nonexistent_runs_xyz__"),
-			)
-		]
+def _context(tmp_path: Path) -> OracleInput:
+    return OracleInput(
+        case_dir=tmp_path,
+        artifact_dir=tmp_path / 'artifact',
+        workspace_dir=tmp_path / 'workspace',
+        output_dir=tmp_path / 'output',
+    )
 
 
-def _ctx(tmp_path: Path) -> OracleInput:
-	return OracleInput(
-		case_dir=tmp_path,
-		artifact_dir=tmp_path / "artifact",
-		workspace_dir=tmp_path / "workspace",
-		output_dir=tmp_path / "output",
-	)
+def _classes(*phase_classes):
+    keys = [
+        ('env_setup',),
+        ('artifact_build',),
+        ('benchmark_prep',),
+        ('experiment_runs',),
+    ]
+    return [
+        DiscoveredOracleClass(key=key, priority=index, cls=cls)
+        for index, (key, cls) in enumerate(zip(keys, phase_classes, strict=True), start=1)
+    ]
 
 
-def _all_pass_phases() -> list[DiscoveredPhase]:
-	"""All four phases, all passing."""
-	return [
-		DiscoveredPhase.from_class(_PassEnvSetup, ENV_SETUP),
-		DiscoveredPhase.from_class(_PassArtifactBuild, ARTIFACT_BUILD),
-		DiscoveredPhase.from_class(_PassBenchmarkPrep, BENCHMARK_PREP),
-		DiscoveredPhase.from_class(_PassExperimentRuns, EXPERIMENT_RUNS),
-	]
+def test_score_all_oracles_pass(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(oracle_execution, 'OraclePhaseResult', PhaseResult)
+    monkeypatch.setattr(oracle_execution, 'OracleResult', OracleResult)
+
+    result = oracle_execution.run_oracle_classes(
+        _context(tmp_path),
+        classes=_classes(PassingPhase, PassingPhase, PassingPhase, PassingPhase),
+        failure_mode=OracleFailureMode.FAIL_FAST,
+    )
+
+    assert result.status == OracleStatus.SUCCESS
+    assert result.score == 4
+    assert [phase.status for phase in result.phases] == [
+        OracleStatus.SUCCESS,
+        OracleStatus.SUCCESS,
+        OracleStatus.SUCCESS,
+        OracleStatus.SUCCESS,
+    ]
 
 
-def _all_fail_phases() -> list[DiscoveredPhase]:
-	"""All four phases, all failing."""
-	return [
-		DiscoveredPhase.from_class(_FailEnvSetup, ENV_SETUP),
-		DiscoveredPhase.from_class(_FailArtifactBuild, ARTIFACT_BUILD),
-		DiscoveredPhase.from_class(_FailBenchmarkPrep, BENCHMARK_PREP),
-		DiscoveredPhase.from_class(_FailExperimentRuns, EXPERIMENT_RUNS),
-	]
+def test_score_partial_oracles_pass_in_continue_mode(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(oracle_execution, 'OraclePhaseResult', PhaseResult)
+    monkeypatch.setattr(oracle_execution, 'OracleResult', OracleResult)
+
+    result = oracle_execution.run_oracle_classes(
+        _context(tmp_path),
+        classes=_classes(PassingPhase, FailingPhase, PassingPhase, PassingPhase),
+        failure_mode=OracleFailureMode.CONTINUE,
+    )
+
+    assert result.status == OracleStatus.ERROR
+    assert result.score == 3
+    assert [phase.status for phase in result.phases] == [
+        OracleStatus.SUCCESS,
+        OracleStatus.ERROR,
+        OracleStatus.SUCCESS,
+        OracleStatus.SUCCESS,
+    ]
 
 
-def test_score_all_phases_pass(tmp_path: Path) -> None:
-	result = run_phases(_ctx(tmp_path), phases=_all_pass_phases())
-	assert result.score == 4
-	assert result.status == OracleStatus.SUCCESS
+def test_score_zero_when_all_oracles_fail_in_continue_mode(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(oracle_execution, 'OraclePhaseResult', PhaseResult)
+    monkeypatch.setattr(oracle_execution, 'OracleResult', OracleResult)
+
+    result = oracle_execution.run_oracle_classes(
+        _context(tmp_path),
+        classes=_classes(FailingPhase, FailingPhase, FailingPhase, FailingPhase),
+        failure_mode=OracleFailureMode.CONTINUE,
+    )
+
+    assert result.status == OracleStatus.ERROR
+    assert result.score == 0
+    assert all(phase.status == OracleStatus.ERROR for phase in result.phases)
 
 
-def test_score_partial_phases_pass(tmp_path: Path) -> None:
-	phases = [
-		DiscoveredPhase.from_class(_PassEnvSetup, ENV_SETUP),
-		DiscoveredPhase.from_class(_FailArtifactBuild, ARTIFACT_BUILD),
-		DiscoveredPhase.from_class(_PassBenchmarkPrep, BENCHMARK_PREP),
-		DiscoveredPhase.from_class(_PassExperimentRuns, EXPERIMENT_RUNS),
-	]
-	result = run_phases(_ctx(tmp_path), phases=phases, failure_mode=OracleFailureMode.CONTINUE)
-	assert result.score == 3
-	assert result.status == OracleStatus.ERROR
+def test_fail_fast_marks_remaining_oracles_pending(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(oracle_execution, 'OraclePhaseResult', PhaseResult)
+    monkeypatch.setattr(oracle_execution, 'OracleResult', OracleResult)
+
+    result = oracle_execution.run_oracle_classes(
+        _context(tmp_path),
+        classes=_classes(FailingPhase, PassingPhase, PassingPhase, PassingPhase),
+        failure_mode=OracleFailureMode.FAIL_FAST,
+    )
+
+    assert result.status == OracleStatus.ERROR
+    assert result.score == 0
+    assert [phase.status for phase in result.phases] == [
+        OracleStatus.ERROR,
+        OracleStatus.PENDING,
+        OracleStatus.PENDING,
+        OracleStatus.PENDING,
+    ]
 
 
-def test_score_no_phases_pass(tmp_path: Path) -> None:
-	result = run_phases(
-		_ctx(tmp_path), phases=_all_fail_phases(), failure_mode=OracleFailureMode.CONTINUE
-	)
-	assert result.score == 0
-	assert result.status == OracleStatus.ERROR
+def test_requirements_exception_is_captured(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(oracle_execution, 'OraclePhaseResult', PhaseResult)
+    monkeypatch.setattr(oracle_execution, 'OracleResult', OracleResult)
 
+    result = oracle_execution.run_oracle_classes(
+        _context(tmp_path),
+        classes=_classes(RuntimeErrorPhase, PassingPhase, PassingPhase, PassingPhase),
+        failure_mode=OracleFailureMode.FAIL_FAST,
+    )
 
-def test_missing_phases_raises(tmp_path: Path) -> None:
-	"""run_phases rejects an incomplete phase set."""
-	phases = [
-		DiscoveredPhase.from_class(_PassEnvSetup, ENV_SETUP),
-		DiscoveredPhase.from_class(_PassArtifactBuild, ARTIFACT_BUILD),
-	]
-	with pytest.raises(ValueError, match="missing required phases"):
-		run_phases(_ctx(tmp_path), phases=phases)
-
-
-def test_fail_fast_stops_after_first_failure(tmp_path: Path) -> None:
-	phases = [
-		DiscoveredPhase.from_class(_FailEnvSetup, ENV_SETUP),
-		DiscoveredPhase.from_class(_PassArtifactBuild, ARTIFACT_BUILD),
-		DiscoveredPhase.from_class(_PassBenchmarkPrep, BENCHMARK_PREP),
-		DiscoveredPhase.from_class(_PassExperimentRuns, EXPERIMENT_RUNS),
-	]
-	result = run_phases(_ctx(tmp_path), phases=phases, failure_mode=OracleFailureMode.FAIL_FAST)
-	assert len(result.phases) == 4
-	assert result.phases[0].status == OracleStatus.ERROR
-	assert result.phases[1].status == OracleStatus.PENDING
-	assert result.phases[2].status == OracleStatus.PENDING
-	assert result.phases[3].status == OracleStatus.PENDING
-	assert result.score == 0
-
-
-def test_continue_mode_runs_all_phases(tmp_path: Path) -> None:
-	phases = [
-		DiscoveredPhase.from_class(_FailEnvSetup, ENV_SETUP),
-		DiscoveredPhase.from_class(_PassArtifactBuild, ARTIFACT_BUILD),
-		DiscoveredPhase.from_class(_PassBenchmarkPrep, BENCHMARK_PREP),
-		DiscoveredPhase.from_class(_PassExperimentRuns, EXPERIMENT_RUNS),
-	]
-	result = run_phases(_ctx(tmp_path), phases=phases, failure_mode=OracleFailureMode.CONTINUE)
-	assert len(result.phases) == 4
-	assert result.phases[0].status == OracleStatus.ERROR
-	assert result.phases[1].status == OracleStatus.SUCCESS
-	assert result.score == 3
-
-
-def test_phase_exception_is_captured_not_raised(tmp_path: Path) -> None:
-	"""Exception in requirements() is caught, phase gets ERROR status."""
-
-	class _BoomRequirements(CaseOracleEnvSetupBase):
-		def requirements(self) -> Sequence[BaseCheck]:
-			raise RuntimeError("requirements() exploded unexpectedly")
-
-	phases = [
-		DiscoveredPhase.from_class(_BoomRequirements, ENV_SETUP),
-		DiscoveredPhase.from_class(_PassArtifactBuild, ARTIFACT_BUILD),
-		DiscoveredPhase.from_class(_PassBenchmarkPrep, BENCHMARK_PREP),
-		DiscoveredPhase.from_class(_PassExperimentRuns, EXPERIMENT_RUNS),
-	]
-	result = run_phases(_ctx(tmp_path), phases=phases)
-
-	assert result.phases[0].status == OracleStatus.ERROR
-	assert "RuntimeError" in (result.phases[0].error or "")
-
-
-def test_phase_error_message_included_in_oracle_error(tmp_path: Path) -> None:
-	result = run_phases(
-		_ctx(tmp_path), phases=_all_fail_phases(), failure_mode=OracleFailureMode.CONTINUE
-	)
-	assert result.error is not None
-	assert "env_setup" in result.error or "artifact_build" in result.error
+    assert result.status == OracleStatus.ERROR
+    assert result.phases[0].error == 'RuntimeError: boom'
+    assert [phase.status for phase in result.phases] == [
+        OracleStatus.ERROR,
+        OracleStatus.PENDING,
+        OracleStatus.PENDING,
+        OracleStatus.PENDING,
+    ]

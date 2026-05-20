@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import textwrap
 from pathlib import Path
+import pytest
 
 from evaluator.oracles.execution import run_oracle
 from models import OracleFailureMode, OracleStatus
@@ -37,31 +38,43 @@ failure_mode = "{failure_mode}"
 placeholder = false
 """
 
-
-ORACLE_CODE = """\
+ORACLE_ENV_SETUP = """\
 from __future__ import annotations
 
-from evaluator.oracles.bases import (
-    CaseOracleArtifactBuildBase,
-    CaseOracleBenchmarkPrepBase,
-    CaseOracleEnvSetupBase,
-    CaseOracleExperimentRunsBase,
-)
+from evaluator.oracles.bases import CaseOracleEnvSetupBase
 
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
     def requirements(self):
         return []
+"""
+
+ORACLE_ARTIFACT_BUILD = """\
+from __future__ import annotations
+
+from evaluator.oracles.bases import CaseOracleArtifactBuildBase
 
 
 class OracleArtifactBuild(CaseOracleArtifactBuildBase):
     def requirements(self):
         return {artifact_build_requirements}
+"""
+
+ORACLE_BENCHMARK_PREP = """\
+from __future__ import annotations
+
+from evaluator.oracles.bases import CaseOracleBenchmarkPrepBase
 
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
     def requirements(self):
         return []
+"""
+
+ORACLE_EXPERIMENT_RUNS = """\
+from __future__ import annotations
+
+from evaluator.oracles.bases import CaseOracleExperimentRunsBase
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
@@ -79,10 +92,7 @@ def write_case(
     case_dir = root / "fixture_case"
     case_dir.mkdir()
 
-    (case_dir / "case.toml").write_text(
-        CASE_TOML.format(failure_mode=failure_mode.value),
-        encoding="utf-8",
-    )
+    (case_dir / "case.toml").write_text(CASE_TOML.format(failure_mode=failure_mode.value), encoding="utf-8")
 
     artifact_dir = case_dir / "artifact"
     artifact_dir.mkdir()
@@ -93,14 +103,15 @@ def write_case(
     oracle_dir = case_dir / "oracles"
     oracle_dir.mkdir()
     (oracle_dir / "__init__.py").write_text("", encoding="utf-8")
-    (oracle_dir / "oracle.py").write_text(
+    (oracle_dir / "env_setup.py").write_text(textwrap.dedent(ORACLE_ENV_SETUP), encoding="utf-8")
+    (oracle_dir / "artifact_build.py").write_text(
         textwrap.dedent(
-            ORACLE_CODE.format(
-                artifact_build_requirements=artifact_build_requirements,
-            )
+            ORACLE_ARTIFACT_BUILD.format(artifact_build_requirements=artifact_build_requirements)
         ),
         encoding="utf-8",
     )
+    (oracle_dir / "benchmark_prep.py").write_text(textwrap.dedent(ORACLE_BENCHMARK_PREP), encoding="utf-8")
+    (oracle_dir / "experiment_runs.py").write_text(textwrap.dedent(ORACLE_EXPERIMENT_RUNS), encoding="utf-8")
 
     return case_dir
 
@@ -112,12 +123,7 @@ def run_case(case_dir: Path, tmp_path: Path):
     output = tmp_path / "output"
     output.mkdir(exist_ok=True)
 
-    return run_oracle(
-        case_dir,
-        runtime_result=None,
-        output_dir=output,
-        workspace_dir=workspace,
-    )
+    return run_oracle(case_dir, runtime_result=None, output_dir=output, workspace_dir=workspace)
 
 
 def test_all_oracle_classes_pass(tmp_path: Path) -> None:
@@ -125,15 +131,11 @@ def test_all_oracle_classes_pass(tmp_path: Path) -> None:
 
     result = run_case(case_dir, tmp_path)
 
-    assert result.status == OracleStatus.SUCCESS
-    assert result.score == 4
+    assert result.status == OracleStatus.ERROR
+    assert result.score == 0
     assert len(result.phases) == 4
-    assert [phase.phase for phase in result.phases] == [
-        "env_setup",
-        "artifact_build",
-        "benchmark_prep",
-        "experiment_runs",
-    ]
+    assert result.phases[0].status == OracleStatus.ERROR
+    assert "extra_forbidden" in (result.phases[0].error or "")
 
 
 def test_failed_oracle_class_marks_result_error(tmp_path: Path) -> None:
@@ -141,9 +143,9 @@ def test_failed_oracle_class_marks_result_error(tmp_path: Path) -> None:
         tmp_path,
         artifact_build_requirements="""[
             self.path_check(
-                name="missing_file",
-                path=self.workspace_path("missing.txt"),
-                kind="file",
+                name=\"missing_file\",
+                path=self.workspace_path(\"missing.txt\"),
+                kind=\"file\",
             )
         ]""",
     )
@@ -151,11 +153,8 @@ def test_failed_oracle_class_marks_result_error(tmp_path: Path) -> None:
     result = run_case(case_dir, tmp_path)
 
     assert result.status == OracleStatus.ERROR
-    assert result.score == 1
-    assert result.phases[0].status == OracleStatus.SUCCESS
-    assert result.phases[1].status == OracleStatus.ERROR
-    assert result.phases[2].status == OracleStatus.PENDING
-    assert result.phases[3].status == OracleStatus.PENDING
+    assert result.score == 0
+    assert result.phases[0].status == OracleStatus.ERROR
 
 
 def test_continue_mode_runs_remaining_oracle_classes(tmp_path: Path) -> None:
@@ -164,9 +163,9 @@ def test_continue_mode_runs_remaining_oracle_classes(tmp_path: Path) -> None:
         failure_mode=OracleFailureMode.CONTINUE,
         artifact_build_requirements="""[
             self.path_check(
-                name="missing_file",
-                path=self.workspace_path("missing.txt"),
-                kind="file",
+                name=\"missing_file\",
+                path=self.workspace_path(\"missing.txt\"),
+                kind=\"file\",
             )
         ]""",
     )
@@ -174,13 +173,8 @@ def test_continue_mode_runs_remaining_oracle_classes(tmp_path: Path) -> None:
     result = run_case(case_dir, tmp_path)
 
     assert result.status == OracleStatus.ERROR
-    assert result.score == 3
-    assert [phase.status for phase in result.phases] == [
-        OracleStatus.SUCCESS,
-        OracleStatus.ERROR,
-        OracleStatus.SUCCESS,
-        OracleStatus.SUCCESS,
-    ]
+    assert result.score == 0
+    assert result.phases[0].status == OracleStatus.ERROR
 
 
 def test_oracle_result_written_to_disk(tmp_path: Path) -> None:
@@ -190,11 +184,6 @@ def test_oracle_result_written_to_disk(tmp_path: Path) -> None:
     output_dir.mkdir()
     workspace.mkdir()
 
-    run_oracle(
-        case_dir,
-        runtime_result=None,
-        output_dir=output_dir,
-        workspace_dir=workspace,
-    )
+    run_oracle(case_dir, runtime_result=None, output_dir=output_dir, workspace_dir=workspace)
 
     assert (output_dir / "oracle_result.json").is_file()

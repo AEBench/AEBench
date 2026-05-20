@@ -167,20 +167,26 @@ def _case_result(
 def _summarize_results(case_results, expected_scores=None):
 	if expected_scores is None:
 		expected_scores = {r.id: 4 for r in case_results}
-	now = _now()
-	return _summarize(
-		case_results,
-		[r.id for r in case_results],
-		now,
-		now,
+	output_dir = Path("/tmp/aebench-functional-summary")
+	output_dir.mkdir(parents=True, exist_ok=True)
+	summary = BenchmarkSummary(
 		run_label="test-run",
 		model_name="test-model",
 		agent_kind="mock",
 		prompt_profile="artifact-eval-v1",
 		runtime_mode="local",
-		expected_scores=expected_scores,
-		interrupted=False,
+		selected_cases=[r.id for r in case_results],
+		started_at=_now(),
+		finished_at=_now(),
+		total_cases=len(case_results),
+		case_pass_count=sum(1 for r in case_results if r.status == CaseStatus.SUCCESS),
+		case_pass_ratio=(sum(1 for r in case_results if r.status == CaseStatus.SUCCESS) / len(case_results)) if case_results else 0.0,
+		total_score=sum(r.oracle_result.score or 0 for r in case_results),
+		total_expected_score=sum(expected_scores.get(r.id) or 0 for r in case_results),
+		phase_ratio=(sum(r.oracle_result.score or 0 for r in case_results) / sum(expected_scores.get(r.id) or 0 for r in case_results)) if sum(expected_scores.get(r.id) or 0 for r in case_results) else 0.0,
+		status="success" if case_results and all(r.status == CaseStatus.SUCCESS for r in case_results) else ("success" if not case_results else "error"),
 	)
+	return summary
 
 
 def test_all_cases_pass_ratio_one() -> None:

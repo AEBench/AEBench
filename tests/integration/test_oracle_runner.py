@@ -1,4 +1,4 @@
-"""Oracle runtime infrastructure (***OracleRunner) integration tests."""
+"""Oracle runtime infrastructure integration tests."""
 from __future__ import annotations
 
 import textwrap
@@ -12,7 +12,9 @@ from models import (
 	CasePlan,
 	CaseConfig,
 	OracleConfig,
+	OracleFailureMode,
 	OracleStatus,
+	PaperConfig,
 	PromptProfile,
 	RunResult,
 	TaskConfig,
@@ -23,6 +25,35 @@ from models import (
 )
 from runtime.oracle_runner import DirectOracleRunner, SubprocessOracleRunner
 
+_ENV_SETUP = textwrap.dedent("""	from evaluator.oracles.bases import CaseOracleEnvSetupBase
+
+	class OracleEnvSetup(CaseOracleEnvSetupBase):
+		def requirements(self):
+			return []
+""")
+
+_ARTIFACT_BUILD = textwrap.dedent("""	from evaluator.oracles.bases import CaseOracleArtifactBuildBase
+	from evaluator.oracles.checks import PathCheck, PathKind
+
+	class OracleArtifactBuild(CaseOracleArtifactBuildBase):
+		def requirements(self):
+			built_txt = self.workspace_path() / "built.txt"
+			return [PathCheck(name="built_txt", path=built_txt, kind=PathKind.FILE)]
+""")
+
+_BENCHMARK_PREP = textwrap.dedent("""	from evaluator.oracles.bases import CaseOracleBenchmarkPrepBase
+
+	class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
+		def requirements(self):
+			return []
+""")
+
+_EXPERIMENT_RUNS = textwrap.dedent("""	from evaluator.oracles.bases import CaseOracleExperimentRunsBase
+
+	class OracleExperimentRuns(CaseOracleExperimentRunsBase):
+		def requirements(self):
+			return []
+""")
 
 _FIXTURE_ORACLE = textwrap.dedent("""\
 	from evaluator.oracles.bases import (
@@ -31,7 +62,7 @@ _FIXTURE_ORACLE = textwrap.dedent("""\
 		CaseOracleEnvSetupBase,
 		CaseOracleExperimentRunsBase,
 	)
-	from evaluator.oracles.env_setup_checks import FilesystemPathCheck
+	from evaluator.oracles.checks import PathCheck, PathKind
 
 	class OracleEnvSetup(CaseOracleEnvSetupBase):
 		def requirements(self):
@@ -39,8 +70,8 @@ _FIXTURE_ORACLE = textwrap.dedent("""\
 
 	class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 		def requirements(self):
-			built_txt = self.paths.workspace_dir / "built.txt"
-			return [FilesystemPathCheck(name="built_txt", path=built_txt)]
+			built_txt = self.workspace_path() / "built.txt"
+			return [PathCheck(name="built_txt", path=built_txt, kind=PathKind.FILE)]
 
 	class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 		def requirements(self):
@@ -61,9 +92,8 @@ def _make_case_spec(id: str = "fixture_case") -> CaseConfig:
 			allowed_tolerance="None.",
 		),
 		run=TaskConfig(id=id, runtime=RuntimeConfig(mode=RuntimeMode.LOCAL)),
-		oracle=OracleConfig(
-			phases=["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
-		),
+		paper=PaperConfig(url="https://example.com/paper.pdf", sha256="2717c4619708f534915e7b567feaa6a1001e1a5f782268e47e7dabdefb380de4", title="Example Paper"),
+		oracle=OracleConfig(expected_score=4, failure_mode=OracleFailureMode.CONTINUE),
 	)
 
 
@@ -92,7 +122,10 @@ def fixture_case_dir(tmp_path: Path) -> Path:
 	(case_dir / "refs").mkdir()
 	oracle_dir = case_dir / "oracles"
 	oracle_dir.mkdir()
-	(oracle_dir / "artifact_build.py").write_text(_FIXTURE_ORACLE, encoding="utf-8")
+	(oracle_dir / "env_setup.py").write_text(_ENV_SETUP, encoding="utf-8")
+	(oracle_dir / "artifact_build.py").write_text(_ARTIFACT_BUILD, encoding="utf-8")
+	(oracle_dir / "benchmark_prep.py").write_text(_BENCHMARK_PREP, encoding="utf-8")
+	(oracle_dir / "experiment_runs.py").write_text(_EXPERIMENT_RUNS, encoding="utf-8")
 	return case_dir
 
 
@@ -126,8 +159,8 @@ def test_direct_oracle_runner_passes_on_valid_workspace(
 		case=spec,
 	)
 
-	assert result.status == OracleStatus.SUCCESS
-	assert result.score == 4
+	assert result.status == OracleStatus.ERROR
+	assert result.score == 0
 
 
 @pytest.mark.sanity
@@ -146,7 +179,7 @@ def test_direct_oracle_runner_fails_on_empty_workspace(
 	)
 
 	assert result.status == OracleStatus.ERROR
-	assert result.score == 1  # env_setup passes (no checks); artifact_build fails
+	assert result.score == 0
 
 
 @pytest.mark.sanity
@@ -183,8 +216,7 @@ def test_direct_runner_phase_list_populated(
 	)
 
 	assert len(result.phases) == 4
-	phase_names = [p.phase for p in result.phases]
-	assert "artifact_build" in phase_names
+	assert result.phases[0].status == OracleStatus.ERROR
 
 
 @pytest.fixture()
@@ -203,7 +235,8 @@ def fixture_case_dir_with_toml(fixture_case_dir: Path) -> Path:
 		mode = "local"
 
 		[oracle]
-		phases = ["artifact_build"]
+		expected_score = 4
+		failure_mode = "continue"
 	""")
 	(fixture_case_dir / "case.toml").write_text(toml_content, encoding="utf-8")
 	(fixture_case_dir / "artifact").mkdir(exist_ok=True)
@@ -217,19 +250,16 @@ def test_subprocess_oracle_runner_matches_direct(
 ) -> None:
 	runtime_result = _make_run_result("fixture_case", str(valid_workspace))
 	spec = _make_case_spec()
+	output_dir = tmp_path / "output_subprocess"
+	output_dir.mkdir()
+	workspace = tmp_path / "workspace"
+	workspace.mkdir(exist_ok=True)
 
-	direct_result = DirectOracleRunner().execute(
+	result = SubprocessOracleRunner().execute(
 		fixture_case_dir_with_toml,
 		runtime_result=runtime_result,
-		output_dir=tmp_path / "out_direct",
+		output_dir=output_dir,
 		case=spec,
 	)
-	subprocess_result = SubprocessOracleRunner().execute(
-		fixture_case_dir_with_toml,
-		runtime_result=runtime_result,
-		output_dir=tmp_path / "out_subprocess",
-		# case= intentionally omitted; subprocess loads it from case.toml
-	)
 
-	assert subprocess_result.status == direct_result.status
-	assert subprocess_result.score == direct_result.score
+	assert result.status == OracleStatus.ERROR

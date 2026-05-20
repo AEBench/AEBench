@@ -3,7 +3,7 @@
 from typing import Sequence
 
 from evaluator.oracles import utils
-from evaluator.oracles.case_base import CaseOracleArtifactBuildBase
+from evaluator.oracles.bases import CaseOracleArtifactBuildBase
 
 
 class OracleArtifactBuild(CaseOracleArtifactBuildBase):

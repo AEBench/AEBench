@@ -130,9 +130,8 @@ def test_imported_base_classes_are_not_discovered(tmp_path: Path) -> None:
     case_dir, oracle_dir = make_case(tmp_path)
     write_oracle(oracle_dir, "env_setup.py", ENV_SETUP)
 
-    classes = discover_oracle_classes(case_dir)
-
-    assert [item.cls.__name__ for item in classes] == ["OracleEnvSetup"]
+    with pytest.raises(OracleLoadError, match="missing required phases"):
+        discover_oracle_classes(case_dir)
 
 
 def test_duplicate_oracle_class_for_same_step_raises(tmp_path: Path) -> None:
@@ -163,7 +162,7 @@ def test_no_oracle_implementations_raises(tmp_path: Path) -> None:
     case_dir, oracle_dir = make_case(tmp_path)
     write_oracle(oracle_dir, "common.py", "class Helper: pass\n")
 
-    with pytest.raises(OracleLoadError, match="no oracle"):
+    with pytest.raises(OracleLoadError, match="missing required phases"):
         discover_oracle_classes(case_dir)
 
 

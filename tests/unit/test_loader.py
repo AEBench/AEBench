@@ -78,7 +78,8 @@ def test_oracle_phases_field_parsed(tmp_path: Path) -> None:
 	case_dir.mkdir()
 	_setup_valid_case(case_dir)
 	spec = load_case_spec(case_dir)
-	assert "env_setup" in spec.oracle.phases
+	assert spec.oracle.expected_score == 4
+	assert spec.oracle.failure_mode.value == "fail_fast"
 
 
 def test_runtime_mode_parsed(tmp_path: Path) -> None:
