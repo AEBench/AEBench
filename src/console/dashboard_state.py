@@ -144,8 +144,7 @@ def _compute_panel_sizes(
     if not progress_text or progress_text == "No active long-running progress source":
         progress_size = _MIN_PROGRESS_PANEL_HEIGHT
     else:
-        progress_size = max(_MIN_PROGRESS_PANEL_HEIGHT, min(8, 4 + progress_text.count("
-")))
+        progress_size = max(_MIN_PROGRESS_PANEL_HEIGHT, min(8, 4 + progress_text.count("\n")))
 
     max_reserved = max(0, height - _MIN_MAIN_PANEL_HEIGHT)
     if status_size + progress_size > max_reserved:

@@ -180,13 +180,11 @@ class DashboardWidgetMixin:
         text.append("  ")
         text.append(current.title, style="bold bright_white")
         if active_case is not None:
-            text.append("
-")
+            text.append("\n")
             text.append(" ACTIVE ", style="bold black on cyan")
             text.append(" ")
             text.append(active_case, style="bold cyan")
-        text.append("
-")
+        text.append("\n")
         text.append(" VIEW ", style="bold black on grey70")
         text.append(f" {current.current_view.value}", style="grey70")
         text.append("   ")
@@ -197,8 +195,7 @@ class DashboardWidgetMixin:
             text.append(" FOCUS ", style="bold black on grey70")
             text.append(f" {current.focus_panel.value}", style="grey70")
         if run_control is not None:
-            text.append("
-")
+            text.append("\n")
             text.append(" INTERRUPT ", style="bold black on grey70")
             text.append(f" {run_control.state_label()}", style=_interrupt_style(run_control))
         return text
@@ -222,8 +219,7 @@ class DashboardWidgetMixin:
         text = Text()
         for index, line in enumerate(lines):
             if index:
-                text.append("
-")
+                text.append("\n")
             text.append_text(_styled_line(line, raw=raw))
         return text
 
@@ -247,20 +243,15 @@ class DashboardWidgetMixin:
     def _help_panel(self) -> Panel:
         body = Text()
         body.append("v", style="bold bright_cyan")
-        body.append(" toggle compact/raw
-", style="grey78")
+        body.append(" toggle compact/raw\n", style="grey78")
         body.append("1/2/3", style="bold yellow")
-        body.append(" set single/split/triple layout
-", style="grey78")
+        body.append(" set single/split/triple layout\n", style="grey78")
         body.append("l", style="bold yellow")
-        body.append(" cycle layout
-", style="grey78")
+        body.append(" cycle layout\n", style="grey78")
         body.append("f", style="bold bright_blue")
-        body.append(" change focus (single layout only)
-", style="grey78")
+        body.append(" change focus (single layout only)\n", style="grey78")
         body.append("q", style="bold red")
-        body.append(" graceful stop; press again to force stop
-", style="grey78")
+        body.append(" graceful stop; press again to force stop\n", style="grey78")
         body.append("?", style="bold white")
         body.append(" toggle help", style="grey78")
         return Panel(

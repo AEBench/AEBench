@@ -120,8 +120,7 @@ def _format_progress_text(
         "-" * 72,
     ]
     body_lines = [*header, *[_highlight_progress_line(line) for line in summary["tail"]]]
-    return "
-".join(line for line in body_lines if line is not None)
+    return "\n".join(line for line in body_lines if line is not None)
 
 
 def _highlight_progress_line(line: str) -> str:
@@ -176,14 +175,10 @@ def _coerce_text(value: object) -> str:
 def _combine_output(stdout: str, stderr: str) -> str:
     parts: list[str] = []
     if stdout:
-        parts.append("STDOUT:
-" + stdout)
+        parts.append("STDOUT:\n" + stdout)
     if stderr:
-        parts.append("STDERR:
-" + stderr)
-    return "
-
-".join(parts)
+        parts.append("STDERR:\n" + stderr)
+    return "\n\n".join(parts)
 
 
 def _payload_without_large_text(payload: dict[str, Any]) -> dict[str, Any]:
@@ -202,8 +197,7 @@ def _summarize_large_text(text: str) -> str:
     head = lines[:DISPLAY_TOOL_OUTPUT_HEAD_LINES]
     tail = lines[-DISPLAY_TOOL_OUTPUT_TAIL_LINES:]
     omitted = len(lines) - len(head) - len(tail)
-    return "
-".join(head + [f"... ({omitted} lines omitted) ..."] + tail)
+    return "\n".join(head + [f"... ({omitted} lines omitted) ..."] + tail)
 
 
 def _compact_line(event: DisplayEvent) -> str:
@@ -284,5 +278,4 @@ def _interrupt_style(control: RunControl) -> str:
 
 
 def _fallback_render_event(event: DisplayEvent) -> None:
-    sys.__stdout__ and sys.__stdout__.write(_compact_line(event) + "
-")
+    sys.__stdout__ and sys.__stdout__.write(_compact_line(event) + "\n")

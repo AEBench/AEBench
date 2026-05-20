@@ -404,31 +404,24 @@ class CaseDisplaySession:
 
     def _write_event(self, event: DisplayEvent) -> None:
         with self._transcript_path.open("a", encoding="utf-8") as handle:
-            handle.write(event.model_dump_json() + "
-")
+            handle.write(event.model_dump_json() + "\n")
         if event.kind in {DisplayKind.START, DisplayKind.STATUS, DisplayKind.ERROR}:
             with self._log_path.open("a", encoding="utf-8") as handle:
-                handle.write(_compact_line(event) + "
-")
+                handle.write(_compact_line(event) + "\n")
         if event.kind == DisplayKind.RUNNER_OUTPUT:
             with self._runner_log_path.open("a", encoding="utf-8") as handle:
                 handle.write(event.text)
-                if event.text and not event.text.endswith("
-"):
-                    handle.write("
-")
+                if event.text and not event.text.endswith("\n"):
+                    handle.write("\n")
         if event.panel == DisplayPanel.INFRA:
             with self._infra_log_path.open("a", encoding="utf-8") as handle:
-                handle.write(_compact_line(event) + "
-")
+                handle.write(_compact_line(event) + "\n")
         if event.panel == DisplayPanel.PROGRESS:
             with self._progress_log_path.open("a", encoding="utf-8") as handle:
-                handle.write(_compact_line(event) + "
-")
+                handle.write(_compact_line(event) + "\n")
         if event.panel in {DisplayPanel.AGENT, DisplayPanel.OUTPUT} and event.kind != DisplayKind.RUNNER_OUTPUT:
             with self._rendered_log_path.open("a", encoding="utf-8") as handle:
-                handle.write(_compact_line(event) + "
-")
+                handle.write(_compact_line(event) + "\n")
         if self._dashboard is not None:
             self._dashboard.send(event)
         elif self._fallback_to_console:
@@ -463,8 +456,7 @@ class CaseDisplaySession:
                     case_id=self._case_id,
                     kind=DisplayKind.PROGRESS,
                     panel=DisplayPanel.PROGRESS,
-                    text=f"Long-running command has no explicit log file
-COMMAND: {source.command}",
+                    text=f"Long-running command has no explicit log file\nCOMMAND: {source.command}",
                     command=source.command,
                     data={"source_type": source.source_type},
                 )
@@ -500,8 +492,7 @@ COMMAND: {source.command}",
             header.append(f"full output saved to {artifact_path}")
         summary = " | ".join(header)
         if rendered_output:
-            summary = f"{summary}
-{rendered_output}"
+            summary = f"{summary}\n{rendered_output}"
         return summary, artifact_path
 
     def _progress_loop(self) -> None:
