@@ -20,12 +20,10 @@ _SKIPPED_PHASE_SUMMARY = "skipped because a previous phase failed"
 def _phase_result_from_report(name: str, report: utils.OracleReport) -> OraclePhaseResult:
     status = OracleStatus.SUCCESS if report.ok else OracleStatus.ERROR
     summary = "all checks passed" if report.ok else "one or more checks failed"
-    checks = report.results
     return OraclePhaseResult(
         phase=name,
         status=status,
         summary=summary,
-        checks=checks,
     )
 
 
@@ -61,12 +59,13 @@ def run_oracle_classes(
             break
 
     score = sum(1 for result in results if result.status == OracleStatus.SUCCESS)
+    overall_status = OracleStatus.SUCCESS if score == len(classes) else OracleStatus.ERROR
     return OracleResult(
-        status=OracleStatus.SUCCESS if not failed_phases else OracleStatus.ERROR,
+        status=overall_status,
         score=score,
         summary=f"Passed {score}/{len(classes)} phases.",
         phases=results,
-        error=None if not failed_phases else f"oracle failed phases: {', '.join(failed_phases)}",
+        error=None if score == len(classes) else f"oracle failed phases: {', '.join(failed_phases)}",
     )
 
 
