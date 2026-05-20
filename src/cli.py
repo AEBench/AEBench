@@ -6,15 +6,12 @@ from pathlib import Path
 
 from config import AppState, resolve_settings
 from evaluator.loader import load_case_spec
+from evaluator.registry import resolve_case_dir
 from log import configure_logging
 from models import RunOptions
 from project_config import load_project_config
 from run_control import RunControl, activate_interrupt_handler
-from runtime.benchmark_runner import BenchmarkRunner, summarize_case_output_dirs
-from runtime.case_runner import CaseRunner
-from runtime.cases import expand_case_dirs, export_case_dirs, resolve_case_dir
 from runtime.oracle_runner import DirectOracleRunner
-from runtime.task_runner import run_tasks_from_jsonl
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -140,41 +137,11 @@ def _init_workspace(args: argparse.Namespace) -> int:
 
 
 def _run_benchmark(args: argparse.Namespace) -> int:
-    context = _build_context()
-    control = RunControl()
-    with activate_interrupt_handler(control):
-        result = BenchmarkRunner(context).run(
-            list(args.case_refs or []),
-            options=_run_options(args),
-            output_dir=_optional_path(args.output_dir),
-            listener=None,
-            run_control=control,
-        )
-    print(f"Benchmark status: {result.summary.status}")
-    print(f"Cases: {result.summary.case_pass_count}/{result.summary.total_cases}")
-    print(f"Phase score: {result.summary.total_score}/{result.summary.total_expected_score}")
-    print(f"Summary: {result.summary_path}")
-    return 0 if result.summary.status == "success" else 1
+    raise SystemExit("benchmark runner is unavailable in this checkout")
 
 
 def _case_run(args: argparse.Namespace) -> int:
-    context = _build_context()
-    case_dir = resolve_case_dir(args.case_ref, project_state=context.project_state)
-    case = load_case_spec(case_dir)
-    control = RunControl()
-    with activate_interrupt_handler(control):
-        result = CaseRunner(context).run(
-            case_dir,
-            save_path=_optional_path(args.save_path),
-            options=_run_options(args),
-            listener=None,
-            run_control=control,
-        )
-    print(f"Case status: {result.status.value}")
-    print(f"Oracle status: {result.oracle_result.status.value}")
-    print(f"Score: {result.oracle_result.score}/{case.oracle.expected_score}")
-    print(f"Output dir: {result.output_dir}")
-    return 0 if result.status.value == "success" else 1
+    raise SystemExit("case runner is unavailable in this checkout")
 
 
 def _case_init(args: argparse.Namespace) -> int:
@@ -224,42 +191,20 @@ def _case_validate(args: argparse.Namespace) -> int:
 
 
 def _case_export(args: argparse.Namespace) -> int:
-    context = _build_context()
-    case_dirs = expand_case_dirs(list(args.case_refs or []), project_state=context.project_state)
-    output = Path(args.output).expanduser().resolve()
-    export_case_dirs(case_dirs, output_path=output, project_state=context.project_state)
-    print(f"Exported {len(case_dirs)} case(s) to {output}")
-    return 0
+    raise SystemExit("case export is unavailable in this checkout")
 
 
 def _case_summarize(args: argparse.Namespace) -> int:
-    context = _build_context()
-    result = summarize_case_output_dirs(
-        [Path(value) for value in args.case_output_inputs],
-        output_dir=Path(args.output_dir).expanduser().resolve(),
-        project_state=context.project_state,
-        model_name=args.model_name,
-        agent_kind=args.agent_kind,
-        prompt_profile=args.prompt_profile,
-        run_label=args.run_label,
-    )
-    print(f"Summary status: {result.summary.status}")
-    print(f"Summary JSON: {result.summary_path}")
-    print(f"Summary Markdown: {result.summary_markdown_path}")
-    return 0 if result.summary.status == "success" else 1
+    raise SystemExit("case summarize is unavailable in this checkout")
 
 
 def _case_oracle(args: argparse.Namespace) -> int:
     from models import RunResult
-    from runtime.benchmark_runner import discover_case_output_dirs
 
     context = _build_context()
     case_dir = resolve_case_dir(args.case_ref, project_state=context.project_state)
     case = load_case_spec(case_dir)
-    output_dir = _optional_path(args.output_dir)
-    if output_dir is None:
-        candidates = discover_case_output_dirs([context.project_state.config.resolve_case_runs_dir(context.project_state.root) / case.id])
-        output_dir = candidates[-1] if candidates else case_dir / "output"
+    output_dir = _optional_path(args.output_dir) or (case_dir / "output")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     runtime_result = None
@@ -284,21 +229,7 @@ def _case_oracle(args: argparse.Namespace) -> int:
 
 
 def _runtime_run(args: argparse.Namespace) -> int:
-    context = _build_context()
-    output_dir = _optional_path(args.output_dir) or (Path(context.settings.default_outputs_dir).expanduser().resolve() / "runtime")
-    control = RunControl()
-    with activate_interrupt_handler(control):
-        results = run_tasks_from_jsonl(
-            context,
-            input_file=Path(args.input_file).expanduser().resolve(),
-            output_dir=output_dir,
-            options=_run_options(args),
-            listener=None,
-            run_control=control,
-        )
-    success = sum(1 for result in results if result.status.value == "success")
-    print(f"Completed {len(results)} task(s); success={success}")
-    return 0 if success == len(results) else 1
+    raise SystemExit("runtime run is unavailable in this checkout")
 
 
 def _build_context() -> AppState:
