@@ -7,7 +7,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from evaluator.constants import CASE_MANIFEST_FILENAME
+from constants import CASE_MANIFEST_FILENAME
 from models import CaseConfig
 
 

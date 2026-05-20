@@ -8,6 +8,10 @@ src/aebench.egg-info/requires.txt
 src/aebench.egg-info/top_level.txt
 src/console/__init__.py
 src/console/dashboard.py
+src/console/dashboard_display.py
+src/console/dashboard_render.py
+src/console/dashboard_state.py
+src/console/dashboard_widgets.py
 src/console/tui.py
 src/evaluator/__init__.py
 src/evaluator/constants.py
@@ -29,4 +33,3 @@ src/runtime/oracle_runner.py
 src/runtime/reporting.py
 src/runtime/session.py
 src/runtime/workspace.py
-tests/test_sdk.py

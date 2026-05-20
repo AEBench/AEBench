@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from evaluator.constants import ARTIFACT_SUBDIR, CASE_MANIFEST_FILENAME, ORACLE_DIRNAME, REFS_DIRNAME
+from constants import ARTIFACT_SUBDIR, CASE_MANIFEST_FILENAME, ORACLE_DIRNAME, REFS_DIRNAME
 from evaluator.loader import CaseBundleError, load_case_spec
 from evaluator.oracles.discovery import OracleLoadError, discover_oracle_classes
 

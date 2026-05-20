@@ -14,15 +14,12 @@ from textual.widgets import Button, ContentSwitcher, Footer, RichLog, Static
 
 logger = logging.getLogger(__name__)
 
-from .dashboard import (
+from .dashboard import BaseDashboardDisplay, DashboardSnapshot, DisplayConfig, DisplayPanel
+from .dashboard_state import (
     _MIN_MAIN_PANEL_HEIGHT,
     _MIN_PROGRESS_PANEL_HEIGHT,
     _WIDTH_SPLIT,
     _WIDTH_TRIPLE,
-    BaseDashboardDisplay,
-    DashboardSnapshot,
-    DisplayConfig,
-    DisplayPanel,
     _compute_effective_layout,
     _compute_panel_sizes,
 )

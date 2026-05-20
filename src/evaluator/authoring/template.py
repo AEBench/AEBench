@@ -17,7 +17,6 @@ _TEMPLATE_FILENAMES = (
     "experiment_runs.py",
 )
 
-
 def write_oracle_templates(
     case_dir: Path,
     *,
@@ -56,18 +55,19 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from evaluator.oracles import BaseCheck, CaseOracleEnvSetupBase
+from evaluator.oracles import CaseOracleEnvSetupBase
+from evaluator.oracles.checks import PathKind
 
 from .case_constants import INSTRUCTION_PATH
 
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
-    def requirements(self) -> Sequence[BaseCheck]:
+    def requirements(self) -> Sequence:
         return (
             self.path_check(
                 name="instructions_exist",
                 path=self.workspace_path(INSTRUCTION_PATH),
-                kind="file",
+                kind=PathKind.FILE,
             ),
         )
 """
@@ -77,18 +77,19 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from evaluator.oracles import BaseCheck, CaseOracleArtifactBuildBase
+from evaluator.oracles import CaseOracleArtifactBuildBase
+from evaluator.oracles.checks import PathKind
 
 from .case_constants import EXPECTED_OUTPUT_PATH
 
 
 class OracleArtifactBuild(CaseOracleArtifactBuildBase):
-    def requirements(self) -> Sequence[BaseCheck]:
+    def requirements(self) -> Sequence:
         return (
             self.path_check(
                 name="output_directory_exists",
                 path=self.workspace_path(EXPECTED_OUTPUT_PATH).parent,
-                kind="dir",
+                kind=PathKind.DIRECTORY,
             ),
         )
 """
@@ -98,18 +99,19 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from evaluator.oracles import BaseCheck, CaseOracleBenchmarkPrepBase
+from evaluator.oracles import CaseOracleBenchmarkPrepBase
+from evaluator.oracles.checks import PathKind
 
 from .case_constants import EXPECTED_RESULT_REF
 
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
-    def requirements(self) -> Sequence[BaseCheck]:
+    def requirements(self) -> Sequence:
         return (
             self.path_check(
                 name="expected_reference_exists",
                 path=self.ref_path(EXPECTED_RESULT_REF),
-                kind="file",
+                kind=PathKind.FILE,
             ),
         )
 """
@@ -119,13 +121,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from evaluator.oracles import BaseCheck, CaseOracleExperimentRunsBase
+from evaluator.oracles import CaseOracleExperimentRunsBase
 
 from .case_constants import EXPECTED_OUTPUT_PATH, EXPECTED_RESULT_REF
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
-    def requirements(self) -> Sequence[BaseCheck]:
+    def requirements(self) -> Sequence:
         return (
             self.text_file_equal(
                 name="output_matches_reference",
@@ -136,7 +138,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 """
 
     rendered = {
-        "__init__.py": """"Case-local oracle package."""\n",
+        "__init__.py": "\"\"\"Case-local oracle package.\"\"\"\n",
         "case_constants.py": constants_py,
         "env_setup.py": env_setup_py,
         "artifact_build.py": artifact_build_py,
