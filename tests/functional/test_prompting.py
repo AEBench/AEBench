@@ -1,12 +1,9 @@
 """Prompt template generation tests."""
+
 from __future__ import annotations
 
-import pytest
-
-from models import PromptProfile, RuntimeMode
+from models import PromptArgs, PromptProfile, RuntimeMode
 from prompting import build_prompt_bundle
-
-from models import PromptArgs
 
 
 def _docker_ctx(**overrides) -> PromptArgs:

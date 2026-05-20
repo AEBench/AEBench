@@ -6,16 +6,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
-from constants import DEFAULT_DOCKER_IMAGE
+from constants import ARTIFACT_SUBDIR, DEFAULT_DOCKER_IMAGE
 from evaluator.constants import ARTIFACT_DIRNAME, REFS_DIRNAME
 from models import (
-    CaseConfig,
-    CasePlan,
-    OracleConfig,
-    OracleFailureMode,
-    OracleScoreMode,
-    PaperConfig,
-    RuntimeMode,
+	CaseConfig,
+	CasePlan,
+	OracleConfig,
+	OracleFailureMode,
+	PaperConfig,
+	RuntimeMode,
 )
 from utils import safe_name
 
@@ -29,115 +28,134 @@ _DEFAULT_OUTPUT = "demo-output/result.txt"
 
 @dataclass(frozen=True, slots=True)
 class CaseInitOptions:
-    case_id: str
-    runtime_mode: RuntimeMode = RuntimeMode.DOCKER
-    instruction_path: str = "README.md"
-    runtime_image: str | None = DEFAULT_DOCKER_IMAGE
-    paper_url: str = "https://example.com/paper.pdf"
-    paper_sha256: str = "0" * 64
-    paper_title: str | None = None
-    template: bool = True
-    quick_check: bool = False
-    expected_output_path: str = _DEFAULT_OUTPUT
-    expected_output_text: str | None = None
+	case_id: str
+	runtime_mode: RuntimeMode = RuntimeMode.DOCKER
+	instruction_path: str = "README.md"
+	runtime_image: str | None = DEFAULT_DOCKER_IMAGE
+	paper_url: str = "https://example.com/paper.pdf"
+	paper_sha256: str = "0" * 64
+	paper_title: str | None = None
+	template: bool = True
+	quick_check: bool = False
+	expected_output_path: str = _DEFAULT_OUTPUT
+	expected_output_text: str | None = None
 
 
 def infer_case_id(source: str | None, *, explicit_id: str | None = None) -> str:
-    if explicit_id and explicit_id.strip():
-        return safe_name(explicit_id.strip()) or explicit_id.strip()
-    if not source:
-        return "new-case"
+	if explicit_id and explicit_id.strip():
+		return safe_name(explicit_id.strip()) or explicit_id.strip()
+	if not source:
+		return "new-case"
 
-    name = Path(source).expanduser().name or Path(urlparse(source).path).name
-    if name.endswith(".git"):
-        name = name[:-4]
-    for suffix in _ARCHIVE_SUFFIXES:
-        if name.endswith(suffix):
-            name = name[: -len(suffix)]
-            break
-    return safe_name(name or "new-case") or "new-case"
+	name = Path(source).expanduser().name or Path(urlparse(source).path).name
+	if name.endswith(".git"):
+		name = name[:-4]
+	for suffix in _ARCHIVE_SUFFIXES:
+		if name.endswith(suffix):
+			name = name[: -len(suffix)]
+			break
+	return safe_name(name or "new-case") or "new-case"
 
 
-def create_case_bundle(case_dir: Path, options: CaseInitOptions, *, overwrite: bool = False) -> CaseConfig:
-    if case_dir.exists() and any(case_dir.iterdir()) and not overwrite:
-        raise FileExistsError(f"case directory is not empty: {case_dir}")
+def create_case_bundle(
+	case_dir: Path, options: CaseInitOptions, *, overwrite: bool = False
+) -> CaseConfig:
+	if case_dir.exists() and any(case_dir.iterdir()) and not overwrite:
+		raise FileExistsError(f"case directory is not empty: {case_dir}")
 
-    case_dir.mkdir(parents=True, exist_ok=True)
-    (case_dir / ARTIFACT_DIRNAME).mkdir(exist_ok=True)
-    (case_dir / REFS_DIRNAME).mkdir(exist_ok=True)
+	case_dir.mkdir(parents=True, exist_ok=True)
+	(case_dir / ARTIFACT_DIRNAME).mkdir(exist_ok=True)
+	(case_dir / REFS_DIRNAME).mkdir(exist_ok=True)
 
-    if options.quick_check:
-        _write_quick_check_files(case_dir, options)
+	if options.quick_check:
+		_write_quick_check_files(case_dir, options)
 
-    if options.template:
-        write_oracle_templates(
-            case_dir,
-            instruction_path=options.instruction_path,
-            expected_output_path=options.expected_output_path,
-            overwrite=overwrite,
-        )
+	if options.template:
+		write_oracle_templates(
+			case_dir,
+			instruction_path=options.instruction_path,
+			expected_output_path=options.expected_output_path,
+			overwrite=overwrite,
+		)
 
-    runtime_image = options.runtime_image if options.runtime_mode == RuntimeMode.DOCKER else None
-    base_case = CaseConfig(id=options.case_id)
-    case = base_case.model_copy(
-        update={
-            "case_brief": CasePlan(
-                core_claim=f"Validate the artifact evaluation contract for {options.case_id}.",
-                acceptable_evidence=(
-                    f"The case passes when {options.expected_output_path} matches "
-                    f"refs/{_EXPECTED_RESULT}."
-                    if options.quick_check
-                    else "The case passes when the four oracle phases succeed."
-                ),
-                allowed_tolerance="n/a",
-            ),
-            "run": base_case.run.model_copy(
-                update={
-                    "instructions": base_case.run.instructions.model_copy(
-                        update={"path": options.instruction_path}
-                    ),
-                    "runtime": base_case.run.runtime.model_copy(
-                        update={"mode": options.runtime_mode, "image": runtime_image}
-                    ),
-                }
-            ),
-            "oracle": OracleConfig(
-                expected_score=4,
-                score_mode=OracleScoreMode.PHASE_COUNT,
-                failure_mode=OracleFailureMode.FAIL_FAST,
-                placeholder=not options.quick_check,
-                notes="Generated by `aebench case init`. Replace templates with real checks.",
-            ),
-            "paper": PaperConfig(
-                url=options.paper_url,
-                sha256=options.paper_sha256,
-                title=options.paper_title,
-            ),
-        }
-    )
-    write_case_spec(case, case_dir)
-    return case
+	runtime_image = options.runtime_image if options.runtime_mode == RuntimeMode.DOCKER else None
+	base_case = CaseConfig.model_validate(
+		{
+			"id": options.case_id,
+			"case_brief": {
+				"core_claim": f"Validate the artifact evaluation contract for {options.case_id}.",
+				"acceptable_evidence": "placeholder",
+				"allowed_tolerance": "n/a",
+			},
+			"run": {
+				"id": options.case_id,
+				"runtime": {"mode": options.runtime_mode, "image": runtime_image},
+			},
+			"paper": {
+				"url": options.paper_url,
+				"sha256": options.paper_sha256,
+				"title": options.paper_title,
+			},
+		}
+	)
+	case = base_case.model_copy(
+		update={
+			"case_brief": CasePlan(
+				core_claim=f"Validate the artifact evaluation contract for {options.case_id}.",
+				acceptable_evidence=(
+					f"The case passes when {options.expected_output_path} matches "
+					f"refs/{_EXPECTED_RESULT}."
+					if options.quick_check
+					else "The case passes when the four oracle phases succeed."
+				),
+				allowed_tolerance="n/a",
+			),
+			"run": base_case.run.model_copy(
+				update={
+					"instructions": base_case.run.instructions.model_copy(
+						update={"path": options.instruction_path}
+					),
+					"runtime": base_case.run.runtime.model_copy(
+						update={"mode": options.runtime_mode, "image": runtime_image}
+					),
+				}
+			),
+			"oracle": OracleConfig(
+				expected_score=4,
+				failure_mode=OracleFailureMode.FAIL_FAST,
+				placeholder=not options.quick_check,
+				notes="Generated by `aebench case init`. Replace templates with real checks.",
+			),
+			"paper": PaperConfig(
+				url=options.paper_url,
+				sha256=options.paper_sha256,
+				title=options.paper_title,
+			),
+		}
+	)
+	write_case_spec(case, case_dir)
+	return case
 
 
 def _write_quick_check_files(case_dir: Path, options: CaseInitOptions) -> None:
-    text = options.expected_output_text or f"{options.case_id} minimal case ready"
-    ref_path = case_dir / REFS_DIRNAME / _EXPECTED_RESULT
-    ref_path.write_text(text.rstrip("\n") + "\n", encoding="utf-8")
+	text = options.expected_output_text or f"{options.case_id} minimal case ready"
+	ref_path = case_dir / REFS_DIRNAME / _EXPECTED_RESULT
+	ref_path.write_text(text.rstrip("\n") + "\n", encoding="utf-8")
 
-    instructions = case_dir / ARTIFACT_SUBDIR / options.instruction_path
-    instructions.parent.mkdir(parents=True, exist_ok=True)
-    output_parent = Path(options.expected_output_path).parent
-    steps = ["# Starter Artifact Instructions", "", "Follow these steps exactly:", ""]
-    if output_parent != Path("."):
-        steps.append(f"1. Create `{output_parent.as_posix()}` if it does not already exist.")
-        number = 2
-    else:
-        number = 1
-    steps.extend(
-        [
-            f"{number}. Write the exact text `{text}` to `{options.expected_output_path}`.",
-            f"{number + 1}. Print the contents of `{options.expected_output_path}`.",
-            "",
-        ]
-    )
-    instructions.write_text("\n".join(steps), encoding="utf-8")
+	instructions = case_dir / ARTIFACT_SUBDIR / options.instruction_path
+	instructions.parent.mkdir(parents=True, exist_ok=True)
+	output_parent = Path(options.expected_output_path).parent
+	steps = ["# Starter Artifact Instructions", "", "Follow these steps exactly:", ""]
+	if output_parent != Path("."):
+		steps.append(f"1. Create `{output_parent.as_posix()}` if it does not already exist.")
+		number = 2
+	else:
+		number = 1
+	steps.extend(
+		[
+			f"{number}. Write the exact text `{text}` to `{options.expected_output_path}`.",
+			f"{number + 1}. Print the contents of `{options.expected_output_path}`.",
+			"",
+		]
+	)
+	instructions.write_text("\n".join(steps), encoding="utf-8")

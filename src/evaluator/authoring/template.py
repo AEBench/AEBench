@@ -9,40 +9,41 @@ from evaluator.constants import ORACLE_DIRNAME
 _EXPECTED_RESULT = "expected_result.txt"
 _DEFAULT_OUTPUT = "demo-output/result.txt"
 _TEMPLATE_FILENAMES = (
-    "__init__.py",
-    "case_constants.py",
-    "env_setup.py",
-    "artifact_build.py",
-    "benchmark_prep.py",
-    "experiment_runs.py",
+	"__init__.py",
+	"case_constants.py",
+	"env_setup.py",
+	"artifact_build.py",
+	"benchmark_prep.py",
+	"experiment_runs.py",
 )
 
-def write_oracle_templates(
-    case_dir: Path,
-    *,
-    instruction_path: str = "README.md",
-    expected_output_path: str = _DEFAULT_OUTPUT,
-    overwrite: bool = False,
-) -> list[Path]:
-    oracle_dir = case_dir / ORACLE_DIRNAME
-    oracle_dir.mkdir(parents=True, exist_ok=True)
 
-    written: list[Path] = []
-    for relative_path, content in render_oracle_templates(
-        instruction_path=instruction_path,
-        expected_output_path=expected_output_path,
-    ).items():
-        target = oracle_dir / relative_path
-        if target.exists() and not overwrite:
-            continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
-        written.append(target)
-    return written
+def write_oracle_templates(
+	case_dir: Path,
+	*,
+	instruction_path: str = "README.md",
+	expected_output_path: str = _DEFAULT_OUTPUT,
+	overwrite: bool = False,
+) -> list[Path]:
+	oracle_dir = case_dir / ORACLE_DIRNAME
+	oracle_dir.mkdir(parents=True, exist_ok=True)
+
+	written: list[Path] = []
+	for relative_path, content in render_oracle_templates(
+		instruction_path=instruction_path,
+		expected_output_path=expected_output_path,
+	).items():
+		target = oracle_dir / relative_path
+		if target.exists() and not overwrite:
+			continue
+		target.parent.mkdir(parents=True, exist_ok=True)
+		target.write_text(content, encoding="utf-8")
+		written.append(target)
+	return written
 
 
 def render_oracle_templates(*, instruction_path: str, expected_output_path: str) -> dict[str, str]:
-    constants_py = f"""\
+	constants_py = f"""\
 from __future__ import annotations
 
 INSTRUCTION_PATH = {instruction_path!r}
@@ -50,7 +51,7 @@ EXPECTED_OUTPUT_PATH = {expected_output_path!r}
 EXPECTED_RESULT_REF = {_EXPECTED_RESULT!r}
 """
 
-    env_setup_py = """\
+	env_setup_py = """\
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -72,7 +73,7 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
         )
 """
 
-    artifact_build_py = """\
+	artifact_build_py = """\
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -94,7 +95,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
         )
 """
 
-    benchmark_prep_py = """\
+	benchmark_prep_py = """\
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -116,7 +117,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
         )
 """
 
-    experiment_runs_py = """\
+	experiment_runs_py = """\
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -137,12 +138,12 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
         )
 """
 
-    rendered = {
-        "__init__.py": "\"\"\"Case-local oracle package.\"\"\"\n",
-        "case_constants.py": constants_py,
-        "env_setup.py": env_setup_py,
-        "artifact_build.py": artifact_build_py,
-        "benchmark_prep.py": benchmark_prep_py,
-        "experiment_runs.py": experiment_runs_py,
-    }
-    return {name: rendered[name] for name in _TEMPLATE_FILENAMES}
+	rendered = {
+		"__init__.py": '"""Case-local oracle package."""\n',
+		"case_constants.py": constants_py,
+		"env_setup.py": env_setup_py,
+		"artifact_build.py": artifact_build_py,
+		"benchmark_prep.py": benchmark_prep_py,
+		"experiment_runs.py": experiment_runs_py,
+	}
+	return {name: rendered[name] for name in _TEMPLATE_FILENAMES}

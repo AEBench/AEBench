@@ -1,4 +1,5 @@
 """Oracle runtime infrastructure integration tests."""
+
 from __future__ import annotations
 
 import textwrap
@@ -9,18 +10,18 @@ import pytest
 
 from models import (
 	AgentResult,
-	CasePlan,
 	CaseConfig,
+	CasePlan,
 	OracleConfig,
 	OracleFailureMode,
 	OracleStatus,
 	PaperConfig,
 	PromptProfile,
 	RunResult,
-	TaskConfig,
-	RuntimeMode,
-	RuntimeInfo,
 	RuntimeConfig,
+	RuntimeInfo,
+	RuntimeMode,
+	TaskConfig,
 	TaskStatus,
 )
 from runtime.oracle_runner import DirectOracleRunner, SubprocessOracleRunner
@@ -92,7 +93,11 @@ def _make_case_spec(id: str = "fixture_case") -> CaseConfig:
 			allowed_tolerance="None.",
 		),
 		run=TaskConfig(id=id, runtime=RuntimeConfig(mode=RuntimeMode.LOCAL)),
-		paper=PaperConfig(url="https://example.com/paper.pdf", sha256="2717c4619708f534915e7b567feaa6a1001e1a5f782268e47e7dabdefb380de4", title="Example Paper"),
+		paper=PaperConfig(
+			url="https://example.com/paper.pdf",
+			sha256="2717c4619708f534915e7b567feaa6a1001e1a5f782268e47e7dabdefb380de4",
+			title="Example Paper",
+		),
 		oracle=OracleConfig(expected_score=4, failure_mode=OracleFailureMode.CONTINUE),
 	)
 

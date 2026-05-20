@@ -4,7 +4,9 @@ from jinja2 import Environment, StrictUndefined
 
 from models import PromptArgs, PromptBundle, PromptProfile, RuntimeMode
 
-_JINJA = Environment(undefined=StrictUndefined, trim_blocks=True, lstrip_blocks=True, keep_trailing_newline=True)
+_JINJA = Environment(
+	undefined=StrictUndefined, trim_blocks=True, lstrip_blocks=True, keep_trailing_newline=True
+)
 
 LOCAL_TIMEOUT_GUIDANCE = """TIMEOUT CONFIGURATION (CRITICAL):
 - Long-running commands are expected.
@@ -94,40 +96,52 @@ Reference files are available read-only at {{ refs_path or "/refs" }}.
 
 
 def build_prompt_bundle(context: PromptArgs) -> PromptBundle:
-    profile = _resolve_profile(context)
-    values = {
-        **context.model_dump(mode="json"),
-        "local_timeout_guidance": LOCAL_TIMEOUT_GUIDANCE,
-        "docker_timeout_guidance": _render(DOCKER_TIMEOUT_GUIDANCE, context),
-        "output_management_guidance": OUTPUT_MANAGEMENT_GUIDANCE,
-        "verify_rule": VERIFY_RULE,
-    }
-    docker = profile == PromptProfile.ARTIFACT_EVAL_DOCKER_V1
-    return PromptBundle(
-        profile=profile,
-        system_prompt=_render(DOCKER_SYSTEM_PROMPT_TEMPLATE if docker else LOCAL_SYSTEM_PROMPT_TEMPLATE, values),
-        initial_prompt=_render(DOCKER_INITIAL_PROMPT_TEMPLATE if docker else LOCAL_INITIAL_PROMPT_TEMPLATE, values),
-    )
+	profile = _resolve_profile(context)
+	values = {
+		**context.model_dump(mode="json"),
+		"local_timeout_guidance": LOCAL_TIMEOUT_GUIDANCE,
+		"docker_timeout_guidance": _render(DOCKER_TIMEOUT_GUIDANCE, context),
+		"output_management_guidance": OUTPUT_MANAGEMENT_GUIDANCE,
+		"verify_rule": VERIFY_RULE,
+	}
+	docker = profile == PromptProfile.ARTIFACT_EVAL_DOCKER_V1
+	return PromptBundle(
+		profile=profile,
+		system_prompt=_render(
+			DOCKER_SYSTEM_PROMPT_TEMPLATE if docker else LOCAL_SYSTEM_PROMPT_TEMPLATE, values
+		),
+		initial_prompt=_render(
+			DOCKER_INITIAL_PROMPT_TEMPLATE if docker else LOCAL_INITIAL_PROMPT_TEMPLATE, values
+		),
+	)
 
 
 def build_container_interactive_prompt() -> str:
-    return _render(DOCKER_INTERACTIVE_PROMPT_TEMPLATE, {"workspace_path": "/repo", "refs_path": "/refs"})
+	return _render(
+		DOCKER_INTERACTIVE_PROMPT_TEMPLATE, {"workspace_path": "/repo", "refs_path": "/refs"}
+	)
 
 
 def _resolve_profile(context: PromptArgs) -> PromptProfile:
-    profile = PromptProfile(context.prompt_profile)
-    if profile == PromptProfile.ARTIFACT_EVAL_V1:
-        return PromptProfile.ARTIFACT_EVAL_LOCAL_V1 if context.runtime_mode == RuntimeMode.LOCAL else PromptProfile.ARTIFACT_EVAL_DOCKER_V1
+	profile = PromptProfile(context.prompt_profile)
+	if profile == PromptProfile.ARTIFACT_EVAL_V1:
+		return (
+			PromptProfile.ARTIFACT_EVAL_LOCAL_V1
+			if context.runtime_mode == RuntimeMode.LOCAL
+			else PromptProfile.ARTIFACT_EVAL_DOCKER_V1
+		)
 
-    profile_runtime = {
-        PromptProfile.ARTIFACT_EVAL_LOCAL_V1: RuntimeMode.LOCAL,
-        PromptProfile.ARTIFACT_EVAL_DOCKER_V1: RuntimeMode.DOCKER,
-    }.get(profile)
-    if profile_runtime is not None and profile_runtime != context.runtime_mode:
-        raise ValueError(f"{profile_runtime.value} prompt profile cannot be used with runtime.mode='{context.runtime_mode.value}'")
-    return profile
+	profile_runtime = {
+		PromptProfile.ARTIFACT_EVAL_LOCAL_V1: RuntimeMode.LOCAL,
+		PromptProfile.ARTIFACT_EVAL_DOCKER_V1: RuntimeMode.DOCKER,
+	}.get(profile)
+	if profile_runtime is not None and profile_runtime != context.runtime_mode:
+		raise ValueError(
+			f"{profile_runtime.value} prompt profile cannot be used with runtime.mode='{context.runtime_mode.value}'"
+		)
+	return profile
 
 
 def _render(template: str, context: PromptArgs | dict[str, object]) -> str:
-    data = context.model_dump(mode="json") if isinstance(context, PromptArgs) else context
-    return _JINJA.from_string(template).render(**data).strip()
+	data = context.model_dump(mode="json") if isinstance(context, PromptArgs) else context
+	return _JINJA.from_string(template).render(**data).strip()

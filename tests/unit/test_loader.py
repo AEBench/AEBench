@@ -1,4 +1,5 @@
 """Case bundle loading and validation tests."""
+
 from __future__ import annotations
 
 import textwrap

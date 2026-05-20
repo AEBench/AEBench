@@ -32,15 +32,15 @@ LIVE_TRANSCRIPT_BASENAME = "agent_events.jsonl"
 LIVE_RENDERED_BASENAME = "agent_rendered.log"
 
 SUMMARY_INSTRUCTION = (
-    "\n\nAt the end, write a brief summary of what you did and the result to "
-    "{basename} in the artifact root so it can be included in the report."
+	"\n\nAt the end, write a brief summary of what you did and the result to "
+	"{basename} in the artifact root so it can be included in the report."
 )
 
 DEFAULT_TASK_TEMPLATE = (
-    "You are asked to follow the artifact instructions in {file_path} to set up, install, "
-    "build, and reproduce the results for this repository inside the benchmark-provided "
-    "execution environment. Execute all required verification steps and complete the task "
-    "without skipping long-running commands."
+	"You are asked to follow the artifact instructions in {file_path} to set up, install, "
+	"build, and reproduce the results for this repository inside the benchmark-provided "
+	"execution environment. Execute all required verification steps and complete the task "
+	"without skipping long-running commands."
 )
 
 LOG_OUTPUT_TRUNCATE_BYTES = 50_000

@@ -4,10 +4,10 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from evaluator.oracles import utils
 from evaluator.oracles.artifact_build_checks import BuildCommandCheck
 from evaluator.oracles.case_base import CaseOracleArtifactBuildBase
 
+from evaluator.oracles import utils
 
 _BUILD_COMMAND: tuple[str, ...] = ("make", "install")
 _BUILD_TIMEOUT_SECONDS = 3600.0
@@ -16,76 +16,75 @@ _BUILD_MODE_ENV = "AE_HERBIE_BUILD_MODE"
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class HerbieBinaryLocatedCheck(utils.BaseCheck):
-    """Fail if herbie binary is not on PATH or in ~/.racket/."""
+	"""Fail if herbie binary is not on PATH or in ~/.racket/."""
 
-    repo_root: "os.PathLike[str]"
-    executor: utils.RuntimeCheckExecutor | None = None
+	repo_root: "os.PathLike[str]"
+	executor: utils.RuntimeCheckExecutor | None = None
 
-    def check(self, *_args, **_kwargs) -> utils.CheckResult:
-        from pathlib import Path
+	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+		from pathlib import Path
 
-        resolved = utils.resolve_check_executable("herbie", executor=self.executor)
-        if resolved is not None:
-            return utils.CheckResult.success()
+		resolved = utils.resolve_check_executable("herbie", executor=self.executor)
+		if resolved is not None:
+			return utils.CheckResult.success()
 
-        rkt_path = Path(self.repo_root) / "src" / "herbie.rkt"
-        if rkt_path.is_file():
-            return utils.CheckResult.success()
+		rkt_path = Path(self.repo_root) / "src" / "herbie.rkt"
+		if rkt_path.is_file():
+			return utils.CheckResult.success()
 
-        home = Path.home()
-        for candidate in home.glob(".racket/*/bin/herbie"):
-            if candidate.is_file():
-                return utils.CheckResult.success()
+		home = Path.home()
+		for candidate in home.glob(".racket/*/bin/herbie"):
+			if candidate.is_file():
+				return utils.CheckResult.success()
 
-        return utils.CheckResult.failure(
-            "herbie binary not found on PATH, in ~/.racket/*/bin/, "
-            "and src/herbie.rkt not found in repo"
-        )
+		return utils.CheckResult.failure(
+			"herbie binary not found on PATH, in ~/.racket/*/bin/, "
+			"and src/herbie.rkt not found in repo"
+		)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class InvalidBuildModeCheck(utils.BaseCheck):
-    mode: str
+	mode: str
 
-    def check(self, *_args, **_kwargs) -> utils.CheckResult:
-        return utils.CheckResult.failure(
-            f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
-        )
+	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+		return utils.CheckResult.failure(
+			f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
+		)
 
 
 class OracleArtifactBuild(CaseOracleArtifactBuildBase):
+	@staticmethod
+	def _build_mode() -> str:
+		raw = os.environ.get(_BUILD_MODE_ENV, "verify").strip().lower()
+		return raw or "verify"
 
-    @staticmethod
-    def _build_mode() -> str:
-        raw = os.environ.get(_BUILD_MODE_ENV, "verify").strip().lower()
-        return raw or "verify"
+	def requirements(self) -> Sequence[utils.BaseCheck]:
+		repo_root = self.paths.workspace_dir
 
-    def requirements(self) -> Sequence[utils.BaseCheck]:
-        repo_root = self.paths.workspace_dir
+		mode = self._build_mode()
 
-        mode = self._build_mode()
+		if mode == "command":
+			return (
+				BuildCommandCheck(
+					name="herbie_make_install",
+					cwd=repo_root,
+					cmd=_BUILD_COMMAND,
+					timeout_seconds=_BUILD_TIMEOUT_SECONDS,
+				),
+			)
 
-        if mode == "command":
-            return (
-                BuildCommandCheck(
-                    name="herbie_make_install",
-                    cwd=repo_root,
-                    cmd=_BUILD_COMMAND,
-                    timeout_seconds=_BUILD_TIMEOUT_SECONDS,
-                ),
-            )
+		if mode == "verify":
+			return (
+				HerbieBinaryLocatedCheck(
+					name="herbie_binary_located",
+					repo_root=repo_root,
+				),
+			)
 
-        if mode == "verify":
-            return (
-                HerbieBinaryLocatedCheck(
-                    name="herbie_binary_located",
-                    repo_root=repo_root,
-                ),
-            )
-
-        return (
-            InvalidBuildModeCheck(
-                name="build_mode_valid",
-                mode=mode,
-            ),
-        )
+		return (
+			InvalidBuildModeCheck(
+				name="build_mode_valid",
+				mode=mode,
+			),
+		)
