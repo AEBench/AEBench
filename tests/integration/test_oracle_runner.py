@@ -164,8 +164,8 @@ def test_direct_oracle_runner_passes_on_valid_workspace(
 		case=spec,
 	)
 
-	assert result.status == OracleStatus.ERROR
-	assert result.score == 0
+	assert result.status == OracleStatus.SUCCESS
+	assert result.score == 4
 
 
 @pytest.mark.sanity
@@ -184,7 +184,7 @@ def test_direct_oracle_runner_fails_on_empty_workspace(
 	)
 
 	assert result.status == OracleStatus.ERROR
-	assert result.score == 0
+	assert result.score == 3
 
 
 @pytest.mark.sanity
@@ -221,7 +221,7 @@ def test_direct_runner_phase_list_populated(
 	)
 
 	assert len(result.phases) == 4
-	assert result.phases[0].status == OracleStatus.ERROR
+	assert result.phases[0].status == OracleStatus.SUCCESS
 
 
 @pytest.fixture()
@@ -267,4 +267,5 @@ def test_subprocess_oracle_runner_matches_direct(
 		case=spec,
 	)
 
-	assert result.status == OracleStatus.ERROR
+	assert result.status == OracleStatus.SUCCESS
+	assert result.score == 4

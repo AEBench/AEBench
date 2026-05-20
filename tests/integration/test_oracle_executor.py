@@ -135,11 +135,10 @@ def test_all_oracle_classes_pass(tmp_path: Path) -> None:
 
 	result = run_case(case_dir, tmp_path)
 
-	assert result.status == OracleStatus.ERROR
-	assert result.score == 0
+	assert result.status == OracleStatus.SUCCESS
+	assert result.score == 4
 	assert len(result.phases) == 4
-	assert result.phases[0].status == OracleStatus.ERROR
-	assert "extra_forbidden" in (result.phases[0].error or "")
+	assert all(phase.status == OracleStatus.SUCCESS for phase in result.phases)
 
 
 def test_failed_oracle_class_marks_result_error(tmp_path: Path) -> None:
@@ -157,8 +156,8 @@ def test_failed_oracle_class_marks_result_error(tmp_path: Path) -> None:
 	result = run_case(case_dir, tmp_path)
 
 	assert result.status == OracleStatus.ERROR
-	assert result.score == 0
-	assert result.phases[0].status == OracleStatus.ERROR
+	assert result.score == 1
+	assert result.phases[0].status == OracleStatus.SUCCESS
 
 
 def test_continue_mode_runs_remaining_oracle_classes(tmp_path: Path) -> None:
@@ -177,8 +176,12 @@ def test_continue_mode_runs_remaining_oracle_classes(tmp_path: Path) -> None:
 	result = run_case(case_dir, tmp_path)
 
 	assert result.status == OracleStatus.ERROR
-	assert result.score == 0
-	assert result.phases[0].status == OracleStatus.ERROR
+	assert result.score == 3
+	assert len(result.phases) == 4
+	assert result.phases[0].status == OracleStatus.SUCCESS
+	assert result.phases[1].status == OracleStatus.ERROR
+	assert result.phases[2].status == OracleStatus.SUCCESS
+	assert result.phases[3].status == OracleStatus.SUCCESS
 
 
 def test_oracle_result_written_to_disk(tmp_path: Path) -> None:
