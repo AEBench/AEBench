@@ -4,11 +4,11 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from evaluator.oracles import utils
 from evaluator.oracles.artifact_build_checks import BuildCommandCheck
 from evaluator.oracles.case_base import CaseOracleArtifactBuildBase
 from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
 
-from evaluator.oracles import utils
 
 _BUILD_MODE_ENV = "AE_PCS_BUILD_MODE"
 _BUILD_TIMEOUT_SECONDS = 600.0
@@ -23,7 +23,7 @@ class PythonPackageImportableCheck(utils.BaseCheck):
 	package_name: str
 	executor: utils.RuntimeCheckExecutor | None = None
 
-	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
 		try:
 			proc = utils.run_check_process_capture(
 				cmd=("python3", "-c", f"import {self.package_name}"),
@@ -56,7 +56,7 @@ class PythonPackageImportableCheck(utils.BaseCheck):
 class InvalidBuildModeCheck(utils.BaseCheck):
 	mode: str
 
-	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
 		return utils.CheckResult.failure(
 			f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
 		)

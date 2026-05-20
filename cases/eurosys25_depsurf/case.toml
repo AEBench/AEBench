@@ -1,0 +1,48 @@
+id = "eurosys25_depsurf"
+
+[case_brief]
+core_claim = "Build DepSurf, stage its benchmark datasets, and produce the expected summary result tables for the paper's compatibility analysis workflow."
+acceptable_evidence = "The bundle oracle accepts the build artifacts, dataset layout, and parseable result CSV files under results/."
+allowed_tolerance = "Exact numeric equality is not required in this bundle; result tables must remain structurally valid and suitable for comparison under the artifact's intended tolerance."
+
+[paper]
+url = "https://depsurf.github.io/assets/paper.pdf"
+sha256 = "74711a898ffcc8bfed799410334506dbd07034b671ec868d7e2aa80f1f6e2ece"
+title = "Revealing the Unstable Foundations of eBPF-Based Kernel Extensions"
+version = "EuroSys 2025 project-page PDF"
+venue = "EuroSys 2025"
+
+[run]
+id = "eurosys25_depsurf"
+
+[run.instructions]
+path = "README.md"
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 345600000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = false
+compose = false
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+placeholder = false
+notes = "Bundle-native oracle migrated from benchmark workspace data; result validation currently checks parseable benchmark tables because no published reference CSV set is bundled."
+
+[upstream]
+source_type = "git"
+url = "https://github.com/ShawnZhong/DepSurf.git"
+ref = "e877bd88d6b27fcf51fa0f5de921b5c13de1dc3d"
+requested_ref = "eurosys25"
+resolved_at = "2026-05-01T11:06:44+00:00"
+artifact_mode = "hybrid"
+overlay_artifact = true

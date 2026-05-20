@@ -1,0 +1,39 @@
+id = "eurosys25_egwalker"
+
+[case_brief]
+core_claim = "Build eg-walker, stage the referenced datasets, and reproduce the benchmark timing outputs used to evaluate the paper's editing workloads."
+acceptable_evidence = "The oracle accepts the required build artifacts, dataset file sizes, and timings.json with strong correlation against bundled reference timings."
+allowed_tolerance = "Timing values may vary across environments, but reproduced timings must preserve the reference trend strongly enough to achieve Pearson correlation >= 0.75."
+
+[paper]
+url = "https://www.repository.cam.ac.uk/bitstreams/5b788146-546f-46f7-a40c-fe8bb94034f2/download"
+sha256 = "eee09e58d6123f9c64a48cc4ae3eb94340e59df77e702630ab54ce43329851e8"
+title = "Collaborative Text Editing with Eg-walker: Better, Faster, Smaller"
+version = "Accepted version hosted by the Cambridge repository"
+venue = "EuroSys 2025"
+
+[run]
+id = "eurosys25_egwalker"
+instructions_path = "README.md"
+prompt_profile = "artifact-eval-v1"
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 345600000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = false
+compose = false
+
+[oracle]
+expected_score = 4
+failure_mode = "fail_fast"
+notes = "Class-based oracle checks build outputs, dataset files, and timing similarity."
+
+[upstream]
+source_type = "git"
+url = "https://github.com/josephg/egwalker-paper.git"
+ref = "4d9bef55e4f2e3b3b8b0efe8f91cd35d34ed35a8"
+resolved_at = "2026-03-10T03:23:24.012772+00:00"

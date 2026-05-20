@@ -1,0 +1,21 @@
+{
+  "benchmarks": [
+    "mysql",
+    "postgres",
+    "sqlite",
+    "clickhouse",
+    "tidb"
+  ],
+  "required_files": [
+    "Dockerfile",
+    "test_setup.sh",
+    "run_test.sh"
+  ],
+  "versions": {
+    "mysql": "8.0.34",
+    "postgres": "3f1aaaa",
+    "sqlite": "20e09ba",
+    "clickhouse": "30464b9",
+    "tidb": "f5ca27e"
+  }
+}

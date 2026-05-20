@@ -1,0 +1,168 @@
+id = "osdi25_bpftime"
+
+[case_brief]
+core_claim = "Build bpftime userspace eBPF runtime, run micro-benchmarks, and verify the published Table 3 kernel/userspace speedup ratios."
+acceptable_evidence = "Build succeeds with 'make benchmark', and the measured kernel/userspace ratios satisfy the paper-derived thresholds encoded in the experiment-run oracle checks. hash_map_lookup is tracked as an optional tradeoff check."
+allowed_tolerance = "Mandatory checks must retain at least 80% of the Table 3 paper ratio, while the optional hash_map_lookup tradeoff allows up to 20% regression. per_cpu map operations are excluded because the paper identifies them as a userspace weakness."
+
+[paper]
+url = "https://www.usenix.org/system/files/osdi25-zheng-yusheng.pdf"
+sha256 = "2717c4619708f534915e7b567feaa6a1001e1a5f782268e47e7dabdefb380de4"
+title = "Extending Applications Safely and Efficiently"
+version = "USENIX OSDI 2025 proceedings version"
+venue = "OSDI 2025"
+
+[run]
+id = "osdi25_bpftime"
+
+[run.instructions]
+path = "README.md"
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 14400000
+gpu = false
+interactive = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[run.artifact_requirements]
+docker = false
+compose = false
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "continue"
+notes = "Micro-benchmark focused (Table 3). Paper reference ratios are loaded from a case-private oracle data file, while tolerance remains in this manifest. hash_map_lookup is retained as an optional tradeoff check. Application benchmarks (nginx, redis, deepflow, fuse, sslsniff, syscount) are not covered."
+
+[[oracle.env_setup.checks]]
+type = "version"
+name = "gcc"
+cmd = ["gcc", "--version"]
+min_version = [12, 0, 0]
+
+[[oracle.env_setup.checks]]
+type = "version"
+name = "clang"
+cmd = ["clang", "--version"]
+min_version = [16, 0, 0]
+
+[[oracle.env_setup.checks]]
+type = "version"
+name = "cmake"
+cmd = ["cmake", "--version"]
+min_version = [3, 15, 0]
+
+[[oracle.env_setup.checks]]
+type = "version"
+name = "python3"
+cmd = ["python3", "--version"]
+min_version = [3, 8, 0]
+
+[[oracle.env_setup.checks]]
+type = "version"
+name = "llvm-strip"
+cmd = ["llvm-strip", "--version"]
+min_version = [16, 0, 0]
+optional = true
+
+[[oracle.artifact_build.checks]]
+type = "path"
+name = "build_dir"
+path = "{workspace_dir}/build"
+path_type = "directory"
+
+[[oracle.artifact_build.checks]]
+type = "path"
+name = "syscall_server_so"
+path = "{workspace_dir}/build/runtime/syscall-server/libbpftime-syscall-server.so"
+path_type = "file"
+
+[[oracle.artifact_build.checks]]
+type = "path"
+name = "agent_so"
+path = "{workspace_dir}/build/runtime/agent/libbpftime-agent.so"
+path_type = "file"
+
+[[oracle.benchmark_prep.checks]]
+type = "path"
+name = "test_victim"
+path = "{workspace_dir}/benchmark/test"
+path_type = "file"
+
+[[oracle.benchmark_prep.checks]]
+type = "path"
+name = "uprobe_loader"
+path = "{workspace_dir}/benchmark/uprobe/uprobe"
+path_type = "file"
+
+[[oracle.benchmark_prep.checks]]
+type = "command"
+name = "python_numpy"
+cmd = ["python3", "-c", "import numpy"]
+cwd = "{workspace_dir}"
+
+[[oracle.experiment_runs.checks]]
+type = "path"
+name = "benchmark_results"
+path = "{workspace_dir}/benchmark/uprobe/benchmark-output.json"
+path_type = "file"
+
+[[oracle.experiment_runs.checks]]
+type = "expr"
+name = "uprobe_speedup_meets_paper"
+expr = "obs.kernel_uprobe[\"__bench_uprobe\"].avg / obs.userspace_uprobe[\"__bench_uprobe\"].avg >= ref.ops[\"__bench_uprobe\"] * 0.8"
+observed = "{workspace_dir}/benchmark/uprobe/benchmark-output.json"
+reference = "{case_dir}/speedup_ratios.paper.json"
+
+[[oracle.experiment_runs.checks]]
+type = "expr"
+name = "uretprobe_speedup_meets_paper"
+expr = "obs.kernel_uprobe[\"__bench_uretprobe\"].avg / obs.userspace_uprobe[\"__bench_uretprobe\"].avg >= ref.ops[\"__bench_uretprobe\"] * 0.8"
+observed = "{workspace_dir}/benchmark/uprobe/benchmark-output.json"
+reference = "{case_dir}/speedup_ratios.paper.json"
+
+[[oracle.experiment_runs.checks]]
+type = "expr"
+name = "read_speedup_meets_paper"
+expr = "obs.kernel_uprobe[\"__bench_read\"].avg / obs.userspace_uprobe[\"__bench_read\"].avg >= ref.ops[\"__bench_read\"] * 0.8"
+observed = "{workspace_dir}/benchmark/uprobe/benchmark-output.json"
+reference = "{case_dir}/speedup_ratios.paper.json"
+
+[[oracle.experiment_runs.checks]]
+type = "expr"
+name = "write_speedup_meets_paper"
+expr = "obs.kernel_uprobe[\"__bench_write\"].avg / obs.userspace_uprobe[\"__bench_write\"].avg >= ref.ops[\"__bench_write\"] * 0.8"
+observed = "{workspace_dir}/benchmark/uprobe/benchmark-output.json"
+reference = "{case_dir}/speedup_ratios.paper.json"
+
+[[oracle.experiment_runs.checks]]
+type = "expr"
+name = "hash_map_update_meets_paper"
+expr = "obs.kernel_uprobe[\"__bench_hash_map_update\"].avg / obs.userspace_uprobe[\"__bench_hash_map_update\"].avg >= ref.ops[\"__bench_hash_map_update\"] * 0.8"
+observed = "{workspace_dir}/benchmark/uprobe/benchmark-output.json"
+reference = "{case_dir}/speedup_ratios.paper.json"
+
+[[oracle.experiment_runs.checks]]
+type = "expr"
+name = "hash_map_lookup_meets_paper"
+expr = "obs.kernel_uprobe[\"__bench_hash_map_lookup\"].avg / obs.userspace_uprobe[\"__bench_hash_map_lookup\"].avg <= ref.ops[\"__bench_hash_map_lookup\"] * 1.2"
+observed = "{workspace_dir}/benchmark/uprobe/benchmark-output.json"
+reference = "{case_dir}/speedup_ratios.paper.json"
+optional = true
+
+[[oracle.experiment_runs.checks]]
+type = "expr"
+name = "hash_map_delete_meets_paper"
+expr = "obs.kernel_uprobe[\"__bench_hash_map_delete\"].avg / obs.userspace_uprobe[\"__bench_hash_map_delete\"].avg >= ref.ops[\"__bench_hash_map_delete\"] * 0.8"
+observed = "{workspace_dir}/benchmark/uprobe/benchmark-output.json"
+reference = "{case_dir}/speedup_ratios.paper.json"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/eunomia-bpf/bpftime.git"
+ref = "8a359fc86438b8b3b0b58e38cff0b190c7e68893"
+notes = "OSDI'25. Must use 'make benchmark' not 'make release'."

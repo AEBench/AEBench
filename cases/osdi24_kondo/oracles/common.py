@@ -4,6 +4,7 @@ import csv
 import json
 from pathlib import Path
 
+
 PROTOCOLS: tuple[str, ...] = (
 	"clientServer",
 	"ringLeaderElection",

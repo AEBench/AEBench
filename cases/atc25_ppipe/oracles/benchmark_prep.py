@@ -4,9 +4,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles.case_base import CaseOracleBenchmarkPrepBase
-
 from evaluator.oracles import utils
+from evaluator.oracles.case_base import CaseOracleBenchmarkPrepBase
 
 from .common import NonEmptyDirectoryCheck
 

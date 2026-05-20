@@ -2,15 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from evaluator.oracles import utils
 from evaluator.oracles.case_base import CaseOracleEnvSetupBase
 from evaluator.oracles.env_setup_checks import (
 	DependencyVersionCheck,
 	FilesystemPathCheck,
 	PathType,
-	VersionCompare,
 )
-
-from evaluator.oracles import utils
 
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
@@ -21,21 +19,18 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 			DependencyVersionCheck(
 				name="racket",
 				cmd=("racket", "--version"),
-				required_version=(8, 0, 0),
-				compare=VersionCompare.GEQ,
+				min_version=(8, 0, 0),
 			),
 			DependencyVersionCheck(
 				name="rustc",
 				cmd=("rustc", "--version"),
-				required_version=(1, 60, 0),
-				compare=VersionCompare.GEQ,
+				min_version=(1, 60, 0),
 				optional=True,
 			),
 			DependencyVersionCheck(
 				name="make",
 				cmd=("make", "--version"),
-				required_version=(0, 0, 0),
-				compare=VersionCompare.GEQ,
+				min_version=(0, 0, 0),
 				optional=True,
 			),
 			FilesystemPathCheck(

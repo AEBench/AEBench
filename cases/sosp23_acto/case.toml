@@ -1,0 +1,48 @@
+id = "sosp23_acto"
+
+[case_brief]
+core_claim = "Build ACTO and reproduce the reference output tables used to summarize operator bugs and test-oracle behavior."
+acceptable_evidence = "The bundle oracle accepts the compiled ACTO helper libraries together with table5.txt through table8.txt matching the bundled reference rows."
+allowed_tolerance = "The reproduced table rows and totals must match the bundled reference content exactly for the checked outputs."
+
+[paper]
+url = "https://raw.githubusercontent.com/xlab-uiuc/acto/main/docs/acto-paper_sosp2023.pdf"
+sha256 = "67cb96570d7f688b2f49997a1cf65a2334b8db87164640feaf9488d68b6b9fd4"
+title = "Acto: Automatic End-to-End Testing for Operation Correctness of Cloud System Management"
+version = "SOSP 2023 upstream repository PDF"
+venue = "SOSP 2023"
+
+[run]
+id = "sosp23_acto"
+
+[run.instructions]
+path = "README.md"
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 345600000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = true
+compose = false
+
+[oracle]
+expected_score = 2
+phases = ["env_setup", "artifact_build"]
+score_mode = "phase_count"
+placeholder = false
+notes = "Bundle-native oracle migrated from benchmark workspace data."
+
+[upstream]
+source_type = "git"
+url = "https://github.com/xlab-uiuc/acto.git"
+ref = "ce5b80a87b467dc0689fc75ff0b69d09e1a3c9d2"
+requested_ref = "sosp-ae"
+resolved_at = "2026-05-01T11:06:44+00:00"
+artifact_mode = "hybrid"
+overlay_artifact = true

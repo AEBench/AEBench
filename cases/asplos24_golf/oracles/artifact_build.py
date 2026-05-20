@@ -5,11 +5,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from evaluator.oracles import utils
 from evaluator.oracles.artifact_build_checks import BuildCommandCheck
 from evaluator.oracles.case_base import CaseOracleArtifactBuildBase
 from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
 
-from evaluator.oracles import utils
 
 _BUILD_MODE_ENV = "AE_GOLF_BUILD_MODE"
 _DOCKER_IMAGE = "golf"
@@ -27,7 +27,7 @@ class DockerImageExistsCheck(utils.BaseCheck):
 
 	image_name: str
 
-	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
 		import subprocess
 
 		result = subprocess.run(
@@ -47,7 +47,7 @@ class DockerImageExistsCheck(utils.BaseCheck):
 class InvalidBuildModeCheck(utils.BaseCheck):
 	mode: str
 
-	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
 		return utils.CheckResult.failure(
 			f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
 		)

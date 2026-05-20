@@ -1,15 +1,21 @@
 id = "asplos25_herbie"
 
 [case_brief]
-core_claim = ""
-acceptable_evidence = ""
+core_claim = "Build Herbie, run the floating-point accuracy benchmarks, and reproduce the end-to-end error improvements reported in the paper."
+acceptable_evidence = "The oracle accepts a results.json whose test entries show Herbie reduces floating-point error (end ≤ start), whose benchmark count matches the reference, and whose start/end error distributions correlate with bundled reference data."
 allowed_tolerance = "Results may vary across environments but must preserve the reference trend."
+
+[paper]
+title = "Automatically Improving Accuracy for Floating Point Expressions"
+venue = "PLDI 2015"
+url = "https://herbie.uwplse.org/pldi15-paper.pdf"
+sha256 = "e9642512aa5bbb61db322367708e005ee16213c57d260d1739d89448db82c3ee"
 
 [run]
 id = "asplos25_herbie"
 
 [run.instructions]
-path = "herbie/README.md"
+path = "README.md"
 
 [run.runtime]
 mode = "docker"
@@ -29,6 +35,7 @@ placeholder = false
 
 [upstream]
 source_type = "git"
-url = ""
-ref = ""
-resolved_at = "2026-04-11T02:00:16.331227+00:00"
+url = "https://github.com/herbie-fp/herbie"
+ref = "bc2ffceea037e01fbff58f5895849dbf3bbdbf9e"
+requested_ref = "arith25"
+resolved_at = "2026-05-01T11:06:44+00:00"

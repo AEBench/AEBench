@@ -1,0 +1,23 @@
+{
+  "source": {
+    "paper": "bpftime: userspace eBPF runtime",
+    "venue": "OSDI 2025",
+    "table": "Table 3",
+    "reference_hardware": "Intel Xeon Gold 5418Y (24 cores, 2.0GHz, 256GB DDR5)"
+  },
+  "metric": "kernel_uprobe_avg / userspace_uprobe_avg",
+  "ops": {
+    "__bench_uprobe": 13.48,
+    "__bench_uretprobe": 16.14,
+    "__bench_read": 15.64,
+    "__bench_write": 17.17,
+    "__bench_hash_map_update": 2.13,
+    "__bench_hash_map_lookup": 0.44,
+    "__bench_hash_map_delete": 2.15
+  },
+  "notes": [
+    "Values are extracted from the paper/artifact reference only.",
+    "A ratio above 1 means bpftime is faster; below 1 means kernel uprobe is faster.",
+    "__bench_hash_map_lookup is the one paper-reported operation where kernel uprobe wins."
+  ]
+}

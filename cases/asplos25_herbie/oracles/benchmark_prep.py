@@ -5,12 +5,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles.case_base import CaseOracleBenchmarkPrepBase
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
-
 from evaluator.oracles import utils
 
 _log = logging.getLogger(__name__)
+from evaluator.oracles.case_base import CaseOracleBenchmarkPrepBase
+from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
+
 
 _MIN_BENCH_FPCORE_FILES = 30
 _MIN_HAMMING_FPCORE_FILES = 4
@@ -23,7 +23,7 @@ class FPCoreBenchmarkCheck(utils.BaseCheck):
 	path: Path
 	min_count: int
 
-	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
 		if not self.path.is_dir():
 			return utils.CheckResult.failure(f"benchmark directory does not exist: {self.path}")
 

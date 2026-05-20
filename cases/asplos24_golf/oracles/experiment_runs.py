@@ -7,10 +7,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from evaluator.oracles import utils
 from evaluator.oracles.case_base import CaseOracleExperimentRunsBase
 from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
-
-from evaluator.oracles import utils
 
 _MIN_DETECTION_RATE = 90.0
 _EXPECTED_GO_INSTRUCTIONS = 121
@@ -94,7 +93,7 @@ class AggregatedDetectionRateCheck(utils.BaseCheck):
 	results_path: Path
 	min_rate: float
 
-	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
 		try:
 			text = self.results_path.read_text(encoding="utf-8")
 		except OSError as exc:
@@ -122,7 +121,7 @@ class NoCgoExamplesCheck(utils.BaseCheck):
 
 	results_path: Path
 
-	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
 		try:
 			text = self.results_path.read_text(encoding="utf-8")
 		except OSError as exc:
@@ -145,7 +144,7 @@ class TotalGoInstructionsCheck(utils.BaseCheck):
 	results_path: Path
 	expected_count: int
 
-	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
 		try:
 			text = self.results_path.read_text(encoding="utf-8")
 		except OSError as exc:
@@ -182,7 +181,7 @@ class PerfCSVStructureCheck(utils.BaseCheck):
 		"CPU utilization ON",
 	)
 
-	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
 		try:
 			text = self.csv_path.read_text(encoding="utf-8").strip()
 		except OSError as exc:

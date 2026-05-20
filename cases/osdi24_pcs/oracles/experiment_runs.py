@@ -6,6 +6,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from evaluator.oracles import utils
+
+_log = logging.getLogger(__name__)
 from evaluator.oracles.case_base import CaseOracleExperimentRunsBase
 from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
 from evaluator.oracles.experiment_runs_checks import (
@@ -13,9 +16,6 @@ from evaluator.oracles.experiment_runs_checks import (
 	SimilarityMetric,
 )
 
-from evaluator.oracles import utils
-
-_log = logging.getLogger(__name__)
 
 _POLICY_MAP_TO_REF = {
 	"AFS": "AFS",
@@ -129,7 +129,7 @@ class NonEmptyFileCheck(utils.BaseCheck):
 
 	path: Path
 
-	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
 		if not self.path.is_file():
 			return utils.CheckResult.failure(f"file missing: {self.path}")
 		try:
@@ -151,7 +151,7 @@ class SimulationMetricCorrelationCheck(utils.BaseCheck):
 	threshold: float
 	normalize_jct: bool = False
 
-	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
 		try:
 			ref_data = _load_reference_csv(self.reference_path)
 		except (OSError, ValueError) as exc:

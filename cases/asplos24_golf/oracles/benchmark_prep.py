@@ -4,10 +4,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from evaluator.oracles import utils
 from evaluator.oracles.case_base import CaseOracleBenchmarkPrepBase
 from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
 
-from evaluator.oracles import utils
 
 _MIN_GOKER_TESTS = 50
 _MIN_CGO_TESTS = 3
@@ -21,7 +21,7 @@ class DirectoryContainsTestCases(utils.BaseCheck):
 	path: Path
 	min_count: int
 
-	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
 		if not self.path.is_dir():
 			return utils.CheckResult.failure(f"directory does not exist: {self.path}")
 

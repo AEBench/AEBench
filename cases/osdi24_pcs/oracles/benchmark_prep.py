@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from evaluator.oracles import utils
 from evaluator.oracles.case_base import CaseOracleBenchmarkPrepBase
 from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
-
-from evaluator.oracles import utils
 
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):

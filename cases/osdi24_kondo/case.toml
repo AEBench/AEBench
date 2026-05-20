@@ -1,12 +1,18 @@
-id = "Kondo"
+id = "osdi24_kondo"
 
 [case_brief]
-core_claim = ""
-acceptable_evidence = ""
-allowed_tolerance = "Results may vary across environments but must preserve the reference trend."
+core_claim = "Set up the Kondo artifact and reproduce the SLOC statistics for the evaluated distributed protocols, showing that invariant taxonomy reduces proof size."
+acceptable_evidence = "The oracle accepts a sloc.csv whose sync_spec, manual_proof, and sync_proof line counts for each evaluated protocol match the bundled reference values within ±5 lines."
+allowed_tolerance = "SLOC counts must stay within ±5 lines of reference for each protocol and field."
+
+[paper]
+title = "Inductive Invariants That Spark Joy: Using Invariant Taxonomies to Streamline Distributed Protocol Proofs"
+venue = "OSDI 2024"
+url = "https://www.usenix.org/system/files/osdi24-zhang-nuda.pdf"
+sha256 = "9135ec91c851760ba309aba74e2f75d3335ffad785ddfcee2ff6d4f418865e7d"
 
 [run]
-id = "Kondo"
+id = "osdi24_kondo"
 
 [run.instructions]
 path = "README.md"

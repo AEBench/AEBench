@@ -1,12 +1,18 @@
-id = "PCS"
+id = "osdi24_pcs"
 
 [case_brief]
-core_claim = ""
-acceptable_evidence = ""
+core_claim = "Build PCS, run the scheduling simulator across multiple workloads and policies, and reproduce the JCT and prediction error metrics reported in the paper."
+acceptable_evidence = "The oracle accepts result CSVs for each scheduling policy and workload whose average JCT and prediction error distributions correlate with bundled reference data at the required Pearson similarity threshold."
 allowed_tolerance = "Results may vary across environments but must preserve the reference trend."
 
+[paper]
+title = "PCS: Predictive Cluster Scheduling"
+venue = "OSDI 2024"
+url = "https://www.usenix.org/system/files/osdi24-bin-faisal.pdf"
+sha256 = "9eab29c751d48c89fc992596dc055c756a1db0268d7a52629d5ace3c243ec926"
+
 [run]
-id = "PCS"
+id = "osdi24_pcs"
 
 [run.instructions]
 path = "README.md"
@@ -30,5 +36,6 @@ placeholder = false
 [upstream]
 source_type = "git"
 url = "https://github.com/abdullahfsm/PCS"
-ref = "762ba599f85968b6be5ed35c9ced40da93f87071"
-resolved_at = "2026-04-11T02:11:09.980616+00:00"
+ref = "2f8a87c629f606d1079bca23b46c70b4a7df41e1"
+requested_ref = "osdi2024-artifact"
+resolved_at = "2026-05-01T11:06:44+00:00"

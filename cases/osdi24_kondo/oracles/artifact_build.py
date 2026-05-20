@@ -4,11 +4,11 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
+from evaluator.oracles import utils
 from evaluator.oracles.artifact_build_checks import BuildCommandCheck
 from evaluator.oracles.case_base import CaseOracleArtifactBuildBase
 from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
 
-from evaluator.oracles import utils
 
 _BUILD_MODE_ENV = "AE_KONDO_BUILD_MODE"
 _BUILD_TIMEOUT_SECONDS = 600.0

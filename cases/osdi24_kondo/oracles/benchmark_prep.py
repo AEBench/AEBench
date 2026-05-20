@@ -4,10 +4,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from evaluator.oracles import utils
 from evaluator.oracles.case_base import CaseOracleBenchmarkPrepBase
 from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
-
-from evaluator.oracles import utils
 
 from .common import PROTOCOLS
 
@@ -24,7 +23,7 @@ class ProtocolSourceFilesCheck(utils.BaseCheck):
 
 	protos_dir: Path
 
-	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
 		missing: list[str] = []
 
 		for protocol in PROTOCOLS:
@@ -65,7 +64,7 @@ class AutogenFilesCheck(utils.BaseCheck):
 
 	protos_dir: Path
 
-	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
 		missing: list[str] = []
 		for protocol in PROTOCOLS:
 			autogen = self.protos_dir / protocol / "async-kondo" / _AUTOGEN_FILE

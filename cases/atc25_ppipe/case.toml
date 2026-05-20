@@ -1,12 +1,18 @@
-id = "PPipe"
+id = "atc25_ppipe"
 
 [case_brief]
-core_claim = ""
-acceptable_evidence = ""
+core_claim = "Build the PPipe MILP scheduler, run planning for the benchmark video analytics workloads, and reproduce the throughput characteristics of the generated execution plans."
+acceptable_evidence = "The oracle accepts plan JSON files for each benchmark workload whose per-plan throughput values correlate with the bundled reference plans at the required Pearson similarity threshold."
 allowed_tolerance = "Results may vary across environments but must preserve the reference trend."
 
+[paper]
+title = "PPipe: Efficient Video Analytics Serving on Heterogeneous GPU Clusters via Pool-Based Pipeline Parallelism"
+venue = "USENIX ATC 2025"
+url = "https://arxiv.org/pdf/2507.18748"
+sha256 = "dcd9018c6473e7976325309c16b6a2ca17f847274163d8aaa2d26d744f4ee787"
+
 [run]
-id = "PPipe"
+id = "atc25_ppipe"
 
 [run.instructions]
 path = "README.md"

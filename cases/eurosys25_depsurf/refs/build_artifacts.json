@@ -1,0 +1,5 @@
+[
+  "depsurf/btf/bpftool/src/bpftool",
+  "data/software/bcc/libbpf-tools/.output",
+  "data/software/tracee/dist/tracee.bpf.o"
+]

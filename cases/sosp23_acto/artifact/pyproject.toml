@@ -1,0 +1,103 @@
+[project]
+name = "acto"
+description = "Push-Button End-to-End Testing of Kubernetes Operators/Controllers"
+requires-python = ">=3.11,<3.12"
+version = "0.1.0"
+readme = "README.md"
+license = { file = "LICENSE" }
+dependencies = [
+    "deepdiff",
+    "kubernetes==31.0.0",
+    "exrex",
+    "jsonschema",
+    "jsonpatch",
+    "pandas",
+    "PyYAML",
+    "ruamel.yaml",
+    "requests",
+    "pydantic",
+    "pytest",
+    "urllib3>=2.2.3",     # security fix
+    "requests>=2.32.3",   # security fix
+    "idna>=3.10",         # security fix
+    "certifi>=2024.8.30", # security fix
+]
+
+[project.optional-dependencies]
+dev = [
+    "docker",
+    "prometheus_client",
+    "pytest-cov",
+    "tabulate",
+    "pip-tools",
+    "pre-commit",
+    "ansible-core>=2.17.5",
+    "jinja2>=3.1.4",
+    "isort",
+    "mypy",
+    "black>=24.10.0",
+    "pylint",
+    "jsonref",
+    "cryptography>=43.0.1", # security fix
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["acto"]
+
+[tool.black]
+line-length = 80
+target-version = ["py310", "py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 80
+skip = ["__init__.py"]
+
+[tool.coverage.run]
+relative_files = true
+
+[tool.pytest.ini_options]
+markers = [
+    "local: mark a test to run on a local machine",
+    "single_bug_reproduction: mark a test to reproduce a single random bug",
+    "all_bug_reproduction: mark a test to reproduce all bugs in the suite",
+    "kubernetes_engine: mark a test for cluster set up",
+]
+python_functions = "test_*"
+python_classes = ""
+
+[tool.pylint."messages control"]
+disable = [
+    "raw-checker-failed",
+    "bad-inline-option",
+    "locally-disabled",
+    "file-ignored",
+    "suppressed-message",
+    "useless-suppression",
+    "deprecated-pragma",
+    "use-implicit-booleaness-not-comparison-to-string",
+    "use-implicit-booleaness-not-comparison-to-zero",
+    "use-symbolic-message-instead",
+    "too-many-return-statements",
+    "too-many-branches",
+    "too-many-instance-attributes",
+    "too-few-public-methods",
+    "consider-using-enumerate",
+    "too-many-lines",
+    "too-many-arguments",
+    "too-many-locals",
+    "no-else-return",
+    "too-many-nested-blocks",
+    "too-many-statements",
+    "dangerous-default-value",
+    "duplicate-code",
+    "missing-module-docstring",
+    "fixme",
+]
+
+[tool.mypy]
+ignore_missing_imports = true

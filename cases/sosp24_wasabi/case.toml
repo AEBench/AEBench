@@ -1,0 +1,48 @@
+id = "sosp24_wasabi"
+
+[case_brief]
+core_claim = "Build Wasabi, stage the benchmark repositories, and reproduce the benchmark bug signatures used by the artifact's retry-bug evaluation."
+acceptable_evidence = "The bundle oracle accepts the built jar, staged benchmark repos, and result CSV files that recover at least 75% of bundled ground-truth bug signatures."
+allowed_tolerance = "Bug signatures need not match in order, but the reproduced benchmark coverage must remain at or above the oracle's 0.75 ground-truth coverage threshold."
+
+[paper]
+url = "https://bastoica.github.io/files/papers/2024_sosp_wasabi.pdf"
+sha256 = "9e406cb89de9903b349958401668ba050db4d5f456c52250722b5a62a77b41a9"
+title = "If At First You Don't Succeed, Try, Try, Again...?"
+version = "SOSP 2024 author-hosted PDF"
+venue = "SOSP 2024"
+
+[run]
+id = "sosp24_wasabi"
+
+[run.instructions]
+path = "README.md"
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 345600000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = false
+compose = false
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+placeholder = false
+notes = "Bundle-native oracle migrated from benchmark workspace data."
+
+[upstream]
+source_type = "git"
+url = "https://github.com/bastoica/wasabi.git"
+ref = "57a01444318ed50422182c4732c29c45909f65d3"
+requested_ref = "sosp24-ae"
+resolved_at = "2026-03-10T03:22:43.788766+00:00"
+artifact_mode = "hybrid"
+overlay_artifact = true

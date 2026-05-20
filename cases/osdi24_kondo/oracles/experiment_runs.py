@@ -4,10 +4,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from evaluator.oracles import utils
 from evaluator.oracles.case_base import CaseOracleExperimentRunsBase
 from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
-
-from evaluator.oracles import utils
 
 from .common import (
 	PROTOCOLS,
@@ -27,7 +26,7 @@ class SlocExactMatchCheck(utils.BaseCheck):
 	reference_path: Path
 	tolerance: int = _SLOC_TOLERANCE
 
-	def check(self, *_args, **_kwargs) -> utils.CheckResult:
+	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
 		if not self.sloc_csv_path.is_file():
 			return utils.CheckResult.failure(f"sloc.csv not found: {self.sloc_csv_path}")
 

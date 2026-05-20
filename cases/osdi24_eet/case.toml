@@ -1,0 +1,47 @@
+id = "osdi24_eet"
+
+[case_brief]
+core_claim = "Build the EET executable, prepare the benchmark scripts, and reproduce the expected benchmark bug counts for the supported database workloads."
+acceptable_evidence = "The bundle oracle accepts the built EET binary, benchmark scripts and versions, and the observed bug totals under *_test/bugs for each benchmark."
+allowed_tolerance = "Bug counts must match the bundled expected totals exactly for the evaluated benchmarks."
+
+[paper]
+url = "https://www.usenix.org/system/files/osdi24-jiang.pdf"
+sha256 = "4d3b059aef9fb016fee4ae72c7dcb0d73ae9569bdf431f297063d3712a2fcf4c"
+title = "Detecting Logic Bugs in Database Engines via Equivalent Expression Transformation"
+version = "USENIX OSDI 2024 proceedings version"
+venue = "OSDI 2024"
+
+[run]
+id = "osdi24_eet"
+
+[run.instructions]
+path = "README.md"
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 345600000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = true
+compose = false
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+placeholder = false
+notes = "Bundle-native oracle migrated from benchmark workspace data."
+
+[upstream]
+source_type = "git"
+url = "https://github.com/JZuming/EET.git"
+ref = "b31d2534bc1079fdeda5333c73bcb99b611efe8e"
+resolved_at = "2026-03-10T03:23:39.155767+00:00"
+artifact_mode = "hybrid"
+overlay_artifact = true

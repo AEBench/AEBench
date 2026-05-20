@@ -6,13 +6,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from evaluator.oracles import utils
 from evaluator.oracles.case_base import CaseOracleExperimentRunsBase
 from evaluator.oracles.experiment_runs_checks import (
 	ListSimilarityCheck,
 	SimilarityMetric,
 )
-
-from evaluator.oracles import utils
 
 from .common import (
 	GlobFileExistsCheck,

@@ -1,0 +1,46 @@
+id = "osdi25_neutrino"
+
+[case_brief]
+core_claim = "Prepare the Neutrino artifact and required benchmark sources, then produce the expected result files for the bounded profiling workflow."
+acceptable_evidence = "The bundle oracle accepts the core build-facing files, required benchmark source files, and parseable result files listed in the benchmark manifest."
+allowed_tolerance = "This bundle checks file presence and parseability rather than exact numeric agreement; generated JSON result files must be valid and complete."
+
+[paper]
+url = "https://www.usenix.org/system/files/osdi25-huang-songlin.pdf"
+sha256 = "a1b6041fafbb05bcad2171ed85cf677f9cf342ebe90ce81e81c2cf1f1f7ef0fc"
+title = "Neutrino: Fine-grained GPU Kernel Profiling via Programmable Probing"
+version = "USENIX OSDI 2025 proceedings version"
+venue = "OSDI 2025"
+
+[run]
+id = "osdi25_neutrino"
+
+[run.instructions]
+path = "README.md"
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 345600000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = false
+compose = false
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+placeholder = false
+notes = "Bundle-native oracle migrated from benchmark workspace data."
+
+[upstream]
+source_type = "git"
+url = "https://github.com/open-neutrino/neutrino.git"
+ref = "43182f3082f5617d8bc85cd8902af4f6fbaeeb24"
+requested_ref = "artifact"
+resolved_at = "2026-05-01T11:18:00+00:00"

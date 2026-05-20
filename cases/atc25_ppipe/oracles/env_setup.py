@@ -2,15 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from evaluator.oracles import utils
 from evaluator.oracles.case_base import CaseOracleEnvSetupBase
 from evaluator.oracles.env_setup_checks import (
 	DependencyVersionCheck,
 	FilesystemPathCheck,
 	PathType,
-	VersionCompare,
 )
-
-from evaluator.oracles import utils
 
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
@@ -21,33 +19,33 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 			DependencyVersionCheck(
 				name="git",
 				cmd=("git", "--version"),
-				required_version=(2, 0, 0),
-				compare=VersionCompare.GEQ,
+				min_version=(2, 0, 0),
 			),
 			DependencyVersionCheck(
 				name="git_lfs",
 				cmd=("git-lfs", "--version"),
-				required_version=(2, 0, 0),
-				compare=VersionCompare.GEQ,
+				min_version=(2, 0, 0),
+				version_regex=r"git-lfs/(\d+\.\d+\.\d+)",
 			),
 			DependencyVersionCheck(
 				name="python",
 				cmd=("python3", "--version"),
-				required_version=(3, 12, 0),
-				compare=VersionCompare.GEQ,
+				min_version=(3, 12, 0),
 			),
 			DependencyVersionCheck(
 				name="gurobi",
-				cmd=("python3", "-c", "import gurobipy; print(gurobipy.gurobi.version())"),
-				required_version=(10, 0, 0),
-				compare=VersionCompare.GEQ,
+				cmd=(
+					"python3",
+					"-c",
+					"import gurobipy; print('.'.join(map(str, gurobipy.gurobi.version())))",
+				),
+				min_version=(10, 0, 0),
 				optional=True,
 			),
 			DependencyVersionCheck(
 				name="java",
 				cmd=("java", "-version"),
-				required_version=(11, 0, 0),
-				compare=VersionCompare.GEQ,
+				min_version=(11, 0, 0),
 			),
 			FilesystemPathCheck(
 				name="repo_root_exists",

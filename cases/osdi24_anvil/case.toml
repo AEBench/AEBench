@@ -1,0 +1,48 @@
+id = "osdi24_anvil"
+
+[case_brief]
+core_claim = "Set up the Anvil artifact and its ACTO dependency, then reproduce the controller evaluation outputs summarized in the artifact's table 3 workflow."
+acceptable_evidence = "The bundle oracle accepts the Anvil checkout, ACTO helper libraries at the expected revision, and a results/table3.md whose controller ratios align with bundled references."
+allowed_tolerance = "Controller ratios may vary, but each reproduced verified-to-reference ratio pair must stay close enough to the bundled refs to satisfy the oracle's similarity threshold."
+
+[paper]
+url = "https://www.usenix.org/system/files/osdi24-sun-xudong.pdf"
+sha256 = "7a642dff7a038e15efd6bf8b1133521aac7746da27dbfa4e49ce19eb08b5af0c"
+title = "Anvil: Verifying Liveness of Cluster Management Controllers"
+version = "USENIX OSDI 2024 proceedings version"
+venue = "OSDI 2024"
+
+[run]
+id = "osdi24_anvil"
+
+[run.instructions]
+path = "README.md"
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 345600000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = true
+compose = false
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+placeholder = false
+notes = "Bundle-native oracle migrated from benchmark workspace data."
+
+[upstream]
+source_type = "git"
+url = "https://github.com/anvil-verifier/anvil.git"
+ref = "8d27a89a18e8ae07cb609369f3e932fd5e8462b2"
+requested_ref = "osdi24"
+resolved_at = "2026-03-10T03:22:57.856952+00:00"
+artifact_mode = "hybrid"
+overlay_artifact = true
