@@ -20,7 +20,7 @@ _SIMULATOR_BINARY = "cluster-sim/build/install/cluster-sim/bin/cluster-sim"
 class InvalidBuildModeCheck(utils.BaseCheck):
 	mode: str
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
+	def check(self) -> utils.CheckResult:
 		return utils.CheckResult.failure(
 			f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
 		)
@@ -33,7 +33,8 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 		return raw or "verify"
 
 	def requirements(self) -> Sequence[utils.BaseCheck]:
-		repo_root = self.paths.workspace_dir
+		repo_root = self.workspace_path()
+		simulator_binary = repo_root / _SIMULATOR_BINARY
 
 		mode = self._build_mode()
 
@@ -45,15 +46,25 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 					cmd=("./gradlew", "installDist"),
 					timeout_seconds=_BUILD_TIMEOUT_SECONDS,
 				),
+				FilesystemPathCheck(
+					name="simulator_binary",
+					path=simulator_binary,
+					path_type=PathType.FILE,
+				),
 			)
 
 		if mode == "verify":
 			return (
 				FilesystemPathCheck(
 					name="simulator_binary",
-					path=repo_root / _SIMULATOR_BINARY,
+					path=simulator_binary,
 					path_type=PathType.FILE,
 				),
 			)
 
-		return (InvalidBuildModeCheck(name="build_mode_valid", mode=mode),)
+		return (
+			InvalidBuildModeCheck(
+				name="build_mode_valid",
+				mode=mode,
+			),
+		)

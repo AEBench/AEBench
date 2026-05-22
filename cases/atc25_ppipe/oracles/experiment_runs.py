@@ -8,17 +8,16 @@ from pathlib import Path
 
 from evaluator.oracles import utils
 from evaluator.oracles.case_base import CaseOracleExperimentRunsBase
+from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
 from evaluator.oracles.experiment_runs_checks import (
 	ListSimilarityCheck,
 	SimilarityMetric,
 )
 
-from .common import (
-	GlobFileExistsCheck,
-	NonEmptyDirectoryCheck,
-)
 
 _PLAN_XPUT_SIMILARITY = 0.95
+
+_REQUIRED_WORKLOADS = ("maf19", "maf21", "ablation")
 
 _LOGS_CSV_REQUIRED_COLUMNS = {
 	"dnn",
@@ -37,20 +36,64 @@ _LOGS_CSV_REQUIRED_COLUMNS = {
 
 
 def _extract_plan_xputs(plan_dir: Path) -> list[tuple[str, float]]:
-	"""Extract (filename, xput) pairs from plan JSONs in a directory."""
+	"""Extract (filename[index], xput) pairs from plan JSON files in a directory."""
+	if not plan_dir.is_dir():
+		raise OSError(f"plan directory missing: {plan_dir}")
+
 	results: list[tuple[str, float]] = []
+	errors: list[str] = []
+
 	for json_path in sorted(plan_dir.glob("*.json")):
 		try:
-			with json_path.open("utf-8") as f:
-				plans = json.load(f)
-		except (OSError, json.JSONDecodeError):
+			with json_path.open("r", encoding="utf-8") as handle:
+				plans = json.load(handle)
+		except (OSError, json.JSONDecodeError) as exc:
+			errors.append(f"{json_path.name}: {exc}")
 			continue
+
 		if not isinstance(plans, list):
+			errors.append(f"{json_path.name}: expected top-level list")
 			continue
-		for i, plan in enumerate(plans):
-			if isinstance(plan, dict) and isinstance(plan.get("xput"), (int, float)):
-				results.append((f"{json_path.name}[{i}]", float(plan["xput"])))
+
+		for index, plan in enumerate(plans):
+			if isinstance(plan, dict) and isinstance(plan.get("xput"), int | float):
+				results.append((f"{json_path.name}[{index}]", float(plan["xput"])))
+
+	if errors:
+		raise ValueError("; ".join(errors[:5]))
+
 	return results
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DirectoryGlobCountCheck(utils.BaseCheck):
+	"""Fail if fewer than min_count entries match the glob pattern."""
+
+	directory: Path
+	pattern: str
+	min_count: int = 1
+
+	def check(self) -> utils.CheckResult:
+		if not self.directory.is_dir():
+			return utils.CheckResult.failure(f"directory missing: {self.directory}")
+
+		try:
+			matches = list(self.directory.glob(self.pattern))
+		except OSError as exc:
+			return utils.CheckResult.failure(f"cannot scan {self.directory}: {exc}")
+
+		if len(matches) < self.min_count:
+			return utils.CheckResult.failure(
+				f"found {len(matches)} entr(y/ies) matching {self.pattern!r} in "
+				f"{self.directory}, expected at least {self.min_count}"
+			)
+
+		return utils.CheckResult.success(
+			message=(
+				f"{len(matches)} entr(y/ies) matching {self.pattern!r} "
+				f"in {self.directory}"
+			)
+		)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -61,11 +104,11 @@ class PlanThroughputCorrelationCheck(utils.BaseCheck):
 	reference_dir: Path
 	threshold: float
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
+	def check(self) -> utils.CheckResult:
 		try:
 			output_xputs = _extract_plan_xputs(self.output_dir)
 			ref_xputs = _extract_plan_xputs(self.reference_dir)
-		except OSError as exc:
+		except (OSError, ValueError) as exc:
 			return utils.CheckResult.failure(f"cannot read plan directories: {exc}")
 
 		if not ref_xputs:
@@ -74,8 +117,10 @@ class PlanThroughputCorrelationCheck(utils.BaseCheck):
 			return utils.CheckResult.failure(f"no output plans found in {self.output_dir}")
 
 		ref_by_key = dict(ref_xputs)
+
 		observed: list[float] = []
 		reference: list[float] = []
+
 		for key, xput in output_xputs:
 			if key in ref_by_key:
 				observed.append(xput)
@@ -105,100 +150,120 @@ class LogsCSVStructureCheck(utils.BaseCheck):
 	path: Path
 	min_rows: int = 10
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
+	def check(self) -> utils.CheckResult:
 		if not self.path.is_file():
 			return utils.CheckResult.failure(f"file missing: {self.path}")
 
 		try:
-			text = self.path.read_text("utf-8")
+			with self.path.open("r", encoding="utf-8", newline="") as handle:
+				reader = csv.DictReader(handle)
+				header = reader.fieldnames or []
+				rows = list(reader)
 		except OSError as exc:
 			return utils.CheckResult.failure(f"cannot read {self.path}: {exc}")
+		except csv.Error as exc:
+			return utils.CheckResult.failure(f"cannot parse {self.path}: {exc}")
 
-		lines = [line for line in text.strip().splitlines() if line.strip()]
-		if len(lines) < 2:
-			return utils.CheckResult.failure(
-				f"{self.path.name} has {len(lines)} line(s), expected header + data"
-			)
+		if not header:
+			return utils.CheckResult.failure(f"{self.path.name} is missing a CSV header")
 
-		reader = csv.reader(lines)
-		header = [col.strip() for col in next(reader)]
 		missing = _LOGS_CSV_REQUIRED_COLUMNS - set(header)
 		if missing:
-			return utils.CheckResult.failure(f"{self.path.name} missing columns: {sorted(missing)}")
+			return utils.CheckResult.failure(
+				f"{self.path.name} missing columns: {sorted(missing)}"
+			)
 
-		data_rows = len(lines) - 1
+		data_rows = len(rows)
 		if data_rows < self.min_rows:
 			return utils.CheckResult.failure(
 				f"{self.path.name} has {data_rows} data row(s), expected at least {self.min_rows}"
 			)
 
-		return utils.CheckResult.success(message=f"{self.path.name}: {data_rows} rows, columns OK")
+		return utils.CheckResult.success(
+			message=f"{self.path.name}: {data_rows} rows, columns OK"
+		)
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	def requirements(self) -> Sequence[utils.BaseCheck]:
-		repo_root = self.paths.workspace_dir
-
+		repo_root = self.workspace_path()
 		outputs = repo_root / "outputs"
 		refs_plans = self.ref_path("plans")
 
 		reqs: list[utils.BaseCheck] = [
-			NonEmptyDirectoryCheck(
-				name="prepartition_mappings_dir",
-				path=outputs / "prepartition_mappings",
+			FilesystemPathCheck(
+				name="outputs_dir_exists",
+				path=outputs,
+				path_type=PathType.DIRECTORY,
 			),
-			GlobFileExistsCheck(
+			FilesystemPathCheck(
+				name="reference_plans_dir_exists",
+				path=refs_plans,
+				path_type=PathType.DIRECTORY,
+			),
+			DirectoryGlobCountCheck(
+				name="prepartition_mappings_dir_populated",
+				directory=outputs / "prepartition_mappings",
+				pattern="*",
+				min_count=1,
+			),
+			DirectoryGlobCountCheck(
 				name="prepartition_mappings_csv",
 				directory=outputs / "prepartition_mappings",
 				pattern="*.csv",
+				min_count=1,
 			),
 		]
 
-		for workload in ("maf19", "maf21", "ablation"):
+		for workload in _REQUIRED_WORKLOADS:
 			output_plan_dir = outputs / "plans" / workload
 			ref_plan_dir = refs_plans / workload
 
-			reqs.append(
-				NonEmptyDirectoryCheck(
-					name=f"plans_{workload}_dir",
-					path=output_plan_dir,
-				)
-			)
-			if ref_plan_dir.is_dir():
-				reqs.append(
+			reqs.extend(
+				(
+					FilesystemPathCheck(
+						name=f"plans_{workload}_dir",
+						path=output_plan_dir,
+						path_type=PathType.DIRECTORY,
+					),
+					FilesystemPathCheck(
+						name=f"reference_plans_{workload}_dir",
+						path=ref_plan_dir,
+						path_type=PathType.DIRECTORY,
+					),
 					PlanThroughputCorrelationCheck(
 						name=f"plans_{workload}_xput_correlation",
 						output_dir=output_plan_dir,
 						reference_dir=ref_plan_dir,
 						threshold=_PLAN_XPUT_SIMILARITY,
-					)
+					),
 				)
+			)
 
-		reqs.append(
-			LogsCSVStructureCheck(
-				name="cluster_logs_maf19",
-				path=outputs / "cluster-logs" / "maf19" / "logs.csv",
-			)
-		)
-		reqs.append(
-			LogsCSVStructureCheck(
-				name="cluster_logs_maf21",
-				path=outputs / "cluster-logs" / "maf21" / "logs.csv",
-			)
-		)
-		reqs.append(
-			LogsCSVStructureCheck(
-				name="cluster_logs_ablation",
-				path=outputs / "cluster-logs" / "ablation_maf19" / "logs.csv",
+		reqs.extend(
+			(
+				LogsCSVStructureCheck(
+					name="cluster_logs_maf19",
+					path=outputs / "cluster-logs" / "maf19" / "logs.csv",
+				),
+				LogsCSVStructureCheck(
+					name="cluster_logs_maf21",
+					path=outputs / "cluster-logs" / "maf21" / "logs.csv",
+				),
+				LogsCSVStructureCheck(
+					name="cluster_logs_ablation",
+					path=outputs / "cluster-logs" / "ablation_maf19" / "logs.csv",
+				),
 			)
 		)
 
 		for fig in ("fig6", "fig7", "fig8", "fig10"):
 			reqs.append(
-				GlobFileExistsCheck(
+				DirectoryGlobCountCheck(
 					name=f"figure_{fig}_output",
 					directory=outputs,
 					pattern=f"*{fig}*",
+					min_count=1,
 				)
 			)
 

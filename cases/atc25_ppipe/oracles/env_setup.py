@@ -13,9 +13,9 @@ from evaluator.oracles.env_setup_checks import (
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
 	def requirements(self) -> Sequence[utils.BaseCheck]:
-		repo_root = self.paths.workspace_dir
+		repo_root = self.workspace_path()
 
-		reqs: list[utils.BaseCheck] = [
+		return (
 			DependencyVersionCheck(
 				name="git",
 				cmd=("git", "--version"),
@@ -72,5 +72,4 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 				path=repo_root / "data",
 				path_type=PathType.DIRECTORY,
 			),
-		]
-		return tuple(reqs)
+		)
