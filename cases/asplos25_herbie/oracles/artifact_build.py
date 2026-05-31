@@ -5,8 +5,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from evaluator.oracles import utils
-from evaluator.oracles.artifact_build_checks import BuildCommandCheck
-from evaluator.oracles.case_base import CaseOracleArtifactBuildBase
+from evaluator.oracles.checks import CommandCheck
+from evaluator.oracles.bases import CaseOracleArtifactBuildBase
 
 _BUILD_COMMAND: tuple[str, ...] = ("make", "install")
 _BUILD_TIMEOUT_SECONDS = 3600.0
@@ -63,13 +63,13 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 		return raw or "verify"
 
 	def requirements(self) -> Sequence[utils.BaseCheck]:
-		repo_root = self.paths.workspace_dir
+		repo_root = self._workspace_dir
 
 		mode = self._build_mode()
 
 		if mode == "command":
 			return (
-				BuildCommandCheck(
+				CommandCheck(
 					name="herbie_make_install",
 					cwd=repo_root,
 					cmd=_BUILD_COMMAND,

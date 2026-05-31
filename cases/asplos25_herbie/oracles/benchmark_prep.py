@@ -8,8 +8,8 @@ from pathlib import Path
 from evaluator.oracles import utils
 
 _log = logging.getLogger(__name__)
-from evaluator.oracles.case_base import CaseOracleBenchmarkPrepBase
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
+from evaluator.oracles.bases import CaseOracleBenchmarkPrepBase
+from evaluator.oracles.checks import PathCheck, PathKind
 
 
 _MIN_BENCH_FPCORE_FILES = 30
@@ -54,26 +54,26 @@ class FPCoreBenchmarkCheck(utils.BaseCheck):
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 	def requirements(self) -> Sequence[utils.BaseCheck]:
-		repo_root = self.paths.workspace_dir
+		repo_root = self._workspace_dir
 
 		bench_dir = repo_root / "bench"
 		hamming_dir = bench_dir / "hamming"
 
 		return (
-			FilesystemPathCheck(
+			PathCheck(
 				name="bench_dir_exists",
 				path=bench_dir,
-				path_type=PathType.DIRECTORY,
+				kind=PathKind.DIRECTORY,
 			),
 			FPCoreBenchmarkCheck(
 				name="bench_has_fpcore_files",
 				path=bench_dir,
 				min_count=_MIN_BENCH_FPCORE_FILES,
 			),
-			FilesystemPathCheck(
+			PathCheck(
 				name="bench_hamming_dir_exists",
 				path=hamming_dir,
-				path_type=PathType.DIRECTORY,
+				kind=PathKind.DIRECTORY,
 			),
 			FPCoreBenchmarkCheck(
 				name="hamming_has_fpcore_files",
