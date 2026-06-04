@@ -2,11 +2,20 @@
   "schema_version": 1,
   "cases_dir": "cases",
   "default_source": {
-    "url": "git@github.com:sys-intelligence/ArtEvalBench.git",
+    "url": "git@github.com:AEBench/AEBench.git",
     "ref": null,
     "bundles_subdir": "cases"
   },
   "cases": {
+    "asplos24_golf": {
+      "path": "cases/asplos24_golf"
+    },
+    "asplos25_herbie": {
+      "path": "cases/asplos25_herbie"
+    },
+    "atc25_ppipe": {
+      "path": "cases/atc25_ppipe"
+    },
     "eurosys25_depsurf": {
       "path": "cases/eurosys25_depsurf"
     },
@@ -18,6 +27,15 @@
     },
     "osdi24_eet": {
       "path": "cases/osdi24_eet"
+    },
+    "osdi24_kondo": {
+      "path": "cases/osdi24_kondo"
+    },
+    "osdi24_pcs": {
+      "path": "cases/osdi24_pcs"
+    },
+    "osdi25_bpftime": {
+      "path": "cases/osdi25_bpftime"
     },
     "osdi25_neutrino": {
       "path": "cases/osdi25_neutrino"
