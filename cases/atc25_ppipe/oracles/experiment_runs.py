@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles import utils
-from evaluator.oracles.case_base import CaseOracleExperimentRunsBase
-from evaluator.oracles.experiment_runs_checks import (
+from evaluator.oracles.bases import CaseOracleExperimentRunsBase
+from evaluator.oracles.checks import (
 	ListSimilarityCheck,
 	SimilarityMetric,
 )
@@ -137,7 +137,7 @@ class LogsCSVStructureCheck(utils.BaseCheck):
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	def requirements(self) -> Sequence[utils.BaseCheck]:
-		repo_root = self.paths.workspace_dir
+		repo_root = self.workspace_path()
 
 		outputs = repo_root / "outputs"
 		refs_plans = self.ref_path("plans")
@@ -150,7 +150,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 			GlobFileExistsCheck(
 				name="prepartition_mappings_csv",
 				directory=outputs / "prepartition_mappings",
-				pattern="*.csv",
+				pattern="*/*.csv",
 			),
 		]
 

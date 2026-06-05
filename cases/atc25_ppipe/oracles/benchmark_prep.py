@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles import utils
-from evaluator.oracles.case_base import CaseOracleBenchmarkPrepBase
+from evaluator.oracles.bases import CaseOracleBenchmarkPrepBase
 
 from .common import NonEmptyDirectoryCheck
 
@@ -118,7 +118,7 @@ class DirectoryFileCountCheck(utils.BaseCheck):
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 	def requirements(self) -> Sequence[utils.BaseCheck]:
-		repo_root = self.paths.workspace_dir
+		repo_root = self.workspace_path()
 
 		data_dir = repo_root / "data"
 		checks: list[utils.BaseCheck] = []
