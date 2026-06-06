@@ -36,7 +36,7 @@ jobs:
         run: uv run --group dev ruff format --check src tests
 
       - name: Run mypy
-        run: MYPYPATH=src uv run --group dev mypy src
+        run: MYPYPATH=src uv run --group dev mypy --explicit-package-bases src
 
       - name: Run fast pytest suite
         run: uv run python -m pytest tests/unit tests/functional
