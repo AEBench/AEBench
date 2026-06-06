@@ -5,11 +5,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles import utils
-from evaluator.oracles.artifact_build_checks import BuildCommandCheck
-from evaluator.oracles.case_base import CaseOracleArtifactBuildBase
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
-
+from evaluator.oracles import CaseOracleArtifactBuildBase, CommandCheck, PathCheck, PathKind
+from evaluator.oracles.utils import BaseCheck, CheckResult
 
 _BUILD_MODE_ENV = "AE_GOLF_BUILD_MODE"
 _DOCKER_IMAGE = "golf"
@@ -22,12 +19,12 @@ _EXPECTED_BUILD_ARTIFACTS = (
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class DockerImageExistsCheck(utils.BaseCheck):
+class DockerImageExistsCheck(BaseCheck):
 	"""Fail if the Docker image is not found locally."""
 
 	image_name: str
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
+	def check(self) -> CheckResult:
 		import subprocess
 
 		result = subprocess.run(
@@ -37,18 +34,18 @@ class DockerImageExistsCheck(utils.BaseCheck):
 			timeout=30,
 		)
 		if result.returncode != 0:
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"Docker image {self.image_name!r} not found. Has ./run.sh been executed?"
 			)
-		return utils.CheckResult.success(message=f"Docker image {self.image_name!r} exists")
+		return CheckResult.success(message=f"Docker image {self.image_name!r} exists")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class InvalidBuildModeCheck(utils.BaseCheck):
+class InvalidBuildModeCheck(BaseCheck):
 	mode: str
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
-		return utils.CheckResult.failure(
+	def check(self) -> CheckResult:
+		return CheckResult.failure(
 			f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
 		)
 
@@ -59,14 +56,14 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 		raw = os.environ.get(_BUILD_MODE_ENV, "verify").strip().lower()
 		return raw or "verify"
 
-	def requirements(self) -> Sequence[utils.BaseCheck]:
-		repo_root = self.paths.workspace_dir
+	def requirements(self) -> Sequence[BaseCheck]:
+		repo_root = self.artifact_path()
 
 		mode = self._build_mode()
 
 		if mode == "command":
 			return (
-				BuildCommandCheck(
+				CommandCheck(
 					name="run_sh_build",
 					cwd=repo_root,
 					cmd=("bash", "./run.sh"),
@@ -75,7 +72,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 			)
 
 		if mode == "verify":
-			checks: list[utils.BaseCheck] = [
+			checks: list[BaseCheck] = [
 				DockerImageExistsCheck(
 					name="docker_image_golf",
 					image_name=_DOCKER_IMAGE,
@@ -83,10 +80,10 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 			]
 			for rel_path in _EXPECTED_BUILD_ARTIFACTS:
 				checks.append(
-					FilesystemPathCheck(
+					PathCheck(
 						name=f"built_{Path(rel_path).name}",
 						path=repo_root / rel_path,
-						path_type=PathType.FILE,
+						kind=PathKind.FILE,
 					)
 				)
 			return tuple(checks)

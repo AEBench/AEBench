@@ -2,38 +2,45 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from evaluator.oracles import utils
-from evaluator.oracles.case_base import CaseOracleEnvSetupBase
-from evaluator.oracles.env_setup_checks import (
-	DependencyVersionCheck,
-	FilesystemPathCheck,
-	PathType,
+from evaluator.oracles import (
+	CaseOracleEnvSetupBase,
+	PathCheck,
+	PathKind,
+	VersionCheck,
 )
+from evaluator.oracles.utils import BaseCheck
+
+from .consts import DOCKER_MIN_VERSION, DOCKERFILE_PATH, README_PATH, RUN_SH_PATH
 
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
-	def requirements(self) -> Sequence[utils.BaseCheck]:
-		repo_root = self.paths.workspace_dir
+	def requirements(self) -> Sequence[BaseCheck]:
+		repo_root = self.artifact_path()
 
 		return (
-			DependencyVersionCheck(
+			VersionCheck(
 				name="docker",
 				cmd=("docker", "--version"),
-				min_version=(26, 0, 0),
+				min_version=DOCKER_MIN_VERSION,
 			),
-			FilesystemPathCheck(
+			PathCheck(
 				name="repo_root_exists",
 				path=repo_root,
-				path_type=PathType.DIRECTORY,
+				kind=PathKind.DIRECTORY,
 			),
-			FilesystemPathCheck(
+			PathCheck(
 				name="dockerfile_exists",
-				path=repo_root / "Dockerfile",
-				path_type=PathType.FILE,
+				path=repo_root / DOCKERFILE_PATH,
+				kind=PathKind.FILE,
 			),
-			FilesystemPathCheck(
+			PathCheck(
+				name="readme_exists",
+				path=repo_root / README_PATH,
+				kind=PathKind.FILE,
+			),
+			PathCheck(
 				name="run_script_exists",
-				path=repo_root / "run.sh",
-				path_type=PathType.FILE,
+				path=repo_root / RUN_SH_PATH,
+				kind=PathKind.FILE,
 			),
 		)
