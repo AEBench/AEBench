@@ -886,7 +886,7 @@ def build_runtime_check_executor(context: OracleInput) -> RuntimeCheckExecutor:
 	runtime_result = context.runtime_result
 
 	oracle_runtime = getattr(context.oracle_config, "runtime", None)
-	oracle_mode: RuntimeMode | None = getattr(oracle_runtime, "mode", RuntimeMode.LOCAL)
+	oracle_mode: RuntimeMode = getattr(oracle_runtime, "mode", RuntimeMode.LOCAL)
 
 	if oracle_mode == RuntimeMode.DOCKER:
 		# image is guaranteed non-None by OracleRuntimeConfig validation
