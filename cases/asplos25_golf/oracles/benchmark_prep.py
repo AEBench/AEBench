@@ -1,35 +1,54 @@
 from __future__ import annotations
 
+import dataclasses
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathCheck, PathKind
-from evaluator.oracles.utils import BaseCheck, CheckResult
+from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind, utils
+from evaluator.oracles.utils import BaseCheck, CheckResult, RuntimeCheckExecutor
 
-_MIN_GOKER_TESTS = 50
-_MIN_CGO_TESTS = 3
-_MIN_CORRECT_TESTS = 10
+from .consts import (
+	BENCHMARKS_REF,
+	CORRECT_PATH,
+	DEADLOCK_CGO_PATH,
+	DEADLOCK_GOKER_PATH,
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DirectoryContainsTestCases(BaseCheck):
-	"""Fail if fewer than min_count subdirectories contain main.go."""
+	"""Fail if fewer than min_count subdirectories contain main.go ."""
 
 	path: Path
 	min_count: int
+	executor: RuntimeCheckExecutor | None = dataclasses.field(default=None, repr=False, compare=False)
 
 	def check(self) -> CheckResult:
-		if not self.path.is_dir():
+		if not utils.check_path_is_dir(self.path, executor=self.executor):
 			return CheckResult.failure(f"directory does not exist: {self.path}")
 
-		count = 0
-		try:
-			for entry in self.path.rglob("main.go"):
-				if entry.is_file():
-					count += 1
-		except OSError as exc:
-			return CheckResult.failure(f"failed to scan {self.path}: {exc}")
+		if self.executor is not None:
+			result = self.executor.run_process_capture(
+				cmd=["find", ".", "-name", "main.go", "-type", "f"],
+				cwd=self.path,
+				env=None,
+				timeout_seconds=30.0,
+			)
+			if result.timed_out:
+				return CheckResult.failure(f"timed out scanning {self.path}")
+			if result.returncode != 0:
+				return CheckResult.failure(f"failed to scan {self.path}: {result.stderr}")
+			count = sum(1 for line in result.stdout.splitlines() if line.strip())
+		else:
+			count = 0
+			try:
+				for entry in self.path.rglob("main.go"):
+					if entry.is_file():
+						count += 1
+			except OSError as exc:
+				return CheckResult.failure(f"failed to scan {self.path}: {exc}")
 
 		if count < self.min_count:
 			return CheckResult.failure(
@@ -42,34 +61,40 @@ class DirectoryContainsTestCases(BaseCheck):
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 	def requirements(self) -> Sequence[BaseCheck]:
-		repo_root = self.artifact_path()
-
-		tests_dir = repo_root / "tester" / "tests"
+		ref = json.loads(self.ref_path(BENCHMARKS_REF).read_text(encoding="utf-8"))
 
 		return (
-			PathCheck(
-				name="tests_deadlock_dir",
-				path=tests_dir / "deadlock",
+			self.path_check(
+				name="deadlock_goker_exists",
+				path=self.app_path(DEADLOCK_GOKER_PATH),
 				kind=PathKind.DIRECTORY,
 			),
-			PathCheck(
-				name="tests_correct_dir",
-				path=tests_dir / "correct",
+			self.path_check(
+				name="deadlock_cgo_examples_exists",
+				path=self.app_path(DEADLOCK_CGO_PATH),
+				kind=PathKind.DIRECTORY,
+			),
+			self.path_check(
+				name="correct_tests_exist",
+				path=self.app_path(CORRECT_PATH),
 				kind=PathKind.DIRECTORY,
 			),
 			DirectoryContainsTestCases(
 				name="goker_suite_has_tests",
-				path=tests_dir / "deadlock" / "gobench" / "goker",
-				min_count=_MIN_GOKER_TESTS,
+				path=self.app_path(DEADLOCK_GOKER_PATH),
+				min_count=ref["deadlock/goker"],
+				executor=self.executor,
 			),
 			DirectoryContainsTestCases(
 				name="cgo_examples_has_tests",
-				path=tests_dir / "deadlock" / "cgo-examples",
-				min_count=_MIN_CGO_TESTS,
+				path=self.app_path(DEADLOCK_CGO_PATH),
+				min_count=ref["deadlock/cgo-examples"],
+				executor=self.executor,
 			),
 			DirectoryContainsTestCases(
 				name="correct_suite_has_tests",
-				path=tests_dir / "correct",
-				min_count=_MIN_CORRECT_TESTS,
+				path=self.app_path(CORRECT_PATH),
+				min_count=ref["correct"],
+				executor=self.executor,
 			),
 		)
