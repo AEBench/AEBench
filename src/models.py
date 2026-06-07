@@ -397,7 +397,7 @@ class CaseStatus(str, Enum):
 class OracleRuntimeConfig(_Model):
 	mode: RuntimeMode | None = None
 	image: str | None = None
-	app_dir: str  = "/"
+	app_dir: str = "/"
 
 	@model_validator(mode="after")
 	def _validate(self) -> "OracleRuntimeConfig":
