@@ -27,6 +27,11 @@ score_mode = "phase_count"
 failure_mode = "fail_fast"
 placeholder = false
 
+[oracle.runtime]
+mode = "docker"
+image = "golf"
+app_dir = "/usr/app"
+
 [upstream]
 source_type = "git"
 url = "https://github.com/VladSaioc/ASPLOS-artifact-2025"
