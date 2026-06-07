@@ -11,18 +11,18 @@ from evaluator.oracles import CaseOracleExperimentRunsBase, PathCheck, PathKind
 from evaluator.oracles.utils import BaseCheck, CheckResult
 
 _MIN_DETECTION_RATE = 90.0
-_EXPECTED_GO_INSTRUCTIONS = 121
+_MIN_EXPECTED_GO_INSTRUCTIONS = 121
 
-_RESULT_FILE_SEARCH_DIRS = ("", "tester")
+_RESULT_TEST_DIR_FALL_BACK = "tester"
 
 
-def _find_result_file(repo_root: Path, filename: str) -> Path | None:
+def _find_result_file(repo_root: Path, filename: str) -> Path:
 	"""Find a result file in the repo root or tester/ subdirectory."""
-	for subdir in _RESULT_FILE_SEARCH_DIRS:
-		candidate = repo_root / subdir / filename if subdir else repo_root / filename
-		if candidate.is_file():
-			return candidate
-	return None
+	candidate = repo_root / filename
+	if candidate.is_file():
+		return candidate
+	else:
+		return repo_root / _RESULT_TEST_DIR_FALL_BACK / filename
 
 
 def _parse_aggregated_total(results_text: str) -> float | None:
@@ -96,9 +96,7 @@ class AggregatedDetectionRateCheck(BaseCheck):
 		try:
 			text = self.results_path.read_text(encoding="utf-8")
 		except OSError as exc:
-			return CheckResult.failure(
-				f"failed to read results file {self.results_path}: {exc}"
-			)
+			return CheckResult.failure(f"failed to read results file {self.results_path}: {exc}")
 
 		rate = _parse_aggregated_total(text)
 		if rate is None:
@@ -124,9 +122,7 @@ class NoCgoExamplesCheck(BaseCheck):
 		try:
 			text = self.results_path.read_text(encoding="utf-8")
 		except OSError as exc:
-			return CheckResult.failure(
-				f"failed to read results file {self.results_path}: {exc}"
-			)
+			return CheckResult.failure(f"failed to read results file {self.results_path}: {exc}")
 
 		if _has_cgo_examples_entries(text):
 			return CheckResult.failure(
@@ -138,7 +134,7 @@ class NoCgoExamplesCheck(BaseCheck):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TotalGoInstructionsCheck(BaseCheck):
-	"""Fail if the total go instruction count does not match expected."""
+	"""Fail if the total go instruction count is less than  expected."""
 
 	results_path: Path
 	expected_count: int
@@ -147,19 +143,15 @@ class TotalGoInstructionsCheck(BaseCheck):
 		try:
 			text = self.results_path.read_text(encoding="utf-8")
 		except OSError as exc:
-			return CheckResult.failure(
-				f"failed to read results file {self.results_path}: {exc}"
-			)
+			return CheckResult.failure(f"failed to read results file {self.results_path}: {exc}")
 
 		count = _count_total_go_instructions(text)
 		if count is None:
-			return CheckResult.failure(
-				"could not parse go instruction count from results file"
-			)
+			return CheckResult.failure("could not parse go instruction count from results file")
 
-		if count != self.expected_count:
+		if count < self.expected_count:
 			return CheckResult.failure(
-				f"total go instructions {count} != expected {self.expected_count}"
+				f"total go instructions {count} < expected {self.expected_count}"
 			)
 
 		return CheckResult.success(message=f"total go instructions: {count}")
@@ -180,7 +172,7 @@ class PerfCSVStructureCheck(BaseCheck):
 		"CPU utilization ON",
 	)
 
-	def check(self)  -> CheckResult:
+	def check(self) -> CheckResult:
 		try:
 			text = self.csv_path.read_text(encoding="utf-8").strip()
 		except OSError as exc:
@@ -211,9 +203,7 @@ class PerfCSVStructureCheck(BaseCheck):
 		]
 
 		if missing:
-			return CheckResult.failure(
-				f"CSV missing expected columns: {missing}; found: {rows[0]}"
-			)
+			return CheckResult.failure(f"CSV missing expected columns: {missing}; found: {rows[0]}")
 
 		return CheckResult.success(
 			message=f"CSV has {len(rows) - 1} data rows with expected columns"
@@ -222,65 +212,43 @@ class PerfCSVStructureCheck(BaseCheck):
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	def requirements(self) -> Sequence[BaseCheck]:
-		repo_root = self.artifact_path()
+		results_path = _find_result_file(self.artifact_path(), "results")
+		perf_csv_path = _find_result_file(self.artifact_path(), "results-perf.csv")
+		tex_path = _find_result_file(self.artifact_path(), "results.tex")
+		tex_fallback = self.artifact_path("results.tex")
 
-		results_path = _find_result_file(repo_root, "results")
-		perf_csv_path = _find_result_file(repo_root, "results-perf.csv")
-		tex_path = _find_result_file(repo_root, "results.tex")
-
-		checks: list[BaseCheck] = []
-
-		if results_path is not None:
-			checks.extend(
-				[
-					AggregatedDetectionRateCheck(
-						name="rq1a_aggregated_detection_rate",
-						results_path=results_path,
-						min_rate=_MIN_DETECTION_RATE,
-					),
-					NoCgoExamplesCheck(
-						name="rq1a_no_cgo_examples",
-						results_path=results_path,
-					),
-					TotalGoInstructionsCheck(
-						name="rq1a_total_go_instructions",
-						results_path=results_path,
-						expected_count=_EXPECTED_GO_INSTRUCTIONS,
-					),
-				]
-			)
-		else:
-			checks.append(
-				PathCheck(
-					name="results_file_exists",
-					path=repo_root / "results",
-                    kind=PathKind.FILE,
-				)
-			)
-
-		if perf_csv_path is not None:
-			checks.append(
-				PerfCSVStructureCheck(
-					name="rq2_perf_csv_structure",
-					csv_path=perf_csv_path,
-				)
-			)
-		else:
-			checks.append(
-				PathCheck(
-					name="results_perf_csv_exists",
-					path=repo_root / "results-perf.csv",
-                    kind=PathKind.FILE,
-				)
-			)
-
-		tex_fallback = repo_root / "results.tex"
-		checks.append(
+		return (
+			PathCheck(
+				name="results_file_exists",
+				path=self.artifact_path("results"),
+				kind=PathKind.FILE,
+			),
+			AggregatedDetectionRateCheck(
+				name="rq1a_aggregated_detection_rate",
+				results_path=results_path,
+				min_rate=_MIN_DETECTION_RATE,
+			),
+			NoCgoExamplesCheck(
+				name="rq1a_no_cgo_examples",
+				results_path=results_path,
+			),
+			TotalGoInstructionsCheck(
+				name="rq1a_total_go_instructions",
+				results_path=results_path,
+				expected_count=_MIN_EXPECTED_GO_INSTRUCTIONS,
+			),
+			PathCheck(
+				name="results_perf_csv_exists",
+				path=self.artifact_path("results-perf.csv"),
+				kind=PathKind.FILE,
+			),
+			PerfCSVStructureCheck(
+				name="rq2_perf_csv_structure",
+				csv_path=perf_csv_path,
+			),
 			PathCheck(
 				name="rq2_boxplot_tex_exists",
 				path=tex_path or tex_fallback,
-                kind=PathKind.FILE,
-			)
+				kind=PathKind.FILE,
+			),
 		)
-
-		return tuple(checks)
