@@ -15,7 +15,7 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 	def requirements(self) -> Sequence[utils.BaseCheck]:
 		repo_root = self.workspace_path()
 
-		reqs: list[utils.BaseCheck] = [
+		return (
 			VersionCheck(
 				name="git",
 				cmd=("git", "--version"),
@@ -32,11 +32,20 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 				cmd=("python3", "--version"),
 				min_version=(3, 11, 0),
 			),
+			#VersionCheck(
+				#name="gurobi",
+				#cmd=(
+					#"python3",
+					#"-c",
+					#"import gurobipy; print('.'.join(map(str, gurobipy.gurobi.version())))",
+				#),
+				#min_version=(10, 0, 0),
+				#optional=True,
+			#),
 			VersionCheck(
                 name="conda",
                 cmd=("conda", "--version"),
-                min_version=(4, 9, 0),   #Added host Conda check
-                version_regex=r"conda\s+(\d+\.\d+\.\d+)",
+                min_version=(4, 9, 0),
             ),
 			VersionCheck(
 				name="java",
@@ -68,5 +77,4 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 				path=repo_root / "data",
 				kind=PathKind.DIRECTORY,
 			),
-		]
-		return tuple(reqs)
+		)
