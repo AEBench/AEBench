@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles import utils
@@ -13,38 +14,65 @@ from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
 _BUILD_MODE_ENV = "AE_KONDO_BUILD_MODE"
 _BUILD_TIMEOUT_SECONDS = 600.0
 
+_BUILD_MODE_VERIFY = "verify"
+_BUILD_MODE_COMMAND = "command"
+_VALID_BUILD_MODES = {_BUILD_MODE_VERIFY, _BUILD_MODE_COMMAND}
+
 _EXPECTED_BUILD_OUTPUTS: tuple[str, ...] = (
-	"local-dafny/Binaries/Dafny.dll",
-	"local-dafny/Scripts/dafny",
+    "local-dafny/Binaries/Dafny.dll",
+    "local-dafny/Scripts/dafny",
 )
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class InvalidBuildModeCheck(utils.BaseCheck):
+    mode: str
+
+    def check(self) -> utils.CheckResult:
+        return utils.CheckResult.failure(
+            f"invalid {_BUILD_MODE_ENV}={self.mode!r}; "
+            f"expected one of: {', '.join(sorted(_VALID_BUILD_MODES))}"
+        )
+
+
 class OracleArtifactBuild(CaseOracleArtifactBuildBase):
-	@staticmethod
-	def _build_mode() -> str:
-		raw = os.environ.get(_BUILD_MODE_ENV, "verify").strip().lower()
-		return raw or "verify"
+    @staticmethod
+    def _build_mode() -> str:
+        raw = os.environ.get(_BUILD_MODE_ENV, _BUILD_MODE_VERIFY).strip().lower()
+        return raw or _BUILD_MODE_VERIFY
 
-	def requirements(self) -> Sequence[utils.BaseCheck]:
-		repo_root = self.paths.workspace_dir
+    def _expected_output_checks(self) -> tuple[utils.BaseCheck, ...]:
+        return tuple(
+            FilesystemPathCheck(
+                name=f"built_{Path(rel).name}",
+                path=self.workspace_path(rel),
+                path_type=PathType.FILE,
+            )
+            for rel in _EXPECTED_BUILD_OUTPUTS
+        )
 
-		mode = self._build_mode()
+    def requirements(self) -> Sequence[utils.BaseCheck]:
+        mode = self._build_mode()
 
-		if mode == "command":
-			return (
-				BuildCommandCheck(
-					name="build_dafny",
-					cwd=repo_root / "local-dafny",
-					cmd=("make",),
-					timeout_seconds=_BUILD_TIMEOUT_SECONDS,
-				),
-			)
+        if mode not in _VALID_BUILD_MODES:
+            return (
+                InvalidBuildModeCheck(
+                    name="valid_build_mode",
+                    mode=mode,
+                ),
+            )
 
-		return tuple(
-			FilesystemPathCheck(
-				name=f"built_{Path(rel).name}",
-				path=repo_root / rel,
-				path_type=PathType.FILE,
-			)
-			for rel in _EXPECTED_BUILD_OUTPUTS
-		)
+        output_checks = self._expected_output_checks()
+
+        if mode == _BUILD_MODE_COMMAND:
+            return (
+                BuildCommandCheck(
+                    name="build_dafny",
+                    cwd=self.workspace_path("local-dafny"),
+                    cmd=("make",),
+                    timeout_seconds=_BUILD_TIMEOUT_SECONDS,
+                ),
+                *output_checks,
+            )
+
+        return output_checks

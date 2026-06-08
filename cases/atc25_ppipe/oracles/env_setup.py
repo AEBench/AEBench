@@ -32,16 +32,6 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 				cmd=("python3", "--version"),
 				min_version=(3, 11, 0),
 			),
-			#VersionCheck(
-				#name="gurobi",
-				#cmd=(
-					#"python3",
-					#"-c",
-					#"import gurobipy; print('.'.join(map(str, gurobipy.gurobi.version())))",
-				#),
-				#min_version=(10, 0, 0),
-				#optional=True,
-			#),
 			VersionCheck(
                 name="conda",
                 cmd=("conda", "--version"),
