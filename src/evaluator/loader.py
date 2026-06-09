@@ -24,7 +24,6 @@ def load_case_spec(case_dir: Path) -> CaseConfig:
 	case_root = case_dir.expanduser().resolve()
 	manifest_path = case_root / CASE_MANIFEST_FILENAME
 	artifact_root = case_root / ARTIFACT_DIRNAME
-	refs_dir = case_root / REFS_DIRNAME
 	oracle_dir = case_root / ORACLE_DIRNAME
 
 	if not case_root.is_dir():
@@ -32,7 +31,7 @@ def load_case_spec(case_dir: Path) -> CaseConfig:
 
 	case = _read_case_toml(case_root, manifest_path)
 	_validate_instructions_path(case_root, artifact_root, case)
-	_validate_required_dirs(case_root, refs_dir, oracle_dir)
+	_validate_oracle_dir(case_root, oracle_dir)
 	return case
 
 
@@ -78,10 +77,7 @@ def _validate_instructions_path(case_root: Path, artifact_root: Path, case: Case
 		raise CaseBundleError("run.instructions.path must stay within artifact/") from exc
 
 
-def _validate_required_dirs(case_root: Path, refs_dir: Path, oracle_dir: Path) -> None:
-	if not refs_dir.is_dir():
-		raise CaseBundleError(f"missing {REFS_DIRNAME}/ directory in {case_root}")
-
+def _validate_oracle_dir(case_root: Path, oracle_dir: Path) -> None:
 	if not oracle_dir.is_dir():
 		raise CaseBundleError(f"missing {ORACLE_DIRNAME}/ directory in {case_root}")
 
