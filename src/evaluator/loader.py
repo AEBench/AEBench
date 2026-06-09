@@ -12,7 +12,7 @@ else:  # pragma: no cover
 
 from models import CaseConfig
 
-from .constants import ARTIFACT_DIRNAME, CASE_MANIFEST_FILENAME, ORACLE_DIRNAME, REFS_DIRNAME
+from .constants import ARTIFACT_DIRNAME, CASE_MANIFEST_FILENAME, ORACLE_DIRNAME
 
 
 class CaseBundleError(ValueError):
