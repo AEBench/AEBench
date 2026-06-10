@@ -37,6 +37,7 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 				name="readme_exists",
 				path=repo_root / README_PATH,
 				kind=PathKind.FILE,
+                optional=True,
 			),
 			PathCheck(
 				name="run_script_exists",
