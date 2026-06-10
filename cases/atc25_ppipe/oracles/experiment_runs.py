@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles import utils
-from evaluator.oracles.case_base import CaseOracleExperimentRunsBase
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
-from evaluator.oracles.experiment_runs_checks import (
+from evaluator.oracles.bases import CaseOracleExperimentRunsBase
+from evaluator.oracles.checks import PathCheck, PathKind
+from evaluator.oracles.checks import (
 	ListSimilarityCheck,
 	SimilarityMetric,
 )
@@ -191,15 +191,15 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 		refs_plans = self.ref_path("plans")
 
 		reqs: list[utils.BaseCheck] = [
-			FilesystemPathCheck(
+			PathCheck(
 				name="outputs_dir_exists",
 				path=outputs,
-				path_type=PathType.DIRECTORY,
+				kind=PathKind.DIRECTORY,
 			),
-			FilesystemPathCheck(
+			PathCheck(
 				name="reference_plans_dir_exists",
 				path=refs_plans,
-				path_type=PathType.DIRECTORY,
+				kind=PathKind.DIRECTORY,
 			),
 			DirectoryGlobCountCheck(
 				name="prepartition_mappings_dir_populated",
@@ -210,7 +210,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 			DirectoryGlobCountCheck(
 				name="prepartition_mappings_csv",
 				directory=outputs / "prepartition_mappings",
-				pattern="*.csv",
+				pattern="*/*.csv",
 				min_count=1,
 			),
 		]
@@ -221,15 +221,15 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 
 			reqs.extend(
 				(
-					FilesystemPathCheck(
+					PathCheck(
 						name=f"plans_{workload}_dir",
 						path=output_plan_dir,
-						path_type=PathType.DIRECTORY,
+						kind=PathKind.DIRECTORY,
 					),
-					FilesystemPathCheck(
+					PathCheck(
 						name=f"reference_plans_{workload}_dir",
 						path=ref_plan_dir,
-						path_type=PathType.DIRECTORY,
+						kind=PathKind.DIRECTORY,
 					),
 					PlanThroughputCorrelationCheck(
 						name=f"plans_{workload}_xput_correlation",

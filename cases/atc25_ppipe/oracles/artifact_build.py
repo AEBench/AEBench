@@ -5,9 +5,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from evaluator.oracles import utils
-from evaluator.oracles.artifact_build_checks import BuildCommandCheck
-from evaluator.oracles.case_base import CaseOracleArtifactBuildBase
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
+from evaluator.oracles.checks import CommandCheck
+from evaluator.oracles.bases import CaseOracleArtifactBuildBase
+from evaluator.oracles.checks import PathCheck, PathKind
 
 
 _BUILD_MODE_ENV = "AE_PPIPE_BUILD_MODE"
@@ -40,25 +40,30 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 
 		if mode == "command":
 			return (
-				BuildCommandCheck(
+				CommandCheck(
 					name="gradle_install_dist",
-					cwd=repo_root / "cluster-sim",
-					cmd=("./gradlew", "installDist"),
+					cwd=repo_root,
+					cmd=(
+						"bash",
+						"-c", 
+						#covers conda build, python version check, gurobi, and change into java simulator folder
+						"conda create -n ppipe python=3.12 -y && conda run -n ppipe pip install -r requirements.txt && cd cluster-sim && ./gradlew installDist",
+					),
 					timeout_seconds=_BUILD_TIMEOUT_SECONDS,
 				),
-				FilesystemPathCheck(
+				PathCheck(
 					name="simulator_binary",
 					path=simulator_binary,
-					path_type=PathType.FILE,
+					kind=PathKind.FILE,
 				),
 			)
 
 		if mode == "verify":
 			return (
-				FilesystemPathCheck(
+				PathCheck(
 					name="simulator_binary",
 					path=simulator_binary,
-					path_type=PathType.FILE,
+					kind=PathKind.FILE,
 				),
 			)
 
