@@ -885,6 +885,26 @@ def build_runtime_check_executor(context: OracleInput) -> RuntimeCheckExecutor:
 	path_mounts = build_path_mounts(context)
 	runtime_result = context.runtime_result
 
+	oracle_runtime = getattr(context.oracle_config, "runtime", None)
+	oracle_mode: RuntimeMode = getattr(oracle_runtime, "mode", RuntimeMode.LOCAL)
+
+	if oracle_mode == RuntimeMode.DOCKER:
+		# image is guaranteed non-None by OracleRuntimeConfig validation
+		oracle_image: str = getattr(oracle_runtime, "image", "")
+		return cast(
+			RuntimeCheckExecutor,
+			DockerRuntimeCheckExecutor(
+				image=oracle_image,
+				path_mounts=path_mounts,
+				default_cwd=context.workspace_dir,
+			),
+		)
+
+	if oracle_mode == RuntimeMode.LOCAL:
+		return cast(
+			RuntimeCheckExecutor, LocalRuntimeCheckExecutor(default_cwd=context.workspace_dir)
+		)
+
 	saved_image = None
 	if runtime_result is not None and runtime_result.runtime.mode == RuntimeMode.DOCKER:
 		saved_image = runtime_result.runtime.saved_image

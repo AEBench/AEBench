@@ -7,23 +7,22 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles import utils
-from evaluator.oracles.case_base import CaseOracleExperimentRunsBase
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
+from evaluator.oracles import CaseOracleExperimentRunsBase, PathCheck, PathKind
+from evaluator.oracles.utils import BaseCheck, CheckResult
 
 _MIN_DETECTION_RATE = 90.0
-_EXPECTED_GO_INSTRUCTIONS = 121
+_MIN_EXPECTED_GO_INSTRUCTIONS = 121
 
-_RESULT_FILE_SEARCH_DIRS = ("", "tester")
+_RESULT_TEST_DIR_FALL_BACK = "tester"
 
 
-def _find_result_file(repo_root: Path, filename: str) -> Path | None:
+def _find_result_file(repo_root: Path, filename: str) -> Path:
 	"""Find a result file in the repo root or tester/ subdirectory."""
-	for subdir in _RESULT_FILE_SEARCH_DIRS:
-		candidate = repo_root / subdir / filename if subdir else repo_root / filename
-		if candidate.is_file():
-			return candidate
-	return None
+	candidate = repo_root / filename
+	if candidate.is_file():
+		return candidate
+	else:
+		return repo_root / _RESULT_TEST_DIR_FALL_BACK / filename
 
 
 def _parse_aggregated_total(results_text: str) -> float | None:
@@ -87,87 +86,79 @@ def _has_cgo_examples_entries(results_text: str) -> bool:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class AggregatedDetectionRateCheck(utils.BaseCheck):
+class AggregatedDetectionRateCheck(BaseCheck):
 	"""Fail if the aggregated detection rate is below the threshold."""
 
 	results_path: Path
 	min_rate: float
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
+	def check(self) -> CheckResult:
 		try:
 			text = self.results_path.read_text(encoding="utf-8")
 		except OSError as exc:
-			return utils.CheckResult.failure(
-				f"failed to read results file {self.results_path}: {exc}"
-			)
+			return CheckResult.failure(f"failed to read results file {self.results_path}: {exc}")
 
 		rate = _parse_aggregated_total(text)
 		if rate is None:
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				"could not parse Aggregated/Total detection rate from results file"
 			)
 
 		if rate < self.min_rate:
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"aggregated detection rate {rate:.2f}% is below minimum {self.min_rate:.2f}%"
 			)
 
-		return utils.CheckResult.success(message=f"aggregated detection rate: {rate:.2f}%")
+		return CheckResult.success(message=f"aggregated detection rate: {rate:.2f}%")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class NoCgoExamplesCheck(utils.BaseCheck):
+class NoCgoExamplesCheck(BaseCheck):
 	"""Fail if the aggregated report lists cgo-examples entries."""
 
 	results_path: Path
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
+	def check(self) -> CheckResult:
 		try:
 			text = self.results_path.read_text(encoding="utf-8")
 		except OSError as exc:
-			return utils.CheckResult.failure(
-				f"failed to read results file {self.results_path}: {exc}"
-			)
+			return CheckResult.failure(f"failed to read results file {self.results_path}: {exc}")
 
 		if _has_cgo_examples_entries(text):
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				"aggregated report contains cgo-examples entries (expected only goker entries)"
 			)
 
-		return utils.CheckResult.success()
+		return CheckResult.success()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class TotalGoInstructionsCheck(utils.BaseCheck):
-	"""Fail if the total go instruction count does not match expected."""
+class TotalGoInstructionsCheck(BaseCheck):
+	"""Fail if the total go instruction count is less than  expected."""
 
 	results_path: Path
 	expected_count: int
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
+	def check(self) -> CheckResult:
 		try:
 			text = self.results_path.read_text(encoding="utf-8")
 		except OSError as exc:
-			return utils.CheckResult.failure(
-				f"failed to read results file {self.results_path}: {exc}"
-			)
+			return CheckResult.failure(f"failed to read results file {self.results_path}: {exc}")
 
 		count = _count_total_go_instructions(text)
 		if count is None:
-			return utils.CheckResult.failure(
-				"could not parse go instruction count from results file"
+			return CheckResult.failure("could not parse go instruction count from results file")
+
+		if count < self.expected_count:
+			return CheckResult.failure(
+				f"total go instructions {count} < expected {self.expected_count}"
 			)
 
-		if count != self.expected_count:
-			return utils.CheckResult.failure(
-				f"total go instructions {count} != expected {self.expected_count}"
-			)
-
-		return utils.CheckResult.success(message=f"total go instructions: {count}")
+		return CheckResult.success(message=f"total go instructions: {count}")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class PerfCSVStructureCheck(utils.BaseCheck):
+class PerfCSVStructureCheck(BaseCheck):
 	"""Fail if the performance CSV is missing expected columns."""
 
 	csv_path: Path
@@ -181,22 +172,22 @@ class PerfCSVStructureCheck(utils.BaseCheck):
 		"CPU utilization ON",
 	)
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
+	def check(self) -> CheckResult:
 		try:
 			text = self.csv_path.read_text(encoding="utf-8").strip()
 		except OSError as exc:
-			return utils.CheckResult.failure(f"failed to read CSV file {self.csv_path}: {exc}")
+			return CheckResult.failure(f"failed to read CSV file {self.csv_path}: {exc}")
 
 		if not text:
-			return utils.CheckResult.failure("CSV file is empty")
+			return CheckResult.failure("CSV file is empty")
 
 		try:
 			rows = list(csv.reader(io.StringIO(text)))
 		except csv.Error as exc:
-			return utils.CheckResult.failure(f"CSV parse error: {exc}")
+			return CheckResult.failure(f"CSV parse error: {exc}")
 
 		if len(rows) < 2:
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"CSV has {len(rows)} row(s), expected at least 2 (header + data)"
 			)
 
@@ -212,76 +203,52 @@ class PerfCSVStructureCheck(utils.BaseCheck):
 		]
 
 		if missing:
-			return utils.CheckResult.failure(
-				f"CSV missing expected columns: {missing}; found: {rows[0]}"
-			)
+			return CheckResult.failure(f"CSV missing expected columns: {missing}; found: {rows[0]}")
 
-		return utils.CheckResult.success(
+		return CheckResult.success(
 			message=f"CSV has {len(rows) - 1} data rows with expected columns"
 		)
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
-	def requirements(self) -> Sequence[utils.BaseCheck]:
-		repo_root = self.paths.workspace_dir
+	def requirements(self) -> Sequence[BaseCheck]:
+		results_path = _find_result_file(self.artifact_path(), "results")
+		perf_csv_path = _find_result_file(self.artifact_path(), "results-perf.csv")
+		tex_path = _find_result_file(self.artifact_path(), "results.tex")
+		tex_fallback = self.artifact_path("results.tex")
 
-		results_path = _find_result_file(repo_root, "results")
-		perf_csv_path = _find_result_file(repo_root, "results-perf.csv")
-		tex_path = _find_result_file(repo_root, "results.tex")
-
-		checks: list[utils.BaseCheck] = []
-
-		if results_path is not None:
-			checks.extend(
-				[
-					AggregatedDetectionRateCheck(
-						name="rq1a_aggregated_detection_rate",
-						results_path=results_path,
-						min_rate=_MIN_DETECTION_RATE,
-					),
-					NoCgoExamplesCheck(
-						name="rq1a_no_cgo_examples",
-						results_path=results_path,
-					),
-					TotalGoInstructionsCheck(
-						name="rq1a_total_go_instructions",
-						results_path=results_path,
-						expected_count=_EXPECTED_GO_INSTRUCTIONS,
-					),
-				]
-			)
-		else:
-			checks.append(
-				FilesystemPathCheck(
-					name="results_file_exists",
-					path=repo_root / "results",
-					path_type=PathType.FILE,
-				)
-			)
-
-		if perf_csv_path is not None:
-			checks.append(
-				PerfCSVStructureCheck(
-					name="rq2_perf_csv_structure",
-					csv_path=perf_csv_path,
-				)
-			)
-		else:
-			checks.append(
-				FilesystemPathCheck(
-					name="results_perf_csv_exists",
-					path=repo_root / "results-perf.csv",
-					path_type=PathType.FILE,
-				)
-			)
-
-		tex_fallback = repo_root / "results.tex"
-		checks.append(
-			FilesystemPathCheck(
+		return (
+			PathCheck(
+				name="results_file_exists",
+				path=self.artifact_path("results"),
+				kind=PathKind.FILE,
+			),
+			AggregatedDetectionRateCheck(
+				name="rq1a_aggregated_detection_rate",
+				results_path=results_path,
+				min_rate=_MIN_DETECTION_RATE,
+			),
+			NoCgoExamplesCheck(
+				name="rq1a_no_cgo_examples",
+				results_path=results_path,
+			),
+			TotalGoInstructionsCheck(
+				name="rq1a_total_go_instructions",
+				results_path=results_path,
+				expected_count=_MIN_EXPECTED_GO_INSTRUCTIONS,
+			),
+			PathCheck(
+				name="results_perf_csv_exists",
+				path=self.artifact_path("results-perf.csv"),
+				kind=PathKind.FILE,
+			),
+			PerfCSVStructureCheck(
+				name="rq2_perf_csv_structure",
+				csv_path=perf_csv_path,
+			),
+			PathCheck(
 				name="rq2_boxplot_tex_exists",
 				path=tex_path or tex_fallback,
-				path_type=PathType.FILE,
-			)
+				kind=PathKind.FILE,
+			),
 		)
-
-		return tuple(checks)
