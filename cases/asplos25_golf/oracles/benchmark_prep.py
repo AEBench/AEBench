@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind, utils
+from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind, checks, utils
 from evaluator.oracles.utils import BaseCheck, CheckResult, RuntimeCheckExecutor
 
 from .consts import (
@@ -79,22 +79,22 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 				path=self.app_path(CORRECT_PATH),
 				kind=PathKind.DIRECTORY,
 			),
-			DirectoryContainsTestCases(
+            self.direcoty_glob_count_check(
 				name="goker_suite_has_tests",
-				path=self.app_path(DEADLOCK_GOKER_PATH),
+				directory=self.app_path(DEADLOCK_GOKER_PATH),
 				min_count=ref["deadlock/goker"],
-				executor=self.executor,
+                pattern="*/main.go",
 			),
-			DirectoryContainsTestCases(
+            self.direcoty_glob_count_check(
 				name="cgo_examples_has_tests",
-				path=self.app_path(DEADLOCK_CGO_PATH),
+				directory=self.app_path(DEADLOCK_CGO_PATH),
 				min_count=ref["deadlock/cgo-examples"],
-				executor=self.executor,
+                pattern="*/main.go",
 			),
-			DirectoryContainsTestCases(
+            self.direcoty_glob_count_check(
 				name="correct_suite_has_tests",
-				path=self.app_path(CORRECT_PATH),
+				directory=self.app_path(CORRECT_PATH),
 				min_count=ref["correct"],
-				executor=self.executor,
+                pattern="*/main.go",
 			),
 		)

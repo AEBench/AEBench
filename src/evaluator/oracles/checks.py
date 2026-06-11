@@ -476,6 +476,34 @@ class TextFileEqualityCheck(utils.BaseCheck):
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class DirectoryGlobCountCheck(utils.BaseCheck):
+    """Fail if fewer than min_count entries match the glob pattern."""
+
+    directory: pathlib.Path
+    pattern: str
+    min_count: int = 1
+    executor: utils.RuntimeCheckExecutor | None = dataclasses.field(
+        default=None, repr=False, compare=False
+    )
+
+    def check(self) -> utils.CheckResult:
+        if not utils.check_path_is_dir(self.directory, executor=self.executor):
+            return utils.CheckResult.failure(f"directory missing: {self.directory}")
+        try:
+            matches = utils.check_glob_directory(self.directory, self.pattern, executor=self.executor)
+        except OSError as exc:
+            return utils.CheckResult.failure(f"cannot scan {self.directory}: {exc}")
+        if len(matches) < self.min_count:
+            return utils.CheckResult.failure(
+            f"found {len(matches)} entr(y/ies) matching {self.pattern!r} in "
+                f"{self.directory}, expected at least {self.min_count}"
+            )
+        return utils.CheckResult.success(
+			message=f"{len(matches)} entr(y/ies) matching {self.pattern!r} in {self.directory}"
+		)
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class ListSimilarityCheck(utils.BaseCheck):
 	observed: Sequence[float]
 	reference: Sequence[float]
