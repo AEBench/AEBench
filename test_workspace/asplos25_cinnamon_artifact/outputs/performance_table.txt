@@ -1,0 +1,6 @@
+
+| Benchmark    | Cinnamon-M   | Cinnamon-4   | Cinnamon-8   | Cinnamon-12  | CraterLake   | CiFHER       | ARK          |
+| Bootstrap    |         1.87 |         1.98 |         1.71 |         1.63 |         6.33 |         5.58 |         3.50 |
+| Resnet       |       105.94 |        94.52 |        73.85 |        70.57 |       321.00 |       189.00 |       125.00 |
+| HELR         |        73.20 |        87.61 |        68.74 |        48.76 |       121.91 |       106.88 | -            |
+| BERT         |         3.83 |         3.83 |         2.07 |         1.66 | -            | -            | -            |
