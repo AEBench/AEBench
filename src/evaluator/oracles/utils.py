@@ -220,7 +220,8 @@ class RuntimeCheckExecutor(Protocol):
 	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
 		raise NotImplementedError
 
-	def glob_directory(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+		''' For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")'''
 		raise NotImplementedError
 
 	def close(self) -> None:
@@ -390,14 +391,15 @@ def check_read_file_text(
 	return path.read_text(encoding=encoding)
 
 
-def check_glob_directory(
+def glob(
 	path: pathlib.Path,
 	pattern: str,
 	*,
 	executor: RuntimeCheckExecutor | None = None,
 ) -> list[pathlib.Path]:
+	''' For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")'''
 	if executor is not None:
-		return executor.glob_directory(path, pattern)
+		return executor.glob(path, pattern)
 	return list(path.glob(pattern))
 
 
@@ -438,7 +440,7 @@ class LocalRuntimeCheckExecutor:
 	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
 		return path.read_text(encoding=encoding)
 
-	def glob_directory(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
 		return list(path.glob(pattern))
 
 	def run_process_capture(
@@ -574,7 +576,7 @@ class SessionRuntimeCheckExecutor(_MappedRuntimeExecutor):
 			raise OSError(f"failed to read {path}: {detail}")
 		return result.stdout or ""
 
-	def glob_directory(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
 		target = self._translate_cwd(path) or str(path)
 		script = 'shopt -s globstar nullglob; for f in "$1"/$2; do echo "$f"; done'
 		try:
@@ -796,7 +798,8 @@ class DockerRuntimeCheckExecutor(_MappedRuntimeExecutor):
 			raise OSError(f"failed to read {path}: {detail}")
 		return result.stdout or ""
 
-	def glob_directory(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+		''' For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")'''
 		target = str(self._translate_path(path) or path)
 		script = 'shopt -s globstar nullglob; for f in "$1"/$2; do echo "$f"; done'
 		try:
@@ -930,7 +933,7 @@ class UnavailableRuntimeCheckExecutor:
 	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
 		raise RuntimeError(self._message)
 
-	def glob_directory(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
 		raise RuntimeError(self._message)
 
 	def close(self) -> None:

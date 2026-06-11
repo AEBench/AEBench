@@ -490,7 +490,7 @@ class DirectoryGlobCountCheck(utils.BaseCheck):
         if not utils.check_path_is_dir(self.directory, executor=self.executor):
             return utils.CheckResult.failure(f"directory missing: {self.directory}")
         try:
-            matches = utils.check_glob_directory(self.directory, self.pattern, executor=self.executor)
+            matches = utils.glob(self.directory, self.pattern, executor=self.executor)
         except OSError as exc:
             return utils.CheckResult.failure(f"cannot scan {self.directory}: {exc}")
         if len(matches) < self.min_count:
