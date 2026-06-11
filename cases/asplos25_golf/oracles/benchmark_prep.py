@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind, checks, utils
+from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind, utils
 from evaluator.oracles.utils import BaseCheck, CheckResult, RuntimeCheckExecutor
 
 from .consts import (
