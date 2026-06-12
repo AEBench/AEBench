@@ -221,7 +221,7 @@ class RuntimeCheckExecutor(Protocol):
 		raise NotImplementedError
 
 	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
-		''' For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")'''
+		"""For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")"""
 		raise NotImplementedError
 
 	def close(self) -> None:
@@ -397,7 +397,7 @@ def glob(
 	*,
 	executor: RuntimeCheckExecutor | None = None,
 ) -> list[pathlib.Path]:
-	''' For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")'''
+	"""For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")"""
 	if executor is not None:
 		return executor.glob(path, pattern)
 	return list(path.glob(pattern))
@@ -799,7 +799,7 @@ class DockerRuntimeCheckExecutor(_MappedRuntimeExecutor):
 		return result.stdout or ""
 
 	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
-		''' For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")'''
+		"""For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")"""
 		target = str(self._translate_path(path) or path)
 		script = 'shopt -s globstar nullglob; for f in "$1"/$2; do echo "$f"; done'
 		try:
