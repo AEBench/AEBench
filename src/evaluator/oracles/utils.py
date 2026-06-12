@@ -952,9 +952,7 @@ def build_runtime_check_executor(context: OracleInput) -> RuntimeCheckExecutor:
 	if not image:
 		return cast(
 			RuntimeCheckExecutor,
-			UnavailableRuntimeCheckExecutor(
-				message="docker oracle checks require runtime.image"
-			),
+			UnavailableRuntimeCheckExecutor(message="docker oracle checks require runtime.image"),
 		)
 
 	# Recreate Docker checks from the recorded task image
