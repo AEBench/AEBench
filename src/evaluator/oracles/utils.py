@@ -890,6 +890,7 @@ def build_runtime_check_executor(context: OracleInput) -> RuntimeCheckExecutor:
 
 	# Use the Docker runtime; run oracles inside Docker
 	if oracle_mode == RuntimeMode.DOCKER:
+		# NOTE: oracle_image is guaranteed not NULL/None by OracleRuntimeConfig validation
 		oracle_image: str = getattr(oracle_runtime, "image", "")
 		return cast(
 			RuntimeCheckExecutor,
@@ -939,20 +940,16 @@ def build_runtime_check_executor(context: OracleInput) -> RuntimeCheckExecutor:
 
 	# Fail if unsupported mode
 	if runtime_result.runtime.mode != RuntimeMode.DOCKER:
-		return cast(
-			RuntimeCheckExecutor,
-			UnavailableRuntimeCheckExecutor(
-				message=f"unsupported inherited runtime mode: {runtime_result.runtime.mode!r}"
-			),
+		raise RuntimeError(
+			f"Cannot build oracle runtime executor: {runtime_result.runtime.mode} mode is unsuported."
 		)
 
 	image = runtime_result.runtime.saved_image or runtime_result.runtime.image
 
 	# Fail if no Docker image to reuse
 	if not image:
-		return cast(
-			RuntimeCheckExecutor,
-			UnavailableRuntimeCheckExecutor(message="docker oracle checks require runtime.image"),
+		raise RuntimeError(
+			"Cannot build oracle runtime executor: inherited Docker runtime has no image."
 		)
 
 	# Recreate Docker checks from the recorded task image
