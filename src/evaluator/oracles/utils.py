@@ -21,7 +21,7 @@ from typing import IO, Any, Protocol, cast, runtime_checkable
 from models import OracleInput, RuntimeMode
 from runtime.backend import BenchRuntime, validate_env_var_name
 
-from ..constants import SUBPROCESS_WAIT_TIMEOUT
+from ..constants import DEFAULT_ORACLE_CHECK_TIMEOUT, SUBPROCESS_WAIT_TIMEOUT
 
 DEFAULT_MAX_CAPTURE_CHARS = 16_384
 DEFAULT_MAX_TRUNCATED_MESSAGE_CHARS = 2_048
@@ -584,7 +584,7 @@ class SessionRuntimeCheckExecutor(_MappedRuntimeExecutor):
 				["bash", "-c", script, "--", target, pattern],
 				cwd=self._translate_cwd(None),
 				env=None,
-				timeout=10.0,
+				timeout=DEFAULT_ORACLE_CHECK_TIMEOUT,
 			)
 		except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
 			raise OSError(f"failed to glob {path}: {exc}") from exc
@@ -807,7 +807,7 @@ class DockerRuntimeCheckExecutor(_MappedRuntimeExecutor):
 				cmd=["bash", "-c", script, "--", target, pattern],
 				cwd=None,
 				env=None,
-				timeout_seconds=10.0,
+				timeout_seconds=DEFAULT_ORACLE_CHECK_TIMEOUT,
 			)
 		except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
 			raise OSError(f"failed to glob {path}: {exc}") from exc
