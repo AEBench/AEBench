@@ -21,7 +21,7 @@ from typing import IO, Any, Protocol, cast, runtime_checkable
 from models import OracleInput, RuntimeMode
 from runtime.backend import BenchRuntime, validate_env_var_name
 
-from ..constants import SUBPROCESS_WAIT_TIMEOUT
+from ..constants import DEFAULT_ORACLE_CHECK_TIMEOUT, SUBPROCESS_WAIT_TIMEOUT
 
 DEFAULT_MAX_CAPTURE_CHARS = 16_384
 DEFAULT_MAX_TRUNCATED_MESSAGE_CHARS = 2_048
@@ -220,6 +220,10 @@ class RuntimeCheckExecutor(Protocol):
 	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
 		raise NotImplementedError
 
+	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+		"""For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")"""
+		raise NotImplementedError
+
 	def close(self) -> None:
 		raise NotImplementedError
 
@@ -387,6 +391,18 @@ def check_read_file_text(
 	return path.read_text(encoding=encoding)
 
 
+def glob(
+	path: pathlib.Path,
+	pattern: str,
+	*,
+	executor: RuntimeCheckExecutor | None = None,
+) -> list[pathlib.Path]:
+	"""For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")"""
+	if executor is not None:
+		return executor.glob(path, pattern)
+	return list(path.glob(pattern))
+
+
 class LocalRuntimeCheckExecutor:
 	path_separator = os.pathsep
 
@@ -423,6 +439,9 @@ class LocalRuntimeCheckExecutor:
 
 	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
 		return path.read_text(encoding=encoding)
+
+	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+		return list(path.glob(pattern))
 
 	def run_process_capture(
 		self,
@@ -556,6 +575,24 @@ class SessionRuntimeCheckExecutor(_MappedRuntimeExecutor):
 			detail = (result.stderr or "").strip()
 			raise OSError(f"failed to read {path}: {detail}")
 		return result.stdout or ""
+
+	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+		target = self._translate_cwd(path) or str(path)
+		script = 'shopt -s globstar nullglob; for f in "$1"/$2; do echo "$f"; done'
+		try:
+			result = self._runtime_backend.run_process(
+				["bash", "-c", script, "--", target, pattern],
+				cwd=self._translate_cwd(None),
+				env=None,
+				timeout=DEFAULT_ORACLE_CHECK_TIMEOUT,
+			)
+		except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+			raise OSError(f"failed to glob {path}: {exc}") from exc
+		if result.returncode != 0:
+			detail = (result.stderr or "").strip()
+			raise OSError(f"failed to glob {path}: {detail or f'rc={result.returncode}'}")
+		lines = [ln for ln in (result.stdout or "").splitlines() if ln.strip()]
+		return [pathlib.Path(ln) for ln in lines]
 
 	def run_process_capture(
 		self,
@@ -761,6 +798,25 @@ class DockerRuntimeCheckExecutor(_MappedRuntimeExecutor):
 			raise OSError(f"failed to read {path}: {detail}")
 		return result.stdout or ""
 
+	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+		"""For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")"""
+		target = str(self._translate_path(path) or path)
+		script = 'shopt -s globstar nullglob; for f in "$1"/$2; do echo "$f"; done'
+		try:
+			result = self._docker_exec(
+				cmd=["bash", "-c", script, "--", target, pattern],
+				cwd=None,
+				env=None,
+				timeout_seconds=DEFAULT_ORACLE_CHECK_TIMEOUT,
+			)
+		except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+			raise OSError(f"failed to glob {path}: {exc}") from exc
+		if result.returncode != 0:
+			detail = (result.stderr or "").strip()
+			raise OSError(f"failed to glob {path}: {detail or f'rc={result.returncode}'}")
+		lines = [ln for ln in result.stdout.splitlines() if ln.strip()]
+		return [pathlib.Path(ln) for ln in lines]
+
 	def run_process_capture(
 		self,
 		*,
@@ -875,6 +931,9 @@ class UnavailableRuntimeCheckExecutor:
 		raise RuntimeError(self._message)
 
 	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
+		raise RuntimeError(self._message)
+
+	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
 		raise RuntimeError(self._message)
 
 	def close(self) -> None:
