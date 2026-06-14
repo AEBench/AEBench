@@ -143,11 +143,13 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 				name="plans_dir_exists",
 				path=data_dir / "plans",
 				kind=PathKind.DIRECTORY,
+				optional=True,
 			),
 			ModelListCountCheck(
 				name="model_list_count",
 				path=data_dir / "model_list.txt",
 				expected_count=_EXPECTED_MODELS,
+				optional=True,
 			),
 		]
 

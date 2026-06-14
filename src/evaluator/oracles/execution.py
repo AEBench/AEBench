@@ -132,6 +132,7 @@ def run_oracle(
 			workspace_dir=resolved_workspace_dir,
 			output_dir=out_dir,
 			runtime_result=runtime_result,
+			oracle_config=spec.oracle if spec else None,
 		)
 		context.runtime_session = runtime_session
 		context.runtime_backend = runtime_backend

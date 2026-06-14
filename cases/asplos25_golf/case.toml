@@ -1,12 +1,12 @@
-id = "golf"
+id = "asplos25_golf"
 
 [case_brief]
-core_claim = ""
-acceptable_evidence = ""
+core_claim = "build golf in a docker container and reproduce the benchmark outputs inside it"
+acceptable_evidence = "build artifacts present, datasets at expected sizes"
 allowed_tolerance = "Results may vary across environments but must preserve the reference trend."
 
 [run]
-id = "golf"
+id = "asplos25_golf"
 
 [run.instructions]
 path = "README.md"
@@ -27,8 +27,14 @@ score_mode = "phase_count"
 failure_mode = "fail_fast"
 placeholder = false
 
+[oracle.runtime]
+mode = "docker"
+image = "golf"
+app_dir = "/usr/app"
+
 [upstream]
 source_type = "git"
 url = "https://github.com/VladSaioc/ASPLOS-artifact-2025"
-ref = "552a9ded0552467669e4f9a954f4bb8a4e692d77"
+ref = "d00cf120331fc5dcaf43d37788bbc041f8b99abe"
 resolved_at = "2026-04-11T02:02:17.900240+00:00"
+

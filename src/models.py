@@ -394,11 +394,24 @@ class CaseStatus(str, Enum):
 	PENDING = "pending"
 
 
+class OracleRuntimeConfig(_Model):
+	mode: RuntimeMode | None = None
+	image: str | None = None
+	app_dir: str = "/"
+
+	@model_validator(mode="after")
+	def _validate(self) -> "OracleRuntimeConfig":
+		if self.mode == RuntimeMode.DOCKER and not self.image:
+			raise ValueError("oracle.runtime.image is required when oracle.runtime.mode = 'docker'")
+		return self
+
+
 class OracleConfig(_Model):
 	expected_score: int = 4
 	failure_mode: OracleFailureMode = OracleFailureMode.FAIL_FAST
 	placeholder: bool = False
 	notes: str | None = None
+	runtime: OracleRuntimeConfig = Field(default_factory=OracleRuntimeConfig)
 
 	@model_validator(mode="before")
 	@classmethod
@@ -492,6 +505,7 @@ class OracleInput(BaseModel):
 	runtime_executor: object | None = None
 	runtime_session: object | None = None
 	runtime_backend: object | None = None
+	oracle_config: OracleConfig | None = None
 
 
 class OraclePhaseResult(_Model):

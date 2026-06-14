@@ -35,6 +35,7 @@ _LOGS_CSV_REQUIRED_COLUMNS = {
 }
 
 
+
 def _extract_plan_xputs(plan_dir: Path) -> list[tuple[str, float]]:
 	"""Extract (filename[index], xput) pairs from plan JSON files in a directory."""
 	if not plan_dir.is_dir():

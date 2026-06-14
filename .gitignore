@@ -1,3 +1,7 @@
+# cases/<case>/artifact
+cases/*/artifact/
+
+
 # Python bytecode / caches
 __pycache__/
 *.py[cod]
@@ -61,6 +65,7 @@ site/
 *.swp
 *.swo
 .cache/
+output/
 tmp/
 temp/
 

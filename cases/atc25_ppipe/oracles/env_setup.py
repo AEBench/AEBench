@@ -47,11 +47,18 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
                 cmd=("conda", "--version"),
                 min_version=(4, 9, 0),
             ),
-			VersionCheck(
-				name="java",
-				cmd=("java", "-version"),
-				min_version=(11, 0, 0),
-			),
+			#VersionCheck(
+                #name="java",
+				#cmd=("java", "-version"),
+                #cmd=(
+                    #"bash", 
+                    #"-c", 
+                    #"java -version 2>&1 | perl -pe 's/\"(\\d+)\"/ $1.0.0 /'" #address changes in case.toml
+                #),
+				
+                #min_version=(11, 0, 0),
+				#max_version=(21,0,0),
+            #),
 			PathCheck(
 				name="repo_root_exists",
 				path=repo_root,

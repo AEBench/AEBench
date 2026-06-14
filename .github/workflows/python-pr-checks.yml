@@ -1,0 +1,42 @@
+name: Python PR Checks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install development dependencies
+        run: uv sync --dev
+
+      - name: Build distribution artifacts
+        run: uv run --with build python -m build
+
+      - name: Run Ruff lint checks
+        run: uv run --group dev ruff check src tests
+
+      - name: Run Ruff format checks
+        run: uv run --group dev ruff format --check src tests
+
+      - name: Run mypy
+        run: MYPYPATH=src uv run --group dev mypy --explicit-package-bases src
+
+      - name: Run fast pytest suite
+        run: uv run python -m pytest tests/unit tests/functional
