@@ -40,6 +40,7 @@ class SourceType(str, Enum):
 class RuntimeMode(str, Enum):
 	LOCAL = "local"
 	DOCKER = "docker"
+	INHERIT = "inherit"
 
 
 class TaskStatus(str, Enum):
