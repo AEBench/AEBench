@@ -1,0 +1,41 @@
+id = "asplos24_rtl_repair"
+
+[case_brief]
+core_claim = "Build rtl-repair, stage the CirFix benchmarks, and reproduce the default repair-evaluation status counts from the ASPLOS'24 artifact."
+acceptable_evidence = "Built synth/osdd binaries, staged benchmark layout, and rtl-repair-default result.toml status counts matching the reference."
+allowed_tolerance = "Timeout counts may be lower on faster machines; success, cannot-repair, and no-repair counts must match the reference."
+
+[paper]
+title = "Automated Repair of RTL Designs"
+venue = "ASPLOS 2024"
+url = "https://github.com/ekiwi/rtl-repair"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+
+[run]
+id = "asplos24_rtl_repair"
+
+[run.instructions]
+path = "Readme.md"
+
+[run.runtime]
+mode = "local"
+timeout_ms = 345600000
+gpu = false
+interactive = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "fail_fast"
+placeholder = false
+
+[upstream]
+source_type = "git"
+url = "https://github.com/ekiwi/rtl-repair.git"
+ref = "71e1afc0b9a2327d008b46acd415cf3f0343a938"
+requested_ref = "asplos24"
+resolved_at = "2026-06-14T00:00:00.000000+00:00"
