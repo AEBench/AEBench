@@ -1,4 +1,4 @@
-"""Shared oracle infrastructure: checks, executors, subprocess helpers, and reporting."""
+"""Shared oracle infrastructure for subprocess helpers."""
 
 from __future__ import annotations
 
