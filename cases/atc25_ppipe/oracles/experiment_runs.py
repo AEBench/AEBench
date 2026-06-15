@@ -66,36 +66,6 @@ def _extract_plan_xputs(plan_dir: Path) -> list[tuple[str, float]]:
 	return results
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DirectoryGlobCountCheck(utils.BaseCheck):
-	"""Fail if fewer than min_count entries match the glob pattern."""
-
-	directory: Path
-	pattern: str
-	min_count: int = 1
-
-	def check(self) -> utils.CheckResult:
-		if not self.directory.is_dir():
-			return utils.CheckResult.failure(f"directory missing: {self.directory}")
-
-		try:
-			matches = list(self.directory.glob(self.pattern))
-		except OSError as exc:
-			return utils.CheckResult.failure(f"cannot scan {self.directory}: {exc}")
-
-		if len(matches) < self.min_count:
-			return utils.CheckResult.failure(
-				f"found {len(matches)} entr(y/ies) matching {self.pattern!r} in "
-				f"{self.directory}, expected at least {self.min_count}"
-			)
-
-		return utils.CheckResult.success(
-			message=(
-				f"{len(matches)} entr(y/ies) matching {self.pattern!r} "
-				f"in {self.directory}"
-			)
-		)
-
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PlanThroughputCorrelationCheck(utils.BaseCheck):
@@ -202,18 +172,19 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 				path=refs_plans,
 				kind=PathKind.DIRECTORY,
 			),
-			DirectoryGlobCountCheck(
+			self.directory_glob_count_check(
 				name="prepartition_mappings_dir_populated",
 				directory=outputs / "prepartition_mappings",
 				pattern="*",
 				min_count=1,
 			),
-			DirectoryGlobCountCheck(
+			self.directory_glob_count_check(
 				name="prepartition_mappings_csv",
 				directory=outputs / "prepartition_mappings",
 				pattern="*/*.csv",
 				min_count=1,
 			),
+
 		]
 
 		for workload in _REQUIRED_WORKLOADS:
@@ -260,7 +231,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 
 		for fig in ("fig6", "fig7", "fig8", "fig10"):
 			reqs.append(
-				DirectoryGlobCountCheck(
+				self.directory_glob_count_check(
 					name=f"figure_{fig}_output",
 					directory=outputs,
 					pattern=f"*{fig}*",

@@ -13,7 +13,6 @@ from evaluator.oracles.checks import PathCheck, PathKind, VersionCheck
 _CONDA_ENV_NAME_ENV = "AE_PPIPE_CONDA_ENV"
 _DEFAULT_CONDA_ENV_NAME = "ppipe"
 _BUILD_MODE_ENV = "AE_PPIPE_BUILD_MODE"
-_BUILD_TIMEOUT_SECONDS = 600.0
 
 
 
@@ -55,16 +54,18 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 		mode = self._build_mode()
 
 		if mode == "command":
+			#ensure conda env exists(py3.12), install requirements, ensures simulator is up
+			build_script = (
+				f"(conda env list | grep -qE '^{env_name}[[:space:]]' "
+				f"|| conda create -n {env_name} python=3.12 -y) && "
+				f"conda run -n {env_name} pip install -r requirements.txt && "
+				f"cd cluster-sim && ./gradlew installDist"
+			)
 			return (
 				CommandCheck(
 					name="gradle_install_dist",
 					cwd=repo_root,
-					cmd=(
-						"bash",
-						"-c", 
-						#covers conda build, python version check, gurobi, and change into java simulator folder
-						"conda create -n ppipe python=3.12 -y && conda run -n ppipe pip install -r requirements.txt && cd cluster-sim && ./gradlew installDist",
-					),
+					cmd=("bash", "-c", build_script),
 					timeout_seconds=_BUILD_TIMEOUT_SECONDS,
 				),
 				PathCheck(

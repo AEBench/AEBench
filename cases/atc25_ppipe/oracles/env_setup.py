@@ -32,33 +32,21 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 				cmd=("python3", "--version"),
 				min_version=(3, 11, 0),
 			),
-			#VersionCheck(
-				#name="gurobi",
-				#cmd=(
-					#"python3",
-					#"-c",
-					#"import gurobipy; print('.'.join(map(str, gurobipy.gurobi.version())))",
-				#),
-				#min_version=(10, 0, 0),
-				#optional=True,
-			#),
+			VersionCheck(
+				name="gurobi",
+				cmd=(
+					"python3",
+					"-c",
+					"import gurobipy; print('.'.join(map(str, gurobipy.gurobi.version())))",
+				),
+				min_version=(10, 0, 0),
+				optional=True,
+			),
 			VersionCheck(
                 name="conda",
                 cmd=("conda", "--version"),
                 min_version=(4, 9, 0),
             ),
-			#VersionCheck(
-                #name="java",
-				#cmd=("java", "-version"),
-                #cmd=(
-                    #"bash", 
-                    #"-c", 
-                    #"java -version 2>&1 | perl -pe 's/\"(\\d+)\"/ $1.0.0 /'" #address changes in case.toml
-                #),
-				
-                #min_version=(11, 0, 0),
-				#max_version=(21,0,0),
-            #),
 			PathCheck(
 				name="repo_root_exists",
 				path=repo_root,

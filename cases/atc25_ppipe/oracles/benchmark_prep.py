@@ -92,35 +92,6 @@ class ModelListCountCheck(utils.BaseCheck):
 		return utils.CheckResult.success(message=f"model_list.txt has {len(lines)} model(s)")
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DirectoryGlobCountCheck(utils.BaseCheck):
-	"""Fail if fewer than min_count entries match the glob pattern."""
-
-	directory: Path
-	pattern: str
-	min_count: int
-
-	def check(self) -> utils.CheckResult:
-		if not self.directory.is_dir():
-			return utils.CheckResult.failure(f"directory missing: {self.directory}")
-
-		try:
-			matches = list(self.directory.glob(self.pattern))
-		except OSError as exc:
-			return utils.CheckResult.failure(f"cannot scan {self.directory}: {exc}")
-
-		if len(matches) < self.min_count:
-			return utils.CheckResult.failure(
-				f"found {len(matches)} entr(y/ies) matching {self.pattern!r} in "
-				f"{self.directory}, expected at least {self.min_count}"
-			)
-
-		return utils.CheckResult.success(
-			message=(
-				f"{len(matches)} entr(y/ies) matching {self.pattern!r} "
-				f"in {self.directory}"
-			)
-		)
 
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
@@ -155,7 +126,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 
 		for subdir in _REQUIRED_MODEL_SUBDIRS:
 			checks.append(
-				DirectoryGlobCountCheck(
+				self.directory_glob_count_check(
 					name=f"models_{subdir}_populated",
 					directory=data_dir / "models" / subdir,
 					pattern="*",
@@ -176,7 +147,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 		)
 
 		checks.append(
-			DirectoryGlobCountCheck(
+			self.directory_glob_count_check(
 				name="prepartition_mappings",
 				directory=data_dir / "prepartition_mappings",
 				pattern="*/*.csv",
@@ -186,7 +157,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 
 		for plan_dir in _REQUIRED_PLAN_DIRS:
 			checks.append(
-				DirectoryGlobCountCheck(
+				self.directory_glob_count_check(
 					name=f"reference_plans_{plan_dir}",
 					directory=data_dir / "plans" / plan_dir,
 					pattern="*.json",
