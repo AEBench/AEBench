@@ -23,7 +23,6 @@ from .process import (
 	truncate_text,
 )
 
-
 PathLike = str | os.PathLike[str] | pathlib.Path
 
 
