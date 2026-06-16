@@ -35,6 +35,86 @@ _PATH_MOUNT_ORDER = (
 )
 
 
+def _prepare_runtime_command(
+	cmd: str | Sequence[str],
+	*,
+	use_shell: bool,
+) -> list[str]:
+	if use_shell:
+		shell_cmd = (
+			cmd
+			if isinstance(cmd, str)
+			else " ".join(shlex.quote(part) for part in cmd)
+		)
+		return ["sh", "-lc", shell_cmd]
+
+	if isinstance(cmd, str):
+		raise TypeError(
+			"use_shell=False requires cmd to be a sequence of argv strings"
+		)
+
+	return list(cmd)
+
+
+def _notify_process_output(
+	*,
+	stdout: str,
+	stderr: str,
+	on_chunk: Callable[[str, str], None] | None,
+) -> None:
+	if on_chunk is None:
+		return
+	if stdout:
+		on_chunk("stdout", stdout)
+	if stderr:
+		on_chunk("stderr", stderr)
+
+
+def _completed_process_result(
+	result: subprocess.CompletedProcess[str],
+	*,
+	capture_limit_chars: int,
+	on_chunk: Callable[[str, str], None] | None,
+) -> ProcResult:
+	stdout = result.stdout or ""
+	stderr = result.stderr or ""
+
+	_notify_process_output(
+		stdout=stdout,
+		stderr=stderr,
+		on_chunk=on_chunk,
+	)
+
+	return ProcResult(
+		returncode=result.returncode,
+		stdout=truncate_text(stdout, capture_limit_chars),
+		stderr=truncate_text(stderr, capture_limit_chars),
+		timed_out=False,
+	)
+
+
+def _timeout_process_result(
+	exc: subprocess.TimeoutExpired,
+	*,
+	capture_limit_chars: int,
+	on_chunk: Callable[[str, str], None] | None,
+) -> ProcResult:
+	stdout = decode_text(exc.stdout)
+	stderr = decode_text(exc.stderr)
+
+	_notify_process_output(
+		stdout=stdout,
+		stderr=stderr,
+		on_chunk=on_chunk,
+	)
+
+	return ProcResult(
+		returncode=None,
+		stdout=truncate_text(stdout, capture_limit_chars),
+		stderr=truncate_text(stderr, capture_limit_chars),
+		timed_out=True,
+	)
+
 def resolve_check_executable(
 	executable: str,
 	*,
@@ -158,6 +238,89 @@ def check_read_file_text(
 	return path.read_text(encoding=encoding)
 
 
+class _RuntimeCheckExecutorBase:
+	"""Provides shared behavior for runtime check executors."""
+
+	def __init__(self, *, default_cwd: pathlib.Path) -> None:
+		self._default_cwd = _resolved_path(default_cwd)
+
+	def _effective_cwd(
+		self,
+		cwd: pathlib.Path | None,
+	) -> pathlib.Path:
+		return self._default_cwd if cwd is None else cwd
+
+	def _prepare_command(
+		self,
+		cmd: str | Sequence[str],
+		*,
+		use_shell: bool,
+	) -> list[str]:
+		if use_shell:
+			shell_cmd = (
+				cmd
+				if isinstance(cmd, str)
+				else " ".join(shlex.quote(part) for part in cmd)
+			)
+			return ["sh", "-lc", shell_cmd]
+
+		if isinstance(cmd, str):
+			raise TypeError(
+				"use_shell=False requires cmd to be a sequence of argv strings"
+			)
+
+		return list(cmd)
+
+	def _completed_result(
+		self,
+		result: subprocess.CompletedProcess[str],
+		*,
+		capture_limit_chars: int,
+		on_chunk: Callable[[str, str], None] | None,
+	) -> ProcResult:
+		stdout = result.stdout or ""
+		stderr = result.stderr or ""
+
+		if on_chunk is not None:
+			if stdout:
+				on_chunk("stdout", stdout)
+			if stderr:
+				on_chunk("stderr", stderr)
+
+		return ProcResult(
+			returncode=result.returncode,
+			stdout=truncate_text(stdout, capture_limit_chars),
+			stderr=truncate_text(stderr, capture_limit_chars),
+			timed_out=False,
+		)
+
+	def _timeout_result(
+		self,
+		exc: subprocess.TimeoutExpired,
+		*,
+		capture_limit_chars: int,
+		on_chunk: Callable[[str, str], None] | None,
+	) -> ProcResult:
+		stdout = decode_text(exc.stdout)
+		stderr = decode_text(exc.stderr)
+
+		if on_chunk is not None:
+			if stdout:
+				on_chunk("stdout", stdout)
+			if stderr:
+				on_chunk("stderr", stderr)
+
+		return ProcResult(
+			returncode=None,
+			stdout=truncate_text(stdout, capture_limit_chars),
+			stderr=truncate_text(stderr, capture_limit_chars),
+			timed_out=True,
+		)
+
+	def close(self) -> None:
+		return None
+
+
 @runtime_checkable
 class RuntimeCheckExecutor(Protocol):
 	@property
@@ -254,11 +417,11 @@ def build_path_mounts(context: OracleInput) -> list[_PathMount]:
 	return mounts
 
 
-class LocalRuntimeCheckExecutor:
+class LocalRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 	path_separator = os.pathsep
 
 	def __init__(self, *, default_cwd: pathlib.Path) -> None:
-		self._default_cwd = _resolved_path(default_cwd)
+		super().__init__(default_cwd=default_cwd)
 
 	def resolve_executable(
 		self,
@@ -323,23 +486,7 @@ class LocalRuntimeCheckExecutor:
 		return None
 
 
-class _MappedRuntimeExecutor:
-	def __init__(self, *, path_mounts: Sequence[_PathMount], default_cwd: pathlib.Path) -> None:
-		self._path_mounts = tuple(path_mounts)
-		self._default_cwd = _resolved_path(default_cwd)
-
-	def _translate_path(self, path: pathlib.Path | None) -> pathlib.PurePosixPath | None:
-		if path is None:
-			return self._translate_path(self._default_cwd)
-		resolved = _resolved_path(path)
-		for mount in self._path_mounts:
-			translated = mount.translate(resolved)
-			if translated is not None:
-				return translated
-		return pathlib.PurePosixPath(str(resolved).replace(os.sep, "/"))
-
-
-class SessionRuntimeCheckExecutor(_MappedRuntimeExecutor):
+class SessionRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 	def __init__(
 		self,
 		*,
@@ -487,7 +634,7 @@ class SessionRuntimeCheckExecutor(_MappedRuntimeExecutor):
 		return None
 
 
-class DockerRuntimeCheckExecutor(_MappedRuntimeExecutor):
+class DockerRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 	path_separator = ":"
 
 	def __init__(
