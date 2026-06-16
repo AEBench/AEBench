@@ -12,6 +12,7 @@ from ..constants import DEFAULT_ORACLE_CHECK_TIMEOUT, REFS_DIRNAME
 from . import utils
 from .checks import (
 	CommandCheck,
+	DirectoryGlobCountCheck,
 	EnvMatchMode,
 	EnvVarCheck,
 	PathCheck,
@@ -60,6 +61,11 @@ class _CaseOracleBase(_OraclePhaseBase):
 		self._case_dir = Path(context.case_dir).expanduser().resolve(strict=False)
 		self._artifact_dir = Path(context.artifact_dir).expanduser().resolve(strict=False)
 		self._workspace_dir = Path(context.workspace_dir).expanduser().resolve(strict=False)
+		self._app_dir = (
+			Path(context.oracle_config.runtime.app_dir)
+			if context.oracle_config and context.oracle_config.runtime
+			else Path(context.artifact_dir).expanduser().resolve(strict=False)
+		)
 		self._output_dir = Path(context.output_dir).expanduser().resolve(strict=False)
 		self._refs_dir = (self._case_dir / REFS_DIRNAME).expanduser().resolve(strict=False)
 		self._executor: utils.RuntimeCheckExecutor | None = cast(
@@ -75,6 +81,9 @@ class _CaseOracleBase(_OraclePhaseBase):
 
 	def artifact_path(self, *parts: str | Path) -> Path:
 		return self._artifact_dir.joinpath(*parts) if parts else self._artifact_dir
+
+	def app_path(self, *parts: str | Path) -> Path:
+		return self._app_dir.joinpath(*parts) if parts else self._app_dir
 
 	def workspace_path(self, *parts: str | Path) -> Path:
 		return self._workspace_dir.joinpath(*parts) if parts else self._workspace_dir
@@ -178,6 +187,24 @@ class _CaseOracleBase(_OraclePhaseBase):
 			optional=optional,
 			observed_path=observed_path,
 			reference_path=reference_path,
+			executor=self._executor,
+		)
+
+	def direcoty_glob_count_check(
+		self,
+		*,
+		name: str,
+		directory: Path,
+		pattern: str,
+		min_count: int = 1,
+		optional: bool = False,
+	) -> DirectoryGlobCountCheck:
+		return DirectoryGlobCountCheck(
+			name=name,
+			optional=optional,
+			directory=directory,
+			pattern=pattern,
+			min_count=min_count,
 			executor=self._executor,
 		)
 

@@ -108,7 +108,7 @@ def test_missing_case_toml_raises(tmp_path: Path) -> None:
 		load_case_spec(case_dir)
 
 
-def test_missing_refs_dir_raises(tmp_path: Path) -> None:
+def test_missing_refs_dir_is_allowed(tmp_path: Path) -> None:
 	case_dir = tmp_path / "no_refs"
 	case_dir.mkdir()
 	_write(case_dir / "case.toml", _MINIMAL_TOML)
@@ -116,8 +116,9 @@ def test_missing_refs_dir_raises(tmp_path: Path) -> None:
 	oracle_dir.mkdir()
 	_write(oracle_dir / "env_setup.py", _ORACLE_STUB)
 
-	with pytest.raises(CaseBundleError, match="refs"):
-		load_case_spec(case_dir)
+	case = load_case_spec(case_dir)
+
+	assert case.id
 
 
 def test_missing_oracle_dir_raises(tmp_path: Path) -> None:

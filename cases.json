@@ -7,8 +7,8 @@
     "bundles_subdir": "cases"
   },
   "cases": {
-    "asplos24_golf": {
-      "path": "cases/asplos24_golf"
+    "asplos25_golf": {
+      "path": "cases/asplos25_golf"
     },
     "asplos25_cinnamon": {
       "path": "cases/asplos25_cinnamon"

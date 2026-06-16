@@ -21,7 +21,7 @@ from typing import IO, Any, Protocol, cast, runtime_checkable
 from models import OracleInput, RuntimeMode
 from runtime.backend import BenchRuntime, validate_env_var_name
 
-from ..constants import SUBPROCESS_WAIT_TIMEOUT
+from ..constants import DEFAULT_ORACLE_CHECK_TIMEOUT, SUBPROCESS_WAIT_TIMEOUT
 
 DEFAULT_MAX_CAPTURE_CHARS = 16_384
 DEFAULT_MAX_TRUNCATED_MESSAGE_CHARS = 2_048
@@ -220,6 +220,10 @@ class RuntimeCheckExecutor(Protocol):
 	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
 		raise NotImplementedError
 
+	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+		"""For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")"""
+		raise NotImplementedError
+
 	def close(self) -> None:
 		raise NotImplementedError
 
@@ -387,6 +391,18 @@ def check_read_file_text(
 	return path.read_text(encoding=encoding)
 
 
+def glob(
+	path: pathlib.Path,
+	pattern: str,
+	*,
+	executor: RuntimeCheckExecutor | None = None,
+) -> list[pathlib.Path]:
+	"""For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")"""
+	if executor is not None:
+		return executor.glob(path, pattern)
+	return list(path.glob(pattern))
+
+
 class LocalRuntimeCheckExecutor:
 	path_separator = os.pathsep
 
@@ -423,6 +439,9 @@ class LocalRuntimeCheckExecutor:
 
 	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
 		return path.read_text(encoding=encoding)
+
+	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+		return list(path.glob(pattern))
 
 	def run_process_capture(
 		self,
@@ -556,6 +575,24 @@ class SessionRuntimeCheckExecutor(_MappedRuntimeExecutor):
 			detail = (result.stderr or "").strip()
 			raise OSError(f"failed to read {path}: {detail}")
 		return result.stdout or ""
+
+	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+		target = self._translate_cwd(path) or str(path)
+		script = 'shopt -s globstar nullglob; for f in "$1"/$2; do echo "$f"; done'
+		try:
+			result = self._runtime_backend.run_process(
+				["bash", "-c", script, "--", target, pattern],
+				cwd=self._translate_cwd(None),
+				env=None,
+				timeout=DEFAULT_ORACLE_CHECK_TIMEOUT,
+			)
+		except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+			raise OSError(f"failed to glob {path}: {exc}") from exc
+		if result.returncode != 0:
+			detail = (result.stderr or "").strip()
+			raise OSError(f"failed to glob {path}: {detail or f'rc={result.returncode}'}")
+		lines = [ln for ln in (result.stdout or "").splitlines() if ln.strip()]
+		return [pathlib.Path(ln) for ln in lines]
 
 	def run_process_capture(
 		self,
@@ -761,6 +798,25 @@ class DockerRuntimeCheckExecutor(_MappedRuntimeExecutor):
 			raise OSError(f"failed to read {path}: {detail}")
 		return result.stdout or ""
 
+	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+		"""For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")"""
+		target = str(self._translate_path(path) or path)
+		script = 'shopt -s globstar nullglob; for f in "$1"/$2; do echo "$f"; done'
+		try:
+			result = self._docker_exec(
+				cmd=["bash", "-c", script, "--", target, pattern],
+				cwd=None,
+				env=None,
+				timeout_seconds=DEFAULT_ORACLE_CHECK_TIMEOUT,
+			)
+		except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+			raise OSError(f"failed to glob {path}: {exc}") from exc
+		if result.returncode != 0:
+			detail = (result.stderr or "").strip()
+			raise OSError(f"failed to glob {path}: {detail or f'rc={result.returncode}'}")
+		lines = [ln for ln in result.stdout.splitlines() if ln.strip()]
+		return [pathlib.Path(ln) for ln in lines]
+
 	def run_process_capture(
 		self,
 		*,
@@ -877,27 +933,45 @@ class UnavailableRuntimeCheckExecutor:
 	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
 		raise RuntimeError(self._message)
 
+	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+		raise RuntimeError(self._message)
+
 	def close(self) -> None:
 		return None
 
 
 def build_runtime_check_executor(context: OracleInput) -> RuntimeCheckExecutor:
+	"""Build the executor used by oracle checks."""
 	path_mounts = build_path_mounts(context)
 	runtime_result = context.runtime_result
+	oracle_runtime = getattr(context.oracle_config, "runtime", None)
+	oracle_mode = getattr(oracle_runtime, "mode", RuntimeMode.INHERIT)
 
-	saved_image = None
-	if runtime_result is not None and runtime_result.runtime.mode == RuntimeMode.DOCKER:
-		saved_image = runtime_result.runtime.saved_image
-	if saved_image:
+	# Use the Docker runtime; run oracles inside Docker
+	if oracle_mode == RuntimeMode.DOCKER:
+		# NOTE: oracle_image is guaranteed not NULL/None by OracleRuntimeConfig validation
+		oracle_image: str = getattr(oracle_runtime, "image", "")
 		return cast(
 			RuntimeCheckExecutor,
 			DockerRuntimeCheckExecutor(
-				image=saved_image,
+				image=oracle_image,
 				path_mounts=path_mounts,
 				default_cwd=context.workspace_dir,
 			),
 		)
 
+	# Use the local runtime; run oracles on local machine
+	if oracle_mode == RuntimeMode.LOCAL:
+		return cast(
+			RuntimeCheckExecutor,
+			LocalRuntimeCheckExecutor(default_cwd=context.workspace_dir),
+		)
+
+	# Inherit the task runtime when requested; run oracles inside inherited runtime
+	if oracle_mode != RuntimeMode.INHERIT:
+		raise ValueError(f"unsupported oracle runtime mode: {oracle_mode!r}")
+
+	# Reuse the live task session when it is available
 	if context.runtime_session is not None and context.runtime_backend is not None:
 		return cast(
 			RuntimeCheckExecutor,
@@ -909,18 +983,35 @@ def build_runtime_check_executor(context: OracleInput) -> RuntimeCheckExecutor:
 			),
 		)
 
-	if runtime_result is None or runtime_result.runtime.mode == RuntimeMode.LOCAL:
-		return cast(
-			RuntimeCheckExecutor, LocalRuntimeCheckExecutor(default_cwd=context.workspace_dir)
-		)
-
-	image = runtime_result.runtime.image
-	if not image:
+	# Fall back to local checks when no task runtime was recorded
+	if runtime_result is None:
 		return cast(
 			RuntimeCheckExecutor,
-			UnavailableRuntimeCheckExecutor(message="docker oracle checks require runtime.image"),
+			LocalRuntimeCheckExecutor(default_cwd=context.workspace_dir),
 		)
 
+	# Reuse local checks when the task ran locally.
+	if runtime_result.runtime.mode == RuntimeMode.LOCAL:
+		return cast(
+			RuntimeCheckExecutor,
+			LocalRuntimeCheckExecutor(default_cwd=context.workspace_dir),
+		)
+
+	# Fail if unsupported mode
+	if runtime_result.runtime.mode != RuntimeMode.DOCKER:
+		raise RuntimeError(
+			f"Cannot build oracle runtime executor: {runtime_result.runtime.mode} mode is unsuported."
+		)
+
+	image = runtime_result.runtime.saved_image or runtime_result.runtime.image
+
+	# Fail if no Docker image to reuse
+	if not image:
+		raise RuntimeError(
+			"Cannot build oracle runtime executor: inherited Docker runtime has no image."
+		)
+
+	# Recreate Docker checks from the recorded task image
 	return cast(
 		RuntimeCheckExecutor,
 		DockerRuntimeCheckExecutor(
