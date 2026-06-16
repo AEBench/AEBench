@@ -47,7 +47,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
         outputs_dir = self.workspace_path() / "asplos25_cinnamon_artifact" / "outputs"
         checks: list[utils.BaseCheck] = []
 
-        # 1. Verify existence of the visual PDFs
+        #existance of pdfs
         for pdf_name in ["keyswitch_comparison.pdf", "bootstrap_comparison.pdf", "performance.pdf", "performance_per_dollar.pdf"]:
             checks.append(
                 PathCheck(
@@ -57,7 +57,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
                 )
             )
 
-        # 2. Check that the table text file exists
+        #txt file existance
         txt_path = outputs_dir / "performance_table.txt"
         checks.append(
             PathCheck(
@@ -67,11 +67,11 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
             )
         )
 
-        # 3. AEBench Native Pearson Correlation Check
+        
         observed = _extract_floats_from_txt(txt_path)
         reference = _load_reference_floats(self.ref_path("results.json"))
 
-        # Only run the correlation if we actually extracted data
+        #only run the correlation if data was actually extracted
         if observed and len(observed) == len(reference):
             checks.append(
                 ListSimilarityCheck(

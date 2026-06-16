@@ -39,30 +39,30 @@ class LFSFileResolvedCheck(utils.BaseCheck):
 
         return utils.CheckResult.success(message=f"{self.path.name}: {size} bytes")
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DirectoryGlobCountCheck(utils.BaseCheck):
-    """Fail if fewer than min_count entries match the glob pattern."""
-    directory: Path
-    pattern: str
-    min_count: int
+# @dataclass(frozen=True, slots=True, kw_only=True)
+# class DirectoryGlobCountCheck(utils.BaseCheck):
+#     """Fail if fewer than min_count entries match the glob pattern."""
+#     directory: Path
+#     pattern: str
+#     min_count: int
 
-    def check(self) -> utils.CheckResult:
-        if not self.directory.is_dir():
-            return utils.CheckResult.failure(f"directory missing: {self.directory}")
-        try:
-            matches = list(self.directory.glob(self.pattern))
-        except OSError as exc:
-            return utils.CheckResult.failure(f"cannot scan {self.directory}: {exc}")
+#     def check(self) -> utils.CheckResult:
+#         if not self.directory.is_dir():
+#             return utils.CheckResult.failure(f"directory missing: {self.directory}")
+#         try:
+#             matches = list(self.directory.glob(self.pattern))
+#         except OSError as exc:
+#             return utils.CheckResult.failure(f"cannot scan {self.directory}: {exc}")
 
-        if len(matches) < self.min_count:
-            return utils.CheckResult.failure(
-                f"found {len(matches)} entr(y/ies) matching {self.pattern!r} in "
-                f"{self.directory}, expected at least {self.min_count}"
-            )
+#         if len(matches) < self.min_count:
+#             return utils.CheckResult.failure(
+#                 f"found {len(matches)} entr(y/ies) matching {self.pattern!r} in "
+#                 f"{self.directory}, expected at least {self.min_count}"
+#             )
 
-        return utils.CheckResult.success(
-            message=f"{len(matches)} entr(y/ies) matching {self.pattern!r} in {self.directory}"
-        )
+#         return utils.CheckResult.success(
+#             message=f"{len(matches)} entr(y/ies) matching {self.pattern!r} in {self.directory}"
+#         )
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
     def requirements(self) -> Sequence[utils.BaseCheck]:
@@ -80,7 +80,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
         required_trace_subdirs = ["bert", "helr", "resnet"]
         for subdir in required_trace_subdirs:
             checks.append(
-                DirectoryGlobCountCheck(
+                self.direcoty_glob_count_check(
                     name=f"traces_{subdir}_populated",
                     directory=traces_dir / subdir,
                     pattern="*",
