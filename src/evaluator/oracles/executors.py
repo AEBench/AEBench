@@ -371,9 +371,6 @@ def build_path_mounts(context: OracleInput) -> list[_PathMount]:
 class LocalRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 	path_separator = os.pathsep
 
-	def __init__(self, *, default_cwd: pathlib.Path) -> None:
-		super().__init__(default_cwd=default_cwd)
-
 	def resolve_executable(
 		self,
 		executable: str,
@@ -433,9 +430,6 @@ class LocalRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 			on_chunk=on_chunk,
 		)
 
-	def close(self) -> None:
-		return None
-
 
 class SessionRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 	def __init__(
@@ -446,9 +440,19 @@ class SessionRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 		path_mounts: Sequence[_PathMount],
 		default_cwd: pathlib.Path,
 	) -> None:
-		super().__init__(path_mounts=path_mounts, default_cwd=default_cwd)
+		super().__init__(default_cwd=default_cwd)
 		self._session = session
 		self._runtime_backend = runtime_backend
+		self._path_mounts = tuple(path_mounts)
+
+	def _translate_path(
+		self,
+		path: pathlib.Path | None,
+	) -> pathlib.PurePosixPath:
+		return _translate_runtime_path(
+			self._effective_cwd(path),
+			path_mounts=self._path_mounts,
+		)
 
 	@property
 	def path_separator(self) -> str:
@@ -581,9 +585,6 @@ class SessionRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 			timed_out=False,
 		)
 
-	def close(self) -> None:
-		return None
-
 
 class DockerRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 	path_separator = ":"
@@ -595,10 +596,22 @@ class DockerRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 		path_mounts: Sequence[_PathMount],
 		default_cwd: pathlib.Path,
 	) -> None:
-		super().__init__(path_mounts=path_mounts, default_cwd=default_cwd)
+		super().__init__(default_cwd=default_cwd)
 		self._image = image
-		self._container_name = f"aebench-oracle-{int(time.time() * 1000)}"
+		self._path_mounts = tuple(path_mounts)
+		self._container_name = (
+			f"aebench-oracle-{int(time.time() * 1000)}"
+		)
 		self._container_id: str | None = None
+
+	def _translate_path(
+		self,
+		path: pathlib.Path | None,
+	) -> pathlib.PurePosixPath:
+		return _translate_runtime_path(
+			self._effective_cwd(path),
+			path_mounts=self._path_mounts,
+		)
 
 	def _ensure_container(self) -> str:
 		if self._container_id is not None:
