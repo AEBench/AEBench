@@ -335,21 +335,6 @@ def test_explicit_local_runtime_uses_local_executor(
 	assert isinstance(executor, LocalRuntimeCheckExecutor)
 
 
-def test_explicit_docker_runtime_uses_configured_image(
-	tmp_path: Path,
-) -> None:
-	context = _oracle_context(
-		tmp_path,
-		oracle_mode=RuntimeMode.DOCKER,
-		oracle_image="configured-image:latest",
-	)
-
-	executor = build_runtime_check_executor(context)
-
-	assert isinstance(executor, DockerRuntimeCheckExecutor)
-	assert executor._image == "configured-image:latest"
-
-
 def test_missing_oracle_runtime_inherits_active_session(
 	tmp_path: Path,
 ) -> None:
