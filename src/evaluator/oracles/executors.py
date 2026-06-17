@@ -238,6 +238,23 @@ def check_read_file_text(
 	return path.read_text(encoding=encoding)
 
 
+def _translate_runtime_path(
+	path: pathlib.Path,
+	*,
+	path_mounts: Sequence[_PathMount],
+) -> pathlib.PurePosixPath:
+	resolved = _resolved_path(path)
+
+	for mount in path_mounts:
+		translated = mount.translate(resolved)
+		if translated is not None:
+			return translated
+
+	return pathlib.PurePosixPath(
+		str(resolved).replace(os.sep, "/")
+	)
+
+
 class _RuntimeCheckExecutorBase:
 	"""Provides shared behavior for runtime check executors."""
 
