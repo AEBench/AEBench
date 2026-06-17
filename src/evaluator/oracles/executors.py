@@ -427,7 +427,7 @@ class LocalRuntimeCheckExecutor(RuntimeCheckExecutor):
 			run_env.update(env)
 		return run_subprocess_capture(
 			cmd=cmd,
-			cwd=cwd or self._default_cwd,
+			cwd=self._effective_cwd(cwd),
 			env=run_env,
 			timeout_seconds=timeout_seconds,
 			use_shell=use_shell,
@@ -792,8 +792,8 @@ def build_runtime_check_executor(
 		image = getattr(oracle_runtime, "image", None)
 		if not image:
 			raise RuntimeError(
-				"cannot build oracle runtime executor: "
-				"Docker mode requires an image"
+				"Cannot build oracle runtime executor: "
+				"Docker mode requires an image."
 			)
 
 		return DockerRuntimeCheckExecutor(
@@ -834,19 +834,18 @@ def build_runtime_check_executor(
 
 	if runtime_result.runtime.mode != RuntimeMode.DOCKER:
 		raise RuntimeError(
-			"cannot build oracle runtime executor: "
+			"Cannot build oracle runtime executor: "
 			"unsupported inherited runtime mode "
-			f"{runtime_result.runtime.mode!r}"
+			f"{runtime_result.runtime.mode!r}."
 		)
-
 	image = (
 		runtime_result.runtime.saved_image
 		or runtime_result.runtime.image
 	)
 	if not image:
 		raise RuntimeError(
-			"cannot build oracle runtime executor: "
-			"inherited Docker runtime has no image"
+			"Cannot build oracle runtime executor: "
+			"inherited Docker runtime has no image."
 		)
 
 	return DockerRuntimeCheckExecutor(
