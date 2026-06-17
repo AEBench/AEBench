@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import abc
 import dataclasses
 import os
 import pathlib
@@ -256,8 +257,8 @@ def check_read_file_text(
 	return path.read_text(encoding=encoding)
 
 
-class _RuntimeCheckExecutorBase:
-	"""Provides shared state for runtime check executors."""
+class RuntimeCheckExecutor(abc.ABC):
+	"""Executes oracle checks in a configured runtime."""
 
 	def __init__(self, *, default_cwd: pathlib.Path) -> None:
 		self._default_cwd = _resolved_path(default_cwd)
@@ -268,32 +269,30 @@ class _RuntimeCheckExecutorBase:
 	) -> pathlib.Path:
 		return self._default_cwd if cwd is None else cwd
 
-	def close(self) -> None:
-		return None
-
-
-@runtime_checkable
-class RuntimeCheckExecutor(Protocol):
 	@property
+	@abc.abstractmethod
 	def path_separator(self) -> str:
-		raise NotImplementedError
+		"""Returns the runtime path-list separator."""
 
+	@abc.abstractmethod
 	def resolve_executable(
 		self,
 		executable: str,
 		*,
 		env: Mapping[str, str] | None = None,
 	) -> str | None:
-		raise NotImplementedError
+		"""Resolves an executable in the runtime."""
 
+	@abc.abstractmethod
 	def read_env_var(
 		self,
 		name: str,
 		*,
 		env: Mapping[str, str] | None = None,
 	) -> str | None:
-		raise NotImplementedError
+		"""Reads an environment variable from the runtime."""
 
+	@abc.abstractmethod
 	def run_process_capture(
 		self,
 		*,
@@ -307,22 +306,30 @@ class RuntimeCheckExecutor(Protocol):
 		encoding: str | None = None,
 		on_chunk: Callable[[str, str], None] | None = None,
 	) -> ProcResult:
-		raise NotImplementedError
+		"""Runs a process and captures its output."""
 
+	@abc.abstractmethod
 	def path_exists(self, path: pathlib.Path) -> bool:
-		raise NotImplementedError
+		"""Returns whether a path exists."""
 
+	@abc.abstractmethod
 	def path_is_file(self, path: pathlib.Path) -> bool:
-		raise NotImplementedError
+		"""Returns whether a path is a regular file."""
 
+	@abc.abstractmethod
 	def path_is_dir(self, path: pathlib.Path) -> bool:
-		raise NotImplementedError
+		"""Returns whether a path is a directory."""
 
-	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
-		raise NotImplementedError
+	@abc.abstractmethod
+	def read_file_text(
+		self,
+		path: pathlib.Path,
+		encoding: str = "utf-8",
+	) -> str:
+		"""Reads a text file."""
 
 	def close(self) -> None:
-		raise NotImplementedError
+		"""Releases resources owned by the executor."""
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -368,8 +375,8 @@ def build_path_mounts(context: OracleInput) -> list[_PathMount]:
 	return mounts
 
 
-class LocalRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
-	path_separator = os.pathsep
+class LocalRuntimeCheckExecutor(RuntimeCheckExecutor):
+	path_separator = ":"
 
 	def resolve_executable(
 		self,
@@ -431,7 +438,7 @@ class LocalRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 		)
 
 
-class SessionRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
+class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 	def __init__(
 		self,
 		*,
@@ -565,7 +572,7 @@ class SessionRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 		)
 
 
-class DockerRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
+class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 	path_separator = ":"
 
 	def __init__(
