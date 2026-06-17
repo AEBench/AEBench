@@ -11,20 +11,17 @@ from models import OracleFailureMode, OracleInput, OraclePhaseResult, OracleResu
 
 from ..constants import ORACLE_RESULT_FILENAME
 from ..loader import load_case_spec
-
-from .oracle_checks_runtime import (
-	RuntimeCheckExecutor,
-	build_runtime_check_executor,
-)
-from .reporting import OracleReport, log_oracle_report
-
-
 from .discovery import (
 	DiscoveredOracleClass,
 	discover_oracle_classes_in_scope,
 	oracle_import_scope,
 	oracle_root_for,
 )
+from .oracle_checks_runtime import (
+	RuntimeCheckExecutor,
+	build_runtime_check_executor,
+)
+from .reporting import OracleReport, log_oracle_report
 
 _SKIPPED_PHASE_SUMMARY = "skipped because a previous phase failed"
 

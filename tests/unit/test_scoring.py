@@ -5,7 +5,7 @@ from pathlib import Path
 
 from evaluator.oracles import execution as oracle_execution
 from evaluator.oracles.discovery import DiscoveredOracleClass
-from evaluator.oracles.utils import CheckEntry, CheckOutcome
+from evaluator.oracles.reporting import CheckEntry, CheckOutcome
 from models import OracleFailureMode, OracleInput, OracleStatus
 
 

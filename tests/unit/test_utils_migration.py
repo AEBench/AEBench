@@ -11,7 +11,6 @@ from typing import Any
 
 import pytest
 
-from models import RuntimeMode
 from evaluator.oracles.oracle_checks_runtime import (
 	DockerRuntimeCheckExecutor,
 	LocalRuntimeCheckExecutor,
@@ -24,12 +23,15 @@ from evaluator.oracles.process import (
 	truncate_text,
 )
 from evaluator.oracles.reporting import (
+	BaseCheck,
 	Check,
 	CheckOutcome,
 	CheckResult,
 	build_oracle_report,
 	run_checks,
 )
+from models import RuntimeMode
+
 
 def _recorded_runtime(
 	mode: RuntimeMode | str,
@@ -318,6 +320,34 @@ def test_build_oracle_report_converts_requirement_error_to_failure() -> None:
 		"failed to enumerate requirements: "
 		"RuntimeError: requirements unavailable"
 	)
+
+
+def test_explicit_local_runtime_uses_local_executor(
+	tmp_path: Path,
+) -> None:
+	context = _oracle_context(
+		tmp_path,
+		oracle_mode=RuntimeMode.LOCAL,
+	)
+
+	executor = build_runtime_check_executor(context)
+
+	assert isinstance(executor, LocalRuntimeCheckExecutor)
+
+
+def test_explicit_docker_runtime_uses_configured_image(
+	tmp_path: Path,
+) -> None:
+	context = _oracle_context(
+		tmp_path,
+		oracle_mode=RuntimeMode.DOCKER,
+		oracle_image="configured-image:latest",
+	)
+
+	executor = build_runtime_check_executor(context)
+
+	assert isinstance(executor, DockerRuntimeCheckExecutor)
+	assert executor._image == "configured-image:latest"
 
 
 def test_missing_oracle_runtime_inherits_active_session(

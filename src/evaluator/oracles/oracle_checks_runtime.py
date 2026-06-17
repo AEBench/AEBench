@@ -801,59 +801,19 @@ def build_runtime_check_executor(
 ) -> RuntimeCheckExecutor:
 	"""Builds the executor used by oracle checks.
 
-	Explicit oracle runtime configuration takes precedence over the benchmark
-	runtime. In inherited mode, an active session is preferred over a recorded
-	runtime result.
+	An active runtime session takes precedence over a recorded runtime result.
+	If no runtime information is available, checks run on the local host.
 
 	Args:
 		context: Oracle invocation context.
 
 	Returns:
-		An executor for the selected runtime.
+		An executor for the task runtime.
 
 	Raises:
-		ValueError: If the explicitly configured runtime mode is unsupported.
-		RuntimeError: If inherited runtime information is incomplete or uses
-			an unsupported mode.
+		RuntimeError: If the recorded runtime is unsupported or does not
+			identify the Docker image needed to recreate it.
 	"""
-	oracle_runtime = getattr(
-		context.oracle_config,
-		"runtime",
-		None,
-	)
-	oracle_mode = getattr(
-		oracle_runtime,
-		"mode",
-		RuntimeMode.INHERIT,
-	)
-
-	# Explicit oracle configuration takes precedence over runtime inheritance.
-	if oracle_mode == RuntimeMode.LOCAL:
-		return LocalRuntimeCheckExecutor(
-			default_cwd=context.workspace_dir,
-		)
-
-	if oracle_mode == RuntimeMode.DOCKER:
-		image = getattr(oracle_runtime, "image", None)
-		if not image:
-			raise RuntimeError(
-				"Cannot build oracle runtime executor: "
-				"Docker mode requires an image."
-			)
-
-		return DockerRuntimeCheckExecutor(
-			image=image,
-			path_mounts=build_path_mounts(context),
-			default_cwd=context.workspace_dir,
-		)
-
-	if oracle_mode != RuntimeMode.INHERIT:
-		raise ValueError(
-			f"unsupported oracle runtime mode: "
-			f"{oracle_mode!r}"
-		)
-
-	# Reuse the current task runtime before checking recorded results.
 	if (
 		context.runtime_session is not None
 		and context.runtime_backend is not None
