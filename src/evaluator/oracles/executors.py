@@ -458,14 +458,11 @@ class SessionRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 	def path_separator(self) -> str:
 		return self._runtime_backend.path_separator
 
-	def _translate_cwd(self, cwd: pathlib.Path | None) -> str | None:
-		translated = self._translate_path(cwd)
-		if translated is not None:
-			return str(translated)
-		translate_host_path = getattr(self._session, "translate_host_path", None)
-		if callable(translate_host_path):
-			return cast(str | None, translate_host_path(cwd))
-		return None if cwd is None else str(cwd)
+	def _translate_cwd(
+		self,
+		cwd: pathlib.Path | None,
+	) -> str:
+		return str(self._translate_path(cwd))
 
 	def _run_test(self, flag: str, path: pathlib.Path) -> bool:
 		try:
@@ -514,7 +511,7 @@ class SessionRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 
 	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
 		_ = encoding
-		target = self._translate_cwd(path) or str(path)
+		target = self._translate_cwd(path)
 		result = self._runtime_backend.run_process(
 			["cat", target],
 			cwd=self._translate_cwd(None),
@@ -603,9 +600,9 @@ class DockerRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 		for mount in self._path_mounts:
 			if mount.host_root.exists():
 				docker_cmd.extend(["-v", f"{mount.host_root}:{mount.runtime_root}"])
-		translated_cwd = self._translate_path(None)
-		if translated_cwd is not None:
-			docker_cmd.extend(["-w", str(translated_cwd)])
+		docker_cmd.extend(
+			["-w", str(self._translate_path(None))]
+		)
 		docker_cmd.extend([self._image, "sleep", "infinity"])
 
 		result = subprocess.run(docker_cmd, capture_output=True, text=True, check=False)
@@ -625,9 +622,9 @@ class DockerRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 	) -> subprocess.CompletedProcess[str]:
 		container_id = self._ensure_container()
 		docker_cmd = ["docker", "exec"]
-		translated_cwd = self._translate_path(cwd)
-		if translated_cwd is not None:
-			docker_cmd.extend(["-w", str(translated_cwd)])
+		docker_cmd.extend(
+			["-w", str(self._translate_path(cwd))]
+		)
 		if env:
 			for key, value in env.items():
 				docker_cmd.extend(["-e", f"{key}={value}"])
@@ -683,7 +680,7 @@ class DockerRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 		return result.stdout.removesuffix("\n")
 
 	def _run_test(self, flag: str, path: pathlib.Path) -> bool:
-		target = str(self._translate_path(path) or path)
+		target = str(self._translate_path(path))
 		try:
 			result = self._docker_exec(
 				cmd=["test", flag, target],
