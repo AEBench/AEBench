@@ -11,7 +11,14 @@ from models import OracleFailureMode, OracleInput, OraclePhaseResult, OracleResu
 
 from ..constants import ORACLE_RESULT_FILENAME
 from ..loader import load_case_spec
-from . import utils
+
+from .oracle_checks_runtime import (
+	RuntimeCheckExecutor,
+	build_runtime_check_executor,
+)
+from .reporting import OracleReport, log_oracle_report
+
+
 from .discovery import (
 	DiscoveredOracleClass,
 	discover_oracle_classes_in_scope,
@@ -22,7 +29,7 @@ from .discovery import (
 _SKIPPED_PHASE_SUMMARY = "skipped because a previous phase failed"
 
 
-def _phase_result_from_report(name: str, report: utils.OracleReport) -> OraclePhaseResult:
+def _phase_result_from_report(name: str, report: OracleReport) -> OraclePhaseResult:
 	status = OracleStatus.SUCCESS if report.ok else OracleStatus.ERROR
 	summary = "all checks passed" if report.ok else "one or more checks failed"
 	return OraclePhaseResult(
@@ -47,7 +54,7 @@ def run_oracle_classes(
 		try:
 			instance = definition.cls(context=context, logger=logger)
 			report = instance.report()
-			utils.log_oracle_report(logger, label=definition.name, report=report, verbose=False)
+			log_oracle_report(logger, label=definition.name, report=report, verbose=False)
 			phase_result = _phase_result_from_report(definition.name, report)
 		except Exception as exc:
 			phase_result = OraclePhaseResult(
@@ -136,7 +143,7 @@ def run_oracle(
 		)
 		context.runtime_session = runtime_session
 		context.runtime_backend = runtime_backend
-		context.runtime_executor = utils.build_runtime_check_executor(context)
+		context.runtime_executor = build_runtime_check_executor(context)
 
 		oracle_root = oracle_root_for(case_root)
 		with oracle_import_scope(case_root, oracle_root.name):
@@ -153,7 +160,7 @@ def run_oracle(
 	finally:
 		try:
 			if context is not None and context.runtime_executor is not None:
-				executor = cast(utils.RuntimeCheckExecutor, context.runtime_executor)
+				executor = cast(RuntimeCheckExecutor, context.runtime_executor)
 				executor.close()
 		except Exception:
 			logging.getLogger(__name__).exception("failed to clean up oracle runtime executor")

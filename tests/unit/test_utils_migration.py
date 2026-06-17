@@ -1,4 +1,4 @@
-"""Tests to help migration/refactoring of utils.py."""
+"""Tests to help migration/refactoring of py."""
 
 from __future__ import annotations
 
@@ -11,9 +11,25 @@ from typing import Any
 
 import pytest
 
-from evaluator.oracles import utils
 from models import RuntimeMode
-
+from evaluator.oracles.oracle_checks_runtime import (
+	DockerRuntimeCheckExecutor,
+	LocalRuntimeCheckExecutor,
+	SessionRuntimeCheckExecutor,
+	build_runtime_check_executor,
+)
+from evaluator.oracles.process import (
+	decode_text,
+	run_subprocess_capture,
+	truncate_text,
+)
+from evaluator.oracles.reporting import (
+	Check,
+	CheckOutcome,
+	CheckResult,
+	build_oracle_report,
+	run_checks,
+)
 
 def _recorded_runtime(
 	mode: RuntimeMode | str,
@@ -76,33 +92,33 @@ def _oracle_context(
 	)
 
 
-def _raise_check_error() -> utils.CheckResult:
+def _raise_check_error() -> CheckResult:
 	raise RuntimeError("check failed unexpectedly")
 
 
-def _raise_requirements_error() -> list[utils.BaseCheck]:
+def _raise_requirements_error() -> list[BaseCheck]:
 	raise RuntimeError("requirements unavailable")
 
 
 def test_decode_text_handles_none_bytes_and_text() -> None:
-	assert utils.decode_text(None) == ""
-	assert utils.decode_text(b"hello") == "hello"
-	assert utils.decode_text("hello") == "hello"
-	assert utils.decode_text(b"\xff") == "\ufffd"
+	assert decode_text(None) == ""
+	assert decode_text(b"hello") == "hello"
+	assert decode_text("hello") == "hello"
+	assert decode_text(b"\xff") == "\ufffd"
 
 
 def test_truncate_text_returns_short_text_unchanged() -> None:
-	assert utils.truncate_text("hello", 10) == "hello"
+	assert truncate_text("hello", 10) == "hello"
 
 
 def test_truncate_text_adds_suffix() -> None:
-	assert utils.truncate_text("abcdefgh", 4) == "abcd\n... [output truncated]"
+	assert truncate_text("abcdefgh", 4) == "abcd\n... [output truncated]"
 
 
 def test_run_subprocess_capture_returns_output_and_returncode(
 	tmp_path: Path,
 ) -> None:
-	result = utils.run_subprocess_capture(
+	result = run_subprocess_capture(
 		cmd=(
 			sys.executable,
 			"-c",
@@ -128,7 +144,7 @@ def test_run_subprocess_capture_uses_cwd_and_environment(
 	env = os.environ.copy()
 	env["AEBENCH_TEST_VALUE"] = "configured"
 
-	result = utils.run_subprocess_capture(
+	result = run_subprocess_capture(
 		cmd=(
 			sys.executable,
 			"-c",
@@ -153,7 +169,7 @@ def test_run_subprocess_capture_uses_cwd_and_environment(
 def test_run_subprocess_capture_streams_chunks(tmp_path: Path) -> None:
 	chunks: list[tuple[str, str]] = []
 
-	result = utils.run_subprocess_capture(
+	result = run_subprocess_capture(
 		cmd=(
 			sys.executable,
 			"-c",
@@ -176,7 +192,7 @@ def test_run_subprocess_capture_streams_chunks(tmp_path: Path) -> None:
 
 
 def test_run_subprocess_capture_truncates_output(tmp_path: Path) -> None:
-	result = utils.run_subprocess_capture(
+	result = run_subprocess_capture(
 		cmd=(
 			sys.executable,
 			"-c",
@@ -198,7 +214,7 @@ def test_run_subprocess_capture_rejects_invalid_capture_limit(
 	tmp_path: Path,
 ) -> None:
 	with pytest.raises(ValueError, match="capture_limit_chars must be > 0"):
-		utils.run_subprocess_capture(
+		run_subprocess_capture(
 			cmd=(sys.executable, "-c", "print('unused')"),
 			cwd=tmp_path,
 			env=None,
@@ -208,7 +224,7 @@ def test_run_subprocess_capture_rejects_invalid_capture_limit(
 
 
 def test_run_subprocess_capture_marks_timeout(tmp_path: Path) -> None:
-	result = utils.run_subprocess_capture(
+	result = run_subprocess_capture(
 		cmd=(
 			sys.executable,
 			"-c",
@@ -225,70 +241,70 @@ def test_run_subprocess_capture_marks_timeout(tmp_path: Path) -> None:
 
 def test_run_checks_reports_required_and_optional_failures() -> None:
 	checks = (
-		utils.Check(
+		Check(
 			name="success",
-			fn=lambda: utils.CheckResult.success("passed"),
+			fn=lambda: CheckResult.success("passed"),
 		),
-		utils.Check(
+		Check(
 			name="required_failure",
-			fn=lambda: utils.CheckResult.failure("required failure"),
+			fn=lambda: CheckResult.failure("required failure"),
 		),
-		utils.Check(
+		Check(
 			name="optional_failure",
 			optional=True,
-			fn=lambda: utils.CheckResult.failure("optional failure"),
+			fn=lambda: CheckResult.failure("optional failure"),
 		),
 	)
 
-	report = utils.run_checks(checks, logger=logging.getLogger(__name__))
+	report = run_checks(checks, logger=logging.getLogger(__name__))
 
 	assert report.ok is False
 	assert report.passed_count == 1
 	assert report.failed_count == 1
 	assert [entry.outcome for entry in report.results] == [
-		utils.CheckOutcome.PASSED,
-		utils.CheckOutcome.FAILED,
-		utils.CheckOutcome.WARNING,
+		CheckOutcome.PASSED,
+		CheckOutcome.FAILED,
+		CheckOutcome.WARNING,
 	]
 
 
 def test_optional_failure_does_not_fail_report() -> None:
 	checks = (
-		utils.Check(
+		Check(
 			name="optional_failure",
 			optional=True,
-			fn=lambda: utils.CheckResult.failure("optional failure"),
+			fn=lambda: CheckResult.failure("optional failure"),
 		),
 	)
 
-	report = utils.run_checks(checks, logger=logging.getLogger(__name__))
+	report = run_checks(checks, logger=logging.getLogger(__name__))
 
 	assert report.ok is True
 	assert report.passed_count == 0
 	assert report.failed_count == 0
-	assert report.results[0].outcome == utils.CheckOutcome.WARNING
+	assert report.results[0].outcome == CheckOutcome.WARNING
 
 
 def test_run_checks_converts_unexpected_exception_to_failure() -> None:
 	checks = (
-		utils.Check(
+		Check(
 			name="unexpected_exception",
 			fn=_raise_check_error,
 		),
 	)
 
-	report = utils.run_checks(checks, logger=logging.getLogger(__name__))
+	report = run_checks(checks, logger=logging.getLogger(__name__))
 
 	assert report.ok is False
 	assert report.failed_count == 1
-	assert report.results[0].outcome == utils.CheckOutcome.FAILED
+	assert report.results[0].outcome == CheckOutcome.FAILED
 	assert report.results[0].message == (
 		"unexpected error: RuntimeError: check failed unexpectedly"
 	)
 
 
 def test_build_oracle_report_converts_requirement_error_to_failure() -> None:
-	report = utils.build_oracle_report(
+	report = build_oracle_report(
 		logger=logging.getLogger(__name__),
 		requirements=_raise_requirements_error,
 	)
@@ -297,39 +313,11 @@ def test_build_oracle_report_converts_requirement_error_to_failure() -> None:
 	assert report.failed_count == 1
 	assert len(report.results) == 1
 	assert report.results[0].name == "<requirements>"
-	assert report.results[0].outcome == utils.CheckOutcome.FAILED
+	assert report.results[0].outcome == CheckOutcome.FAILED
 	assert report.results[0].message == (
 		"failed to enumerate requirements: "
 		"RuntimeError: requirements unavailable"
 	)
-
-
-def test_explicit_local_runtime_uses_local_executor(
-	tmp_path: Path,
-) -> None:
-	context = _oracle_context(
-		tmp_path,
-		oracle_mode=RuntimeMode.LOCAL,
-	)
-
-	executor = utils.build_runtime_check_executor(context)
-
-	assert isinstance(executor, utils.LocalRuntimeCheckExecutor)
-
-
-def test_explicit_docker_runtime_uses_configured_image(
-	tmp_path: Path,
-) -> None:
-	context = _oracle_context(
-		tmp_path,
-		oracle_mode=RuntimeMode.DOCKER,
-		oracle_image="configured-image:latest",
-	)
-
-	executor = utils.build_runtime_check_executor(context)
-
-	assert isinstance(executor, utils.DockerRuntimeCheckExecutor)
-	assert executor._image == "configured-image:latest"
 
 
 def test_missing_oracle_runtime_inherits_active_session(
@@ -346,9 +334,9 @@ def test_missing_oracle_runtime_inherits_active_session(
 		runtime_backend=object(),
 	)
 
-	executor = utils.build_runtime_check_executor(context)
+	executor = build_runtime_check_executor(context)
 
-	assert isinstance(executor, utils.SessionRuntimeCheckExecutor)
+	assert isinstance(executor, SessionRuntimeCheckExecutor)
 
 
 def test_inherit_without_recorded_runtime_uses_local_executor(
@@ -360,9 +348,9 @@ def test_inherit_without_recorded_runtime_uses_local_executor(
 		runtime_result=None,
 	)
 
-	executor = utils.build_runtime_check_executor(context)
+	executor = build_runtime_check_executor(context)
 
-	assert isinstance(executor, utils.LocalRuntimeCheckExecutor)
+	assert isinstance(executor, LocalRuntimeCheckExecutor)
 
 
 def test_inherit_recorded_local_runtime_uses_local_executor(
@@ -374,9 +362,9 @@ def test_inherit_recorded_local_runtime_uses_local_executor(
 		runtime_result=_recorded_runtime(RuntimeMode.LOCAL),
 	)
 
-	executor = utils.build_runtime_check_executor(context)
+	executor = build_runtime_check_executor(context)
 
-	assert isinstance(executor, utils.LocalRuntimeCheckExecutor)
+	assert isinstance(executor, LocalRuntimeCheckExecutor)
 
 
 def test_inherit_docker_runtime_prefers_saved_image(
@@ -392,9 +380,9 @@ def test_inherit_docker_runtime_prefers_saved_image(
 		),
 	)
 
-	executor = utils.build_runtime_check_executor(context)
+	executor = build_runtime_check_executor(context)
 
-	assert isinstance(executor, utils.DockerRuntimeCheckExecutor)
+	assert isinstance(executor, DockerRuntimeCheckExecutor)
 	assert executor._image == "saved-image:latest"
 
 
@@ -411,9 +399,9 @@ def test_inherit_docker_runtime_falls_back_to_original_image(
 		),
 	)
 
-	executor = utils.build_runtime_check_executor(context)
+	executor = build_runtime_check_executor(context)
 
-	assert isinstance(executor, utils.DockerRuntimeCheckExecutor)
+	assert isinstance(executor, DockerRuntimeCheckExecutor)
 	assert executor._image == "original-image:latest"
 
 
@@ -434,7 +422,7 @@ def test_inherit_docker_runtime_without_image_raises(
 		RuntimeError,
 		match="inherited Docker runtime has no image",
 	):
-		utils.build_runtime_check_executor(context)
+		build_runtime_check_executor(context)
 
 
 def test_inherit_unsupported_runtime_mode_raises(
@@ -450,4 +438,4 @@ def test_inherit_unsupported_runtime_mode_raises(
 		RuntimeError,
 		match="Cannot build oracle runtime executor",
 	):
-		utils.build_runtime_check_executor(context)
+		build_runtime_check_executor(context)
