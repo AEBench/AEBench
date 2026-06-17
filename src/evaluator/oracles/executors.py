@@ -541,13 +541,11 @@ class SessionRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 	) -> ProcResult:
 		_ = drain_after_kill
 		_ = encoding
-		if use_shell:
-			shell_cmd = cmd if isinstance(cmd, str) else " ".join(shlex.quote(part) for part in cmd)
-			run_cmd = ["sh", "-lc", shell_cmd]
-		else:
-			if isinstance(cmd, str):
-				raise TypeError("use_shell=False requires cmd to be a sequence of argv strings")
-			run_cmd = list(cmd)
+
+		run_cmd = _prepare_runtime_command(
+			cmd,
+			use_shell=use_shell,
+		)
 
 		try:
 			result = self._runtime_backend.run_process(
@@ -557,32 +555,16 @@ class SessionRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 				timeout=timeout_seconds,
 			)
 		except subprocess.TimeoutExpired as exc:
-			stdout = decode_text(exc.stdout)
-			stderr = decode_text(exc.stderr)
-			if on_chunk is not None:
-				if stdout:
-					on_chunk("stdout", stdout)
-				if stderr:
-					on_chunk("stderr", stderr)
-			return ProcResult(
-				returncode=None,
-				stdout=truncate_text(stdout, capture_limit_chars),
-				stderr=truncate_text(stderr, capture_limit_chars),
-				timed_out=True,
+			return _timeout_process_result(
+				exc,
+				capture_limit_chars=capture_limit_chars,
+				on_chunk=on_chunk,
 			)
 
-		stdout = result.stdout or ""
-		stderr = result.stderr or ""
-		if on_chunk is not None:
-			if stdout:
-				on_chunk("stdout", stdout)
-			if stderr:
-				on_chunk("stderr", stderr)
-		return ProcResult(
-			returncode=result.returncode,
-			stdout=truncate_text(stdout, capture_limit_chars),
-			stderr=truncate_text(stderr, capture_limit_chars),
-			timed_out=False,
+		return _completed_process_result(
+			result,
+			capture_limit_chars=capture_limit_chars,
+			on_chunk=on_chunk,
 		)
 
 
@@ -754,13 +736,11 @@ class DockerRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 	) -> ProcResult:
 		_ = drain_after_kill
 		_ = encoding
-		if use_shell:
-			shell_cmd = cmd if isinstance(cmd, str) else " ".join(shlex.quote(part) for part in cmd)
-			run_cmd = ["sh", "-lc", shell_cmd]
-		else:
-			if isinstance(cmd, str):
-				raise TypeError("use_shell=False requires cmd to be a sequence of argv strings")
-			run_cmd = list(cmd)
+
+		run_cmd = _prepare_runtime_command(
+			cmd,
+			use_shell=use_shell,
+		)
 
 		try:
 			result = self._docker_exec(
@@ -770,38 +750,17 @@ class DockerRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 				timeout_seconds=timeout_seconds,
 			)
 		except subprocess.TimeoutExpired as exc:
-			stdout = decode_text(exc.stdout)
-			stderr = decode_text(exc.stderr)
-			if on_chunk is not None:
-				if stdout:
-					on_chunk("stdout", stdout)
-				if stderr:
-					on_chunk("stderr", stderr)
-			return ProcResult(
-				returncode=None,
-				stdout=truncate_text(stdout, capture_limit_chars),
-				stderr=truncate_text(stderr, capture_limit_chars),
-				timed_out=True,
+			return _timeout_process_result(
+				exc,
+				capture_limit_chars=capture_limit_chars,
+				on_chunk=on_chunk,
 			)
 
-		stdout = result.stdout or ""
-		stderr = result.stderr or ""
-		if on_chunk is not None:
-			if stdout:
-				on_chunk("stdout", stdout)
-			if stderr:
-				on_chunk("stderr", stderr)
-		return ProcResult(
-			returncode=result.returncode,
-			stdout=truncate_text(stdout, capture_limit_chars),
-			stderr=truncate_text(stderr, capture_limit_chars),
-			timed_out=False,
+		return _completed_process_result(
+			result,
+			capture_limit_chars=capture_limit_chars,
+			on_chunk=on_chunk,
 		)
-
-	def close(self) -> None:
-		target = self._container_id or self._container_name
-		subprocess.run(["docker", "rm", "-f", target], capture_output=True, text=True, check=False)
-		self._container_id = None
 
 
 class UnavailableRuntimeCheckExecutor:
