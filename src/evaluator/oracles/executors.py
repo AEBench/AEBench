@@ -815,84 +815,91 @@ class UnavailableRuntimeCheckExecutor:
 		return None
 
 
-def build_runtime_check_executor(context: OracleInput) -> RuntimeCheckExecutor:
-	"""Build the executor used by oracle checks."""
-	path_mounts = build_path_mounts(context)
-	runtime_result = context.runtime_result
-	oracle_runtime = getattr(context.oracle_config, "runtime", None)
-	oracle_mode = getattr(oracle_runtime, "mode", RuntimeMode.INHERIT)
+def build_runtime_check_executor(
+	context: OracleInput,
+) -> RuntimeCheckExecutor:
+	"""Builds the executor used by oracle checks."""
+	oracle_runtime = getattr(
+		context.oracle_config,
+		"runtime",
+		None,
+	)
+	oracle_mode = getattr(
+		oracle_runtime,
+		"mode",
+		RuntimeMode.INHERIT,
+	)
 
-	# Use the Docker runtime; run oracles inside Docker
-	if oracle_mode == RuntimeMode.DOCKER:
-		# NOTE: oracle_image is guaranteed not NULL/None by OracleRuntimeConfig validation
-		oracle_image: str = getattr(oracle_runtime, "image", "")
-		return cast(
-			RuntimeCheckExecutor,
-			DockerRuntimeCheckExecutor(
-				image=oracle_image,
-				path_mounts=path_mounts,
-				default_cwd=context.workspace_dir,
-			),
-		)
-
-	# Use the local runtime; run oracles on local machine
+	# Explicit oracle configuration overrides runtime inheritance.
 	if oracle_mode == RuntimeMode.LOCAL:
-		return cast(
-			RuntimeCheckExecutor,
-			LocalRuntimeCheckExecutor(default_cwd=context.workspace_dir),
+		return LocalRuntimeCheckExecutor(
+			default_cwd=context.workspace_dir,
 		)
 
-	# Inherit the task runtime when requested; run oracles inside inherited runtime
+	if oracle_mode == RuntimeMode.DOCKER:
+		image = getattr(oracle_runtime, "image", None)
+		if not image:
+			raise RuntimeError(
+				"cannot build oracle runtime executor: "
+				"Docker mode requires an image"
+			)
+
+		return DockerRuntimeCheckExecutor(
+			image=image,
+			path_mounts=build_path_mounts(context),
+			default_cwd=context.workspace_dir,
+		)
+
 	if oracle_mode != RuntimeMode.INHERIT:
-		raise ValueError(f"unsupported oracle runtime mode: {oracle_mode!r}")
+		raise ValueError(
+			f"unsupported oracle runtime mode: "
+			f"{oracle_mode!r}"
+		)
 
-	# Reuse the live task session when it is available
-	if context.runtime_session is not None and context.runtime_backend is not None:
-		return cast(
-			RuntimeCheckExecutor,
-			SessionRuntimeCheckExecutor(
-				session=context.runtime_session,
-				runtime_backend=cast(BenchRuntime, context.runtime_backend),
-				path_mounts=path_mounts,
-				default_cwd=context.workspace_dir,
+	# Otherwise, inherit the task runtime.
+	if (
+		context.runtime_session is not None
+		and context.runtime_backend is not None
+	):
+		return SessionRuntimeCheckExecutor(
+			session=context.runtime_session,
+			runtime_backend=cast(
+				BenchRuntime,
+				context.runtime_backend,
 			),
+			path_mounts=build_path_mounts(context),
+			default_cwd=context.workspace_dir,
 		)
 
-	# Fall back to local checks when no task runtime was recorded
-	if runtime_result is None:
-		return cast(
-			RuntimeCheckExecutor,
-			LocalRuntimeCheckExecutor(default_cwd=context.workspace_dir),
+	runtime_result = context.runtime_result
+	if (
+		runtime_result is None
+		or runtime_result.runtime.mode == RuntimeMode.LOCAL
+	):
+		return LocalRuntimeCheckExecutor(
+			default_cwd=context.workspace_dir,
 		)
 
-	# Reuse local checks when the task ran locally.
-	if runtime_result.runtime.mode == RuntimeMode.LOCAL:
-		return cast(
-			RuntimeCheckExecutor,
-			LocalRuntimeCheckExecutor(default_cwd=context.workspace_dir),
-		)
-
-	# Fail if unsupported mode
 	if runtime_result.runtime.mode != RuntimeMode.DOCKER:
 		raise RuntimeError(
-			f"Cannot build oracle runtime executor: {runtime_result.runtime.mode} mode is unsuported."
+			"cannot build oracle runtime executor: "
+			"unsupported inherited runtime mode "
+			f"{runtime_result.runtime.mode!r}"
 		)
 
-	image = runtime_result.runtime.saved_image or runtime_result.runtime.image
-
-	# Fail if no Docker image to reuse
+	image = (
+		runtime_result.runtime.saved_image
+		or runtime_result.runtime.image
+	)
 	if not image:
 		raise RuntimeError(
-			"Cannot build oracle runtime executor: inherited Docker runtime has no image."
+			"cannot build oracle runtime executor: "
+			"inherited Docker runtime has no image"
 		)
 
-	# Recreate Docker checks from the recorded task image
-	return cast(
-		RuntimeCheckExecutor,
-		DockerRuntimeCheckExecutor(
-			image=image,
-			path_mounts=path_mounts,
-			default_cwd=context.workspace_dir,
-		),
+	return DockerRuntimeCheckExecutor(
+		image=image,
+		path_mounts=build_path_mounts(context),
+		default_cwd=context.workspace_dir,
 	)
 
