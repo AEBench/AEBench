@@ -44,7 +44,7 @@ def _load_reference_floats(ref_path: Path) -> list[float]:
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
     def requirements(self) -> Sequence[utils.BaseCheck]:
-        outputs_dir = self.workspace_path() / "asplos25_cinnamon_artifact" / "outputs"
+        outputs_dir = self.workspace_path() / "outputs"
         checks: list[utils.BaseCheck] = []
 
         #existance of pdfs
@@ -71,16 +71,14 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
         observed = _extract_floats_from_txt(txt_path)
         reference = _load_reference_floats(self.ref_path("results.json"))
 
-        #only run the correlation if data was actually extracted
-        if observed and len(observed) == len(reference):
-            checks.append(
-                ListSimilarityCheck(
-                    name="results_correlation",
-                    observed=observed,
-                    reference=reference,
-                    metric=SimilarityMetric.PEARSON,
-                    min_similarity=0.75,
-                )
+        checks.append(
+            ListSimilarityCheck(
+                name="results_correlation",
+                observed=observed,
+                reference=reference,
+                metric=SimilarityMetric.PEARSON,
+                min_similarity=0.75,
             )
+        )
 
         return tuple(checks)
