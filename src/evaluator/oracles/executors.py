@@ -288,16 +288,21 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 	) -> str:
 		return str(self._translate_path(cwd))
 
-	def _run_test(self, flag: str, path: pathlib.Path) -> bool:
+	def _path_matches(
+		self,
+		predicate: str,
+		path: pathlib.Path,
+	) -> bool:
 		try:
 			result = self._runtime_backend.run_process(
-				["test", flag, self._translate_cwd(path) or str(path)],
+				["test", predicate, self._translate_cwd(path)],
 				cwd=self._translate_cwd(None),
 				env=None,
 				timeout=5.0,
 			)
 		except (OSError, RuntimeError, subprocess.TimeoutExpired):
 			return False
+
 		return result.returncode == 0
 
 	def resolve_executable(
@@ -325,13 +330,13 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 		)
 
 	def path_exists(self, path: pathlib.Path) -> bool:
-		return self._run_test("-e", path)
+		return self._path_matches("-e", path)
 
 	def path_is_file(self, path: pathlib.Path) -> bool:
-		return self._run_test("-f", path)
+		return self._path_matches("-f", path)
 
 	def path_is_dir(self, path: pathlib.Path) -> bool:
-		return self._run_test("-d", path)
+		return self._path_matches("-d", path)
 
 	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
 		_ = encoding
@@ -503,27 +508,33 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 			return None
 		return result.stdout.removesuffix("\n")
 
-	def _run_test(self, flag: str, path: pathlib.Path) -> bool:
+	def _path_matches(
+		self,
+		predicate: str,
+		path: pathlib.Path,
+	) -> bool:
 		target = str(self._translate_path(path))
+
 		try:
 			result = self._docker_exec(
-				cmd=["test", flag, target],
+				cmd=["test", predicate, target],
 				cwd=None,
 				env=None,
 				timeout_seconds=5.0,
 			)
 		except (OSError, RuntimeError, subprocess.TimeoutExpired):
 			return False
+
 		return result.returncode == 0
 
 	def path_exists(self, path: pathlib.Path) -> bool:
-		return self._run_test("-e", path)
+		return self._path_matches("-e", path)
 
 	def path_is_file(self, path: pathlib.Path) -> bool:
-		return self._run_test("-f", path)
+		return self._path_matches("-f", path)
 
 	def path_is_dir(self, path: pathlib.Path) -> bool:
-		return self._run_test("-d", path)
+		return self._path_matches("-d", path)
 
 	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
 		_ = encoding
