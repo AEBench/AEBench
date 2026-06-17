@@ -760,61 +760,6 @@ class DockerRuntimeCheckExecutor(_RuntimeCheckExecutorBase):
 		)
 
 
-class UnavailableRuntimeCheckExecutor:
-	def __init__(self, *, message: str) -> None:
-		self._message = message
-
-	@property
-	def path_separator(self) -> str:
-		raise RuntimeError(self._message)
-
-	def resolve_executable(
-		self,
-		executable: str,
-		*,
-		env: Mapping[str, str] | None = None,
-	) -> str | None:
-		raise RuntimeError(self._message)
-
-	def read_env_var(
-		self,
-		name: str,
-		*,
-		env: Mapping[str, str] | None = None,
-	) -> str | None:
-		raise RuntimeError(self._message)
-
-	def run_process_capture(
-		self,
-		*,
-		cmd: str | Sequence[str],
-		cwd: pathlib.Path | None,
-		env: Mapping[str, str] | None,
-		timeout_seconds: float,
-		use_shell: bool = False,
-		capture_limit_chars: int = DEFAULT_MAX_CAPTURE_CHARS,
-		drain_after_kill: bool = False,
-		encoding: str | None = None,
-		on_chunk: Callable[[str, str], None] | None = None,
-	) -> ProcResult:
-		raise RuntimeError(self._message)
-
-	def path_exists(self, path: pathlib.Path) -> bool:
-		raise RuntimeError(self._message)
-
-	def path_is_file(self, path: pathlib.Path) -> bool:
-		raise RuntimeError(self._message)
-
-	def path_is_dir(self, path: pathlib.Path) -> bool:
-		raise RuntimeError(self._message)
-
-	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
-		raise RuntimeError(self._message)
-
-	def close(self) -> None:
-		return None
-
-
 def build_runtime_check_executor(
 	context: OracleInput,
 ) -> RuntimeCheckExecutor:
