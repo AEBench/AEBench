@@ -36,165 +36,23 @@ _PATH_MOUNT_ORDER = (
 )
 
 
-def _prepare_runtime_command(
-	cmd: str | Sequence[str],
-	*,
-	use_shell: bool,
-) -> list[str]:
-	if use_shell:
-		shell_cmd = (
-			cmd
-			if isinstance(cmd, str)
-			else " ".join(shlex.quote(part) for part in cmd)
-		)
-		return ["sh", "-lc", shell_cmd]
+@dataclasses.dataclass(frozen=True, slots=True)
+class _PathMount:
+	host_root: pathlib.Path
+	runtime_root: pathlib.PurePosixPath
 
-	if isinstance(cmd, str):
-		raise TypeError(
-			"use_shell=False requires cmd to be a sequence of argv strings"
-		)
-
-	return list(cmd)
+	def translate(self, path: pathlib.Path) -> pathlib.PurePosixPath | None:
+		try:
+			relative = path.relative_to(self.host_root)
+		except ValueError:
+			return None
+		if not relative.parts:
+			return self.runtime_root
+		return self.runtime_root.joinpath(*relative.parts)
 
 
-def _translate_runtime_path(
-	path: pathlib.Path,
-	*,
-	path_mounts: Sequence[_PathMount],
-) -> pathlib.PurePosixPath:
-	resolved = _resolved_path(path)
-
-	for mount in path_mounts:
-		translated = mount.translate(resolved)
-		if translated is not None:
-			return translated
-
-	return pathlib.PurePosixPath(
-		str(resolved).replace(os.sep, "/")
-	)
-
-
-def resolve_check_executable(
-	executable: str,
-	*,
-	executor: RuntimeCheckExecutor | None,
-	env: Mapping[str, str] | None = None,
-) -> str | None:
-	if executor is not None:
-		return executor.resolve_executable(executable, env=env)
-	path_value = None if env is None else env.get("PATH")
-	return shutil.which(executable, path=path_value)
-
-
-def read_check_env_var(
-	name: str,
-	*,
-	executor: RuntimeCheckExecutor | None,
-	env: Mapping[str, str] | None = None,
-) -> str | None:
-	if executor is not None:
-		return executor.read_env_var(name, env=env)
-	if env is not None and name in env:
-		return env[name]
-	return os.environ.get(name)
-
-
-def get_check_path_separator(*, executor: RuntimeCheckExecutor | None) -> str:
-	if executor is not None:
-		return executor.path_separator
-	return os.pathsep
-
-
-def path_from_user_input(value: PathLike) -> pathlib.Path:
-	return pathlib.Path(os.fspath(value))
-
-
-def run_check_process_capture(
-	*,
-	cmd: str | Sequence[str],
-	cwd: pathlib.Path | None,
-	env: Mapping[str, str] | None,
-	timeout_seconds: float,
-	use_shell: bool = False,
-	capture_limit_chars: int = DEFAULT_MAX_CAPTURE_CHARS,
-	drain_after_kill: bool = False,
-	encoding: str | None = None,
-	on_chunk: Callable[[str, str], None] | None = None,
-	executor: RuntimeCheckExecutor | None = None,
-) -> ProcResult:
-	if executor is not None:
-		return executor.run_process_capture(
-			cmd=cmd,
-			cwd=cwd,
-			env=env,
-			timeout_seconds=timeout_seconds,
-			use_shell=use_shell,
-			capture_limit_chars=capture_limit_chars,
-			drain_after_kill=drain_after_kill,
-			encoding=encoding,
-			on_chunk=on_chunk,
-		)
-
-	run_env: Mapping[str, str] | None
-	if env is None:
-		run_env = None
-	else:
-		merged = os.environ.copy()
-		merged.update(env)
-		run_env = merged
-
-	return run_subprocess_capture(
-		cmd=cmd,
-		cwd=cwd,
-		env=run_env,
-		timeout_seconds=timeout_seconds,
-		use_shell=use_shell,
-		capture_limit_chars=capture_limit_chars,
-		drain_after_kill=drain_after_kill,
-		encoding=encoding,
-		on_chunk=on_chunk,
-	)
-
-
-def check_path_exists(
-	path: pathlib.Path,
-	*,
-	executor: RuntimeCheckExecutor | None = None,
-) -> bool:
-	if executor is not None:
-		return executor.path_exists(path)
-	return path.exists()
-
-
-def check_path_is_file(
-	path: pathlib.Path,
-	*,
-	executor: RuntimeCheckExecutor | None = None,
-) -> bool:
-	if executor is not None:
-		return executor.path_is_file(path)
-	return path.is_file()
-
-
-def check_path_is_dir(
-	path: pathlib.Path,
-	*,
-	executor: RuntimeCheckExecutor | None = None,
-) -> bool:
-	if executor is not None:
-		return executor.path_is_dir(path)
-	return path.is_dir()
-
-
-def check_read_file_text(
-	path: pathlib.Path,
-	*,
-	encoding: str = "utf-8",
-	executor: RuntimeCheckExecutor | None = None,
-) -> str:
-	if executor is not None:
-		return executor.read_file_text(path, encoding)
-	return path.read_text(encoding=encoding)
+def _resolved_path(path: PathLike) -> pathlib.Path:
+	return pathlib.Path(path).expanduser().resolve(strict=False)
 
 
 class RuntimeCheckExecutor(abc.ABC):
@@ -272,23 +130,42 @@ class RuntimeCheckExecutor(abc.ABC):
 		"""Releases resources owned by the executor."""
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
-class _PathMount:
-	host_root: pathlib.Path
-	runtime_root: pathlib.PurePosixPath
+def _translate_runtime_path(
+	path: pathlib.Path,
+	*,
+	path_mounts: Sequence[_PathMount],
+) -> pathlib.PurePosixPath:
+	resolved = _resolved_path(path)
 
-	def translate(self, path: pathlib.Path) -> pathlib.PurePosixPath | None:
-		try:
-			relative = path.relative_to(self.host_root)
-		except ValueError:
-			return None
-		if not relative.parts:
-			return self.runtime_root
-		return self.runtime_root.joinpath(*relative.parts)
+	for mount in path_mounts:
+		translated = mount.translate(resolved)
+		if translated is not None:
+			return translated
+
+	return pathlib.PurePosixPath(
+		str(resolved).replace(os.sep, "/")
+	)
 
 
-def _resolved_path(path: PathLike) -> pathlib.Path:
-	return pathlib.Path(path).expanduser().resolve(strict=False)
+def _prepare_runtime_command(
+	cmd: str | Sequence[str],
+	*,
+	use_shell: bool,
+) -> list[str]:
+	if use_shell:
+		shell_cmd = (
+			cmd
+			if isinstance(cmd, str)
+			else " ".join(shlex.quote(part) for part in cmd)
+		)
+		return ["sh", "-lc", shell_cmd]
+
+	if isinstance(cmd, str):
+		raise TypeError(
+			"use_shell=False requires cmd to be a sequence of argv strings"
+		)
+
+	return list(cmd)
 
 
 def build_path_mounts(context: OracleInput) -> list[_PathMount]:
@@ -794,3 +671,125 @@ def build_runtime_check_executor(
 		default_cwd=context.workspace_dir,
 	)
 
+
+def resolve_check_executable(
+	executable: str,
+	*,
+	executor: RuntimeCheckExecutor | None,
+	env: Mapping[str, str] | None = None,
+) -> str | None:
+	if executor is not None:
+		return executor.resolve_executable(executable, env=env)
+	path_value = None if env is None else env.get("PATH")
+	return shutil.which(executable, path=path_value)
+
+
+def read_check_env_var(
+	name: str,
+	*,
+	executor: RuntimeCheckExecutor | None,
+	env: Mapping[str, str] | None = None,
+) -> str | None:
+	if executor is not None:
+		return executor.read_env_var(name, env=env)
+	if env is not None and name in env:
+		return env[name]
+	return os.environ.get(name)
+
+
+def get_check_path_separator(*, executor: RuntimeCheckExecutor | None) -> str:
+	if executor is not None:
+		return executor.path_separator
+	return os.pathsep
+
+
+def path_from_user_input(value: PathLike) -> pathlib.Path:
+	return pathlib.Path(os.fspath(value))
+
+
+def run_check_process_capture(
+	*,
+	cmd: str | Sequence[str],
+	cwd: pathlib.Path | None,
+	env: Mapping[str, str] | None,
+	timeout_seconds: float,
+	use_shell: bool = False,
+	capture_limit_chars: int = DEFAULT_MAX_CAPTURE_CHARS,
+	drain_after_kill: bool = False,
+	encoding: str | None = None,
+	on_chunk: Callable[[str, str], None] | None = None,
+	executor: RuntimeCheckExecutor | None = None,
+) -> ProcResult:
+	if executor is not None:
+		return executor.run_process_capture(
+			cmd=cmd,
+			cwd=cwd,
+			env=env,
+			timeout_seconds=timeout_seconds,
+			use_shell=use_shell,
+			capture_limit_chars=capture_limit_chars,
+			drain_after_kill=drain_after_kill,
+			encoding=encoding,
+			on_chunk=on_chunk,
+		)
+
+	run_env: Mapping[str, str] | None
+	if env is None:
+		run_env = None
+	else:
+		merged = os.environ.copy()
+		merged.update(env)
+		run_env = merged
+
+	return run_subprocess_capture(
+		cmd=cmd,
+		cwd=cwd,
+		env=run_env,
+		timeout_seconds=timeout_seconds,
+		use_shell=use_shell,
+		capture_limit_chars=capture_limit_chars,
+		drain_after_kill=drain_after_kill,
+		encoding=encoding,
+		on_chunk=on_chunk,
+	)
+
+
+def check_path_exists(
+	path: pathlib.Path,
+	*,
+	executor: RuntimeCheckExecutor | None = None,
+) -> bool:
+	if executor is not None:
+		return executor.path_exists(path)
+	return path.exists()
+
+
+def check_path_is_file(
+	path: pathlib.Path,
+	*,
+	executor: RuntimeCheckExecutor | None = None,
+) -> bool:
+	if executor is not None:
+		return executor.path_is_file(path)
+	return path.is_file()
+
+
+def check_path_is_dir(
+	path: pathlib.Path,
+	*,
+	executor: RuntimeCheckExecutor | None = None,
+) -> bool:
+	if executor is not None:
+		return executor.path_is_dir(path)
+	return path.is_dir()
+
+
+def check_read_file_text(
+	path: pathlib.Path,
+	*,
+	encoding: str = "utf-8",
+	executor: RuntimeCheckExecutor | None = None,
+) -> str:
+	if executor is not None:
+		return executor.read_file_text(path, encoding)
+	return path.read_text(encoding=encoding)
