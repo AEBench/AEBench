@@ -50,32 +50,33 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 
 		if mode == "verify":
 			return (
-				PathCheck(
-					name="build_script_exists",
-					path=repo_root / "build_cinnamon.sh",
-					kind=PathKind.FILE,
-				),
-				PathCheck(
-					name="run_keyswitch_comparison_script_exists",
-					path=repo_root / "run_keyswitch_comparison.sh",
-					kind=PathKind.FILE,
-				),
-				PathCheck(
-					name="run_bootstrap_comparison_script_exists",
-					path=repo_root / "run_bootstrap_comparison.sh",
-					kind=PathKind.FILE,
-				),
-				PathCheck(
-					name="run_performance_script_exists",
-					path=repo_root / "run_performance_script.sh",
-					kind=PathKind.FILE,
-				),
-                CommandCheck(
+				CommandCheck(
                     name="cinnamon_container_is_running",
                     cmd=("docker", "inspect", "-f", "{{.State.Running}}", "cinnamon"),
                     signature="true",
-                    timeout_seconds=10.0
+                    timeout_seconds=10.0,
+                ),
+				CommandCheck(
+                    name="build_script_exists",
+                    cmd=("docker", "exec", "cinnamon", "ls", "build_cinnamon.sh"),
+                    timeout_seconds=10.0,
+                ),
+				CommandCheck(
+                    name="run_keyswitch_comparison_script_exists",
+                    cmd=("docker", "exec", "cinnamon", "ls", "run_keyswitch_comparison.sh"),
+                    timeout_seconds=10.0,
+                ),
+                CommandCheck(
+                    name="run_bootstrap_comparison_script_exists",
+                    cmd=("docker", "exec", "cinnamon", "ls", "run_bootstrap_comparison.sh"),
+                    timeout_seconds=10.0,
+                ),
+                CommandCheck(
+                    name="run_performance_script_exists",
+                    cmd=("docker", "exec", "cinnamon", "ls", "run_performance.sh"),
+                    timeout_seconds=10.0,
                 )
+                
 			)
 
 		return (
