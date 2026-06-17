@@ -170,9 +170,7 @@ class VersionCheck(BaseCheck):
 				executor=self.executor,
 			)
 		except (OSError, RuntimeError) as exc:
-			return CheckResult.failure(
-				f"failed to run {executable!r}: {exc}", stderr=str(exc)
-			)
+			return CheckResult.failure(f"failed to run {executable!r}: {exc}", stderr=str(exc))
 
 		if proc.timed_out:
 			return CheckResult.failure(
@@ -272,9 +270,7 @@ class EnvVarCheck(BaseCheck):
 		if self.match_mode == EnvMatchMode.EXACT:
 			if actual == self.expected:
 				return CheckResult.success()
-			return CheckResult.failure(
-				f"{self.env_var} expected {self.expected!r}, got {actual!r}"
-			)
+			return CheckResult.failure(f"{self.env_var} expected {self.expected!r}, got {actual!r}")
 		if self.match_mode == EnvMatchMode.CONTAINS:
 			if self.expected in actual:
 				return CheckResult.success()
@@ -379,9 +375,7 @@ class CommandCheck(BaseCheck):
 			if not check_path_exists(cwd, executor=self.executor):
 				return CheckResult.failure(f"working directory not found: {cwd}", cwd=cwd)
 			if not check_path_is_dir(cwd, executor=self.executor):
-				return CheckResult.failure(
-					f"working directory is not a directory: {cwd}", cwd=cwd
-				)
+				return CheckResult.failure(f"working directory is not a directory: {cwd}", cwd=cwd)
 
 		signature = self.signature
 		stdout_seen = signature is None
@@ -818,4 +812,3 @@ def _summarize_threshold_mismatches(
 		return ""
 	suffix = f"\n... ({total_bad - len(lines)} more)" if total_bad > len(lines) else ""
 	return "mismatches:\n" + "\n".join(lines) + suffix
-

@@ -150,9 +150,7 @@ def test_run_subprocess_capture_uses_cwd_and_environment(
 		cmd=(
 			sys.executable,
 			"-c",
-			"import os; "
-			"print(os.getcwd()); "
-			"print(os.environ['AEBENCH_TEST_VALUE'])",
+			"import os; print(os.getcwd()); print(os.environ['AEBENCH_TEST_VALUE'])",
 		),
 		cwd=tmp_path,
 		env=env,
@@ -175,9 +173,7 @@ def test_run_subprocess_capture_streams_chunks(tmp_path: Path) -> None:
 		cmd=(
 			sys.executable,
 			"-c",
-			"import sys; "
-			"print('stdout text'); "
-			"print('stderr text', file=sys.stderr)",
+			"import sys; print('stdout text'); print('stderr text', file=sys.stderr)",
 		),
 		cwd=tmp_path,
 		env=None,
@@ -317,8 +313,7 @@ def test_build_oracle_report_converts_requirement_error_to_failure() -> None:
 	assert report.results[0].name == "<requirements>"
 	assert report.results[0].outcome == CheckOutcome.FAILED
 	assert report.results[0].message == (
-		"failed to enumerate requirements: "
-		"RuntimeError: requirements unavailable"
+		"failed to enumerate requirements: RuntimeError: requirements unavailable"
 	)
 
 

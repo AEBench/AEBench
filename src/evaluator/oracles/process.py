@@ -253,4 +253,3 @@ def run_subprocess_capture(
 		stderr += _TRUNCATION_SUFFIX
 
 	return ProcResult(returncode=returncode, stdout=stdout, stderr=stderr, timed_out=timed_out)
-

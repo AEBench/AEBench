@@ -248,4 +248,3 @@ class CaseOracleExperimentRunsBase(_CaseOracleBase):
 	elementwise_equal = staticmethod(elementwise_equal)
 	elementwise_similarity_scores = staticmethod(elementwise_similarity_scores)
 	elementwise_similarity_threshold = staticmethod(elementwise_similarity_threshold)
-

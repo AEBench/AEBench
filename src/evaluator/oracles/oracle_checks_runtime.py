@@ -1,10 +1,9 @@
 """Runtime execution mode for oracle checks.
 
 This module defines the runtime abstraction used by oracle checks: local,
-active-session, and Docker modes. It also implements factory class that 
+active-session, and Docker modes. It also implements factory class that
 selects an implementation from an oracle invocation context.
 """
-
 
 from __future__ import annotations
 
@@ -175,9 +174,7 @@ def _translate_runtime_path(
 		if translated is not None:
 			return translated
 
-	return pathlib.PurePosixPath(
-		str(resolved).replace(os.sep, "/")
-	)
+	return pathlib.PurePosixPath(str(resolved).replace(os.sep, "/"))
 
 
 def _prepare_runtime_command(
@@ -198,17 +195,11 @@ def _prepare_runtime_command(
 		TypeError: If a string command is supplied without shell execution.
 	"""
 	if use_shell:
-		shell_cmd = (
-			cmd
-			if isinstance(cmd, str)
-			else " ".join(shlex.quote(part) for part in cmd)
-		)
+		shell_cmd = cmd if isinstance(cmd, str) else " ".join(shlex.quote(part) for part in cmd)
 		return ["sh", "-lc", shell_cmd]
 
 	if isinstance(cmd, str):
-		raise TypeError(
-			"use_shell=False requires cmd to be a sequence of argv strings"
-		)
+		raise TypeError("use_shell=False requires cmd to be a sequence of argv strings")
 
 	return list(cmd)
 
@@ -538,9 +529,7 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		super().__init__(default_cwd=default_cwd)
 		self._image = image
 		self._path_mounts = tuple(path_mounts)
-		self._container_name = (
-			f"aebench-oracle-{int(time.time() * 1000)}"
-		)
+		self._container_name = f"aebench-oracle-{int(time.time() * 1000)}"
 		self._container_id: str | None = None
 
 	def _translate_path(
@@ -575,12 +564,8 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		]
 		for mount in self._path_mounts:
 			if mount.host_root.exists():
-				docker_cmd.extend(
-					["-v", f"{mount.host_root}:{mount.runtime_root}"]
-				)
-		docker_cmd.extend(
-			["-w", str(self._translate_path(None))]
-		)
+				docker_cmd.extend(["-v", f"{mount.host_root}:{mount.runtime_root}"])
+		docker_cmd.extend(["-w", str(self._translate_path(None))])
 		docker_cmd.extend([self._image, "sleep", "infinity"])
 
 		result = subprocess.run(
@@ -590,10 +575,7 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 			check=False,
 		)
 		if result.returncode != 0:
-			detail = (
-				(result.stderr or result.stdout).strip()
-				or "docker run failed"
-			)
+			detail = (result.stderr or result.stdout).strip() or "docker run failed"
 			raise RuntimeError(detail)
 		self._container_id = result.stdout.strip()
 		return self._container_id
@@ -623,9 +605,7 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		"""
 		container_id = self._ensure_container()
 		docker_cmd = ["docker", "exec"]
-		docker_cmd.extend(
-			["-w", str(self._translate_path(cwd))]
-		)
+		docker_cmd.extend(["-w", str(self._translate_path(cwd))])
 		if env:
 			for key, value in env.items():
 				docker_cmd.extend(["-e", f"{key}={value}"])
@@ -814,10 +794,7 @@ def build_runtime_check_executor(
 		RuntimeError: If the recorded runtime is unsupported or does not
 			identify the Docker image needed to recreate it.
 	"""
-	if (
-		context.runtime_session is not None
-		and context.runtime_backend is not None
-	):
+	if context.runtime_session is not None and context.runtime_backend is not None:
 		return SessionRuntimeCheckExecutor(
 			session=context.runtime_session,
 			runtime_backend=cast(
@@ -829,10 +806,7 @@ def build_runtime_check_executor(
 		)
 
 	runtime_result = context.runtime_result
-	if (
-		runtime_result is None
-		or runtime_result.runtime.mode == RuntimeMode.LOCAL
-	):
+	if runtime_result is None or runtime_result.runtime.mode == RuntimeMode.LOCAL:
 		return LocalRuntimeCheckExecutor(
 			default_cwd=context.workspace_dir,
 		)
@@ -844,14 +818,10 @@ def build_runtime_check_executor(
 			f"{runtime_result.runtime.mode!r}."
 		)
 
-	image = (
-		runtime_result.runtime.saved_image
-		or runtime_result.runtime.image
-	)
+	image = runtime_result.runtime.saved_image or runtime_result.runtime.image
 	if not image:
 		raise RuntimeError(
-			"Cannot build oracle runtime executor: "
-			"inherited Docker runtime has no image."
+			"Cannot build oracle runtime executor: inherited Docker runtime has no image."
 		)
 
 	return DockerRuntimeCheckExecutor(
