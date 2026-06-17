@@ -24,7 +24,7 @@ class ProcResult:
 	stdout: str
 	stderr: str
 	timed_out: bool
-	
+
 
 def decode_text(value: bytes | str | None) -> str:
 	if value is None:
@@ -38,6 +38,68 @@ def truncate_text(text: str, max_chars: int) -> str:
 	if len(text) <= max_chars:
 		return text
 	return text[:max_chars] + _TRUNCATION_SUFFIX
+
+
+def _notify_output(
+	*,
+	stdout: str,
+	stderr: str,
+	on_chunk: Callable[[str, str], None] | None,
+) -> None:
+	if on_chunk is None:
+		return
+	if stdout:
+		on_chunk("stdout", stdout)
+	if stderr:
+		on_chunk("stderr", stderr)
+
+
+def proc_result_from_completed_process(
+	result: subprocess.CompletedProcess[str],
+	*,
+	capture_limit_chars: int,
+	on_chunk: Callable[[str, str], None] | None,
+) -> ProcResult:
+	"""Builds a captured result from a completed process."""
+	stdout = result.stdout or ""
+	stderr = result.stderr or ""
+
+	_notify_output(
+		stdout=stdout,
+		stderr=stderr,
+		on_chunk=on_chunk,
+	)
+
+	return ProcResult(
+		returncode=result.returncode,
+		stdout=truncate_text(stdout, capture_limit_chars),
+		stderr=truncate_text(stderr, capture_limit_chars),
+		timed_out=False,
+	)
+
+
+def proc_result_from_timeout(
+	exc: subprocess.TimeoutExpired,
+	*,
+	capture_limit_chars: int,
+	on_chunk: Callable[[str, str], None] | None,
+) -> ProcResult:
+	"""Builds a captured result from a process timeout."""
+	stdout = decode_text(exc.stdout)
+	stderr = decode_text(exc.stderr)
+
+	_notify_output(
+		stdout=stdout,
+		stderr=stderr,
+		on_chunk=on_chunk,
+	)
+
+	return ProcResult(
+		returncode=None,
+		stdout=truncate_text(stdout, capture_limit_chars),
+		stderr=truncate_text(stderr, capture_limit_chars),
+		timed_out=True,
+	)
 
 
 def stream_subprocess(

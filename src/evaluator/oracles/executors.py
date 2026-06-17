@@ -19,9 +19,9 @@ from runtime.backend import BenchRuntime, validate_env_var_name
 from .process import (
 	DEFAULT_MAX_CAPTURE_CHARS,
 	ProcResult,
-	decode_text,
+	proc_result_from_completed_process,
+	proc_result_from_timeout,
 	run_subprocess_capture,
-	truncate_text,
 )
 
 PathLike = str | os.PathLike[str] | pathlib.Path
