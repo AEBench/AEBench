@@ -57,66 +57,6 @@ def _prepare_runtime_command(
 	return list(cmd)
 
 
-def _notify_process_output(
-	*,
-	stdout: str,
-	stderr: str,
-	on_chunk: Callable[[str, str], None] | None,
-) -> None:
-	if on_chunk is None:
-		return
-	if stdout:
-		on_chunk("stdout", stdout)
-	if stderr:
-		on_chunk("stderr", stderr)
-
-
-def _completed_process_result(
-	result: subprocess.CompletedProcess[str],
-	*,
-	capture_limit_chars: int,
-	on_chunk: Callable[[str, str], None] | None,
-) -> ProcResult:
-	stdout = result.stdout or ""
-	stderr = result.stderr or ""
-
-	_notify_process_output(
-		stdout=stdout,
-		stderr=stderr,
-		on_chunk=on_chunk,
-	)
-
-	return ProcResult(
-		returncode=result.returncode,
-		stdout=truncate_text(stdout, capture_limit_chars),
-		stderr=truncate_text(stderr, capture_limit_chars),
-		timed_out=False,
-	)
-
-
-def _timeout_process_result(
-	exc: subprocess.TimeoutExpired,
-	*,
-	capture_limit_chars: int,
-	on_chunk: Callable[[str, str], None] | None,
-) -> ProcResult:
-	stdout = decode_text(exc.stdout)
-	stderr = decode_text(exc.stderr)
-
-	_notify_process_output(
-		stdout=stdout,
-		stderr=stderr,
-		on_chunk=on_chunk,
-	)
-
-	return ProcResult(
-		returncode=None,
-		stdout=truncate_text(stdout, capture_limit_chars),
-		stderr=truncate_text(stderr, capture_limit_chars),
-		timed_out=True,
-	)
-
-
 def _translate_runtime_path(
 	path: pathlib.Path,
 	*,
@@ -559,13 +499,13 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 				timeout=timeout_seconds,
 			)
 		except subprocess.TimeoutExpired as exc:
-			return _timeout_process_result(
+			return proc_result_from_timeout(
 				exc,
 				capture_limit_chars=capture_limit_chars,
 				on_chunk=on_chunk,
 			)
 
-		return _completed_process_result(
+		return proc_result_from_completed_process(
 			result,
 			capture_limit_chars=capture_limit_chars,
 			on_chunk=on_chunk,
@@ -754,13 +694,13 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 				timeout_seconds=timeout_seconds,
 			)
 		except subprocess.TimeoutExpired as exc:
-			return _timeout_process_result(
+			return proc_result_from_timeout(
 				exc,
 				capture_limit_chars=capture_limit_chars,
 				on_chunk=on_chunk,
 			)
 
-		return _completed_process_result(
+		return proc_result_from_completed_process(
 			result,
 			capture_limit_chars=capture_limit_chars,
 			on_chunk=on_chunk,
