@@ -1,4 +1,10 @@
-"""Runtime oracle infrastructure."""
+"""Runtime execution mode for oracle checks.
+
+This module defines the runtime abstraction used by oracle checks: local,
+active-session, and Docker modes. It also implements factory class that 
+selects an implementation from an oracle invocation context.
+"""
+
 
 from __future__ import annotations
 
@@ -11,7 +17,7 @@ import shutil
 import subprocess
 import time
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, Protocol, cast, runtime_checkable
+from typing import Any, cast
 
 from models import OracleInput, RuntimeMode
 from runtime.backend import BenchRuntime, validate_env_var_name
@@ -38,10 +44,21 @@ _PATH_MOUNT_ORDER = (
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class _PathMount:
+	"""Maps a host directory into the runtime filesystem."""
+
 	host_root: pathlib.Path
 	runtime_root: pathlib.PurePosixPath
 
 	def translate(self, path: pathlib.Path) -> pathlib.PurePosixPath | None:
+		"""Translates a host path contained by this mount.
+
+		Args:
+			path: Resolved host path to translate.
+
+		Returns:
+			The corresponding runtime path, or None when the path is outside
+			this mount.
+		"""
 		try:
 			relative = path.relative_to(self.host_root)
 		except ValueError:
@@ -52,6 +69,7 @@ class _PathMount:
 
 
 def _resolved_path(path: PathLike) -> pathlib.Path:
+	"""Returns an absolute normalized path without requiring it to exist."""
 	return pathlib.Path(path).expanduser().resolve(strict=False)
 
 
@@ -59,12 +77,14 @@ class RuntimeCheckExecutor(abc.ABC):
 	"""Executes oracle checks in a configured runtime."""
 
 	def __init__(self, *, default_cwd: pathlib.Path) -> None:
+		"""Initializes the executor with its default working directory."""
 		self._default_cwd = _resolved_path(default_cwd)
 
 	def _effective_cwd(
 		self,
 		cwd: pathlib.Path | None,
 	) -> pathlib.Path:
+		"""Returns the requested working directory or the configured default."""
 		return self._default_cwd if cwd is None else cwd
 
 	@property
@@ -135,6 +155,19 @@ def _translate_runtime_path(
 	*,
 	path_mounts: Sequence[_PathMount],
 ) -> pathlib.PurePosixPath:
+	"""Translates a host path into the runtime filesystem namespace.
+
+	Mounted paths are expected to be ordered from most specific to least specific.
+	Paths outside all configured mounts retain their absolute host spelling,
+	with POSIX normalized separators.
+
+	Args:
+		path: Host path to translate.
+		path_mounts: Candidate host-to-runtime mappings.
+
+	Returns:
+		The translated runtime path.
+	"""
 	resolved = _resolved_path(path)
 
 	for mount in path_mounts:
@@ -152,6 +185,18 @@ def _prepare_runtime_command(
 	*,
 	use_shell: bool,
 ) -> list[str]:
+	"""Normalizes a command for execution in a POSIX runtime.
+
+	Args:
+		cmd: Shell source or an argument vector.
+		use_shell: Whether to execute the command through ``sh -lc``.
+
+	Returns:
+		An argument vector suitable for the runtime backend.
+
+	Raises:
+		TypeError: If a string command is supplied without shell execution.
+	"""
 	if use_shell:
 		shell_cmd = (
 			cmd
@@ -169,6 +214,17 @@ def _prepare_runtime_command(
 
 
 def build_path_mounts(context: OracleInput) -> list[_PathMount]:
+	"""Builds host-to-runtime path mappings for an oracle invocation.
+
+	The returned mappings are ordered from the deepest host path to the
+	shallowest so nested directories take precedence over their parents.
+
+	Args:
+		context: Oracle invocation context containing the relevant paths.
+
+	Returns:
+		Ordered path mappings for runtime translation.
+	"""
 	raw_mounts: list[tuple[pathlib.Path, pathlib.PurePosixPath]] = []
 	refs_dir = context.case_dir / "refs"
 	values: dict[str, pathlib.Path] = {
@@ -185,14 +241,22 @@ def build_path_mounts(context: OracleInput) -> list[_PathMount]:
 
 	unique: dict[tuple[str, str], _PathMount] = {}
 	for host_root, runtime_root_path in raw_mounts:
-		unique[(str(host_root), str(runtime_root_path))] = _PathMount(host_root, runtime_root_path)
+		unique[(str(host_root), str(runtime_root_path))] = _PathMount(
+			host_root,
+			runtime_root_path,
+		)
 
 	mounts = list(unique.values())
-	mounts.sort(key=lambda mount: len(mount.host_root.parts), reverse=True)
+	mounts.sort(
+		key=lambda mount: len(mount.host_root.parts),
+		reverse=True,
+	)
 	return mounts
 
 
 class LocalRuntimeCheckExecutor(RuntimeCheckExecutor):
+	"""Executes oracle checks directly on the local host."""
+
 	path_separator = ":"
 
 	def resolve_executable(
@@ -201,6 +265,7 @@ class LocalRuntimeCheckExecutor(RuntimeCheckExecutor):
 		*,
 		env: Mapping[str, str] | None = None,
 	) -> str | None:
+		"""Resolves an executable on the local host."""
 		path_value = None if env is None else env.get("PATH")
 		return shutil.which(executable, path=path_value)
 
@@ -210,20 +275,29 @@ class LocalRuntimeCheckExecutor(RuntimeCheckExecutor):
 		*,
 		env: Mapping[str, str] | None = None,
 	) -> str | None:
+		"""Reads an environment variable from the local host."""
 		if env is not None and name in env:
 			return env[name]
 		return os.environ.get(name)
 
 	def path_exists(self, path: pathlib.Path) -> bool:
+		"""Returns whether a local path exists."""
 		return path.exists()
 
 	def path_is_file(self, path: pathlib.Path) -> bool:
+		"""Returns whether a local path is a regular file."""
 		return path.is_file()
 
 	def path_is_dir(self, path: pathlib.Path) -> bool:
+		"""Returns whether a local path is a directory."""
 		return path.is_dir()
 
-	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
+	def read_file_text(
+		self,
+		path: pathlib.Path,
+		encoding: str = "utf-8",
+	) -> str:
+		"""Reads a text file from the local filesystem."""
 		return path.read_text(encoding=encoding)
 
 	def run_process_capture(
@@ -239,6 +313,11 @@ class LocalRuntimeCheckExecutor(RuntimeCheckExecutor):
 		encoding: str | None = None,
 		on_chunk: Callable[[str, str], None] | None = None,
 	) -> ProcResult:
+		"""Runs a process locally with the requested environment overrides.
+
+		The supplied environment augments the current process environment
+		rather than replacing it.
+		"""
 		run_env = os.environ.copy()
 		if env is not None:
 			run_env.update(env)
@@ -256,6 +335,8 @@ class LocalRuntimeCheckExecutor(RuntimeCheckExecutor):
 
 
 class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
+	"""Executes oracle checks through an active benchmark runtime."""
+
 	def __init__(
 		self,
 		*,
@@ -264,6 +345,14 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 		path_mounts: Sequence[_PathMount],
 		default_cwd: pathlib.Path,
 	) -> None:
+		"""Initializes an executor backed by an existing runtime session.
+
+		Args:
+			session: Active runtime session associated with the benchmark.
+			runtime_backend: Backend used to execute runtime operations.
+			path_mounts: Host-to-runtime path mappings.
+			default_cwd: Default host working directory for checks.
+		"""
 		super().__init__(default_cwd=default_cwd)
 		self._session = session
 		self._runtime_backend = runtime_backend
@@ -273,6 +362,7 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 		self,
 		path: pathlib.Path | None,
 	) -> pathlib.PurePosixPath:
+		"""Translates a host path, using the default directory when omitted."""
 		return _translate_runtime_path(
 			self._effective_cwd(path),
 			path_mounts=self._path_mounts,
@@ -280,12 +370,14 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 
 	@property
 	def path_separator(self) -> str:
+		"""Returns the path-list separator used by the active runtime."""
 		return self._runtime_backend.path_separator
 
 	def _translate_cwd(
 		self,
 		cwd: pathlib.Path | None,
 	) -> str:
+		"""Returns a runtime working directory accepted by the backend."""
 		return str(self._translate_path(cwd))
 
 	def _path_matches(
@@ -293,6 +385,11 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 		predicate: str,
 		path: pathlib.Path,
 	) -> bool:
+		"""Evaluates a POSIX filesystem predicate in the active runtime.
+
+		NOTE: Runtime startup and communication failures are currently represented
+		as a non-match.
+		"""
 		try:
 			result = self._runtime_backend.run_process(
 				["test", predicate, self._translate_cwd(path)],
@@ -311,6 +408,7 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 		*,
 		env: Mapping[str, str] | None = None,
 	) -> str | None:
+		"""Resolves an executable through the active runtime backend."""
 		return self._runtime_backend.resolve_executable(
 			executable,
 			cwd=self._translate_cwd(None),
@@ -323,6 +421,7 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 		*,
 		env: Mapping[str, str] | None = None,
 	) -> str | None:
+		"""Reads an environment variable through the active runtime backend."""
 		return self._runtime_backend.read_env_var(
 			name,
 			cwd=self._translate_cwd(None),
@@ -330,15 +429,30 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 		)
 
 	def path_exists(self, path: pathlib.Path) -> bool:
+		"""Returns whether a path exists in the active runtime."""
 		return self._path_matches("-e", path)
 
 	def path_is_file(self, path: pathlib.Path) -> bool:
+		"""Returns whether a path is a regular file in the active runtime."""
 		return self._path_matches("-f", path)
 
 	def path_is_dir(self, path: pathlib.Path) -> bool:
+		"""Returns whether a path is a directory in the active runtime."""
 		return self._path_matches("-d", path)
 
-	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
+	def read_file_text(
+		self,
+		path: pathlib.Path,
+		encoding: str = "utf-8",
+	) -> str:
+		"""Reads a text file through the active runtime backend.
+
+		NOTE: The backend currently returns decoded text, so the encoding argument
+		is accepted for interface compatibility but is not applied here.
+
+		Raises:
+			OSError: If the runtime command cannot read the requested file.
+		"""
 		_ = encoding
 		target = self._translate_cwd(path)
 		result = self._runtime_backend.run_process(
@@ -365,6 +479,12 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 		encoding: str | None = None,
 		on_chunk: Callable[[str, str], None] | None = None,
 	) -> ProcResult:
+		"""Runs a command through the active runtime and captures its output.
+
+		The active backend owns process execution. This adapter normalizes
+		shell commands, translates the working directory, and converts backend
+		results and timeouts into ``ProcResult`` instances.
+		"""
 		_ = drain_after_kill
 		_ = encoding
 
@@ -395,6 +515,8 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 
 
 class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
+	"""Executes oracle checks in a lazily created Docker container."""
+
 	path_separator = ":"
 
 	def __init__(
@@ -404,6 +526,15 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		path_mounts: Sequence[_PathMount],
 		default_cwd: pathlib.Path,
 	) -> None:
+		"""Initializes a Docker-backed executor.
+
+		The container is not started until the first operation requires it.
+
+		Args:
+			image: Docker image used for oracle checks.
+			path_mounts: Host directories exposed inside the container.
+			default_cwd: Default host working directory for checks.
+		"""
 		super().__init__(default_cwd=default_cwd)
 		self._image = image
 		self._path_mounts = tuple(path_mounts)
@@ -416,27 +547,53 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		self,
 		path: pathlib.Path | None,
 	) -> pathlib.PurePosixPath:
+		"""Translates a host path into the container filesystem."""
 		return _translate_runtime_path(
 			self._effective_cwd(path),
 			path_mounts=self._path_mounts,
 		)
 
 	def _ensure_container(self) -> str:
+		"""Starts the check container if necessary and returns its ID.
+
+		Returns:
+			The Docker container ID.
+
+		Raises:
+			RuntimeError: If Docker cannot create the container.
+		"""
 		if self._container_id is not None:
 			return self._container_id
 
-		docker_cmd = ["docker", "run", "-d", "--init", "--name", self._container_name]
+		docker_cmd = [
+			"docker",
+			"run",
+			"-d",
+			"--init",
+			"--name",
+			self._container_name,
+		]
 		for mount in self._path_mounts:
 			if mount.host_root.exists():
-				docker_cmd.extend(["-v", f"{mount.host_root}:{mount.runtime_root}"])
+				docker_cmd.extend(
+					["-v", f"{mount.host_root}:{mount.runtime_root}"]
+				)
 		docker_cmd.extend(
 			["-w", str(self._translate_path(None))]
 		)
 		docker_cmd.extend([self._image, "sleep", "infinity"])
 
-		result = subprocess.run(docker_cmd, capture_output=True, text=True, check=False)
+		result = subprocess.run(
+			docker_cmd,
+			capture_output=True,
+			text=True,
+			check=False,
+		)
 		if result.returncode != 0:
-			detail = (result.stderr or result.stdout).strip() or "docker run failed"
+			detail = (
+				(result.stderr or result.stdout).strip()
+				or "docker run failed"
+			)
 			raise RuntimeError(detail)
 		self._container_id = result.stdout.strip()
 		return self._container_id
@@ -449,6 +606,21 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		env: Mapping[str, str] | None,
 		timeout_seconds: float,
 	) -> subprocess.CompletedProcess[str]:
+		"""Executes a command in the check container.
+
+		Args:
+			cmd: Argument vector to execute.
+			cwd: Host working directory to translate into the container.
+			env: Environment variables supplied to ``docker exec``.
+			timeout_seconds: Maximum execution time.
+
+		Returns:
+			The completed ``docker exec`` process.
+
+		Raises:
+			subprocess.TimeoutExpired: If execution exceeds the timeout.
+			RuntimeError: If the container cannot be started.
+		"""
 		container_id = self._ensure_container()
 		docker_cmd = ["docker", "exec"]
 		docker_cmd.extend(
@@ -473,6 +645,7 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		*,
 		env: Mapping[str, str] | None = None,
 	) -> str | None:
+		"""Resolves an executable inside the check container."""
 		command = f"command -v {shlex.quote(executable)}"
 		try:
 			result = self._docker_exec(
@@ -494,6 +667,7 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		*,
 		env: Mapping[str, str] | None = None,
 	) -> str | None:
+		"""Reads an environment variable inside the check container."""
 		valid_name = validate_env_var_name(name)
 		try:
 			result = self._docker_exec(
@@ -513,6 +687,11 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		predicate: str,
 		path: pathlib.Path,
 	) -> bool:
+		"""Evaluates a POSIX filesystem predicate in the container.
+
+		Docker startup and communication failures are currently represented
+		as a non-match.
+		"""
 		target = str(self._translate_path(path))
 
 		try:
@@ -528,15 +707,32 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		return result.returncode == 0
 
 	def path_exists(self, path: pathlib.Path) -> bool:
+		"""Returns whether a path exists in the check container."""
 		return self._path_matches("-e", path)
 
 	def path_is_file(self, path: pathlib.Path) -> bool:
+		"""Returns whether a path is a regular file in the check container."""
 		return self._path_matches("-f", path)
 
 	def path_is_dir(self, path: pathlib.Path) -> bool:
+		"""Returns whether a path is a directory in the check container."""
 		return self._path_matches("-d", path)
 
-	def read_file_text(self, path: pathlib.Path, encoding: str = "utf-8") -> str:
+	def read_file_text(
+		self,
+		path: pathlib.Path,
+		encoding: str = "utf-8",
+	) -> str:
+		"""Reads a text file from the check container.
+
+		Docker returns decoded text because ``subprocess.run`` uses text mode.
+		The encoding argument is therefore accepted for interface compatibility
+		but is not applied by this implementation.
+
+		Raises:
+			OSError: If Docker cannot execute the command or the file cannot
+				be read.
+		"""
 		_ = encoding
 		target = str(self._translate_path(path) or path)
 		try:
@@ -566,6 +762,11 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		encoding: str | None = None,
 		on_chunk: Callable[[str, str], None] | None = None,
 	) -> ProcResult:
+		"""Runs a command in the check container and captures its output.
+
+		This adapter normalizes shell commands and converts Docker process
+		results and timeouts into ``ProcResult`` instances.
+		"""
 		_ = drain_after_kill
 		_ = encoding
 
@@ -598,7 +799,23 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 def build_runtime_check_executor(
 	context: OracleInput,
 ) -> RuntimeCheckExecutor:
-	"""Builds the executor used by oracle checks."""
+	"""Builds the executor used by oracle checks.
+
+	Explicit oracle runtime configuration takes precedence over the benchmark
+	runtime. In inherited mode, an active session is preferred over a recorded
+	runtime result.
+
+	Args:
+		context: Oracle invocation context.
+
+	Returns:
+		An executor for the selected runtime.
+
+	Raises:
+		ValueError: If the explicitly configured runtime mode is unsupported.
+		RuntimeError: If inherited runtime information is incomplete or uses
+			an unsupported mode.
+	"""
 	oracle_runtime = getattr(
 		context.oracle_config,
 		"runtime",
@@ -610,7 +827,7 @@ def build_runtime_check_executor(
 		RuntimeMode.INHERIT,
 	)
 
-	# Explicit oracle configuration overrides runtime inheritance.
+	# Explicit oracle configuration takes precedence over runtime inheritance.
 	if oracle_mode == RuntimeMode.LOCAL:
 		return LocalRuntimeCheckExecutor(
 			default_cwd=context.workspace_dir,
@@ -636,7 +853,7 @@ def build_runtime_check_executor(
 			f"{oracle_mode!r}"
 		)
 
-	# Otherwise, inherit the task runtime.
+	# Reuse the current task runtime before checking recorded results.
 	if (
 		context.runtime_session is not None
 		and context.runtime_backend is not None
@@ -666,6 +883,7 @@ def build_runtime_check_executor(
 			"unsupported inherited runtime mode "
 			f"{runtime_result.runtime.mode!r}."
 		)
+
 	image = (
 		runtime_result.runtime.saved_image
 		or runtime_result.runtime.image
@@ -689,6 +907,7 @@ def resolve_check_executable(
 	executor: RuntimeCheckExecutor | None,
 	env: Mapping[str, str] | None = None,
 ) -> str | None:
+	"""Resolves an executable through an executor or on the local host."""
 	if executor is not None:
 		return executor.resolve_executable(executable, env=env)
 	path_value = None if env is None else env.get("PATH")
@@ -701,6 +920,7 @@ def read_check_env_var(
 	executor: RuntimeCheckExecutor | None,
 	env: Mapping[str, str] | None = None,
 ) -> str | None:
+	"""Reads an environment variable through an executor or locally."""
 	if executor is not None:
 		return executor.read_env_var(name, env=env)
 	if env is not None and name in env:
@@ -708,13 +928,18 @@ def read_check_env_var(
 	return os.environ.get(name)
 
 
-def get_check_path_separator(*, executor: RuntimeCheckExecutor | None) -> str:
+def get_check_path_separator(
+	*,
+	executor: RuntimeCheckExecutor | None,
+) -> str:
+	"""Returns the path-list separator used by the selected runtime."""
 	if executor is not None:
 		return executor.path_separator
 	return os.pathsep
 
 
 def path_from_user_input(value: PathLike) -> pathlib.Path:
+	"""Converts a user-supplied path-like value to ``pathlib.Path``."""
 	return pathlib.Path(os.fspath(value))
 
 
@@ -731,6 +956,11 @@ def run_check_process_capture(
 	on_chunk: Callable[[str, str], None] | None = None,
 	executor: RuntimeCheckExecutor | None = None,
 ) -> ProcResult:
+	"""Runs a check process through an executor or on the local host.
+
+	When no executor is supplied, environment overrides augment the current
+	process environment.
+	"""
 	if executor is not None:
 		return executor.run_process_capture(
 			cmd=cmd,
@@ -770,6 +1000,7 @@ def check_path_exists(
 	*,
 	executor: RuntimeCheckExecutor | None = None,
 ) -> bool:
+	"""Returns whether a path exists in the selected runtime."""
 	if executor is not None:
 		return executor.path_exists(path)
 	return path.exists()
@@ -780,6 +1011,7 @@ def check_path_is_file(
 	*,
 	executor: RuntimeCheckExecutor | None = None,
 ) -> bool:
+	"""Returns whether a path is a file in the selected runtime."""
 	if executor is not None:
 		return executor.path_is_file(path)
 	return path.is_file()
@@ -790,6 +1022,7 @@ def check_path_is_dir(
 	*,
 	executor: RuntimeCheckExecutor | None = None,
 ) -> bool:
+	"""Returns whether a path is a directory in the selected runtime."""
 	if executor is not None:
 		return executor.path_is_dir(path)
 	return path.is_dir()
@@ -801,6 +1034,7 @@ def check_read_file_text(
 	encoding: str = "utf-8",
 	executor: RuntimeCheckExecutor | None = None,
 ) -> str:
+	"""Reads a text file from the selected runtime."""
 	if executor is not None:
 		return executor.read_file_text(path, encoding)
 	return path.read_text(encoding=encoding)

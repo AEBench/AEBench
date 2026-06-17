@@ -27,7 +27,7 @@ from .process import (
 	truncate_text,
 )
 
-from .executors import (
+from .oracle_checks_runtime import (
 	DockerRuntimeCheckExecutor,
 	LocalRuntimeCheckExecutor,
 	PathLike,
