@@ -26,6 +26,9 @@ phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
 score_mode = "phase_count"
 failure_mode = "fail_fast"
 
+[oracle.runtime]
+mode = "local"
+
 [upstream]
 source_type = "git"
 url = "https://github.com/sidjay10/asplos25_cinnamon_artifact.git"
