@@ -242,16 +242,11 @@ def test_build_path_mounts_includes_standard_case_paths(
 
 	mounts = build_path_mounts(context)
 
-	by_runtime_path = {
-		str(mount.runtime_root): mount.host_root
-		for mount in mounts
-	}
+	by_runtime_path = {str(mount.runtime_root): mount.host_root for mount in mounts}
 
 	assert by_runtime_path["/workspace"] == context.workspace_dir.resolve()
 	assert by_runtime_path["/case"] == context.case_dir.resolve()
-	assert by_runtime_path["/refs"] == (
-		context.case_dir / "refs"
-	).resolve()
+	assert by_runtime_path["/refs"] == (context.case_dir / "refs").resolve()
 	assert by_runtime_path["/artifact"] == context.artifact_dir.resolve()
 	assert by_runtime_path["/output"] == context.output_dir.resolve()
 
@@ -262,10 +257,7 @@ def test_build_path_mounts_orders_nested_paths_first(
 	context = _oracle_context(tmp_path)
 
 	mounts = build_path_mounts(context)
-	depths = [
-		len(mount.host_root.parts)
-		for mount in mounts
-	]
+	depths = [len(mount.host_root.parts) for mount in mounts]
 
 	assert depths == sorted(depths, reverse=True)
 
@@ -421,16 +413,8 @@ def test_docker_executor_starts_container_lazily_and_reuses_it(
 	assert executor.path_exists(context.workspace_dir) is True
 	assert executor.path_is_dir(context.workspace_dir) is True
 
-	container_starts = [
-		command
-		for command in calls
-		if command[:3] == ["docker", "run", "-d"]
-	]
-	container_execs = [
-		command
-		for command in calls
-		if command[:2] == ["docker", "exec"]
-	]
+	container_starts = [command for command in calls if command[:3] == ["docker", "run", "-d"]]
+	container_execs = [command for command in calls if command[:2] == ["docker", "exec"]]
 
 	assert len(container_starts) == 1
 	assert len(container_execs) == 2
