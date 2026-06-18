@@ -14,7 +14,20 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Generic, TypeVar
 
 from ..constants import DEFAULT_ORACLE_CHECK_TIMEOUT
-from . import utils
+from .oracle_checks_runtime import (
+	PathLike,
+	RuntimeCheckExecutor,
+	check_path_exists,
+	check_path_is_dir,
+	check_path_is_file,
+	check_read_file_text,
+	path_from_user_input,
+	read_check_env_var,
+	resolve_check_executable,
+	run_check_process_capture,
+)
+from .process import DEFAULT_MAX_CAPTURE_CHARS
+from .reporting import BaseCheck, CheckResult
 
 SemanticVersion = tuple[int, int, int]
 _ResultT = TypeVar("_ResultT")
@@ -58,13 +71,13 @@ class Comparison(Generic[_ResultT]):
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class VersionCheck(utils.BaseCheck):
+class VersionCheck(BaseCheck):
 	cmd: Sequence[str]
 	min_version: SemanticVersion | None = None
 	max_version: SemanticVersion | None = None
 	version_regex: str | None = None
 	timeout_seconds: float = DEFAULT_ORACLE_CHECK_TIMEOUT
-	executor: utils.RuntimeCheckExecutor | None = dataclasses.field(
+	executor: RuntimeCheckExecutor | None = dataclasses.field(
 		default=None, repr=False, compare=False
 	)
 
@@ -138,31 +151,29 @@ class VersionCheck(utils.BaseCheck):
 		assert self.max_version is not None
 		return f"<= {self._format_version(self.max_version)}"
 
-	def check(self) -> utils.CheckResult:
+	def check(self) -> CheckResult:
 		executable = self.cmd[0]
 		try:
-			resolved = utils.resolve_check_executable(executable, executor=self.executor)
+			resolved = resolve_check_executable(executable, executor=self.executor)
 		except (RuntimeError, ValueError) as exc:
-			return utils.CheckResult.failure(str(exc))
+			return CheckResult.failure(str(exc))
 		if resolved is None:
-			return utils.CheckResult.failure(f"{executable!r} was not found on PATH")
+			return CheckResult.failure(f"{executable!r} was not found on PATH")
 
 		try:
-			proc = utils.run_check_process_capture(
+			proc = run_check_process_capture(
 				cmd=(resolved, *self.cmd[1:]),
 				cwd=None,
 				env=None,
 				timeout_seconds=self.timeout_seconds,
-				capture_limit_chars=utils.DEFAULT_MAX_CAPTURE_CHARS,
+				capture_limit_chars=DEFAULT_MAX_CAPTURE_CHARS,
 				executor=self.executor,
 			)
 		except (OSError, RuntimeError) as exc:
-			return utils.CheckResult.failure(
-				f"failed to run {executable!r}: {exc}", stderr=str(exc)
-			)
+			return CheckResult.failure(f"failed to run {executable!r}: {exc}", stderr=str(exc))
 
 		if proc.timed_out:
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"{executable!r} timed out after {self.timeout_seconds}s",
 				stdout=proc.stdout,
 				stderr=proc.stderr,
@@ -173,7 +184,7 @@ class VersionCheck(utils.BaseCheck):
 				"\n".join(part for part in (proc.stdout, proc.stderr) if part).strip()
 				or f"rc={proc.returncode}"
 			)
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"{executable!r} version check failed: {detail}",
 				stdout=proc.stdout,
 				stderr=proc.stderr,
@@ -184,14 +195,14 @@ class VersionCheck(utils.BaseCheck):
 		if self._compiled_version_regex is not None:
 			match = self._compiled_version_regex.search(version_text)
 			if match is None:
-				return utils.CheckResult.failure(
+				return CheckResult.failure(
 					"version_regex did not match command output",
 					stdout=proc.stdout,
 					stderr=proc.stderr,
 					returncode=proc.returncode,
 				)
 			if match.lastindex not in (None, 1):
-				return utils.CheckResult.failure(
+				return CheckResult.failure(
 					"version_regex must contain at most one capture group",
 					stdout=proc.stdout,
 					stderr=proc.stderr,
@@ -201,37 +212,37 @@ class VersionCheck(utils.BaseCheck):
 
 		found_version = self._parse_version(version_text)
 		if found_version is None:
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"could not parse a version from {executable!r} output",
 				stdout=proc.stdout,
 				stderr=proc.stderr,
 				returncode=proc.returncode,
 			)
 		if self.min_version is not None and found_version < self.min_version:
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"{executable!r} version {self._format_version(found_version)} does not satisfy {self._format_requirement()}",
 				stdout=proc.stdout,
 				stderr=proc.stderr,
 				returncode=proc.returncode,
 			)
 		if self.max_version is not None and found_version > self.max_version:
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"{executable!r} version {self._format_version(found_version)} does not satisfy {self._format_requirement()}",
 				stdout=proc.stdout,
 				stderr=proc.stderr,
 				returncode=proc.returncode,
 			)
-		return utils.CheckResult.success(
+		return CheckResult.success(
 			stdout=proc.stdout, stderr=proc.stderr, returncode=proc.returncode
 		)
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class EnvVarCheck(utils.BaseCheck):
+class EnvVarCheck(BaseCheck):
 	env_var: str
 	expected: str
 	match_mode: EnvMatchMode = EnvMatchMode.EXACT
-	executor: utils.RuntimeCheckExecutor | None = dataclasses.field(
+	executor: RuntimeCheckExecutor | None = dataclasses.field(
 		default=None, repr=False, compare=False
 	)
 
@@ -249,34 +260,32 @@ class EnvVarCheck(utils.BaseCheck):
 				raise ValueError(f"{self.name}: invalid regex: {exc}") from exc
 			object.__setattr__(self, "_pattern", pattern)
 
-	def check(self) -> utils.CheckResult:
+	def check(self) -> CheckResult:
 		try:
-			actual = utils.read_check_env_var(self.env_var, executor=self.executor)
+			actual = read_check_env_var(self.env_var, executor=self.executor)
 		except (RuntimeError, ValueError) as exc:
-			return utils.CheckResult.failure(str(exc))
+			return CheckResult.failure(str(exc))
 		if actual is None:
-			return utils.CheckResult.failure(f"{self.env_var} is not set")
+			return CheckResult.failure(f"{self.env_var} is not set")
 		if self.match_mode == EnvMatchMode.EXACT:
 			if actual == self.expected:
-				return utils.CheckResult.success()
-			return utils.CheckResult.failure(
-				f"{self.env_var} expected {self.expected!r}, got {actual!r}"
-			)
+				return CheckResult.success()
+			return CheckResult.failure(f"{self.env_var} expected {self.expected!r}, got {actual!r}")
 		if self.match_mode == EnvMatchMode.CONTAINS:
 			if self.expected in actual:
-				return utils.CheckResult.success()
-			return utils.CheckResult.failure(f"{self.env_var} does not contain {self.expected!r}")
+				return CheckResult.success()
+			return CheckResult.failure(f"{self.env_var} does not contain {self.expected!r}")
 		assert self._pattern is not None
 		if self._pattern.search(actual):
-			return utils.CheckResult.success()
-		return utils.CheckResult.failure(f"{self.env_var} does not match regex {self.expected!r}")
+			return CheckResult.success()
+		return CheckResult.failure(f"{self.env_var} does not match regex {self.expected!r}")
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class PathCheck(utils.BaseCheck):
-	path: utils.PathLike
+class PathCheck(BaseCheck):
+	path: PathLike
 	kind: PathKind = PathKind.ANY
-	executor: utils.RuntimeCheckExecutor | None = dataclasses.field(
+	executor: RuntimeCheckExecutor | None = dataclasses.field(
 		default=None, repr=False, compare=False
 	)
 
@@ -289,37 +298,37 @@ class PathCheck(utils.BaseCheck):
 		object.__setattr__(self, "_path_text", path_text)
 
 	def _path(self) -> pathlib.Path:
-		return utils.path_from_user_input(self._path_text)
+		return path_from_user_input(self._path_text)
 
-	def check(self) -> utils.CheckResult:
+	def check(self) -> CheckResult:
 		path = self._path()
-		if not utils.check_path_exists(path, executor=self.executor):
+		if not check_path_exists(path, executor=self.executor):
 			label = "path"
 			if self.kind == PathKind.FILE:
 				label = "file"
 			elif self.kind == PathKind.DIRECTORY:
 				label = "directory"
-			return utils.CheckResult.failure(f"{label} not found: {self._path_text}")
+			return CheckResult.failure(f"{label} not found: {self._path_text}")
 		if self.kind == PathKind.ANY:
-			return utils.CheckResult.success()
+			return CheckResult.success()
 		if self.kind == PathKind.FILE:
-			if utils.check_path_is_file(path, executor=self.executor):
-				return utils.CheckResult.success()
-			return utils.CheckResult.failure(f"expected a file: {self._path_text}")
-		if utils.check_path_is_dir(path, executor=self.executor):
-			return utils.CheckResult.success()
-		return utils.CheckResult.failure(f"expected a directory: {self._path_text}")
+			if check_path_is_file(path, executor=self.executor):
+				return CheckResult.success()
+			return CheckResult.failure(f"expected a file: {self._path_text}")
+		if check_path_is_dir(path, executor=self.executor):
+			return CheckResult.success()
+		return CheckResult.failure(f"expected a directory: {self._path_text}")
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class CommandCheck(utils.BaseCheck):
+class CommandCheck(BaseCheck):
 	cmd: str | Sequence[str]
-	cwd: utils.PathLike | None = None
+	cwd: PathLike | None = None
 	timeout_seconds: float = DEFAULT_ORACLE_CHECK_TIMEOUT
 	env: Mapping[str, str] = dataclasses.field(default_factory=dict)
 	use_shell: bool = False
 	signature: str | None = None
-	executor: utils.RuntimeCheckExecutor | None = dataclasses.field(
+	executor: RuntimeCheckExecutor | None = dataclasses.field(
 		default=None, repr=False, compare=False
 	)
 
@@ -348,7 +357,7 @@ class CommandCheck(utils.BaseCheck):
 			clean_env[key] = str(value)
 		object.__setattr__(self, "env", clean_env)
 		if self.cwd is not None:
-			object.__setattr__(self, "cwd", utils.path_from_user_input(self.cwd))
+			object.__setattr__(self, "cwd", path_from_user_input(self.cwd))
 		if self.signature is not None and not self.signature.strip():
 			object.__setattr__(self, "signature", None)
 
@@ -360,15 +369,13 @@ class CommandCheck(utils.BaseCheck):
 			return self.cmd
 		return " ".join(shlex.quote(arg) for arg in self.cmd)
 
-	def check(self) -> utils.CheckResult:
+	def check(self) -> CheckResult:
 		cwd = self._cwd()
 		if cwd is not None:
-			if not utils.check_path_exists(cwd, executor=self.executor):
-				return utils.CheckResult.failure(f"working directory not found: {cwd}", cwd=cwd)
-			if not utils.check_path_is_dir(cwd, executor=self.executor):
-				return utils.CheckResult.failure(
-					f"working directory is not a directory: {cwd}", cwd=cwd
-				)
+			if not check_path_exists(cwd, executor=self.executor):
+				return CheckResult.failure(f"working directory not found: {cwd}", cwd=cwd)
+			if not check_path_is_dir(cwd, executor=self.executor):
+				return CheckResult.failure(f"working directory is not a directory: {cwd}", cwd=cwd)
 
 		signature = self.signature
 		stdout_seen = signature is None
@@ -391,26 +398,26 @@ class CommandCheck(utils.BaseCheck):
 				stderr_tail = haystack[-carry_len:] if carry_len else ""
 
 		try:
-			proc = utils.run_check_process_capture(
+			proc = run_check_process_capture(
 				cmd=self.cmd,
 				cwd=cwd,
 				env=self.env or None,
 				timeout_seconds=float(self.timeout_seconds),
 				use_shell=self.use_shell,
-				capture_limit_chars=utils.DEFAULT_MAX_CAPTURE_CHARS,
+				capture_limit_chars=DEFAULT_MAX_CAPTURE_CHARS,
 				drain_after_kill=False,
 				on_chunk=on_chunk,
 				executor=self.executor,
 			)
 		except (OSError, RuntimeError) as exc:
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"failed to run command: {self._display_cmd()}: {exc}",
 				stderr=str(exc),
 				cwd=cwd,
 			)
 
 		if proc.timed_out:
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"command timed out after {self.timeout_seconds}s: {self._display_cmd()}",
 				stdout=proc.stdout,
 				stderr=proc.stderr,
@@ -418,7 +425,7 @@ class CommandCheck(utils.BaseCheck):
 				cwd=cwd,
 			)
 		if proc.returncode != 0:
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"command failed (rc={proc.returncode}): {self._display_cmd()}",
 				stdout=proc.stdout,
 				stderr=proc.stderr,
@@ -426,14 +433,14 @@ class CommandCheck(utils.BaseCheck):
 				cwd=cwd,
 			)
 		if signature is not None and not (stdout_seen or stderr_seen):
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"signature not found: {signature!r}: {self._display_cmd()}",
 				stdout=proc.stdout,
 				stderr=proc.stderr,
 				returncode=proc.returncode,
 				cwd=cwd,
 			)
-		return utils.CheckResult.success(
+		return CheckResult.success(
 			stdout=proc.stdout,
 			stderr=proc.stderr,
 			returncode=proc.returncode,
@@ -442,27 +449,27 @@ class CommandCheck(utils.BaseCheck):
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class TextFileEqualityCheck(utils.BaseCheck):
-	observed_path: utils.PathLike
-	reference_path: utils.PathLike
-	executor: utils.RuntimeCheckExecutor | None = dataclasses.field(
+class TextFileEqualityCheck(BaseCheck):
+	observed_path: PathLike
+	reference_path: PathLike
+	executor: RuntimeCheckExecutor | None = dataclasses.field(
 		default=None, repr=False, compare=False
 	)
 
-	def check(self) -> utils.CheckResult:
-		observed_path = utils.path_from_user_input(self.observed_path)
-		reference_path = utils.path_from_user_input(self.reference_path)
-		if not utils.check_path_is_file(observed_path, executor=self.executor):
-			return utils.CheckResult.failure(f"observed file missing: {observed_path}")
-		if not utils.check_path_is_file(reference_path, executor=self.executor):
-			return utils.CheckResult.failure(f"reference file missing: {reference_path}")
+	def check(self) -> CheckResult:
+		observed_path = path_from_user_input(self.observed_path)
+		reference_path = path_from_user_input(self.reference_path)
+		if not check_path_is_file(observed_path, executor=self.executor):
+			return CheckResult.failure(f"observed file missing: {observed_path}")
+		if not check_path_is_file(reference_path, executor=self.executor):
+			return CheckResult.failure(f"reference file missing: {reference_path}")
 		try:
-			observed = utils.check_read_file_text(observed_path, executor=self.executor)
-			reference = utils.check_read_file_text(reference_path, executor=self.executor)
+			observed = check_read_file_text(observed_path, executor=self.executor)
+			reference = check_read_file_text(reference_path, executor=self.executor)
 		except OSError as exc:
-			return utils.CheckResult.failure(f"failed to read file: {exc}")
+			return CheckResult.failure(f"failed to read file: {exc}")
 		if observed == reference:
-			return utils.CheckResult.success("file contents match reference")
+			return CheckResult.success("file contents match reference")
 		preview_limit = 200
 		observed_preview = observed[:preview_limit] + (
 			"..." if len(observed) > preview_limit else ""
@@ -470,41 +477,13 @@ class TextFileEqualityCheck(utils.BaseCheck):
 		reference_preview = reference[:preview_limit] + (
 			"..." if len(reference) > preview_limit else ""
 		)
-		return utils.CheckResult.failure(
+		return CheckResult.failure(
 			f"content mismatch ({len(reference)} vs {len(observed)} chars): expected={reference_preview!r} observed={observed_preview!r}"
 		)
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class DirectoryGlobCountCheck(utils.BaseCheck):
-	"""Fail if fewer than min_count entries match the glob pattern."""
-
-	directory: pathlib.Path
-	pattern: str
-	min_count: int = 1
-	executor: utils.RuntimeCheckExecutor | None = dataclasses.field(
-		default=None, repr=False, compare=False
-	)
-
-	def check(self) -> utils.CheckResult:
-		if not utils.check_path_is_dir(self.directory, executor=self.executor):
-			return utils.CheckResult.failure(f"directory missing: {self.directory}")
-		try:
-			matches = utils.glob(self.directory, self.pattern, executor=self.executor)
-		except OSError as exc:
-			return utils.CheckResult.failure(f"cannot scan {self.directory}: {exc}")
-		if len(matches) < self.min_count:
-			return utils.CheckResult.failure(
-				f"found {len(matches)} entr(y/ies) matching {self.pattern!r} in "
-				f"{self.directory}, expected at least {self.min_count}"
-			)
-		return utils.CheckResult.success(
-			message=f"{len(matches)} entr(y/ies) matching {self.pattern!r} in {self.directory}"
-		)
-
-
-@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class ListSimilarityCheck(utils.BaseCheck):
+class ListSimilarityCheck(BaseCheck):
 	observed: Sequence[float]
 	reference: Sequence[float]
 	metric: SimilarityMetric = SimilarityMetric.PEARSON
@@ -530,20 +509,20 @@ class ListSimilarityCheck(utils.BaseCheck):
 		object.__setattr__(self, "observed", tuple(self.observed))
 		object.__setattr__(self, "reference", tuple(self.reference))
 
-	def check(self) -> utils.CheckResult:
+	def check(self) -> CheckResult:
 		try:
 			score = compute_similarity(self.metric, self.observed, self.reference)
 		except ValueError as exc:
-			return utils.CheckResult.failure(f"{self.name}: {exc}")
+			return CheckResult.failure(f"{self.name}: {exc}")
 		if score < self.min_similarity:
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"{self.metric.value} similarity {score:.6f} < min_similarity {self.min_similarity:.6f}"
 			)
-		return utils.CheckResult.success()
+		return CheckResult.success()
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class ElementwiseEqualityCheck(utils.BaseCheck):
+class ElementwiseEqualityCheck(BaseCheck):
 	observed: Sequence[float]
 	reference: Sequence[float]
 	max_mismatches_to_report: int = 10
@@ -554,22 +533,22 @@ class ElementwiseEqualityCheck(utils.BaseCheck):
 		object.__setattr__(self, "observed", tuple(self.observed))
 		object.__setattr__(self, "reference", tuple(self.reference))
 
-	def check(self) -> utils.CheckResult:
+	def check(self) -> CheckResult:
 		try:
 			comparisons = elementwise_equal(self.observed, self.reference)
 		except ValueError as exc:
-			return utils.CheckResult.failure(f"{self.name}: {exc}")
+			return CheckResult.failure(f"{self.name}: {exc}")
 		if all(comparison.result for comparison in comparisons):
-			return utils.CheckResult.success()
+			return CheckResult.success()
 		detail = _summarize_boolean_mismatches(comparisons, max_items=self.max_mismatches_to_report)
 		message = "elementwise equality check failed"
 		if detail:
 			message = f"{message}\n{detail}"
-		return utils.CheckResult.failure(message)
+		return CheckResult.failure(message)
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class ElementwiseSimilarityThresholdCheck(utils.BaseCheck):
+class ElementwiseSimilarityThresholdCheck(BaseCheck):
 	observed: Sequence[float]
 	reference: Sequence[float]
 	threshold: float
@@ -588,7 +567,7 @@ class ElementwiseSimilarityThresholdCheck(utils.BaseCheck):
 		object.__setattr__(self, "observed", tuple(self.observed))
 		object.__setattr__(self, "reference", tuple(self.reference))
 
-	def check(self) -> utils.CheckResult:
+	def check(self) -> CheckResult:
 		try:
 			scores = elementwise_similarity_scores(
 				self.observed,
@@ -596,9 +575,9 @@ class ElementwiseSimilarityThresholdCheck(utils.BaseCheck):
 				abs_epsilon=self.abs_epsilon,
 			)
 		except ValueError as exc:
-			return utils.CheckResult.failure(f"{self.name}: {exc}")
+			return CheckResult.failure(f"{self.name}: {exc}")
 		if all(score.result >= self.threshold for score in scores):
-			return utils.CheckResult.success()
+			return CheckResult.success()
 		detail = _summarize_threshold_mismatches(
 			scores,
 			threshold=self.threshold,
@@ -607,7 +586,7 @@ class ElementwiseSimilarityThresholdCheck(utils.BaseCheck):
 		message = f"elementwise similarity below threshold {self.threshold:.6f}"
 		if detail:
 			message = f"{message}\n{detail}"
-		return utils.CheckResult.failure(message)
+		return CheckResult.failure(message)
 
 
 def compute_similarity(

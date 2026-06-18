@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles import checks
-from evaluator.oracles.utils import ProcResult
+from evaluator.oracles.process import ProcResult
 
 
 @dataclass
