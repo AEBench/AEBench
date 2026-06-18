@@ -2,10 +2,10 @@
 
 from typing import Sequence
 
-from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleArtifactBuildBase
+from evaluator.oracles.reporting import BaseCheck
 
 
 class OracleArtifactBuild(CaseOracleArtifactBuildBase):
-	def requirements(self) -> Sequence[utils.BaseCheck]:
+	def requirements(self) -> Sequence[BaseCheck]:
 		return []
