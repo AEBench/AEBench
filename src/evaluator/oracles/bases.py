@@ -120,23 +120,11 @@ class _CaseOracleBase(_OraclePhaseBase):
 
 		# Normalize paths once so derived phases use consistent absolute paths
 		# <strict=False> allows paths that do not exist yet (e.g., logs/output files)
-		self._case_dir = (
-			Path(context.case_dir).expanduser().resolve(strict=False)
-		)
-		self._artifact_dir = (
-			Path(context.artifact_dir).expanduser().resolve(strict=False)
-		)
-		self._workspace_dir = (
-			Path(context.workspace_dir).expanduser().resolve(strict=False)
-		)
-		self._output_dir = (
-			Path(context.output_dir).expanduser().resolve(strict=False)
-		)
-		self._refs_dir = (
-			(self._case_dir / REFS_DIRNAME)
-			.expanduser()
-			.resolve(strict=False)
-		)
+		self._case_dir = Path(context.case_dir).expanduser().resolve(strict=False)
+		self._artifact_dir = Path(context.artifact_dir).expanduser().resolve(strict=False)
+		self._workspace_dir = Path(context.workspace_dir).expanduser().resolve(strict=False)
+		self._output_dir = Path(context.output_dir).expanduser().resolve(strict=False)
+		self._refs_dir = (self._case_dir / REFS_DIRNAME).expanduser().resolve(strict=False)
 
 		# Checks through the active task runtime, if missing use local I/O
 		self._executor: RuntimeCheckExecutor | None = cast(
@@ -155,27 +143,15 @@ class _CaseOracleBase(_OraclePhaseBase):
 
 	def artifact_path(self, *parts: str | Path) -> Path:
 		"""Returns a path relative to the artifact directory."""
-		return (
-			self._artifact_dir.joinpath(*parts)
-			if parts
-			else self._artifact_dir
-		)
+		return self._artifact_dir.joinpath(*parts) if parts else self._artifact_dir
 
 	def workspace_path(self, *parts: str | Path) -> Path:
 		"""Returns a path relative to the task workspace."""
-		return (
-			self._workspace_dir.joinpath(*parts)
-			if parts
-			else self._workspace_dir
-		)
+		return self._workspace_dir.joinpath(*parts) if parts else self._workspace_dir
 
 	def output_path(self, *parts: str | Path) -> Path:
 		"""Returns a path relative to the oracle output directory."""
-		return (
-			self._output_dir.joinpath(*parts)
-			if parts
-			else self._output_dir
-		)
+		return self._output_dir.joinpath(*parts) if parts else self._output_dir
 
 	def ref_path(self, *parts: str | Path) -> Path:
 		"""Returns a path relative to the case reference directory."""
@@ -362,9 +338,5 @@ class CaseOracleExperimentRunsBase(_CaseOracleBase):
 	# Exposes a few common similarlity comparison helpers for raw data series
 	similarity = staticmethod(compute_similarity)
 	elementwise_equal = staticmethod(elementwise_equal)
-	elementwise_similarity_scores = staticmethod(
-		elementwise_similarity_scores
-	)
-	elementwise_similarity_threshold = staticmethod(
-		elementwise_similarity_threshold
-	)
+	elementwise_similarity_scores = staticmethod(elementwise_similarity_scores)
+	elementwise_similarity_threshold = staticmethod(elementwise_similarity_threshold)

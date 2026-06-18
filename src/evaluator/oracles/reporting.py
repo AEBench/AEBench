@@ -132,28 +132,18 @@ class OracleReport:
 	def ok(self) -> bool:
 		"""Returns whether every required check avoided failure."""
 		return all(
-			entry.outcome != CheckOutcome.FAILED
-			for entry in self.results
-			if not entry.optional
+			entry.outcome != CheckOutcome.FAILED for entry in self.results if not entry.optional
 		)
 
 	@property
 	def passed_count(self) -> int:
 		"""Returns the number of successful checks."""
-		return sum(
-			1
-			for entry in self.results
-			if entry.outcome == CheckOutcome.PASSED
-		)
+		return sum(1 for entry in self.results if entry.outcome == CheckOutcome.PASSED)
 
 	@property
 	def failed_count(self) -> int:
 		"""Returns the number of required checks that failed."""
-		return sum(
-			1
-			for entry in self.results
-			if entry.outcome == CheckOutcome.FAILED
-		)
+		return sum(1 for entry in self.results if entry.outcome == CheckOutcome.FAILED)
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
@@ -207,23 +197,13 @@ def run_checks(
 				outcome = CheckOutcome.PASSED
 				message = result.message or "ok"
 			else:
-				outcome = (
-					CheckOutcome.WARNING
-					if check.optional
-					else CheckOutcome.FAILED
-				)
+				outcome = CheckOutcome.WARNING if check.optional else CheckOutcome.FAILED
 				message = result.message or "failed"
 		except Exception as exc:
 			# Preserve phase progress while recording implementation errors as
 			# failures of the affected check
-			outcome = (
-				CheckOutcome.WARNING
-				if check.optional
-				else CheckOutcome.FAILED
-			)
-			message = (
-				f"unexpected error: {type(exc).__name__}: {exc}"
-			)
+			outcome = CheckOutcome.WARNING if check.optional else CheckOutcome.FAILED
+			message = f"unexpected error: {type(exc).__name__}: {exc}"
 			logger.exception(
 				"check %r raised an unexpected exception",
 				check.name,
@@ -261,10 +241,7 @@ def build_oracle_report(
 	try:
 		checks = requirements()
 	except Exception as exc:
-		message = (
-			"failed to enumerate requirements: "
-			f"{type(exc).__name__}: {exc}"
-		)
+		message = f"failed to enumerate requirements: {type(exc).__name__}: {exc}"
 		logger.error(message)
 
 		# Report setup failures through the same I/O stream as check failures
