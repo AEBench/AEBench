@@ -31,22 +31,29 @@ from .reporting import BaseCheck, CheckResult
 
 SemanticVersion = tuple[int, int, int]
 _ResultT = TypeVar("_ResultT")
+
 _EPSILON = 1e-12
 
 
 class EnvMatchMode(enum.Enum):
+	"""Supported environment-variable matching strategies."""
+
 	EXACT = "exact"
 	CONTAINS = "contains"
 	REGEX = "regex"
 
 
 class PathKind(enum.Enum):
+	"""Filesystem object type required by a path check."""
+
 	ANY = "any"
 	FILE = "file"
 	DIRECTORY = "directory"
 
 
 class SimilarityMetric(enum.Enum):
+	"""Supported aggregate similarity metrics."""
+
 	JACCARD_SET = "jaccard_set"
 	JACCARD_MULTISET = "jaccard_multiset"
 	COSINE = "cosine"
@@ -57,6 +64,7 @@ class SimilarityMetric(enum.Enum):
 def _validate_numeric_sequence_pair(
 	observed: Sequence[float], reference: Sequence[float], *, label: str
 ) -> None:
+	"""Validates a non-empty pair of equal-length numeric sequences."""
 	if len(observed) != len(reference):
 		raise ValueError(f"{label}: observed and reference must have the same length")
 	if not observed:
@@ -65,6 +73,8 @@ def _validate_numeric_sequence_pair(
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class Comparison(Generic[_ResultT]):
+	"""Stores one observed/reference comparison and its derived result."""
+
 	observed: float
 	reference: float
 	result: _ResultT
@@ -72,6 +82,12 @@ class Comparison(Generic[_ResultT]):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class VersionCheck(BaseCheck):
+	"""Checks that an executable reports a version within allowed bounds.
+
+	The command may print the version on either stdout or stderr. An optional
+	regular expression can isolate the version portion of the output.
+	"""
+
 	cmd: Sequence[str]
 	min_version: SemanticVersion | None = None
 	max_version: SemanticVersion | None = None
@@ -91,6 +107,7 @@ class VersionCheck(BaseCheck):
 		if self.timeout_seconds <= 0:
 			raise ValueError(f"{self.name}: timeout_seconds must be > 0")
 
+		# Normalize caller-provided sequences
 		object.__setattr__(self, "cmd", tuple(self.cmd))
 		object.__setattr__(
 			self, "min_version", self._validate_version(self.min_version, "min_version")
@@ -115,6 +132,7 @@ class VersionCheck(BaseCheck):
 	def _validate_version(
 		self, value: SemanticVersion | None, field_name: str
 	) -> SemanticVersion | None:
+		"""Validates and normalizes a three-part semantic version."""
 		if value is None:
 			return None
 		try:
@@ -126,12 +144,14 @@ class VersionCheck(BaseCheck):
 		return major, minor, patch
 
 	def _compile_regex(self, pattern: str) -> re.Pattern[str]:
+		"""Compiles a case-insensitive version extraction pattern."""
 		try:
 			return re.compile(pattern, flags=re.IGNORECASE)
 		except re.error as exc:
 			raise ValueError(f"{self.name}: invalid version_regex: {exc}") from exc
 
 	def _parse_version(self, text: str) -> SemanticVersion | None:
+		"""Parses a <major.minor> or <major.minor.patch> version."""
 		match = re.search(r"(?:^|\s)v?(\d+)\.(\d+)(?:\.(\d+))?", text)
 		if match is None:
 			return None
@@ -139,9 +159,11 @@ class VersionCheck(BaseCheck):
 		return int(match.group(1)), int(match.group(2)), patch
 
 	def _format_version(self, version: SemanticVersion) -> str:
+		"""Formats a semantic version for diagnostics."""
 		return ".".join(str(part) for part in version)
 
 	def _format_requirement(self) -> str:
+		"""Returns the configured version range for diagnostics."""
 		if self.min_version is not None and self.max_version is not None:
 			if self.min_version == self.max_version:
 				return f"== {self._format_version(self.min_version)}"
@@ -192,6 +214,8 @@ class VersionCheck(BaseCheck):
 			)
 
 		version_text = "\n".join(part for part in (proc.stdout, proc.stderr) if part).strip()
+
+		# Isolate the version using a regex
 		if self._compiled_version_regex is not None:
 			match = self._compiled_version_regex.search(version_text)
 			if match is None:
@@ -239,6 +263,8 @@ class VersionCheck(BaseCheck):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class EnvVarCheck(BaseCheck):
+	"""Checks an environment variable through the configured runtime."""
+
 	env_var: str
 	expected: str
 	match_mode: EnvMatchMode = EnvMatchMode.EXACT
@@ -283,6 +309,8 @@ class EnvVarCheck(BaseCheck):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class PathCheck(BaseCheck):
+	"""Checks that a path exists with the required type."""
+
 	path: PathLike
 	kind: PathKind = PathKind.ANY
 	executor: RuntimeCheckExecutor | None = dataclasses.field(
@@ -322,6 +350,13 @@ class PathCheck(BaseCheck):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class CommandCheck(BaseCheck):
+	"""Runs a command and optionally requires an output signature.
+
+	Commands execute through the configured runtime executor. Output is
+	streamed while the process runs so signatures can be detected even when
+	the saved output is truncated.
+	"""
+
 	cmd: str | Sequence[str]
 	cwd: PathLike | None = None
 	timeout_seconds: float = DEFAULT_ORACLE_CHECK_TIMEOUT
@@ -380,11 +415,14 @@ class CommandCheck(BaseCheck):
 		signature = self.signature
 		stdout_seen = signature is None
 		stderr_seen = signature is None
+
+		# Retain enough trailing text to detect a given pattern/signature
 		carry_len = 0 if signature is None else max(len(signature) - 1, 0)
 		stdout_tail = ""
 		stderr_tail = ""
 
 		def on_chunk(stream_name: str, text: str) -> None:
+			"""Searches streamed output for the configured signature."""
 			nonlocal stdout_seen, stderr_seen, stdout_tail, stderr_tail
 			if signature is None:
 				return
@@ -450,6 +488,8 @@ class CommandCheck(BaseCheck):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class TextFileEqualityCheck(BaseCheck):
+	"""Compares text files for exact equality."""
+
 	observed_path: PathLike
 	reference_path: PathLike
 	executor: RuntimeCheckExecutor | None = dataclasses.field(
@@ -470,6 +510,8 @@ class TextFileEqualityCheck(BaseCheck):
 			return CheckResult.failure(f"failed to read file: {exc}")
 		if observed == reference:
 			return CheckResult.success("file contents match reference")
+
+		# Add short mismatch diagnostics message
 		preview_limit = 200
 		observed_preview = observed[:preview_limit] + (
 			"..." if len(observed) > preview_limit else ""
@@ -484,6 +526,8 @@ class TextFileEqualityCheck(BaseCheck):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class ListSimilarityCheck(BaseCheck):
+	"""Checks aggregate similarity between two numeric sequences."""
+
 	observed: Sequence[float]
 	reference: Sequence[float]
 	metric: SimilarityMetric = SimilarityMetric.PEARSON
@@ -523,6 +567,8 @@ class ListSimilarityCheck(BaseCheck):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class ElementwiseEqualityCheck(BaseCheck):
+	"""Checks exact equality at each position in two numeric sequences."""
+
 	observed: Sequence[float]
 	reference: Sequence[float]
 	max_mismatches_to_report: int = 10
@@ -549,6 +595,8 @@ class ElementwiseEqualityCheck(BaseCheck):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class ElementwiseSimilarityThresholdCheck(BaseCheck):
+	"""Checks that every element pair meets a similarity threshold."""
+
 	observed: Sequence[float]
 	reference: Sequence[float]
 	threshold: float
@@ -592,6 +640,20 @@ class ElementwiseSimilarityThresholdCheck(BaseCheck):
 def compute_similarity(
 	metric: SimilarityMetric, left: Sequence[float], right: Sequence[float]
 ) -> float:
+	"""Computes aggregate similarity using a given metric.
+
+	Args:
+		metric: Similarity metric to evaluate.
+		left: First numeric sequence.
+		right: Second numeric sequence.
+
+	Returns:
+		The computed similarity score.
+
+	Raises:
+		ValueError: If the metric is unsupported or the inputs do not satisfy
+			the selected metric's requirements.
+	"""
 	if metric == SimilarityMetric.JACCARD_SET:
 		return _jaccard_set_similarity(left, right)
 	if metric == SimilarityMetric.JACCARD_MULTISET:
@@ -608,6 +670,18 @@ def compute_similarity(
 def elementwise_equal(
 	observed: Sequence[float], reference: Sequence[float]
 ) -> list[Comparison[bool]]:
+	"""Compares two numeric sequences and checks if they are elementwise equal.
+
+	Args:
+		observed: Observed numeric values.
+		reference: Expected numeric values.
+
+	Returns:
+		One comparison result per input position.
+
+	Raises:
+		ValueError: If the sequences are empty or have different lengths.
+	"""
 	_validate_numeric_sequence_pair(observed, reference, label="elementwise_equal")
 	return [
 		Comparison(observed=a, reference=b, result=a == b)
@@ -622,6 +696,21 @@ def elementwise_similarity_scores(
 	similarity_fn: Callable[[float, float], float] | None = None,
 	abs_epsilon: float = 1e-12,
 ) -> list[Comparison[float]]:
+	"""Computes a similarity score for each pair of numeric values.
+
+	Args:
+		observed: Observed numeric values.
+		reference: Expected numeric values.
+		similarity_fn: Optional pairwise similarity function.
+		abs_epsilon: Minimum denominator used by the default function.
+
+	Returns:
+		One similarity score per input position.
+
+	Raises:
+		ValueError: If the inputs are empty, differ in length, or use an
+			invalid epsilon.
+	"""
 	_validate_numeric_sequence_pair(observed, reference, label="elementwise_similarity_scores")
 	if abs_epsilon <= 0:
 		raise ValueError("elementwise_similarity_scores: abs_epsilon must be > 0")
@@ -646,6 +735,21 @@ def elementwise_similarity_threshold(
 	similarity_fn: Callable[[float, float], float] | None = None,
 	abs_epsilon: float = 1e-12,
 ) -> list[Comparison[bool]]:
+	"""Checks pairwise similarity scores against a minimum threshold.
+
+	Args:
+		observed: Observed numeric values.
+		reference: Expected numeric values.
+		threshold: Inclusive minimum score in the range [0, 1].
+		similarity_fn: Optional pairwise similarity function.
+		abs_epsilon: Minimum denominator used by the default function.
+
+	Returns:
+		One threshold result per input position.
+
+	Raises:
+		ValueError: If the threshold, inputs, or epsilon are invalid.
+	"""
 	if not math.isfinite(threshold):
 		raise ValueError("elementwise_similarity_threshold: threshold must be finite")
 	if not 0.0 <= threshold <= 1.0:
@@ -664,19 +768,24 @@ def elementwise_similarity_threshold(
 
 
 def _require_equal_lengths(left: Sequence[float], right: Sequence[float], *, label: str) -> None:
+	"""Requires two numeric sequences to have equal lengths."""
 	if len(left) != len(right):
 		raise ValueError(f"{label}: length mismatch: left has {len(left)}, right has {len(right)}")
 
 
 def _require_all_finite(values: Sequence[float], *, label: str) -> None:
+	"""Requires every numeric value to be finite."""
 	for index, value in enumerate(values):
 		if not math.isfinite(value):
 			raise ValueError(f"{label}: non-finite value at index {index}: {value!r}")
 
 
 def _jaccard_set_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+	"""Computes Jaccard similarity for duplicate-free sets of values."""
 	_require_all_finite(left, label="jaccard_set_similarity.left")
 	_require_all_finite(right, label="jaccard_set_similarity.right")
+
+	# Reject duplicates rather than silently discarding multiplicity
 	left_set = set(left)
 	right_set = set(right)
 	if len(left_set) != len(left):
@@ -689,11 +798,13 @@ def _jaccard_set_similarity(left: Sequence[float], right: Sequence[float]) -> fl
 		)
 	union = left_set | right_set
 	if not union:
+		# Two empty sets are identical
 		return 1.0
 	return len(left_set & right_set) / len(union)
 
 
 def _jaccard_multiset_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+	"""Computes Jaccard similarity while preserving value multiplicity."""
 	_require_all_finite(left, label="jaccard_multiset_similarity.left")
 	_require_all_finite(right, label="jaccard_multiset_similarity.right")
 	left_counter = Counter(left)
@@ -707,6 +818,7 @@ def _jaccard_multiset_similarity(left: Sequence[float], right: Sequence[float]) 
 
 
 def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+	"""Computes cosine similarity for equal-length numeric vectors."""
 	_require_equal_lengths(left, right, label="cosine_similarity")
 	_require_all_finite(left, label="cosine_similarity.left")
 	_require_all_finite(right, label="cosine_similarity.right")
@@ -717,6 +829,8 @@ def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
 		dot += a * b
 		left_norm += a * a
 		right_norm += b * b
+
+	# Two zero vectors as identical; a zero and nonzero vector are orthogonal
 	if left_norm <= _EPSILON and right_norm <= _EPSILON:
 		return 1.0
 	if left_norm <= _EPSILON or right_norm <= _EPSILON:
@@ -725,6 +839,7 @@ def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
 
 
 def _pearson_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+	"""Computes Pearson correlation for equal-length numeric sequences."""
 	_require_equal_lengths(left, right, label="pearson_similarity")
 	if len(left) < 2:
 		raise ValueError(f"pearson_similarity: need at least 2 samples, got {len(left)}")
@@ -741,6 +856,8 @@ def _pearson_similarity(left: Sequence[float], right: Sequence[float]) -> float:
 		covariance += left_delta * right_delta
 		left_var += left_delta * left_delta
 		right_var += right_delta * right_delta
+
+	# Correlation is undefined for constant sequences
 	if left_var <= _EPSILON and right_var <= _EPSILON:
 		return 1.0 if tuple(left) == tuple(right) else 0.0
 	if left_var <= _EPSILON or right_var <= _EPSILON:
@@ -749,6 +866,7 @@ def _pearson_similarity(left: Sequence[float], right: Sequence[float]) -> float:
 
 
 def _min_max_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+	"""Computes min-max similarity for nonnegative numeric vectors."""
 	_require_equal_lengths(left, right, label="min_max_similarity")
 	_require_all_finite(left, label="min_max_similarity.left")
 	_require_all_finite(right, label="min_max_similarity.right")
@@ -767,6 +885,7 @@ def _min_max_similarity(left: Sequence[float], right: Sequence[float]) -> float:
 
 
 def _default_numeric_similarity(a: float, b: float, *, abs_epsilon: float) -> float:
+	"""Returns bounded similarity based on relative absolute difference."""
 	if not math.isfinite(a) or not math.isfinite(b):
 		raise ValueError(f"default_numeric_similarity: non-finite input: a={a!r}, b={b!r}")
 	denominator = max(abs(a), abs(b), abs_epsilon)
@@ -776,6 +895,7 @@ def _default_numeric_similarity(a: float, b: float, *, abs_epsilon: float) -> fl
 def _summarize_boolean_mismatches(
 	comparisons: Sequence[Comparison[bool]], *, max_items: int
 ) -> str:
+	"""Formats a bounded summary of failed equality comparisons."""
 	lines: list[str] = []
 	total_bad = 0
 	for index, comparison in enumerate(comparisons):
@@ -798,6 +918,7 @@ def _summarize_threshold_mismatches(
 	threshold: float,
 	max_items: int,
 ) -> str:
+	"""Formats a bounded summary of scores below a threshold."""
 	lines: list[str] = []
 	total_bad = 0
 	for index, comparison in enumerate(comparisons):
