@@ -188,9 +188,7 @@ def stream_subprocess(
 				break
 
 			# Use short polling intervals so the timeout remains responsive
-			for key, _mask in selector.select(
-				timeout=min(0.25, remaining)
-			):
+			for key, _mask in selector.select(timeout=min(0.25, remaining)):
 				stream = cast(IO[bytes], key.fileobj)
 				chunk = stream.read(8192)
 				if not chunk:
@@ -207,10 +205,7 @@ def stream_subprocess(
 			# Some processes flush useful diagnostics while being terminated
 			if drain_after_kill:
 				drain_deadline = time.monotonic() + 1.0
-				while (
-					selector.get_map()
-					and time.monotonic() < drain_deadline
-				):
+				while selector.get_map() and time.monotonic() < drain_deadline:
 					for key, _mask in selector.select(timeout=0.1):
 						stream = cast(IO[bytes], key.fileobj)
 						chunk = stream.read(8192)
@@ -219,7 +214,7 @@ def stream_subprocess(
 							continue
 						on_chunk(cast(str, key.data), chunk)
 
-			# Collect the terminated child process exit; but preserve 
+			# Collect the terminated child process exit; but preserve
 			# output/reporting even if the process does not terminate promptly
 			try:
 				proc.wait(timeout=SUBPROCESS_WAIT_TIMEOUT)
@@ -230,7 +225,7 @@ def stream_subprocess(
 		try:
 			return proc.wait(timeout=SUBPROCESS_WAIT_TIMEOUT), False
 		except Exception:
-			# The terminated process exist status may have already 
+			# The terminated process exist status may have already
 			# been collected thru platform-specific behavior
 			return proc.returncode, False
 	finally:
@@ -345,11 +340,7 @@ def run_subprocess_capture(
 
 	def handle_raw(stream_name: str, raw: bytes) -> None:
 		"""Decodes a raw stream chunk using the corresponding decoder."""
-		decoder = (
-			stdout_decoder
-			if stream_name == "stdout"
-			else stderr_decoder
-		)
+		decoder = stdout_decoder if stream_name == "stdout" else stderr_decoder
 		handle_text(stream_name, decoder.decode(raw))
 
 	returncode, timed_out = stream_subprocess(

@@ -40,11 +40,7 @@ def _phase_result_from_report(
 ) -> OraclePhaseResult:
 	"""Converts a check report into a phase-level result."""
 	status = OracleStatus.SUCCESS if report.ok else OracleStatus.ERROR
-	summary = (
-		"all checks passed"
-		if report.ok
-		else "one or more checks failed"
-	)
+	summary = "all checks passed" if report.ok else "one or more checks failed"
 	return OraclePhaseResult(
 		phase=name,
 		status=status,
@@ -107,27 +103,13 @@ def run_oracle_classes(
 
 		results.append(phase_result)
 
-		if (
-			phase_result.status != OracleStatus.SUCCESS
-			and mode == OracleFailureMode.FAIL_FAST
-		):
+		if phase_result.status != OracleStatus.SUCCESS and mode == OracleFailureMode.FAIL_FAST:
 			# Pending entries preserve the complete phase plan in the result
-			results.extend(
-				_pending_phase_result(pending.name)
-				for pending in classes[index + 1 :]
-			)
+			results.extend(_pending_phase_result(pending.name) for pending in classes[index + 1 :])
 			break
 
-	score = sum(
-		1
-		for result in results
-		if result.status == OracleStatus.SUCCESS
-	)
-	overall_status = (
-		OracleStatus.SUCCESS
-		if score == len(classes)
-		else OracleStatus.ERROR
-	)
+	score = sum(1 for result in results if result.status == OracleStatus.SUCCESS)
+	overall_status = OracleStatus.SUCCESS if score == len(classes) else OracleStatus.ERROR
 
 	return OracleResult(
 		status=overall_status,
@@ -135,9 +117,7 @@ def run_oracle_classes(
 		summary=f"Passed {score}/{len(classes)} phases.",
 		phases=results,
 		error=(
-			None
-			if score == len(classes)
-			else f"oracle failed phases: {', '.join(failed_phases)}"
+			None if score == len(classes) else f"oracle failed phases: {', '.join(failed_phases)}"
 		),
 	)
 
@@ -177,23 +157,13 @@ def _resolve_workspace_dir(
 		The resolved workspace path.
 	"""
 	if explicit_workspace_dir is not None:
-		return (
-			explicit_workspace_dir
-			.expanduser()
-			.resolve(strict=False)
-		)
+		return explicit_workspace_dir.expanduser().resolve(strict=False)
 
 	runtime_workspace = (
-		None
-		if runtime_result is None
-		else getattr(runtime_result, "workspace_path", None)
+		None if runtime_result is None else getattr(runtime_result, "workspace_path", None)
 	)
 	if runtime_workspace:
-		return (
-			Path(str(runtime_workspace))
-			.expanduser()
-			.resolve(strict=False)
-		)
+		return Path(str(runtime_workspace)).expanduser().resolve(strict=False)
 
 	if artifact_dir.exists():
 		return artifact_dir
@@ -236,14 +206,8 @@ def run_oracle(
 
 	try:
 		spec = case or load_case_spec(case_root)
-		failure_mode = (
-			spec.oracle.failure_mode
-			if spec.oracle
-			else OracleFailureMode.FAIL_FAST
-		)
-		artifact_dir = (
-			case_root / ARTIFACT_SUBDIR
-		).resolve(strict=False)
+		failure_mode = spec.oracle.failure_mode if spec.oracle else OracleFailureMode.FAIL_FAST
+		artifact_dir = (case_root / ARTIFACT_SUBDIR).resolve(strict=False)
 		resolved_workspace_dir = _resolve_workspace_dir(
 			case_root=case_root,
 			artifact_dir=artifact_dir,
@@ -284,17 +248,11 @@ def run_oracle(
 			status=OracleStatus.ERROR,
 			score=0,
 			summary="Oracle evaluation failed.",
-			error=(
-				f"{type(exc).__name__}: {exc}\n"
-				f"{traceback_text}"
-			),
+			error=(f"{type(exc).__name__}: {exc}\n{traceback_text}"),
 		)
 	finally:
 		try:
-			if (
-				context is not None
-				and context.runtime_executor is not None
-			):
+			if context is not None and context.runtime_executor is not None:
 				executor = cast(
 					RuntimeCheckExecutor,
 					context.runtime_executor,
@@ -302,9 +260,7 @@ def run_oracle(
 				executor.close()
 		except Exception:
 			# Cleanup failures should not replace the oracle result
-			logging.getLogger(__name__).exception(
-				"failed to clean up oracle runtime executor"
-			)
+			logging.getLogger(__name__).exception("failed to clean up oracle runtime executor")
 
 	try:
 		(out_dir / ORACLE_RESULT_FILENAME).write_text(
