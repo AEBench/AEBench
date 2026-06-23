@@ -11,7 +11,12 @@ DOCKERFILE_PATH = "Dockerfile"
 # Oracle 2: artifact_build (binaries present in the agent-built `crocus` image)
 # ---------------------------------------------------------------------------
 # Executables the experiments rely on; checked via `command -v` inside the image.
-REQUIRED_BINARIES = {"z3":(4,12,2), "cargo":(1,72,1), "rustc":(1,72,1), "python3":(3,0,0)}
+REQUIRED_BINARIES = {
+	"z3": (4, 12, 2),
+	"cargo": (1, 72, 1),
+	"rustc": (1, 72, 1),
+	"python3": (3, 0, 0),
+}
 # Python packages the analysis scripts import.
 REQUIRED_PY_MODULES = ("matplotlib", "tabulate")
 
