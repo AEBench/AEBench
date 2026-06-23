@@ -33,12 +33,15 @@ EXPERIMENT_SCRIPTS = (
 )
 
 # ---------------------------------------------------------------------------
-# Oracle 4: experiment_runs (agent-saved outputs, read from the workspace)
+# Oracle 4: experiment_runs (agent-saved outputs copied into the artifact dir)
+# The agent copies experiment outputs into `self.artifact_dir` under this folder
+# (the artifact's native output folder name, per the README).
 # ---------------------------------------------------------------------------
-RESULTS_DIR = "crocus-results"
+RESULTS_DIR = "script-results"
 
 TABLE1_FILE = "table1.txt"
-CDF_PDF_FILE = "cdf.pdf"
+# Figure 4 CDF is written with a timestamped name (cdf-<ts>.pdf); match by glob.
+CDF_PDF_GLOB = "cdf*.pdf"
 COVERAGE_WASMTIME_FILE = "coverage_wasmtime.txt"
 COVERAGE_RUSTC_FILE = "coverage_rustc.txt"
 
@@ -52,7 +55,7 @@ CASE_STUDY_SIGNATURES = {
 	"cs_4_3_1.txt": ("Verification failed",),
 	"cs_4_3_2.txt": ("Verification failed",),
 	"cs_4_3_3.txt": ("Verification failed",),
-	"cs_4_4_1.txt": ("Verification Success", "Verification failed"),
+	"cs_4_4_1.txt": ("Verification succeeded", "Verification failed"),
 	"cs_4_4_2.txt": ("Assertion list is only feasible for one input with distinct BV values!",),
 	"cs_4_4_4.txt": ("Verification failed",),
 }
