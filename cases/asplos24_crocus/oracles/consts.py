@@ -11,11 +11,9 @@ DOCKERFILE_PATH = "Dockerfile"
 # Oracle 2: artifact_build (binaries present in the agent-built `crocus` image)
 # ---------------------------------------------------------------------------
 # Executables the experiments rely on; checked via `command -v` inside the image.
-REQUIRED_BINARIES = ("z3", "cargo", "rustc", "python3")
+REQUIRED_BINARIES = {"z3":(4,12,2), "cargo":(1,72,1), "rustc":(1,72,1), "python3":(3,0,0)}
 # Python packages the analysis scripts import.
 REQUIRED_PY_MODULES = ("matplotlib", "tabulate")
-# The Crocus verification crate (relative to app_dir = veri_engine).
-CARGO_MANIFEST_PATH = "Cargo.toml"
 
 # ---------------------------------------------------------------------------
 # Oracle 3: benchmark_prep (experiment inputs present in the image)
