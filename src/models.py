@@ -199,6 +199,11 @@ class CasePlan(_Model):
 
 
 class InstructionsConfig(_Model):
+
+	# TODO: This is a temporary fix for ignoring the run.instructions.required_evidence field.
+	# Remove this and wire required_evidence back into the agent's prompt.
+	model_config = ConfigDict(extra="ignore")
+
 	path: str = "README.md"
 
 	@model_validator(mode="after")
