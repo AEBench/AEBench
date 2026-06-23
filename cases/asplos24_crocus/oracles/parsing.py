@@ -141,9 +141,7 @@ class CoveragePercentCheck(BaseCheck):
 		if errors:
 			return CheckResult.failure("coverage mismatch: " + "; ".join(errors))
 
-		return CheckResult.success(
-			message=f"coverage reproduced: uses {uses}%, covered {covered}%"
-		)
+		return CheckResult.success(message=f"coverage reproduced: uses {uses}%, covered {covered}%")
 
 
 def _last_pct(matches: Sequence[str]) -> float | None:
