@@ -174,9 +174,7 @@ def test_recorded_local_runtime_uses_local_executor(
 ) -> None:
 	context = _oracle_context(
 		tmp_path,
-		runtime_result=_recorded_runtime(
-			RuntimeMode.LOCAL
-		),
+		runtime_result=_recorded_runtime(RuntimeMode.LOCAL),
 	)
 
 	registry = build_oracle_runtime_registry(context)

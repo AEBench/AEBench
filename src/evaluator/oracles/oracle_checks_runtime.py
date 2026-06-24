@@ -215,9 +215,7 @@ def _translate_host_path(
 		if translated is not None:
 			return translated
 
-	raise ValueError(
-		f"host path is not mounted in the oracle runtime: {resolved}"
-	)
+	raise ValueError(f"host path is not mounted in the oracle runtime: {resolved}")
 
 
 def _prepare_runtime_command(
@@ -238,17 +236,11 @@ def _prepare_runtime_command(
 		TypeError: If a string command is supplied without shell execution.
 	"""
 	if use_shell:
-		shell_cmd = (
-			cmd
-			if isinstance(cmd, str)
-			else " ".join(shlex.quote(part) for part in cmd)
-		)
+		shell_cmd = cmd if isinstance(cmd, str) else " ".join(shlex.quote(part) for part in cmd)
 		return ["sh", "-lc", shell_cmd]
 
 	if isinstance(cmd, str):
-		raise TypeError(
-			"use_shell=False requires cmd to be a sequence of argv strings"
-		)
+		raise TypeError("use_shell=False requires cmd to be a sequence of argv strings")
 
 	return list(cmd)
 
@@ -265,9 +257,7 @@ def build_path_mounts(context: OracleInput) -> list[_PathMount]:
 	Returns:
 		Ordered path mappings for runtime translation.
 	"""
-	raw_mounts: list[
-		tuple[pathlib.Path, pathlib.PurePosixPath]
-	] = []
+	raw_mounts: list[tuple[pathlib.Path, pathlib.PurePosixPath]] = []
 	refs_dir = context.case_dir / "refs"
 	values: dict[str, pathlib.Path] = {
 		"workspace_dir": context.workspace_dir,
@@ -279,10 +269,7 @@ def build_path_mounts(context: OracleInput) -> list[_PathMount]:
 
 	for field_name, runtime_root in _PATH_MOUNT_ORDER:
 		host_root = _resolved_path(values[field_name])
-		if (
-			host_root.exists()
-			or field_name in {"artifact_dir", "output_dir"}
-		):
+		if host_root.exists() or field_name in {"artifact_dir", "output_dir"}:
 			raw_mounts.append(
 				(
 					host_root,
@@ -317,9 +304,7 @@ class LocalRuntimeCheckExecutor(RuntimeCheckExecutor):
 			if runtime_path.is_absolute():
 				return runtime_path.resolve(strict=False)
 
-			return (self._default_cwd / runtime_path).resolve(
-				strict=False
-			)
+			return (self._default_cwd / runtime_path).resolve(strict=False)
 
 		return self._resolve_host_path(path)
 
@@ -387,11 +372,7 @@ class LocalRuntimeCheckExecutor(RuntimeCheckExecutor):
 		if env is not None:
 			run_env.update(env)
 
-		resolved_cwd = (
-			self._default_cwd
-			if cwd is None
-			else self.resolve_path(cwd)
-		)
+		resolved_cwd = self._default_cwd if cwd is None else self.resolve_path(cwd)
 
 		return run_subprocess_capture(
 			cmd=cmd,
@@ -647,9 +628,7 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 				path_mounts=self._path_mounts,
 			)
 		)
-		self._container_name = (
-			f"aebench-oracle-{int(time.time() * 1000)}"
-		)
+		self._container_name = f"aebench-oracle-{int(time.time() * 1000)}"
 		self._container_id: str | None = None
 
 	def resolve_path(
@@ -715,10 +694,7 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 			check=False,
 		)
 		if result.returncode != 0:
-			detail = (
-				(result.stderr or result.stdout).strip()
-				or "docker run failed"
-			)
+			detail = (result.stderr or result.stdout).strip() or "docker run failed"
 			raise RuntimeError(detail)
 
 		self._container_id = result.stdout.strip()
@@ -749,11 +725,7 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 			ValueError: If a host working directory is not mounted.
 		"""
 		container_id = self._ensure_container()
-		runtime_cwd = (
-			self._runtime_cwd
-			if cwd is None
-			else self.resolve_path(cwd)
-		)
+		runtime_cwd = self._runtime_cwd if cwd is None else self.resolve_path(cwd)
 
 		docker_cmd = [
 			"docker",
@@ -963,10 +935,7 @@ def _build_task_runtime_check_executor(
 	context: OracleInput,
 ) -> RuntimeCheckExecutor:
 	"""Builds an executor for the task runtime."""
-	if (
-		context.runtime_session is not None
-		and context.runtime_backend is not None
-	):
+	if context.runtime_session is not None and context.runtime_backend is not None:
 		return SessionRuntimeCheckExecutor(
 			session=context.runtime_session,
 			runtime_backend=cast(
@@ -978,10 +947,7 @@ def _build_task_runtime_check_executor(
 		)
 
 	runtime_result = context.runtime_result
-	if (
-		runtime_result is None
-		or runtime_result.runtime.mode == RuntimeMode.LOCAL
-	):
+	if runtime_result is None or runtime_result.runtime.mode == RuntimeMode.LOCAL:
 		return LocalRuntimeCheckExecutor(
 			default_cwd=context.workspace_dir,
 		)
@@ -993,14 +959,10 @@ def _build_task_runtime_check_executor(
 			f"{runtime_result.runtime.mode!r}."
 		)
 
-	image = (
-		runtime_result.runtime.saved_image
-		or runtime_result.runtime.image
-	)
+	image = runtime_result.runtime.saved_image or runtime_result.runtime.image
 	if not image:
 		raise RuntimeError(
-			"Cannot build oracle runtime executor: "
-			"task Docker runtime has no image."
+			"Cannot build oracle runtime executor: task Docker runtime has no image."
 		)
 
 	return DockerRuntimeCheckExecutor(
@@ -1021,9 +983,7 @@ class OracleRuntimeRegistry:
 		"""
 		self._context = context
 		self._targets = dict(context.oracle_targets)
-		self._path_mounts = tuple(
-			build_path_mounts(context)
-		)
+		self._path_mounts = tuple(build_path_mounts(context))
 		self._executors: dict[
 			str,
 			RuntimeCheckExecutor,
@@ -1053,13 +1013,9 @@ class OracleRuntimeRegistry:
 		try:
 			target = self._targets[target_name]
 		except KeyError as exc:
-			available = ", ".join(
-				sorted(self._targets)
-			)
+			available = ", ".join(sorted(self._targets))
 			raise KeyError(
-				f"unknown oracle target "
-				f"{target_name!r}; available targets: "
-				f"{available}"
+				f"unknown oracle target {target_name!r}; available targets: {available}"
 			) from exc
 
 		executor = self._build_executor(target)
@@ -1083,9 +1039,7 @@ class OracleRuntimeRegistry:
 			target,
 			TaskOracleTargetConfig,
 		):
-			return _build_task_runtime_check_executor(
-				self._context
-			)
+			return _build_task_runtime_check_executor(self._context)
 
 		if isinstance(
 			target,
@@ -1094,26 +1048,17 @@ class OracleRuntimeRegistry:
 			return DockerRuntimeCheckExecutor(
 				image=target.image,
 				path_mounts=self._path_mounts,
-				default_cwd=(
-					self._context.workspace_dir
-				),
-				runtime_cwd=pathlib.PurePosixPath(
-					target.working_dir
-				),
+				default_cwd=(self._context.workspace_dir),
+				runtime_cwd=pathlib.PurePosixPath(target.working_dir),
 			)
 
-		raise RuntimeError(
-			"unsupported oracle target type: "
-			f"{type(target).__name__}"
-		)
+		raise RuntimeError(f"unsupported oracle target type: {type(target).__name__}")
 
 	def close(self) -> None:
 		"""Closes all executors constructed by this registry."""
 		errors: list[tuple[str, Exception]] = []
 
-		for target_name, executor in reversed(
-			list(self._executors.items())
-		):
+		for target_name, executor in reversed(list(self._executors.items())):
 			try:
 				executor.close()
 			except Exception as exc:
@@ -1123,11 +1068,8 @@ class OracleRuntimeRegistry:
 
 		if errors:
 			target_name, error = errors[0]
-			raise RuntimeError(
-				f"failed to close oracle target "
-				f"{target_name!r}: {error}"
-			) from error
-		
+			raise RuntimeError(f"failed to close oracle target {target_name!r}: {error}") from error
+
 
 def build_oracle_runtime_registry(
 	context: OracleInput,
@@ -1189,9 +1131,7 @@ def _resolve_local_check_path(path: CheckPath) -> pathlib.Path:
 		if candidate.is_absolute():
 			return candidate.resolve(strict=False)
 
-		return (pathlib.Path.cwd() / candidate).resolve(
-			strict=False
-		)
+		return (pathlib.Path.cwd() / candidate).resolve(strict=False)
 
 	return pathlib.Path(path).expanduser().resolve(strict=False)
 
@@ -1235,11 +1175,7 @@ def run_check_process_capture(
 		merged.update(env)
 		run_env = merged
 
-	resolved_cwd = (
-		None
-		if cwd is None
-		else _resolve_local_check_path(cwd)
-	)
+	resolved_cwd = None if cwd is None else _resolve_local_check_path(cwd)
 
 	return run_subprocess_capture(
 		cmd=cmd,
@@ -1303,6 +1239,4 @@ def check_read_file_text(
 			encoding=encoding,
 		)
 
-	return _resolve_local_check_path(path).read_text(
-		encoding=encoding
-	)
+	return _resolve_local_check_path(path).read_text(encoding=encoding)

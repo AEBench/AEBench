@@ -145,52 +145,23 @@ class _CaseOracleBase(_OraclePhaseBase):
 
 		# Normalize host paths once. strict=False permits paths for outputs
 		# and build products that do not exist yet
-		self._case_dir = (
-			Path(context.case_dir)
-			.expanduser()
-			.resolve(strict=False)
-		)
-		self._artifact_dir = (
-			Path(context.artifact_dir)
-			.expanduser()
-			.resolve(strict=False)
-		)
-		self._workspace_dir = (
-			Path(context.workspace_dir)
-			.expanduser()
-			.resolve(strict=False)
-		)
-		self._output_dir = (
-			Path(context.output_dir)
-			.expanduser()
-			.resolve(strict=False)
-		)
-		self._refs_dir = (
-			(self._case_dir / REFS_DIRNAME)
-			.expanduser()
-			.resolve(strict=False)
-		)
+		self._case_dir = Path(context.case_dir).expanduser().resolve(strict=False)
+		self._artifact_dir = Path(context.artifact_dir).expanduser().resolve(strict=False)
+		self._workspace_dir = Path(context.workspace_dir).expanduser().resolve(strict=False)
+		self._output_dir = Path(context.output_dir).expanduser().resolve(strict=False)
+		self._refs_dir = (self._case_dir / REFS_DIRNAME).expanduser().resolve(strict=False)
 
 		self._runtime_registry = cast(
 			OracleRuntimeRegistry | None,
 			context.runtime_registry,
 		)
 		if self._runtime_registry is None:
-			raise RuntimeError(
-				"oracle runtime registry is not initialized"
-			)
+			raise RuntimeError("oracle runtime registry is not initialized")
 
 		if not isinstance(self.phase_label, OraclePhaseName):
-			raise TypeError(
-				f"{type(self).__name__}.phase_label must be "
-				"an OraclePhaseName"
-			)
+			raise TypeError(f"{type(self).__name__}.phase_label must be an OraclePhaseName")
 
-		self._default_target_name = (
-			context.oracle_phase_targets.target_for_phase(
-				self.phase_label
-			)
-		)
+		self._default_target_name = context.oracle_phase_targets.target_for_phase(self.phase_label)
 
 	@property
 	def default_target_name(self) -> str:
@@ -210,14 +181,8 @@ class _CaseOracleBase(_OraclePhaseBase):
 		Returns:
 			The executor associated with the selected target.
 		"""
-		target_name = (
-			self._default_target_name
-			if target is None
-			else target
-		)
-		return self._runtime_registry.executor_for(
-			target_name
-		)
+		target_name = self._default_target_name if target is None else target
+		return self._runtime_registry.executor_for(target_name)
 
 	@property
 	def executor(self) -> RuntimeCheckExecutor:
@@ -226,43 +191,23 @@ class _CaseOracleBase(_OraclePhaseBase):
 
 	def case_path(self, *parts: str | Path) -> Path:
 		"""Returns a host path relative to the case directory."""
-		return (
-			self._case_dir.joinpath(*parts)
-			if parts
-			else self._case_dir
-		)
+		return self._case_dir.joinpath(*parts) if parts else self._case_dir
 
 	def artifact_path(self, *parts: str | Path) -> Path:
 		"""Returns a host path relative to the artifact directory."""
-		return (
-			self._artifact_dir.joinpath(*parts)
-			if parts
-			else self._artifact_dir
-		)
+		return self._artifact_dir.joinpath(*parts) if parts else self._artifact_dir
 
 	def workspace_path(self, *parts: str | Path) -> Path:
 		"""Returns a host path relative to the task workspace."""
-		return (
-			self._workspace_dir.joinpath(*parts)
-			if parts
-			else self._workspace_dir
-		)
+		return self._workspace_dir.joinpath(*parts) if parts else self._workspace_dir
 
 	def output_path(self, *parts: str | Path) -> Path:
 		"""Returns a host path relative to the oracle output directory."""
-		return (
-			self._output_dir.joinpath(*parts)
-			if parts
-			else self._output_dir
-		)
+		return self._output_dir.joinpath(*parts) if parts else self._output_dir
 
 	def ref_path(self, *parts: str | Path) -> Path:
 		"""Returns a host path relative to the reference directory."""
-		return (
-			self._refs_dir.joinpath(*parts)
-			if parts
-			else self._refs_dir
-		)
+		return self._refs_dir.joinpath(*parts) if parts else self._refs_dir
 
 	def runtime_path(
 		self,
@@ -478,9 +423,5 @@ class CaseOracleExperimentRunsBase(_CaseOracleBase):
 	# Expose common similarity comparison helpers for raw data series
 	similarity = staticmethod(compute_similarity)
 	elementwise_equal = staticmethod(elementwise_equal)
-	elementwise_similarity_scores = staticmethod(
-		elementwise_similarity_scores
-	)
-	elementwise_similarity_threshold = staticmethod(
-		elementwise_similarity_threshold
-	)
+	elementwise_similarity_scores = staticmethod(elementwise_similarity_scores)
+	elementwise_similarity_threshold = staticmethod(elementwise_similarity_threshold)

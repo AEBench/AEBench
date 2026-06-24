@@ -5,10 +5,12 @@ from enum import Enum
 
 class OraclePhaseName(str, Enum):
 	"""Identifies a supported oracle evaluation phase."""
+
 	ENV_SETUP = "env_setup"
 	ARTIFACT_BUILD = "artifact_build"
 	BENCHMARK_PREP = "benchmark_prep"
 	EXPERIMENT_RUNS = "experiment_runs"
+
 
 DEFAULT_TIMEOUT_MS: int = 345_600_000
 DEFAULT_DOCKER_IMAGE: str = "aebench-agent:latest"

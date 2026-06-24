@@ -131,26 +131,19 @@ class DockerImageOracleTargetConfig(_Model):
 	def _validate_target(self) -> "DockerImageOracleTargetConfig":
 		self.image = self.image.strip()
 		if not self.image:
-			raise ValueError(
-				"oracle target image must not be empty"
-			)
+			raise ValueError("oracle target image must not be empty")
 
 		working_dir_text = self.working_dir.strip()
 		working_dir = PurePosixPath(working_dir_text)
 		if not working_dir_text or not working_dir.is_absolute():
-			raise ValueError(
-				"oracle target working_dir must be "
-				"an absolute POSIX path"
-			)
+			raise ValueError("oracle target working_dir must be an absolute POSIX path")
 
 		self.working_dir = working_dir.as_posix()
 		return self
 
 
 OracleTargetConfig = Annotated[
-	LocalOracleTargetConfig
-	| TaskOracleTargetConfig
-	| DockerImageOracleTargetConfig,
+	LocalOracleTargetConfig | TaskOracleTargetConfig | DockerImageOracleTargetConfig,
 	Field(discriminator="type"),
 ]
 
@@ -453,10 +446,7 @@ class OraclePhaseTargetsConfig(_Model):
 		):
 			target_name = getattr(self, field_name).strip()
 			if not target_name:
-				raise ValueError(
-					f"oracle.phase_targets.{field_name} "
-					"must not be empty"
-				)
+				raise ValueError(f"oracle.phase_targets.{field_name} must not be empty")
 			setattr(self, field_name, target_name)
 
 		return self
@@ -466,22 +456,16 @@ class OraclePhaseTargetsConfig(_Model):
 		try:
 			return getattr(self, phase_name)
 		except AttributeError as exc:
-			raise ValueError(
-				f"unknown oracle phase: {phase_name}"
-			) from exc
-		
+			raise ValueError(f"unknown oracle phase: {phase_name}") from exc
+
 
 class OracleConfig(_Model):
 	expected_score: int = 4
 	failure_mode: OracleFailureMode = OracleFailureMode.FAIL_FAST
 	placeholder: bool = False
 	notes: str | None = None
-	targets: dict[str, OracleTargetConfig] = Field(
-		default_factory=dict
-	)
-	phase_targets: OraclePhaseTargetsConfig = Field(
-		default_factory=OraclePhaseTargetsConfig
-	)
+	targets: dict[str, OracleTargetConfig] = Field(default_factory=dict)
+	phase_targets: OraclePhaseTargetsConfig = Field(default_factory=OraclePhaseTargetsConfig)
 
 	@model_validator(mode="before")
 	@classmethod
@@ -490,8 +474,7 @@ class OracleConfig(_Model):
 			return values
 		if "runtime" in values:
 			raise ValueError(
-				"oracle.runtime was removed; define "
-				"oracle.targets and oracle.phase_targets"
+				"oracle.runtime was removed; define oracle.targets and oracle.phase_targets"
 			)
 		cleaned = dict(values)
 		for key in (
@@ -508,9 +491,7 @@ class OracleConfig(_Model):
 	@model_validator(mode="after")
 	def _validate_config(self) -> "OracleConfig":
 		if self.expected_score <= 0:
-			raise ValueError(
-				"oracle.expected_score must be positive"
-			)
+			raise ValueError("oracle.expected_score must be positive")
 
 		if self.notes is not None:
 			self.notes = self.notes.strip() or None
@@ -531,10 +512,7 @@ class OracleConfig(_Model):
 			local_target,
 			LocalOracleTargetConfig,
 		):
-			raise ValueError(
-				'oracle target "local" is reserved '
-				'for type = "local"'
-			)
+			raise ValueError('oracle target "local" is reserved for type = "local"')
 
 		task_target = targets.get("task")
 		if task_target is None:
@@ -543,10 +521,7 @@ class OracleConfig(_Model):
 			task_target,
 			TaskOracleTargetConfig,
 		):
-			raise ValueError(
-				'oracle target "task" is reserved '
-				'for type = "task"'
-			)
+			raise ValueError('oracle target "task" is reserved for type = "task"')
 
 		for phase_name in (
 			OraclePhaseName.ENV_SETUP,
@@ -554,16 +529,10 @@ class OracleConfig(_Model):
 			OraclePhaseName.BENCHMARK_PREP,
 			OraclePhaseName.EXPERIMENT_RUNS,
 		):
-			target_name = (
-				self.phase_targets.target_for_phase(
-					phase_name
-				)
-			)
+			target_name = self.phase_targets.target_for_phase(phase_name)
 			if target_name not in targets:
 				raise ValueError(
-					f"oracle.phase_targets.{phase_name} "
-					f"references unknown target "
-					f"{target_name!r}"
+					f"oracle.phase_targets.{phase_name} references unknown target {target_name!r}"
 				)
 
 		self.targets = targets
