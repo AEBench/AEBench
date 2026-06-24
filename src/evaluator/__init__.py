@@ -15,7 +15,7 @@ from models import (
 	OracleStatus,
 )
 
-from .constants import ARTIFACT_DIRNAME
+from constants import ARTIFACT_DIRNAME
 from .loader import CaseBundleError, load_case_spec
 
 

@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import IO, cast
 
-from ..constants import SUBPROCESS_WAIT_TIMEOUT
+from constants import SUBPROCESS_WAIT_TIMEOUT
 
 DEFAULT_MAX_CAPTURE_CHARS = 16_384
 _TRUNCATION_SUFFIX = "\n... [output truncated]"

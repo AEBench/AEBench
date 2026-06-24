@@ -16,10 +16,14 @@ from evaluator.oracles.oracle_checks_runtime import (
 	LocalRuntimeCheckExecutor,
 	SessionRuntimeCheckExecutor,
 	build_path_mounts,
-	build_runtime_check_executor,
+	build_oracle_runtime_registry,
 )
-from models import RuntimeMode
-
+from models import (
+	DockerImageOracleTargetConfig,
+	OracleConfig,
+	OracleTargetConfig,
+	RuntimeMode,
+)
 
 class _FakeRuntimeBackend:
 	"""Records commands issued through a session runtime executor."""
@@ -79,32 +83,42 @@ def _recorded_runtime(
 def _oracle_context(
 	tmp_path: Path,
 	*,
+	extra_targets: Mapping[str, OracleTargetConfig] | None = None,
 	runtime_result: Any = None,
 	runtime_session: Any = None,
 	runtime_backend: Any = None,
 ) -> Any:
+	"""Builds an oracle runtime context for executor unit tests."""
+	oracle_config = OracleConfig(
+		targets=dict(extra_targets or {}),
+	)
+
 	case_dir = tmp_path / "case"
+	artifact_dir = tmp_path / "artifact"
 	workspace_dir = tmp_path / "workspace"
-	artifact_dir = case_dir / "artifact"
 	output_dir = tmp_path / "output"
+	refs_dir = case_dir / "refs"
 
 	for path in (
 		case_dir,
-		case_dir / "refs",
-		workspace_dir,
+		refs_dir,
 		artifact_dir,
+		workspace_dir,
 		output_dir,
 	):
 		path.mkdir(parents=True, exist_ok=True)
 
 	return SimpleNamespace(
 		case_dir=case_dir,
-		workspace_dir=workspace_dir,
 		artifact_dir=artifact_dir,
+		workspace_dir=workspace_dir,
 		output_dir=output_dir,
+		oracle_targets=oracle_config.targets,
+		oracle_phase_targets=oracle_config.phase_targets,
 		runtime_result=runtime_result,
 		runtime_session=runtime_session,
 		runtime_backend=runtime_backend,
+		runtime_registry=None,
 	)
 
 
@@ -120,7 +134,7 @@ def _session_executor(
 	)
 
 
-def test_active_session_takes_precedence_over_recorded_runtime(
+def test_task_target_active_session_takes_precedence_over_recorded_runtime(
 	tmp_path: Path,
 ) -> None:
 	backend = _FakeRuntimeBackend()
@@ -134,7 +148,8 @@ def test_active_session_takes_precedence_over_recorded_runtime(
 		runtime_backend=backend,
 	)
 
-	executor = build_runtime_check_executor(context)
+	registry = build_oracle_runtime_registry(context)
+	executor = registry.executor_for("task")
 
 	assert isinstance(executor, SessionRuntimeCheckExecutor)
 
@@ -147,7 +162,8 @@ def test_missing_runtime_result_uses_local_executor(
 		runtime_result=None,
 	)
 
-	executor = build_runtime_check_executor(context)
+	registry = build_oracle_runtime_registry(context)
+	executor = registry.executor_for("task")
 
 	assert isinstance(executor, LocalRuntimeCheckExecutor)
 
@@ -157,12 +173,37 @@ def test_recorded_local_runtime_uses_local_executor(
 ) -> None:
 	context = _oracle_context(
 		tmp_path,
-		runtime_result=_recorded_runtime(RuntimeMode.LOCAL),
+		runtime_result=_recorded_runtime(
+			RuntimeMode.LOCAL
+		),
 	)
 
-	executor = build_runtime_check_executor(context)
+	registry = build_oracle_runtime_registry(context)
+	executor = registry.executor_for("task")
 
 	assert isinstance(executor, LocalRuntimeCheckExecutor)
+
+
+def test_recorded_docker_runtime_falls_back_to_original_image(
+	tmp_path: Path,
+) -> None:
+	context = _oracle_context(
+		tmp_path,
+		runtime_result=_recorded_runtime(
+			RuntimeMode.DOCKER,
+			saved_image=None,
+			image="original-image:latest",
+		),
+	)
+
+	registry = build_oracle_runtime_registry(context)
+	executor = registry.executor_for("task")
+
+	assert isinstance(
+		executor,
+		DockerRuntimeCheckExecutor,
+	)
+	assert executor._image == "original-image:latest"
 
 
 def test_recorded_docker_runtime_prefers_saved_image(
@@ -177,7 +218,8 @@ def test_recorded_docker_runtime_prefers_saved_image(
 		),
 	)
 
-	executor = build_runtime_check_executor(context)
+	registry = build_oracle_runtime_registry(context)
+	executor = registry.executor_for("task")
 
 	assert isinstance(executor, DockerRuntimeCheckExecutor)
 	assert executor._image == "saved-image:latest"
@@ -195,8 +237,9 @@ def test_recorded_docker_runtime_falls_back_to_original_image(
 		),
 	)
 
-	executor = build_runtime_check_executor(context)
-
+	registry = build_oracle_runtime_registry(context)
+	executor = registry.executor_for("task")
+	
 	assert isinstance(executor, DockerRuntimeCheckExecutor)
 	assert executor._image == "original-image:latest"
 
@@ -213,11 +256,10 @@ def test_recorded_docker_runtime_without_image_raises(
 		),
 	)
 
-	with pytest.raises(
-		RuntimeError,
-		match="inherited Docker runtime has no image",
-	):
-		build_runtime_check_executor(context)
+	registry = build_oracle_runtime_registry(context)
+
+	with pytest.raises(RuntimeError):
+		registry.executor_for("task")
 
 
 def test_unsupported_recorded_runtime_mode_raises(
@@ -228,11 +270,10 @@ def test_unsupported_recorded_runtime_mode_raises(
 		runtime_result=_recorded_runtime("unsupported"),
 	)
 
-	with pytest.raises(
-		RuntimeError,
-		match="Cannot build oracle runtime executor",
-	):
-		build_runtime_check_executor(context)
+	registry = build_oracle_runtime_registry(context)
+
+	with pytest.raises(RuntimeError):
+		registry.executor_for("task")
 
 
 def test_build_path_mounts_includes_standard_case_paths(
@@ -422,3 +463,30 @@ def test_docker_executor_starts_container_lazily_and_reuses_it(
 	start_command = container_starts[0]
 	working_directory_index = start_command.index("-w")
 	assert start_command[working_directory_index + 1] == "/workspace"
+
+
+def test_docker_image_target_uses_configured_image_and_working_dir(
+	tmp_path: Path,
+) -> None:
+	context = _oracle_context(
+		tmp_path,
+		extra_targets={
+			"golf": DockerImageOracleTargetConfig(
+				image="golf",
+				working_dir="/usr/app",
+			),
+		},
+		runtime_result=_recorded_runtime(
+			RuntimeMode.DOCKER,
+			image="task-image:latest",
+		),
+		runtime_session=object(),
+		runtime_backend=_FakeRuntimeBackend(),
+	)
+
+	registry = build_oracle_runtime_registry(context)
+	executor = registry.executor_for("golf")
+
+	assert isinstance(executor, DockerRuntimeCheckExecutor)
+	assert executor._image == "golf"
+	assert str(executor._runtime_cwd) == "/usr/app"

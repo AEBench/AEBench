@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
-from constants import ARTIFACT_SUBDIR, DEFAULT_DOCKER_IMAGE
+from constants import ARTIFACT_DIRNAME, DEFAULT_DOCKER_IMAGE
 from evaluator.constants import ARTIFACT_DIRNAME, REFS_DIRNAME
 from models import (
 	CaseConfig,
@@ -142,7 +142,7 @@ def _write_quick_check_files(case_dir: Path, options: CaseInitOptions) -> None:
 	ref_path = case_dir / REFS_DIRNAME / _EXPECTED_RESULT
 	ref_path.write_text(text.rstrip("\n") + "\n", encoding="utf-8")
 
-	instructions = case_dir / ARTIFACT_SUBDIR / options.instruction_path
+	instructions = case_dir / ARTIFACT_DIRNAME / options.instruction_path
 	instructions.parent.mkdir(parents=True, exist_ok=True)
 	output_parent = Path(options.expected_output_path).parent
 	steps = ["# Starter Artifact Instructions", "", "Follow these steps exactly:", ""]

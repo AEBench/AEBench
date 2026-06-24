@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
-from ..constants import ORACLE_DIRNAME
+from constants import ORACLE_DIRNAME
 from .bases import (
 	CaseOracleArtifactBuildBase,
 	CaseOracleBenchmarkPrepBase,
