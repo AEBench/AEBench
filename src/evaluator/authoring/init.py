@@ -6,8 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
-from constants import ARTIFACT_DIRNAME, DEFAULT_DOCKER_IMAGE
-from evaluator.constants import ARTIFACT_DIRNAME, REFS_DIRNAME
+from constants import ARTIFACT_DIRNAME, DEFAULT_DOCKER_IMAGE, REFS_DIRNAME
 from models import (
 	CaseConfig,
 	CasePlan,

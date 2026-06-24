@@ -8,12 +8,12 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import cast
 
+from constants import DEFAULT_ORACLE_CHECK_TIMEOUT, REFS_DIRNAME
 from models import (
 	OracleInput,
 	OraclePhaseName,
 )
 
-from constants import DEFAULT_ORACLE_CHECK_TIMEOUT, REFS_DIRNAME
 from .checks import (
 	CommandCheck,
 	EnvMatchMode,

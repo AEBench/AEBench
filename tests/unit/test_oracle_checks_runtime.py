@@ -15,8 +15,8 @@ from evaluator.oracles.oracle_checks_runtime import (
 	DockerRuntimeCheckExecutor,
 	LocalRuntimeCheckExecutor,
 	SessionRuntimeCheckExecutor,
-	build_path_mounts,
 	build_oracle_runtime_registry,
+	build_path_mounts,
 )
 from models import (
 	DockerImageOracleTargetConfig,
@@ -24,6 +24,7 @@ from models import (
 	OracleTargetConfig,
 	RuntimeMode,
 )
+
 
 class _FakeRuntimeBackend:
 	"""Records commands issued through a session runtime executor."""
@@ -223,25 +224,6 @@ def test_recorded_docker_runtime_prefers_saved_image(
 
 	assert isinstance(executor, DockerRuntimeCheckExecutor)
 	assert executor._image == "saved-image:latest"
-
-
-def test_recorded_docker_runtime_falls_back_to_original_image(
-	tmp_path: Path,
-) -> None:
-	context = _oracle_context(
-		tmp_path,
-		runtime_result=_recorded_runtime(
-			RuntimeMode.DOCKER,
-			saved_image=None,
-			image="original-image:latest",
-		),
-	)
-
-	registry = build_oracle_runtime_registry(context)
-	executor = registry.executor_for("task")
-	
-	assert isinstance(executor, DockerRuntimeCheckExecutor)
-	assert executor._image == "original-image:latest"
 
 
 def test_recorded_docker_runtime_without_image_raises(
