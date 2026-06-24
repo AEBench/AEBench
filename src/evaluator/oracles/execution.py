@@ -208,15 +208,10 @@ def run_oracle(
 	try:
 		spec = case or load_case_spec(case_root)
 		if spec.oracle is None:
-			raise RuntimeError(
-				f"case {spec.id!r} does not define "
-				"an oracle configuration"
-			)
+			raise RuntimeError(f"case {spec.id!r} does not define an oracle configuration")
 
 		failure_mode = spec.oracle.failure_mode
-		artifact_dir = (
-			case_root / ARTIFACT_DIRNAME
-		).resolve(strict=False)
+		artifact_dir = (case_root / ARTIFACT_DIRNAME).resolve(strict=False)
 		resolved_workspace_dir = _resolve_workspace_dir(
 			case_root=case_root,
 			artifact_dir=artifact_dir,
@@ -237,9 +232,7 @@ def run_oracle(
 		)
 
 		# Build one lazy executor registry for this oracle invocation.
-		runtime_registry = build_oracle_runtime_registry(
-			context
-		)
+		runtime_registry = build_oracle_runtime_registry(context)
 		context.runtime_registry = runtime_registry
 
 		oracle_root = oracle_root_for(case_root)
@@ -264,10 +257,7 @@ def run_oracle(
 			status=OracleStatus.ERROR,
 			score=0,
 			summary="Oracle evaluation failed.",
-			error=(
-				f"{type(exc).__name__}: {exc}\n"
-				f"{traceback_text}"
-			),
+			error=(f"{type(exc).__name__}: {exc}\n{traceback_text}"),
 		)
 	finally:
 		if runtime_registry is not None:
@@ -275,9 +265,7 @@ def run_oracle(
 				runtime_registry.close()
 			except Exception:
 				# Cleanup failures must not replace the evaluation result.
-				logging.getLogger(__name__).exception(
-					"failed to close oracle runtime registry"
-				)
+				logging.getLogger(__name__).exception("failed to close oracle runtime registry")
 
 	try:
 		(out_dir / ORACLE_RESULT_FILENAME).write_text(
