@@ -8,10 +8,13 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import cast
 
-from constants import DEFAULT_ORACLE_CHECK_TIMEOUT, REFS_DIRNAME
+from constants import (
+	DEFAULT_ORACLE_CHECK_TIMEOUT,
+	REFS_DIRNAME,
+	OraclePhaseName,
+)
 from models import (
 	OracleInput,
-	OraclePhaseName,
 )
 
 from .checks import (
@@ -172,17 +175,14 @@ class _CaseOracleBase(_OraclePhaseBase):
 		self,
 		target: str | None = None,
 	) -> RuntimeCheckExecutor:
-		"""Returns the executor for a target or the phase default.
+		"""Return the executor for a target or the phase default."""
 
-		Args:
-			target: Optional named target override. When omitted, the
-				configured phase target is used.
+		registry = self._runtime_registry
+		if registry is None:
+			raise RuntimeError("oracle runtime registry is not initialized")
 
-		Returns:
-			The executor associated with the selected target.
-		"""
 		target_name = self._default_target_name if target is None else target
-		return self._runtime_registry.executor_for(target_name)
+		return registry.executor_for(target_name)
 
 	@property
 	def executor(self) -> RuntimeCheckExecutor:
@@ -300,7 +300,6 @@ class _CaseOracleBase(_OraclePhaseBase):
 			name=name,
 			optional=optional,
 			cmd=cmd,
-			cwd=cwd,
 			timeout_seconds=timeout_seconds,
 			env={} if env is None else env,
 			use_shell=use_shell,

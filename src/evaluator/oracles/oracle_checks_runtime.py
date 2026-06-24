@@ -246,19 +246,11 @@ def _prepare_runtime_command(
 
 
 def build_path_mounts(context: OracleInput) -> list[_PathMount]:
-	"""Builds host-to-runtime path mappings for an oracle invocation.
+	"""Build host-to-runtime path mappings for an oracle invocation."""
 
-	The returned mappings are ordered from the deepest host path to the
-	shallowest so nested directories take precedence over their parents.
-
-	Args:
-		context: Oracle invocation context containing the relevant paths.
-
-	Returns:
-		Ordered path mappings for runtime translation.
-	"""
 	raw_mounts: list[tuple[pathlib.Path, pathlib.PurePosixPath]] = []
 	refs_dir = context.case_dir / "refs"
+
 	values: dict[str, pathlib.Path] = {
 		"workspace_dir": context.workspace_dir,
 		"case_dir": context.case_dir,
@@ -267,21 +259,23 @@ def build_path_mounts(context: OracleInput) -> list[_PathMount]:
 		"output_dir": context.output_dir,
 	}
 
-	for field_name, runtime_root in _PATH_MOUNT_ORDER:
+	for field_name, runtime_root_str in _PATH_MOUNT_ORDER:
 		host_root = _resolved_path(values[field_name])
+
 		if host_root.exists() or field_name in {"artifact_dir", "output_dir"}:
 			raw_mounts.append(
 				(
 					host_root,
-					pathlib.PurePosixPath(runtime_root),
+					pathlib.PurePosixPath(runtime_root_str),
 				)
 			)
 
 	unique: dict[tuple[str, str], _PathMount] = {}
-	for host_root, runtime_root in raw_mounts:
-		unique[(str(host_root), str(runtime_root))] = _PathMount(
+
+	for host_root, runtime_root_path in raw_mounts:
+		unique[(str(host_root), str(runtime_root_path))] = _PathMount(
 			host_root=host_root,
-			runtime_root=runtime_root,
+			runtime_root=runtime_root_path,
 		)
 
 	mounts = list(unique.values())
