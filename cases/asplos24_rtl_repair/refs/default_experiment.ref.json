@@ -1,0 +1,10 @@
+{
+  "experiment_dir": "rtl-repair-default",
+  "status_counts": {
+    "success": 17,
+    "cannot-repair": 10,
+    "no-repair": 1
+  },
+  "max_timeout": 4,
+  "min_result_tomls": 32
+}
