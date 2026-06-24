@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from enum import Enum
+
 
 class OraclePhaseName(str, Enum):
 	"""Identifies a supported oracle evaluation phase."""

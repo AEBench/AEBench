@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from constants import ARTIFACT_DIRNAME
 from models import (
 	CaseConfig,
 	OracleFailureMode,
@@ -15,7 +16,6 @@ from models import (
 	OracleStatus,
 )
 
-from constants import ARTIFACT_DIRNAME
 from .loader import CaseBundleError, load_case_spec
 
 

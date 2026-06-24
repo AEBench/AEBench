@@ -6,9 +6,9 @@ import json
 import logging
 import traceback
 from pathlib import Path
-from typing import Any, Sequence, cast
+from typing import Any, Sequence
 
-from constants import ARTIFACT_DIRNAME
+from constants import ARTIFACT_DIRNAME, ORACLE_RESULT_FILENAME
 from models import (
 	OracleFailureMode,
 	OracleInput,
@@ -17,7 +17,6 @@ from models import (
 	OracleStatus,
 )
 
-from constants import ORACLE_RESULT_FILENAME
 from ..loader import load_case_spec
 from .discovery import (
 	DiscoveredOracleClass,

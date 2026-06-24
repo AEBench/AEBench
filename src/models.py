@@ -9,7 +9,6 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from constants import (
-	OraclePhaseName,
 	DEFAULT_MODEL,
 	DEFAULT_PROMPT_PROFILE,
 	DEFAULT_TIMEOUT_MS,
@@ -19,6 +18,7 @@ from constants import (
 	RENDERED_LOG_BASENAME,
 	RUNNER_LOG_BASENAME,
 	TRANSCRIPT_BASENAME,
+	OraclePhaseName,
 )
 from project_config import ArtifactMode
 from utils import safe_name
@@ -113,33 +113,6 @@ BenchSource = Annotated[
 	Field(discriminator="type"),
 ]
 
-
-class TaskOracleTargetConfig(_Model):
-	type: Literal["task"] = "task"
-
-
-class DockerImageOracleTargetConfig(_Model):
-	type: Literal["docker_image"] = "docker_image"
-	image: str
-	working_dir: str = "/"
-
-	@model_validator(mode="after")
-	def _validate_target(self) -> "DockerImageOracleTargetConfig":
-		self.image = self.image.strip()
-		if not self.image:
-			raise ValueError(
-				"oracle.target.image must not be empty"
-			)
-
-		working_dir_text = self.working_dir.strip()
-		working_dir = PurePosixPath(working_dir_text)
-		if not working_dir_text or not working_dir.is_absolute():
-			raise ValueError(
-				"oracle.target.working_dir must be an absolute POSIX path"
-			)
-
-		self.working_dir = working_dir.as_posix()
-		return self
 
 class LocalOracleTargetConfig(_Model):
 	type: Literal["local"] = "local"
