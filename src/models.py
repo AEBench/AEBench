@@ -451,11 +451,18 @@ class OraclePhaseTargetsConfig(_Model):
 
 		return self
 
-	def target_for_phase(self, phase_name: str) -> str:
-		"""Returns the configured target for an oracle phase."""
+	def target_for_phase(self, phase_name: OraclePhaseName) -> str:
+		"""Return the configured target for an oracle phase."""
+		targets = {
+			OraclePhaseName.ENV_SETUP: self.env_setup,
+			OraclePhaseName.ARTIFACT_BUILD: self.artifact_build,
+			OraclePhaseName.BENCHMARK_PREP: self.benchmark_prep,
+			OraclePhaseName.EXPERIMENT_RUNS: self.experiment_runs,
+		}
+
 		try:
-			return getattr(self, phase_name)
-		except AttributeError as exc:
+			return targets[phase_name]
+		except KeyError as exc:
 			raise ValueError(f"unknown oracle phase: {phase_name}") from exc
 
 

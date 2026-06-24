@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evaluator.constants import ORACLE_DIRNAME
+from constants import ORACLE_DIRNAME
 
 _EXPECTED_RESULT = "expected_result.txt"
 _DEFAULT_OUTPUT = "demo-output/result.txt"
