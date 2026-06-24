@@ -27,7 +27,7 @@ def test_case_run_end_to_end(tmp_path: Path) -> None:
 		workspace_dir=workspace_dir,
 	)
 
-	assert result.status == OracleStatus.SUCCESS
+	assert result.status == OracleStatus.SUCCESS, repr(result)
 	assert result.score == 4
 	assert len(result.phases) == 4
 	assert all(phase.status == OracleStatus.SUCCESS for phase in result.phases)

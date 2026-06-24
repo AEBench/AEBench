@@ -1,3 +1,5 @@
+"""Base classes and convenience helpers for case oracle phases."""
+
 from __future__ import annotations
 
 import abc
@@ -9,10 +11,8 @@ from typing import cast
 from models import OracleInput
 
 from ..constants import DEFAULT_ORACLE_CHECK_TIMEOUT, REFS_DIRNAME
-from . import utils
 from .checks import (
 	CommandCheck,
-	DirectoryGlobCountCheck,
 	EnvMatchMode,
 	EnvVarCheck,
 	PathCheck,
@@ -24,74 +24,137 @@ from .checks import (
 	elementwise_similarity_scores,
 	elementwise_similarity_threshold,
 )
+from .oracle_checks_runtime import (
+	RuntimeCheckExecutor,
+	check_path_exists,
+	check_path_is_dir,
+	check_path_is_file,
+	check_read_file_text,
+	path_from_user_input,
+	run_check_process_capture,
+)
+from .process import ProcResult
+from .reporting import (
+	BaseCheck,
+	OracleReport,
+	build_oracle_report,
+	log_oracle_report,
+)
 
 
 class _OraclePhaseBase(abc.ABC):
+	"""Defines the common lifecycle for an oracle phase.
+
+	Subclasses provide the checks for a phase through <requirements()>.
+	The base class evaluates those checks and gemerates an eval report.
+	"""
+
 	phase_label = "OraclePhase"
 
-	def __init__(self, *, context: OracleInput, logger: logging.Logger) -> None:
+	def __init__(
+		self,
+		*,
+		context: OracleInput,
+		logger: logging.Logger,
+	) -> None:
+		"""Initializes an oracle phase.
+
+		Args:
+			context: Paths and runtime state for the oracle invocation.
+			logger: Logger used for check results and diagnostics.
+		"""
 		self._context = context
 		self._logger = logger
 
 	@property
 	def context(self) -> OracleInput:
+		"""Returns the invocation context for this phase."""
 		return self._context
 
 	@property
 	def logger(self) -> logging.Logger:
+		"""Returns the logger used by this phase."""
 		return self._logger
 
 	@abc.abstractmethod
-	def requirements(self) -> Sequence[utils.BaseCheck]:
+	def requirements(self) -> Sequence[BaseCheck]:
+		"""Returns the checks evaluated by this phase."""
 		raise NotImplementedError
 
-	def report(self) -> utils.OracleReport:
-		return utils.build_oracle_report(logger=self._logger, requirements=self.requirements)
+	def report(self) -> OracleReport:
+		"""Evaluates this phase and returns its structured report."""
+		return build_oracle_report(
+			logger=self._logger,
+			requirements=self.requirements,
+		)
 
 	def run(self, *, verbose: bool = False) -> bool:
+		"""Evaluates and logs this phase.
+
+		Args:
+			verbose: Whether to include successful checks in the log.
+
+		Returns:
+			True when all required checks pass.
+		"""
 		report = self.report()
-		return utils.log_oracle_report(
-			self._logger, label=self.phase_label, report=report, verbose=verbose
+		return log_oracle_report(
+			self._logger,
+			label=self.phase_label,
+			report=report,
+			verbose=verbose,
 		)
 
 
 class _CaseOracleBase(_OraclePhaseBase):
-	def __init__(self, *, context: OracleInput, logger: logging.Logger) -> None:
+	"""Provides normalized case paths and runtime-aware check abstractions."""
+
+	def __init__(
+		self,
+		*,
+		context: OracleInput,
+		logger: logging.Logger,
+	) -> None:
+		"""Initializes shared state for a case oracle phase."""
 		super().__init__(context=context, logger=logger)
+
+		# Normalize paths once so derived phases use consistent absolute paths
+		# <strict=False> allows paths that do not exist yet (e.g., logs/output files)
 		self._case_dir = Path(context.case_dir).expanduser().resolve(strict=False)
 		self._artifact_dir = Path(context.artifact_dir).expanduser().resolve(strict=False)
 		self._workspace_dir = Path(context.workspace_dir).expanduser().resolve(strict=False)
-		self._app_dir = (
-			Path(context.oracle_config.runtime.app_dir)
-			if context.oracle_config and context.oracle_config.runtime
-			else Path(context.artifact_dir).expanduser().resolve(strict=False)
-		)
 		self._output_dir = Path(context.output_dir).expanduser().resolve(strict=False)
 		self._refs_dir = (self._case_dir / REFS_DIRNAME).expanduser().resolve(strict=False)
-		self._executor: utils.RuntimeCheckExecutor | None = cast(
-			utils.RuntimeCheckExecutor | None, context.runtime_executor
+
+		# Checks through the active task runtime, if missing use local I/O
+		self._executor: RuntimeCheckExecutor | None = cast(
+			RuntimeCheckExecutor | None,
+			context.runtime_executor,
 		)
 
 	@property
-	def executor(self) -> utils.RuntimeCheckExecutor | None:
+	def executor(self) -> RuntimeCheckExecutor | None:
+		"""Returns the executor used for runtime-aware checks."""
 		return self._executor
 
 	def case_path(self, *parts: str | Path) -> Path:
+		"""Returns a path relative to the case directory."""
 		return self._case_dir.joinpath(*parts) if parts else self._case_dir
 
 	def artifact_path(self, *parts: str | Path) -> Path:
+		"""Returns a path relative to the artifact directory."""
 		return self._artifact_dir.joinpath(*parts) if parts else self._artifact_dir
 
-	def app_path(self, *parts: str | Path) -> Path:
-		return self._app_dir.joinpath(*parts) if parts else self._app_dir
-
 	def workspace_path(self, *parts: str | Path) -> Path:
+		"""Returns a path relative to the task workspace."""
 		return self._workspace_dir.joinpath(*parts) if parts else self._workspace_dir
 
 	def output_path(self, *parts: str | Path) -> Path:
+		"""Returns a path relative to the oracle output directory."""
 		return self._output_dir.joinpath(*parts) if parts else self._output_dir
 
 	def ref_path(self, *parts: str | Path) -> Path:
+		"""Returns a path relative to the case reference directory."""
 		return self._refs_dir.joinpath(*parts) if parts else self._refs_dir
 
 	def version_check(
@@ -105,6 +168,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 		timeout_seconds: float = DEFAULT_ORACLE_CHECK_TIMEOUT,
 		optional: bool = False,
 	) -> VersionCheck:
+		"""Creates a runtime-aware command version check."""
 		return VersionCheck(
 			name=name,
 			optional=optional,
@@ -125,6 +189,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 		match_mode: EnvMatchMode = EnvMatchMode.EXACT,
 		optional: bool = False,
 	) -> EnvVarCheck:
+		"""Creates a runtime-aware environment variable check."""
 		return EnvVarCheck(
 			name=name,
 			optional=optional,
@@ -142,6 +207,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 		kind: PathKind = PathKind.ANY,
 		optional: bool = False,
 	) -> PathCheck:
+		"""Creates a runtime-aware filesystem path check."""
 		return PathCheck(
 			name=name,
 			optional=optional,
@@ -162,6 +228,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 		signature: str | None = None,
 		optional: bool = False,
 	) -> CommandCheck:
+		"""Creates a runtime-aware command execution check."""
 		return CommandCheck(
 			name=name,
 			optional=optional,
@@ -182,6 +249,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 		reference_path: str | Path,
 		optional: bool = False,
 	) -> TextFileEqualityCheck:
+		"""Creates a check that compares observed and reference text files."""
 		return TextFileEqualityCheck(
 			name=name,
 			optional=optional,
@@ -190,37 +258,39 @@ class _CaseOracleBase(_OraclePhaseBase):
 			executor=self._executor,
 		)
 
-	def directory_glob_count_check(
+	def read_text(
 		self,
+		path: str | Path,
 		*,
-		name: str,
-		directory: Path,
-		pattern: str,
-		min_count: int = 1,
-		optional: bool = False,
-	) -> DirectoryGlobCountCheck:
-		return DirectoryGlobCountCheck(
-			name=name,
-			optional=optional,
-			directory=directory,
-			pattern=pattern,
-			min_count=min_count,
+		encoding: str = "utf-8",
+	) -> str:
+		"""Reads a text file through the configured runtime."""
+		return check_read_file_text(
+			path_from_user_input(path),
+			encoding=encoding,
 			executor=self._executor,
 		)
 
-	def read_text(self, path: str | Path, *, encoding: str = "utf-8") -> str:
-		return utils.check_read_file_text(
-			utils.path_from_user_input(path), encoding=encoding, executor=self._executor
+	def path_exists(self, path: str | Path) -> bool:
+		"""Returns whether a path exists in the configured runtime."""
+		return check_path_exists(
+			path_from_user_input(path),
+			executor=self._executor,
 		)
 
-	def path_exists(self, path: str | Path) -> bool:
-		return utils.check_path_exists(utils.path_from_user_input(path), executor=self._executor)
-
 	def is_file(self, path: str | Path) -> bool:
-		return utils.check_path_is_file(utils.path_from_user_input(path), executor=self._executor)
+		"""Returns whether a path is a regular file."""
+		return check_path_is_file(
+			path_from_user_input(path),
+			executor=self._executor,
+		)
 
 	def is_dir(self, path: str | Path) -> bool:
-		return utils.check_path_is_dir(utils.path_from_user_input(path), executor=self._executor)
+		"""Returns whether a path is a directory."""
+		return check_path_is_dir(
+			path_from_user_input(path),
+			executor=self._executor,
+		)
 
 	def run_command(
 		self,
@@ -230,10 +300,11 @@ class _CaseOracleBase(_OraclePhaseBase):
 		env: Mapping[str, str] | None = None,
 		timeout_seconds: float,
 		use_shell: bool = False,
-	) -> utils.ProcResult:
-		return utils.run_check_process_capture(
+	) -> ProcResult:
+		"""Runs a command through the configured runtime and captures output."""
+		return run_check_process_capture(
 			cmd=cmd,
-			cwd=None if cwd is None else utils.path_from_user_input(cwd),
+			cwd=None if cwd is None else path_from_user_input(cwd),
 			env=env,
 			timeout_seconds=timeout_seconds,
 			use_shell=use_shell,
@@ -242,20 +313,29 @@ class _CaseOracleBase(_OraclePhaseBase):
 
 
 class CaseOracleEnvSetupBase(_CaseOracleBase):
+	"""Base class for environment setup oracles."""
+
 	phase_label = "EnvironmentSetup"
 
 
 class CaseOracleArtifactBuildBase(_CaseOracleBase):
+	"""Base class for artifact build oracles."""
+
 	phase_label = "ArtifactBuild"
 
 
 class CaseOracleBenchmarkPrepBase(_CaseOracleBase):
+	"""Base class for benchmark preparation oracles."""
+
 	phase_label = "BenchmarkPrep"
 
 
 class CaseOracleExperimentRunsBase(_CaseOracleBase):
+	"""Base class for experiment execution and result validation oracles."""
+
 	phase_label = "ExperimentRuns"
 
+	# Exposes a few common similarlity comparison helpers for raw data series
 	similarity = staticmethod(compute_similarity)
 	elementwise_equal = staticmethod(elementwise_equal)
 	elementwise_similarity_scores = staticmethod(elementwise_similarity_scores)
