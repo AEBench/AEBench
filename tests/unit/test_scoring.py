@@ -6,7 +6,12 @@ from pathlib import Path
 from evaluator.oracles import execution as oracle_execution
 from evaluator.oracles.discovery import DiscoveredOracleClass
 from evaluator.oracles.reporting import CheckEntry, CheckOutcome
-from models import OracleFailureMode, OracleInput, OracleStatus
+from models import (
+	OracleConfig,
+	OracleFailureMode,
+	OracleInput,
+	OracleStatus,
+)
 
 
 @dataclass
@@ -60,11 +65,16 @@ class RuntimeErrorPhase(DummyPhase):
 
 
 def _context(tmp_path: Path) -> OracleInput:
+	oracle_config = OracleConfig()
+
 	return OracleInput(
 		case_dir=tmp_path,
 		artifact_dir=tmp_path / "artifact",
 		workspace_dir=tmp_path / "workspace",
 		output_dir=tmp_path / "output",
+		oracle_targets=oracle_config.targets,
+		oracle_phase_targets=oracle_config.phase_targets,
+		runtime_registry=None,
 	)
 
 

@@ -1,4 +1,12 @@
 from __future__ import annotations
+from enum import Enum
+
+class OraclePhaseName(str, Enum):
+	"""Identifies a supported oracle evaluation phase."""
+	ENV_SETUP = "env_setup"
+	ARTIFACT_BUILD = "artifact_build"
+	BENCHMARK_PREP = "benchmark_prep"
+	EXPERIMENT_RUNS = "experiment_runs"
 
 DEFAULT_TIMEOUT_MS: int = 345_600_000
 DEFAULT_DOCKER_IMAGE: str = "aebench-agent:latest"
@@ -7,11 +15,12 @@ DEFAULT_PROMPT_PROFILE: str = "artifact-eval-v1"
 DEFAULT_OUTPUTS_DIR: str = "./outputs"
 DEFAULT_AGENT_MAX_BUFFER_SIZE: int = 8 * 1024 * 1024
 
-ARTIFACT_SUBDIR: str = "artifact"
 CASE_MANIFEST_FILENAME: str = "case.toml"
+ORACLE_RESULT_FILENAME: str = "oracle_result.json"
+
+ARTIFACT_DIRNAME: str = "artifact"
 ORACLE_DIRNAME: str = "oracles"
 REFS_DIRNAME: str = "refs"
-ORACLE_RESULT_FILENAME: str = "oracle_result.json"
 
 DEFAULT_ORACLE_CHECK_TIMEOUT: float = 5.0
 DEFAULT_ORACLE_BUILD_TIMEOUT: float = 60.0
