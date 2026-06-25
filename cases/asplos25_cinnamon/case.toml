@@ -12,7 +12,7 @@ id = "asplos25_cinnamon"
 path = "README.md"
 
 [run.runtime]
-mode = "docker"
+mode = "local"
 timeout_ms = 172800000      
 gpu = false
 interactive = false
