@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles import utils
-from evaluator.oracles.case_base import CaseOracleExperimentRunsBase
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
-from evaluator.oracles.experiment_runs_checks import (
+from evaluator.oracles.bases import CaseOracleExperimentRunsBase
+from evaluator.oracles.checks import PathCheck, PathKind
+from evaluator.oracles.checks import (
 	ListSimilarityCheck,
 	SimilarityMetric,
 )
@@ -33,6 +33,7 @@ _LOGS_CSV_REQUIRED_COLUMNS = {
 	"perc_dropped",
 	"perc_violate_sla",
 }
+
 
 
 def _extract_plan_xputs(plan_dir: Path) -> list[tuple[str, float]]:
@@ -64,36 +65,6 @@ def _extract_plan_xputs(plan_dir: Path) -> list[tuple[str, float]]:
 
 	return results
 
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DirectoryGlobCountCheck(utils.BaseCheck):
-	"""Fail if fewer than min_count entries match the glob pattern."""
-
-	directory: Path
-	pattern: str
-	min_count: int = 1
-
-	def check(self) -> utils.CheckResult:
-		if not self.directory.is_dir():
-			return utils.CheckResult.failure(f"directory missing: {self.directory}")
-
-		try:
-			matches = list(self.directory.glob(self.pattern))
-		except OSError as exc:
-			return utils.CheckResult.failure(f"cannot scan {self.directory}: {exc}")
-
-		if len(matches) < self.min_count:
-			return utils.CheckResult.failure(
-				f"found {len(matches)} entr(y/ies) matching {self.pattern!r} in "
-				f"{self.directory}, expected at least {self.min_count}"
-			)
-
-		return utils.CheckResult.success(
-			message=(
-				f"{len(matches)} entr(y/ies) matching {self.pattern!r} "
-				f"in {self.directory}"
-			)
-		)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -191,28 +162,29 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 		refs_plans = self.ref_path("plans")
 
 		reqs: list[utils.BaseCheck] = [
-			FilesystemPathCheck(
+			PathCheck(
 				name="outputs_dir_exists",
 				path=outputs,
-				path_type=PathType.DIRECTORY,
+				kind=PathKind.DIRECTORY,
 			),
-			FilesystemPathCheck(
+			PathCheck(
 				name="reference_plans_dir_exists",
 				path=refs_plans,
-				path_type=PathType.DIRECTORY,
+				kind=PathKind.DIRECTORY,
 			),
-			DirectoryGlobCountCheck(
+			self.directory_glob_count_check(
 				name="prepartition_mappings_dir_populated",
 				directory=outputs / "prepartition_mappings",
 				pattern="*",
 				min_count=1,
 			),
-			DirectoryGlobCountCheck(
+			self.directory_glob_count_check(
 				name="prepartition_mappings_csv",
 				directory=outputs / "prepartition_mappings",
-				pattern="*.csv",
+				pattern="*/*.csv",
 				min_count=1,
 			),
+
 		]
 
 		for workload in _REQUIRED_WORKLOADS:
@@ -221,15 +193,15 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 
 			reqs.extend(
 				(
-					FilesystemPathCheck(
+					PathCheck(
 						name=f"plans_{workload}_dir",
 						path=output_plan_dir,
-						path_type=PathType.DIRECTORY,
+						kind=PathKind.DIRECTORY,
 					),
-					FilesystemPathCheck(
+					PathCheck(
 						name=f"reference_plans_{workload}_dir",
 						path=ref_plan_dir,
-						path_type=PathType.DIRECTORY,
+						kind=PathKind.DIRECTORY,
 					),
 					PlanThroughputCorrelationCheck(
 						name=f"plans_{workload}_xput_correlation",
@@ -259,7 +231,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 
 		for fig in ("fig6", "fig7", "fig8", "fig10"):
 			reqs.append(
-				DirectoryGlobCountCheck(
+				self.directory_glob_count_check(
 					name=f"figure_{fig}_output",
 					directory=outputs,
 					pattern=f"*{fig}*",

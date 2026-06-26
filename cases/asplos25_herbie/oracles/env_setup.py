@@ -3,39 +3,39 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from evaluator.oracles import utils
-from evaluator.oracles.case_base import CaseOracleEnvSetupBase
-from evaluator.oracles.env_setup_checks import (
-	DependencyVersionCheck,
-	FilesystemPathCheck,
-	PathType,
+from evaluator.oracles.bases import CaseOracleEnvSetupBase
+from evaluator.oracles.checks import (
+        CommandCheck,
+	VersionCheck,
+	PathCheck,
+	PathKind,
 )
-
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
 	def requirements(self) -> Sequence[utils.BaseCheck]:
-		repo_root = self.paths.workspace_dir
+		repo_root = self._workspace_dir
 
 		return (
-			DependencyVersionCheck(
+			VersionCheck(
 				name="racket",
 				cmd=("racket", "--version"),
 				min_version=(8, 0, 0),
 			),
-			DependencyVersionCheck(
+			VersionCheck(
 				name="rustc",
 				cmd=("rustc", "--version"),
 				min_version=(1, 60, 0),
 				optional=True,
 			),
-			DependencyVersionCheck(
+			VersionCheck(
 				name="make",
 				cmd=("make", "--version"),
-				min_version=(0, 0, 0),
-				optional=True,
+				min_version=(4, 4, 0),
+				version_regex=r"GNU Make\s+([0-9]+(?:\.[0-9]+){1,2})",
 			),
-			FilesystemPathCheck(
+                        PathCheck(
 				name="repo_root_exists",
 				path=repo_root,
-				path_type=PathType.DIRECTORY,
+				kind=PathKind.DIRECTORY,
 			),
 		)
