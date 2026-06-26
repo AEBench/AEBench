@@ -7,12 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from evaluator.oracles import utils
-from evaluator.oracles.case_base import CaseOracleExperimentRunsBase
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
-from evaluator.oracles.experiment_runs_checks import (
-	ListSimilarityCheck,
-	SimilarityMetric,
-)
+from evaluator.oracles.bases import CaseOracleExperimentRunsBase
+from evaluator.oracles.checks import CommandCheck, PathCheck, PathKind
+
 
 _START_ERROR_SIMILARITY = 0.90
 _END_ERROR_SIMILARITY = 0.50
@@ -219,7 +216,7 @@ class HerbieValueSimilarityCheck(utils.BaseCheck):
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	def requirements(self) -> Sequence[utils.BaseCheck]:
-		repo_root = self.paths.workspace_dir
+		repo_root = self._workspace_dir
 		report = _discover_herbie_report(repo_root)
 		reference_path = self.ref_path("results.ref.json")
 
@@ -227,20 +224,20 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 
 		if report is None:
 			checks.append(
-				FilesystemPathCheck(
+				PathCheck(
 					name="results_json",
 					path=repo_root / "graphs" / "results.json",
-					path_type=PathType.FILE,
+					kind=PathKind.FILE,
 				)
 			)
 			return tuple(checks)
 
 		html_path, results_path = report
 		checks.append(
-			FilesystemPathCheck(
+			PathCheck(
 				name="herbie_report_html",
 				path=html_path,
-				path_type=PathType.FILE,
+				kind=PathKind.FILE,
 			)
 		)
 

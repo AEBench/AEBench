@@ -1,0 +1,141 @@
+[
+  {
+    "xput": 3220.185977466677,
+    "config": {
+      "dnn_name": "wide_resnet101_2",
+      "gpu_name_arr": [
+        "L4",
+        "T4"
+      ],
+      "sla": 67085.48262032085,
+      "num_mps_levels": [
+        4,
+        4
+      ],
+      "max_num_parts": 3,
+      "bs_same": true,
+      "transmit_time_us_arr": [
+        13844.48,
+        8652.800000000001,
+        3461.12,
+        1784.2176,
+        1784.2176,
+        1784.2176,
+        1784.2176,
+        1784.2176,
+        1784.2176
+      ],
+      "est_xput": 2103.7042023595145,
+      "batch_build_factor": 1.3,
+      "hist_adjustment": 6709,
+      "hist_adjustment_w_scheduling": 0,
+      "num_gpu_per_server_arr": [
+        4,
+        2
+      ],
+      "force_sum_gpu_integer_per_partition": true,
+      "bw_gbps": 10,
+      "runtime_fmt": 1
+    },
+    "sla": 67085.48262032085,
+    "pipelines": [
+      {
+        "xput": 918.3259613255998,
+        "partitions": [
+          {
+            "dnn": "wide_resnet101_2",
+            "layers": [
+              0,
+              4
+            ],
+            "gpu": "T4",
+            "mps": 0,
+            "bs": 2,
+            "num_gpu_per_server": 2,
+            "num_gpu": 15.999993224424454,
+            "lat_infer": 33542.0,
+            "lat_trans": 3568.4352,
+            "xput": 954.0273820538104
+          },
+          {
+            "dnn": "wide_resnet101_2",
+            "layers": [
+              4,
+              10
+            ],
+            "gpu": "L4",
+            "mps": 0,
+            "bs": 2,
+            "num_gpu_per_server": 4,
+            "num_gpu": 7.999996612087963,
+            "lat_infer": 17423.0,
+            "lat_trans": 0.0,
+            "xput": 918.3259613255998
+          }
+        ],
+        "est_xput": 2103.7042023595145,
+        "est_batch_build_lat": 617.9576000000001,
+        "batch_build_factor": 1.3,
+        "hist_adjustment": 6709,
+        "hist_adjustment_w_scheduling": 0
+      },
+      {
+        "xput": 2301.859541433472,
+        "partitions": [
+          {
+            "dnn": "wide_resnet101_2",
+            "layers": [
+              0,
+              3
+            ],
+            "gpu": "T4",
+            "mps": 0,
+            "bs": 1,
+            "num_gpu_per_server": 2,
+            "num_gpu": 26.0,
+            "lat_infer": 11099.0,
+            "lat_trans": 3461.12,
+            "xput": 2342.5533831876746
+          },
+          {
+            "dnn": "wide_resnet101_2",
+            "layers": [
+              3,
+              5
+            ],
+            "gpu": "T4",
+            "mps": 0,
+            "bs": 1,
+            "num_gpu_per_server": 2,
+            "num_gpu": 33.0,
+            "lat_infer": 14314.0,
+            "lat_trans": 1784.2176,
+            "xput": 2305.4352382283078
+          },
+          {
+            "dnn": "wide_resnet101_2",
+            "layers": [
+              5,
+              10
+            ],
+            "gpu": "L4",
+            "mps": 2,
+            "bs": 1,
+            "num_gpu_per_server": 4,
+            "num_gpu": 17.0,
+            "lat_infer": 22156.0,
+            "lat_trans": 0.0,
+            "xput": 2301.859541433472
+          }
+        ],
+        "est_xput": 2103.7042023595145,
+        "est_batch_build_lat": 0.0,
+        "batch_build_factor": 1.3,
+        "hist_adjustment": 6709,
+        "hist_adjustment_w_scheduling": 0
+      }
+    ],
+    "mipgap": 0.08780548367589876,
+    "runtime": 60.039862871170044
+  }
+]
