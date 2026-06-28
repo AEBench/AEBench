@@ -1,0 +1,50 @@
+id = "atc25_koala"
+
+[case_brief]
+core_claim = "Build the Koala benchmark Docker image and reproduce the suite's output-correctness claim: on --min inputs, each of the 11 GPU-free / offline-at-runtime benchmarks validates its outputs against the pre-committed known-good hashes and is reported [pass]."
+acceptable_evidence = "All 11 benchmarks (analytics, bio, ci-cd, covid, file-mod, ml, nlp, oneliners, unixfun, weather, web-search) report [pass]: every validate.sh status line has status 0 (ci-cd via its test-suite pass/fail), with the expected number of status lines per benchmark."
+allowed_tolerance = "Dynamic metrics (CPU time, memory, IO, wall-clock; Table 1 cols 8-13, Fig 6) are hardware-dependent and ignored. Only deterministic output-correctness (hash equality / test-suite pass) is scored. The web-search validator picks random query terms but only checks query success, so its verdict is deterministic."
+
+[run]
+id = "atc25_koala"
+
+[run.instructions]
+path = "README.md"
+required_evidence = [
+"Build the Koala image: `docker build -t koala .` from the repo root.",
+"Run each of the 11 benchmarks on --min inside the koala image, keeping outputs: `./main.sh <bench> --min --keep` (run_dynamic not required).",
+"For each benchmark, save the harness stdout (which prints `<bench> [pass]`) to `script-results/<bench>.log`.",
+"For each benchmark, copy the per-run validation file `<bench>/<bench>.hash` (validate.sh output) to `script-results/<bench>.hash`.",
+"The helper `reproduce-koala.sh` performs all of the above and writes script-results/ directly.",
+]
+
+[run.runtime]
+mode = "docker"
+image = "aebench-agent:latest"
+timeout_ms = 14400000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = true
+compose = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "fail_fast"
+placeholder = false
+
+[oracle.runtime]
+mode = "docker"
+image = "koala"
+app_dir = "/koala"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/kbensh/koala"
+ref = "5b6caaf6a96511c973f56a2c781535712d0f9337"
