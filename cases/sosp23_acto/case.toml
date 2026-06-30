@@ -32,11 +32,15 @@ docker = true
 compose = false
 
 [oracle]
-expected_score = 2
-phases = ["env_setup", "artifact_build"]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
 score_mode = "phase_count"
+failure_mode = "fail_fast"
 placeholder = false
-notes = "Bundle-native oracle migrated from benchmark workspace data."
+notes = "Checks the ACTO build, bundled campaign data, and exact Tables 5-8 results from the pinned SOSP 2023 artifact."
+
+[oracle.runtime]
+mode = "local"
 
 [upstream]
 source_type = "git"

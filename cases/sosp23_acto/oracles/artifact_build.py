@@ -2,20 +2,28 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from evaluator.oracles.artifact_build_checks import BuildCommandCheck
-from evaluator.oracles.discovery import artifact_build
-from evaluator.oracles.utils import Checkable
-from models import OracleInput
+from evaluator.oracles import CaseOracleArtifactBuildBase, PathKind, utils
 
 
-@artifact_build
-def oracle_artifact_build(context: OracleInput) -> Sequence[Checkable]:
-	repo_root = context.workspace_dir
-	return (
-		BuildCommandCheck(
-			name="acto_make_lib",
-			cwd=repo_root,
-			cmd=("make", "lib"),
-			timeout_seconds=60.0,
-		),
-	)
+class OracleArtifactBuild(CaseOracleArtifactBuildBase):
+	def requirements(self) -> Sequence[utils.BaseCheck]:
+		workspace = self.workspace_path()
+
+		return (
+			self.command_check(
+				name="acto_make",
+				cwd=workspace,
+				cmd=("make",),
+				timeout_seconds=300.0,
+			),
+			self.path_check(
+				name="k8sutil_shared_library",
+				path=workspace / "acto" / "k8s_util" / "lib" / "k8sutil.so",
+				kind=PathKind.FILE,
+			),
+			self.path_check(
+				name="ssa_shared_library",
+				path=workspace / "ssa" / "libanalysis.so",
+				kind=PathKind.FILE,
+			),
+		)
