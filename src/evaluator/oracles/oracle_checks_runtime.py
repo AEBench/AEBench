@@ -999,17 +999,17 @@ class OracleRuntimeRegistry:
 			KeyError: If the target name is not configured.
 			RuntimeError: If the target cannot be constructed.
 		"""
-		try:
-			return self._executors[target_name]
-		except KeyError:
-			pass
+		executor = self._executors.get(target_name)
+		if executor is not None:
+			return executor
 
 		try:
 			target = self._targets[target_name]
 		except KeyError as exc:
 			available = ", ".join(sorted(self._targets))
 			raise KeyError(
-				f"unknown oracle target {target_name!r}; available targets: {available}"
+				f"unknown oracle target {target_name!r}; "
+				f"available targets: {available}"
 			) from exc
 
 		executor = self._build_executor(target)
