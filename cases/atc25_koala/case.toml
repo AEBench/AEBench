@@ -47,4 +47,4 @@ app_dir = "/koala"
 [upstream]
 source_type = "git"
 url = "https://github.com/kbensh/koala"
-ref = "5b6caaf6a96511c973f56a2c781535712d0f9337"
+ref = "a3d4972d7fff6c3ded92d3308110787679da4ead"
