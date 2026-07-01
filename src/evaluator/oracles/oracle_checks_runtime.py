@@ -725,7 +725,7 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		cmd: list[str],
 		cwd: CheckPath | None,
 		env: Mapping[str, str] | None,
-        timeout_seconds: float=DEFAULT_ORACLE_CHECK_TIMEOUT,
+		timeout_seconds: float = DEFAULT_ORACLE_CHECK_TIMEOUT,
 	) -> subprocess.CompletedProcess[str]:
 		"""Executes a command in the check container.
 
@@ -1277,6 +1277,7 @@ def check_read_file_text(
 		)
 
 	return _resolve_local_check_path(path).read_text(encoding=encoding)
+
 
 def glob(
 	path: pathlib.Path,
