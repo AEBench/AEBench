@@ -1007,8 +1007,7 @@ class OracleRuntimeRegistry:
 		except KeyError as exc:
 			available = ", ".join(sorted(self._targets))
 			raise KeyError(
-				f"unknown oracle target {target_name!r}; "
-				f"available targets: {available}"
+				f"unknown oracle target {target_name!r}; available targets: {available}"
 			) from exc
 
 		executor = self._build_executor(target)
@@ -1124,9 +1123,7 @@ def _resolve_local_check_path(path: OraclePath) -> pathlib.Path:
 		if candidate.is_absolute():
 			return candidate.resolve(strict=False)
 
-		return (
-			pathlib.Path.cwd() / candidate
-		).resolve(strict=False)
+		return (pathlib.Path.cwd() / candidate).resolve(strict=False)
 
 	return pathlib.Path(path).expanduser().resolve(strict=False)
 

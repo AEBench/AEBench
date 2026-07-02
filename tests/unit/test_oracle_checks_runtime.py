@@ -487,9 +487,7 @@ def test_local_executor_resolves_relative_runtime_path(
 		)
 	)
 
-	assert resolved == (
-		tmp_path / "results" / "output.json"
-	).resolve()
+	assert resolved == (tmp_path / "results" / "output.json").resolve()
 
 
 def test_local_executor_preserves_absolute_runtime_path(
@@ -499,12 +497,6 @@ def test_local_executor_preserves_absolute_runtime_path(
 		default_cwd=tmp_path,
 	)
 
-	resolved = executor.resolve_path(
-		RuntimePath.from_parts(
-			"/usr/app/results/output.json"
-		)
-	)
+	resolved = executor.resolve_path(RuntimePath.from_parts("/usr/app/results/output.json"))
 
-	assert resolved == Path(
-		"/usr/app/results/output.json"
-	)
+	assert resolved == Path("/usr/app/results/output.json")
