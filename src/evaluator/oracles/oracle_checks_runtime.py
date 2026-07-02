@@ -36,6 +36,7 @@ from .process import (
 	run_subprocess_capture,
 )
 
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class RuntimePath:
 	"""A path expressed in the selected runtime's filesystem namespace."""
