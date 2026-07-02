@@ -172,13 +172,13 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 				path=refs_plans,
 				kind=PathKind.DIRECTORY,
 			),
-			self.directory_glob_count_check(
+			self.min_matching_entry_count_check(
 				name="prepartition_mappings_dir_populated",
 				directory=outputs / "prepartition_mappings",
 				pattern="*",
 				min_count=1,
 			),
-			self.directory_glob_count_check(
+			self.min_matching_entry_count_check(
 				name="prepartition_mappings_csv",
 				directory=outputs / "prepartition_mappings",
 				pattern="*/*.csv",
@@ -231,7 +231,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 
 		for fig in ("fig6", "fig7", "fig8", "fig10"):
 			reqs.append(
-				self.directory_glob_count_check(
+				self.min_matching_entry_count_check(
 					name=f"figure_{fig}_output",
 					directory=outputs,
 					pattern=f"*{fig}*",

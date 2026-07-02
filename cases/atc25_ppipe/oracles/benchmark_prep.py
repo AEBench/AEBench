@@ -126,7 +126,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 
 		for subdir in _REQUIRED_MODEL_SUBDIRS:
 			checks.append(
-				self.directory_glob_count_check(
+				self.min_matching_entry_count_check(
 					name=f"models_{subdir}_populated",
 					directory=data_dir / "models" / subdir,
 					pattern="*",
@@ -147,7 +147,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 		)
 
 		checks.append(
-			self.directory_glob_count_check(
+			self.min_matching_entry_count_check(
 				name="prepartition_mappings",
 				directory=data_dir / "prepartition_mappings",
 				pattern="*/*.csv",
@@ -157,7 +157,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 
 		for plan_dir in _REQUIRED_PLAN_DIRS:
 			checks.append(
-				self.directory_glob_count_check(
+				self.min_matching_entry_count_check(
 					name=f"reference_plans_{plan_dir}",
 					directory=data_dir / "plans" / plan_dir,
 					pattern="*.json",
