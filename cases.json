@@ -16,6 +16,9 @@
     "asplos25_herbie": {
       "path": "cases/asplos25_herbie"
     },
+    "atc25_koala": {
+      "path": "cases/atc25_koala"
+    },
     "atc25_ppipe": {
       "path": "cases/atc25_ppipe"
     },
