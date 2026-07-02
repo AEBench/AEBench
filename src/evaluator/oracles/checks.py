@@ -13,10 +13,13 @@ from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from typing import Generic, TypeVar
 
-from ..constants import DEFAULT_ORACLE_CHECK_TIMEOUT
+from constants import DEFAULT_ORACLE_CHECK_TIMEOUT
+
 from .oracle_checks_runtime import (
-	PathLike,
+	HostPath,
+	OraclePath,
 	RuntimeCheckExecutor,
+	RuntimePath,
 	check_path_exists,
 	check_path_is_dir,
 	check_path_is_file,
@@ -309,43 +312,54 @@ class EnvVarCheck(BaseCheck):
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class PathCheck(BaseCheck):
-	"""Checks that a path exists with the required type."""
+	"""Checks that a runtime-visible path exists with the required type."""
 
-	path: PathLike
+	path: OraclePath
 	kind: PathKind = PathKind.ANY
 	executor: RuntimeCheckExecutor | None = dataclasses.field(
-		default=None, repr=False, compare=False
+		default=None,
+		repr=False,
+		compare=False,
 	)
 
-	_path_text: str = dataclasses.field(init=False, repr=False, default="")
-
 	def __post_init__(self) -> None:
+		if isinstance(self.path, RuntimePath):
+			return
+
 		path_text = os.fspath(self.path).strip()
 		if not path_text:
 			raise ValueError(f"{self.name}: path cannot be empty")
-		object.__setattr__(self, "_path_text", path_text)
 
-	def _path(self) -> pathlib.Path:
-		return path_from_user_input(self._path_text)
+		object.__setattr__(
+			self,
+			"path",
+			pathlib.Path(path_text),
+		)
 
 	def check(self) -> CheckResult:
-		path = self._path()
+		path = self.path
+		path_text = str(path)
+
 		if not check_path_exists(path, executor=self.executor):
 			label = "path"
 			if self.kind == PathKind.FILE:
 				label = "file"
 			elif self.kind == PathKind.DIRECTORY:
 				label = "directory"
-			return CheckResult.failure(f"{label} not found: {self._path_text}")
+			return CheckResult.failure(f"{label} not found: {path_text}")
+
 		if self.kind == PathKind.ANY:
 			return CheckResult.success()
+
 		if self.kind == PathKind.FILE:
 			if check_path_is_file(path, executor=self.executor):
 				return CheckResult.success()
-			return CheckResult.failure(f"expected a file: {self._path_text}")
+			return CheckResult.failure(f"expected a file: {path_text}")
+
 		if check_path_is_dir(path, executor=self.executor):
 			return CheckResult.success()
-		return CheckResult.failure(f"expected a directory: {self._path_text}")
+
+		return CheckResult.failure(f"expected a directory: {path_text}")
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
@@ -358,7 +372,7 @@ class CommandCheck(BaseCheck):
 	"""
 
 	cmd: str | Sequence[str]
-	cwd: PathLike | None = None
+	cwd: HostPath | None = None
 	timeout_seconds: float = DEFAULT_ORACLE_CHECK_TIMEOUT
 	env: Mapping[str, str] = dataclasses.field(default_factory=dict)
 	use_shell: bool = False
@@ -490,15 +504,15 @@ class CommandCheck(BaseCheck):
 class TextFileEqualityCheck(BaseCheck):
 	"""Compares text files for exact equality."""
 
-	observed_path: PathLike
-	reference_path: PathLike
+	observed_path: OraclePath
+	reference_path: OraclePath
 	executor: RuntimeCheckExecutor | None = dataclasses.field(
 		default=None, repr=False, compare=False
 	)
 
 	def check(self) -> CheckResult:
-		observed_path = path_from_user_input(self.observed_path)
-		reference_path = path_from_user_input(self.reference_path)
+		observed_path = self.observed_path
+		reference_path = self.reference_path
 		if not check_path_is_file(observed_path, executor=self.executor):
 			return CheckResult.failure(f"observed file missing: {observed_path}")
 		if not check_path_is_file(reference_path, executor=self.executor):

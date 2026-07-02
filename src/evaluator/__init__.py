@@ -4,18 +4,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from constants import ARTIFACT_DIRNAME, OraclePhaseName
 from models import (
 	CaseConfig,
 	OracleFailureMode,
 	OracleInput,
-	OraclePhaseName,
 	OraclePhaseResult,
 	OracleResult,
 	OracleScoreMode,
 	OracleStatus,
 )
 
-from .constants import ARTIFACT_DIRNAME
 from .loader import CaseBundleError, load_case_spec
 
 

@@ -6,9 +6,9 @@ import json
 import logging
 import traceback
 from pathlib import Path
-from typing import Any, Sequence, cast
+from typing import Any, Sequence
 
-from constants import ARTIFACT_SUBDIR
+from constants import ARTIFACT_DIRNAME, ORACLE_RESULT_FILENAME
 from models import (
 	OracleFailureMode,
 	OracleInput,
@@ -17,7 +17,6 @@ from models import (
 	OracleStatus,
 )
 
-from ..constants import ORACLE_RESULT_FILENAME
 from ..loader import load_case_spec
 from .discovery import (
 	DiscoveredOracleClass,
@@ -26,8 +25,8 @@ from .discovery import (
 	oracle_root_for,
 )
 from .oracle_checks_runtime import (
-	RuntimeCheckExecutor,
-	build_runtime_check_executor,
+	OracleRuntimeRegistry,
+	build_oracle_runtime_registry,
 )
 from .reporting import OracleReport, log_oracle_report
 
@@ -183,9 +182,10 @@ def run_oracle(
 ) -> OracleResult:
 	"""Loads and runs all oracle phases for a case.
 
-	The runtime executor is always closed on a best-effort basis. The final
-	result is also written on a best-effort basis so persistence failures do
-	not replace the evaluation result returned to the caller.
+	The runtime registry is closed on a best-effort basis. Closing the
+	registry closes every target executor created during the invocation.
+	The final result is also written on a best-effort basis so persistence
+	failures do not replace the evaluation result returned to the caller.
 
 	Args:
 		case_dir: Root directory of the case.
@@ -202,12 +202,16 @@ def run_oracle(
 	case_root = case_dir.resolve()
 	out_dir = output_dir.resolve()
 	out_dir.mkdir(parents=True, exist_ok=True)
-	context: OracleInput | None = None
+
+	runtime_registry: OracleRuntimeRegistry | None = None
 
 	try:
 		spec = case or load_case_spec(case_root)
-		failure_mode = spec.oracle.failure_mode if spec.oracle else OracleFailureMode.FAIL_FAST
-		artifact_dir = (case_root / ARTIFACT_SUBDIR).resolve(strict=False)
+		if spec.oracle is None:
+			raise RuntimeError(f"case {spec.id!r} does not define an oracle configuration")
+
+		failure_mode = spec.oracle.failure_mode
+		artifact_dir = (case_root / ARTIFACT_DIRNAME).resolve(strict=False)
 		resolved_workspace_dir = _resolve_workspace_dir(
 			case_root=case_root,
 			artifact_dir=artifact_dir,
@@ -220,17 +224,22 @@ def run_oracle(
 			artifact_dir=artifact_dir,
 			workspace_dir=resolved_workspace_dir,
 			output_dir=out_dir,
+			oracle_targets=spec.oracle.targets,
+			oracle_phase_targets=spec.oracle.phase_targets,
 			runtime_result=runtime_result,
-			oracle_config=spec.oracle if spec else None,
+			runtime_session=runtime_session,
+			runtime_backend=runtime_backend,
 		)
-		context.runtime_session = runtime_session
-		context.runtime_backend = runtime_backend
 
-		# Build one executor per oracle invocation
-		context.runtime_executor = build_runtime_check_executor(context)
+		# Build one lazy executor registry for this oracle invocation.
+		runtime_registry = build_oracle_runtime_registry(context)
+		context.runtime_registry = runtime_registry
 
 		oracle_root = oracle_root_for(case_root)
-		with oracle_import_scope(case_root, oracle_root.name):
+		with oracle_import_scope(
+			case_root,
+			oracle_root.name,
+		):
 			classes = discover_oracle_classes_in_scope(
 				case_root,
 				oracle_root,
@@ -241,8 +250,8 @@ def run_oracle(
 				failure_mode=failure_mode,
 			)
 	except Exception as exc:
-		# Setup, discovery, and orchestration errors are represented through
-		# the OracleResult API instead of propagating those to callers
+		# Represent setup, discovery, and orchestration failures through the
+		# OracleResult API instead of propagating them to callers.
 		traceback_text = traceback.format_exc()
 		result = OracleResult(
 			status=OracleStatus.ERROR,
@@ -251,16 +260,12 @@ def run_oracle(
 			error=(f"{type(exc).__name__}: {exc}\n{traceback_text}"),
 		)
 	finally:
-		try:
-			if context is not None and context.runtime_executor is not None:
-				executor = cast(
-					RuntimeCheckExecutor,
-					context.runtime_executor,
-				)
-				executor.close()
-		except Exception:
-			# Cleanup failures should not replace the oracle result
-			logging.getLogger(__name__).exception("failed to clean up oracle runtime executor")
+		if runtime_registry is not None:
+			try:
+				runtime_registry.close()
+			except Exception:
+				# Cleanup failures must not replace the evaluation result.
+				logging.getLogger(__name__).exception("failed to close oracle runtime registry")
 
 	try:
 		(out_dir / ORACLE_RESULT_FILENAME).write_text(
@@ -271,7 +276,8 @@ def run_oracle(
 			encoding="utf-8",
 		)
 	except Exception:
-		# The caller still receives the in-memory result when persistence fails
+		# The caller still receives the in-memory result when persistence
+		# fails.
 		logging.getLogger(__name__).exception(
 			"failed to write oracle result file to %s",
 			out_dir,
