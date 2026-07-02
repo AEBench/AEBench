@@ -17,6 +17,7 @@ from evaluator.oracles.oracle_checks_runtime import (
 	SessionRuntimeCheckExecutor,
 	build_oracle_runtime_registry,
 	build_path_mounts,
+	RuntimePath,
 )
 from models import (
 	DockerImageOracleTargetConfig,
@@ -470,3 +471,40 @@ def test_docker_image_target_uses_configured_image_and_working_dir(
 	assert isinstance(executor, DockerRuntimeCheckExecutor)
 	assert executor._image == "golf"
 	assert str(executor._runtime_cwd) == "/usr/app"
+
+
+def test_local_executor_resolves_relative_runtime_path(
+	tmp_path: Path,
+) -> None:
+	executor = LocalRuntimeCheckExecutor(
+		default_cwd=tmp_path,
+	)
+
+	resolved = executor.resolve_path(
+		RuntimePath.from_parts(
+			"results",
+			"output.json",
+		)
+	)
+
+	assert resolved == (
+		tmp_path / "results" / "output.json"
+	).resolve()
+
+
+def test_local_executor_preserves_absolute_runtime_path(
+	tmp_path: Path,
+) -> None:
+	executor = LocalRuntimeCheckExecutor(
+		default_cwd=tmp_path,
+	)
+
+	resolved = executor.resolve_path(
+		RuntimePath.from_parts(
+			"/usr/app/results/output.json"
+		)
+	)
+
+	assert resolved == Path(
+		"/usr/app/results/output.json"
+	)

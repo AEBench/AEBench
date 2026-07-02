@@ -16,8 +16,8 @@ from typing import Generic, TypeVar
 from constants import DEFAULT_ORACLE_CHECK_TIMEOUT
 
 from .oracle_checks_runtime import (
-	CheckPath,
-	PathLike,
+	OraclePath,
+	HostPath,
 	RuntimeCheckExecutor,
 	RuntimePath,
 	check_path_exists,
@@ -314,7 +314,7 @@ class EnvVarCheck(BaseCheck):
 class PathCheck(BaseCheck):
 	"""Checks that a runtime-visible path exists with the required type."""
 
-	path: CheckPath
+	path: OraclePath
 	kind: PathKind = PathKind.ANY
 	executor: RuntimeCheckExecutor | None = dataclasses.field(
 		default=None,
@@ -372,7 +372,7 @@ class CommandCheck(BaseCheck):
 	"""
 
 	cmd: str | Sequence[str]
-	cwd: PathLike | None = None
+	cwd: HostPath | None = None
 	timeout_seconds: float = DEFAULT_ORACLE_CHECK_TIMEOUT
 	env: Mapping[str, str] = dataclasses.field(default_factory=dict)
 	use_shell: bool = False
@@ -504,8 +504,8 @@ class CommandCheck(BaseCheck):
 class TextFileEqualityCheck(BaseCheck):
 	"""Compares text files for exact equality."""
 
-	observed_path: CheckPath
-	reference_path: CheckPath
+	observed_path: OraclePath
+	reference_path: OraclePath
 	executor: RuntimeCheckExecutor | None = dataclasses.field(
 		default=None, repr=False, compare=False
 	)
