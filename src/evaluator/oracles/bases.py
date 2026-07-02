@@ -31,7 +31,7 @@ from .checks import (
 	elementwise_similarity_threshold,
 )
 from .oracle_checks_runtime import (
-	CheckPath,
+	OraclePath,
 	OracleRuntimeRegistry,
 	RuntimeCheckExecutor,
 	RuntimePath,
@@ -268,7 +268,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 		self,
 		*,
 		name: str,
-		path: CheckPath,
+		path: OraclePath,
 		kind: PathKind = PathKind.ANY,
 		optional: bool = False,
 		target: str | None = None,
@@ -287,7 +287,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 		*,
 		name: str,
 		cmd: str | Sequence[str],
-		cwd: CheckPath | None = None,
+		cwd: OraclePath | None = None,
 		timeout_seconds: float,
 		env: Mapping[str, str] | None = None,
 		use_shell: bool = False,
@@ -311,8 +311,8 @@ class _CaseOracleBase(_OraclePhaseBase):
 		self,
 		*,
 		name: str,
-		observed_path: CheckPath,
-		reference_path: CheckPath,
+		observed_path: OraclePath,
+		reference_path: OraclePath,
 		optional: bool = False,
 		target: str | None = None,
 	) -> TextFileEqualityCheck:
@@ -327,7 +327,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 
 	def read_text(
 		self,
-		path: CheckPath,
+		path: OraclePath,
 		*,
 		encoding: str = "utf-8",
 		target: str | None = None,
@@ -341,7 +341,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 
 	def path_exists(
 		self,
-		path: CheckPath,
+		path: OraclePath,
 		*,
 		target: str | None = None,
 	) -> bool:
@@ -353,7 +353,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 
 	def is_file(
 		self,
-		path: CheckPath,
+		path: OraclePath,
 		*,
 		target: str | None = None,
 	) -> bool:
@@ -365,7 +365,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 
 	def is_dir(
 		self,
-		path: CheckPath,
+		path: OraclePath,
 		*,
 		target: str | None = None,
 	) -> bool:
@@ -379,7 +379,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 		self,
 		*,
 		cmd: str | Sequence[str],
-		cwd: CheckPath | None = None,
+		cwd: OraclePath | None = None,
 		env: Mapping[str, str] | None = None,
 		timeout_seconds: float,
 		use_shell: bool = False,

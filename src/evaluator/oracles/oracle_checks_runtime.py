@@ -36,9 +36,6 @@ from .process import (
 	run_subprocess_capture,
 )
 
-PathLike = str | os.PathLike[str] | pathlib.Path
-
-
 @dataclasses.dataclass(frozen=True, slots=True)
 class RuntimePath:
 	"""A path expressed in the selected runtime's filesystem namespace."""
@@ -58,7 +55,8 @@ class RuntimePath:
 		return self.value.as_posix()
 
 
-CheckPath = PathLike | RuntimePath
+HostPath = str | os.PathLike[str]
+OraclePath = HostPath | RuntimePath
 
 
 _PATH_MOUNT_ORDER = (
@@ -101,8 +99,8 @@ class _PathMount:
 		return self.runtime_root.joinpath(*relative.parts)
 
 
-def _resolved_path(path: PathLike) -> pathlib.Path:
-	"""Returns an absolute normalized path without requiring it to exist."""
+def _resolved_path(path: HostPath) -> pathlib.Path:
+	"""Returns an absolute normalized host path without requiring it to exist."""
 	return pathlib.Path(path).expanduser().resolve(strict=False)
 
 
@@ -113,8 +111,8 @@ class RuntimeCheckExecutor(abc.ABC):
 		"""Initializes the executor with its default host working directory."""
 		self._default_cwd = _resolved_path(default_cwd)
 
-	def _resolve_host_path(self, path: PathLike) -> pathlib.Path:
-		"""Resolves a host path relative to the executor workspace."""
+	def _resolve_host_path(self, path: HostPath) -> pathlib.Path:
+		"""Resolves an evaluator-host path relative to the workspace."""
 		candidate = pathlib.Path(path).expanduser()
 		if candidate.is_absolute():
 			return candidate.resolve(strict=False)
@@ -124,7 +122,7 @@ class RuntimeCheckExecutor(abc.ABC):
 	@abc.abstractmethod
 	def resolve_path(
 		self,
-		path: CheckPath,
+		path: OraclePath,
 	) -> pathlib.Path | pathlib.PurePosixPath:
 		"""Resolves a path in the executor's filesystem namespace."""
 
@@ -156,7 +154,7 @@ class RuntimeCheckExecutor(abc.ABC):
 		self,
 		*,
 		cmd: str | Sequence[str],
-		cwd: CheckPath | None,
+		cwd: OraclePath | None,
 		env: Mapping[str, str] | None,
 		timeout_seconds: float,
 		use_shell: bool = False,
@@ -168,21 +166,21 @@ class RuntimeCheckExecutor(abc.ABC):
 		"""Runs a process and captures its output."""
 
 	@abc.abstractmethod
-	def path_exists(self, path: CheckPath) -> bool:
+	def path_exists(self, path: OraclePath) -> bool:
 		"""Returns whether a path exists."""
 
 	@abc.abstractmethod
-	def path_is_file(self, path: CheckPath) -> bool:
+	def path_is_file(self, path: OraclePath) -> bool:
 		"""Returns whether a path is a regular file."""
 
 	@abc.abstractmethod
-	def path_is_dir(self, path: CheckPath) -> bool:
+	def path_is_dir(self, path: OraclePath) -> bool:
 		"""Returns whether a path is a directory."""
 
 	@abc.abstractmethod
 	def read_file_text(
 		self,
-		path: CheckPath,
+		path: OraclePath,
 		encoding: str = "utf-8",
 	) -> str:
 		"""Reads a text file."""
@@ -291,7 +289,7 @@ class LocalRuntimeCheckExecutor(RuntimeCheckExecutor):
 
 	path_separator = os.pathsep
 
-	def resolve_path(self, path: CheckPath) -> pathlib.Path:
+	def resolve_path(self, path: OraclePath) -> pathlib.Path:
 		"""Resolves a host-backed or runtime-native local path."""
 		if isinstance(path, RuntimePath):
 			runtime_path = pathlib.Path(str(path.value))
@@ -324,21 +322,21 @@ class LocalRuntimeCheckExecutor(RuntimeCheckExecutor):
 
 		return os.environ.get(name)
 
-	def path_exists(self, path: CheckPath) -> bool:
+	def path_exists(self, path: OraclePath) -> bool:
 		"""Returns whether a local path exists."""
 		return self.resolve_path(path).exists()
 
-	def path_is_file(self, path: CheckPath) -> bool:
+	def path_is_file(self, path: OraclePath) -> bool:
 		"""Returns whether a local path is a regular file."""
 		return self.resolve_path(path).is_file()
 
-	def path_is_dir(self, path: CheckPath) -> bool:
+	def path_is_dir(self, path: OraclePath) -> bool:
 		"""Returns whether a local path is a directory."""
 		return self.resolve_path(path).is_dir()
 
 	def read_file_text(
 		self,
-		path: CheckPath,
+		path: OraclePath,
 		encoding: str = "utf-8",
 	) -> str:
 		"""Reads a text file from the local filesystem."""
@@ -348,7 +346,7 @@ class LocalRuntimeCheckExecutor(RuntimeCheckExecutor):
 		self,
 		*,
 		cmd: str | Sequence[str],
-		cwd: CheckPath | None,
+		cwd: OraclePath | None,
 		env: Mapping[str, str] | None,
 		timeout_seconds: float,
 		use_shell: bool = False,
@@ -411,7 +409,7 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 
 	def resolve_path(
 		self,
-		path: CheckPath,
+		path: OraclePath,
 	) -> pathlib.PurePosixPath:
 		"""Resolves a host-backed or runtime-native session path."""
 		if isinstance(path, RuntimePath):
@@ -432,7 +430,7 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 
 	def _translate_cwd(
 		self,
-		cwd: CheckPath | None,
+		cwd: OraclePath | None,
 	) -> str:
 		"""Returns a runtime working directory accepted by the backend."""
 		if cwd is None:
@@ -443,7 +441,7 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 	def _path_matches(
 		self,
 		predicate: str,
-		path: CheckPath,
+		path: OraclePath,
 	) -> bool:
 		"""Evaluates a POSIX filesystem predicate in the active runtime.
 
@@ -494,21 +492,21 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 			env=None if env is None else dict(env),
 		)
 
-	def path_exists(self, path: CheckPath) -> bool:
+	def path_exists(self, path: OraclePath) -> bool:
 		"""Returns whether a path exists in the active runtime."""
 		return self._path_matches("-e", path)
 
-	def path_is_file(self, path: CheckPath) -> bool:
+	def path_is_file(self, path: OraclePath) -> bool:
 		"""Returns whether a path is a regular file in the active runtime."""
 		return self._path_matches("-f", path)
 
-	def path_is_dir(self, path: CheckPath) -> bool:
+	def path_is_dir(self, path: OraclePath) -> bool:
 		"""Returns whether a path is a directory in the active runtime."""
 		return self._path_matches("-d", path)
 
 	def read_file_text(
 		self,
-		path: CheckPath,
+		path: OraclePath,
 		encoding: str = "utf-8",
 	) -> str:
 		"""Reads a text file through the active runtime backend.
@@ -537,7 +535,7 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 		self,
 		*,
 		cmd: str | Sequence[str],
-		cwd: CheckPath | None,
+		cwd: OraclePath | None,
 		env: Mapping[str, str] | None,
 		timeout_seconds: float,
 		use_shell: bool = False,
@@ -627,7 +625,7 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 
 	def resolve_path(
 		self,
-		path: CheckPath,
+		path: OraclePath,
 	) -> pathlib.PurePosixPath:
 		"""Resolves a host-backed or runtime-native container path."""
 		if isinstance(path, RuntimePath):
@@ -698,7 +696,7 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		self,
 		*,
 		cmd: list[str],
-		cwd: CheckPath | None,
+		cwd: OraclePath | None,
 		env: Mapping[str, str] | None,
 		timeout_seconds: float,
 	) -> subprocess.CompletedProcess[str]:
@@ -803,7 +801,7 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 	def _path_matches(
 		self,
 		predicate: str,
-		path: CheckPath,
+		path: OraclePath,
 	) -> bool:
 		"""Evaluates a POSIX filesystem predicate in the container.
 
@@ -828,21 +826,21 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 
 		return result.returncode == 0
 
-	def path_exists(self, path: CheckPath) -> bool:
+	def path_exists(self, path: OraclePath) -> bool:
 		"""Returns whether a path exists in the check container."""
 		return self._path_matches("-e", path)
 
-	def path_is_file(self, path: CheckPath) -> bool:
+	def path_is_file(self, path: OraclePath) -> bool:
 		"""Returns whether a path is a regular file in the check container."""
 		return self._path_matches("-f", path)
 
-	def path_is_dir(self, path: CheckPath) -> bool:
+	def path_is_dir(self, path: OraclePath) -> bool:
 		"""Returns whether a path is a directory in the check container."""
 		return self._path_matches("-d", path)
 
 	def read_file_text(
 		self,
-		path: CheckPath,
+		path: OraclePath,
 		encoding: str = "utf-8",
 	) -> str:
 		"""Reads a text file from the check container.
@@ -882,7 +880,7 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		self,
 		*,
 		cmd: str | Sequence[str],
-		cwd: CheckPath | None,
+		cwd: OraclePath | None,
 		env: Mapping[str, str] | None,
 		timeout_seconds: float,
 		use_shell: bool = False,
@@ -1113,19 +1111,21 @@ def get_check_path_separator(
 	return os.pathsep
 
 
-def path_from_user_input(value: PathLike) -> pathlib.Path:
+def path_from_user_input(value: HostPath) -> pathlib.Path:
 	"""Converts a user-supplied host path to ``pathlib.Path``."""
 	return pathlib.Path(os.fspath(value))
 
 
-def _resolve_local_check_path(path: CheckPath) -> pathlib.Path:
-	"""Resolves a check path without an explicit executor."""
+def _resolve_local_check_path(path: OraclePath) -> pathlib.Path:
+	"""Resolves an oracle path without an explicit executor."""
 	if isinstance(path, RuntimePath):
 		candidate = pathlib.Path(str(path.value))
 		if candidate.is_absolute():
 			return candidate.resolve(strict=False)
 
-		return (pathlib.Path.cwd() / candidate).resolve(strict=False)
+		return (
+			pathlib.Path.cwd() / candidate
+		).resolve(strict=False)
 
 	return pathlib.Path(path).expanduser().resolve(strict=False)
 
@@ -1133,7 +1133,7 @@ def _resolve_local_check_path(path: CheckPath) -> pathlib.Path:
 def run_check_process_capture(
 	*,
 	cmd: str | Sequence[str],
-	cwd: CheckPath | None,
+	cwd: OraclePath | None,
 	env: Mapping[str, str] | None,
 	timeout_seconds: float,
 	use_shell: bool = False,
@@ -1185,7 +1185,7 @@ def run_check_process_capture(
 
 
 def check_path_exists(
-	path: CheckPath,
+	path: OraclePath,
 	*,
 	executor: RuntimeCheckExecutor | None = None,
 ) -> bool:
@@ -1197,7 +1197,7 @@ def check_path_exists(
 
 
 def check_path_is_file(
-	path: CheckPath,
+	path: OraclePath,
 	*,
 	executor: RuntimeCheckExecutor | None = None,
 ) -> bool:
@@ -1209,7 +1209,7 @@ def check_path_is_file(
 
 
 def check_path_is_dir(
-	path: CheckPath,
+	path: OraclePath,
 	*,
 	executor: RuntimeCheckExecutor | None = None,
 ) -> bool:
@@ -1221,7 +1221,7 @@ def check_path_is_dir(
 
 
 def check_read_file_text(
-	path: CheckPath,
+	path: OraclePath,
 	*,
 	encoding: str = "utf-8",
 	executor: RuntimeCheckExecutor | None = None,
