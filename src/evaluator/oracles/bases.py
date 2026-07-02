@@ -326,7 +326,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 			executor=self.executor_for(target),
 		)
 
-	def direcoty_glob_count_check(
+	def directory_glob_count_check(
 		self,
 		*,
 		name: str,
