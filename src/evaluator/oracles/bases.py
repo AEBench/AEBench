@@ -21,6 +21,7 @@ from .checks import (
 	CommandCheck,
 	EnvMatchMode,
 	EnvVarCheck,
+	MinMatchingEntryCountCheck,
 	PathCheck,
 	PathKind,
 	TextFileEqualityCheck,
@@ -322,6 +323,25 @@ class _CaseOracleBase(_OraclePhaseBase):
 			optional=optional,
 			observed_path=observed_path,
 			reference_path=reference_path,
+			executor=self.executor_for(target),
+		)
+
+	def min_matching_entry_count_check(
+		self,
+		*,
+		name: str,
+		directory: Path,
+		pattern: str,
+		min_count: int = 1,
+		optional: bool = False,
+		target: str | None = None,
+	) -> MinMatchingEntryCountCheck:
+		return MinMatchingEntryCountCheck(
+			name=name,
+			optional=optional,
+			directory=directory,
+			pattern=pattern,
+			min_count=min_count,
 			executor=self.executor_for(target),
 		)
 

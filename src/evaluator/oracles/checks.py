@@ -24,6 +24,7 @@ from .oracle_checks_runtime import (
 	check_path_is_dir,
 	check_path_is_file,
 	check_read_file_text,
+	glob,
 	path_from_user_input,
 	read_check_env_var,
 	resolve_check_executable,
@@ -535,6 +536,34 @@ class TextFileEqualityCheck(BaseCheck):
 		)
 		return CheckResult.failure(
 			f"content mismatch ({len(reference)} vs {len(observed)} chars): expected={reference_preview!r} observed={observed_preview!r}"
+		)
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class MinMatchingEntryCountCheck(BaseCheck):
+	"""Fail if fewer than min_count entries match the glob pattern."""
+
+	directory: pathlib.Path
+	pattern: str
+	min_count: int = 1
+	executor: RuntimeCheckExecutor | None = dataclasses.field(
+		default=None, repr=False, compare=False
+	)
+
+	def check(self) -> CheckResult:
+		if not check_path_is_dir(self.directory, executor=self.executor):
+			return CheckResult.failure(f"directory missing: {self.directory}")
+		try:
+			matches = glob(self.directory, self.pattern, executor=self.executor)
+		except OSError as exc:
+			return CheckResult.failure(f"cannot scan {self.directory}: {exc}")
+		if len(matches) < self.min_count:
+			return CheckResult.failure(
+				f"found {len(matches)} entr(y/ies) matching {self.pattern!r} in "
+				f"{self.directory}, expected at least {self.min_count}"
+			)
+		return CheckResult.success(
+			message=f"{len(matches)} entr(y/ies) matching {self.pattern!r} in {self.directory}"
 		)
 
 
