@@ -16,8 +16,8 @@ from typing import Generic, TypeVar
 from constants import DEFAULT_ORACLE_CHECK_TIMEOUT
 
 from .oracle_checks_runtime import (
-	OraclePath,
 	HostPath,
+	OraclePath,
 	RuntimeCheckExecutor,
 	RuntimePath,
 	check_path_exists,

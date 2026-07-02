@@ -14,10 +14,10 @@ import pytest
 from evaluator.oracles.oracle_checks_runtime import (
 	DockerRuntimeCheckExecutor,
 	LocalRuntimeCheckExecutor,
+	RuntimePath,
 	SessionRuntimeCheckExecutor,
 	build_oracle_runtime_registry,
 	build_path_mounts,
-	RuntimePath,
 )
 from models import (
 	DockerImageOracleTargetConfig,
