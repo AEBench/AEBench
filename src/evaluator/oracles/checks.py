@@ -540,7 +540,7 @@ class TextFileEqualityCheck(BaseCheck):
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class DirectoryGlobCountCheck(BaseCheck):
+class MinMatchingEntryCountCheck(BaseCheck):
 	"""Fail if fewer than min_count entries match the glob pattern."""
 
 	directory: pathlib.Path

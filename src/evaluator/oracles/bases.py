@@ -19,9 +19,9 @@ from models import (
 
 from .checks import (
 	CommandCheck,
-	DirectoryGlobCountCheck,
 	EnvMatchMode,
 	EnvVarCheck,
+	MinMatchingEntryCountCheck,
 	PathCheck,
 	PathKind,
 	TextFileEqualityCheck,
@@ -326,7 +326,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 			executor=self.executor_for(target),
 		)
 
-	def directory_glob_count_check(
+	def min_matching_entry_count_check(
 		self,
 		*,
 		name: str,
@@ -335,8 +335,8 @@ class _CaseOracleBase(_OraclePhaseBase):
 		min_count: int = 1,
 		optional: bool = False,
 		target: str | None = None,
-	) -> DirectoryGlobCountCheck:
-		return DirectoryGlobCountCheck(
+	) -> MinMatchingEntryCountCheck:
+		return MinMatchingEntryCountCheck(
 			name=name,
 			optional=optional,
 			directory=directory,
