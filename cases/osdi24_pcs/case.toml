@@ -34,7 +34,7 @@ failure_mode = "fail_fast"
 placeholder = false
 
 [oracle.runtime]
-mode = "local"
+mode = "inherit"
 
 [upstream]
 source_type = "git"
