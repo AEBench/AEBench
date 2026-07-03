@@ -6,7 +6,7 @@ acceptable_evidence = "The oracle accepts result CSVs for each scheduling policy
 allowed_tolerance = "Results may vary across environments but must preserve the reference trend."
 
 [paper]
-title = "PCS: Predictive Cluster Scheduling"
+title = "When will my ML Job finish? Toward providing Completion Time Estimates through Predictability-Centric Scheduling"
 venue = "OSDI 2024"
 url = "https://www.usenix.org/system/files/osdi24-bin-faisal.pdf"
 sha256 = "9eab29c751d48c89fc992596dc055c756a1db0268d7a52629d5ace3c243ec926"
@@ -34,11 +34,11 @@ failure_mode = "fail_fast"
 placeholder = false
 
 [oracle.runtime]
-mode = "local"
+mode = "inherit"
 
 [upstream]
 source_type = "git"
-url = "https://github.com/abdullahfsm/PCS"
-ref = "2f8a87c629f606d1079bca23b46c70b4a7df41e1"
-requested_ref = "osdi2024-artifact"
-resolved_at = "2026-05-01T11:06:44+00:00"
+url = "https://github.com/TuftsNATLab/PCS"
+ref = "4ed6b2e45b31e9654359b8584caa5c54b381d3ef"
+requested_ref = "main"
+resolved_at = "2026-07-02T00:00:00+00:00"
