@@ -43,9 +43,6 @@
     "osdi25_bpftime": {
       "path": "cases/osdi25_bpftime"
     },
-    "osdi25_neutrino": {
-      "path": "cases/osdi25_neutrino"
-    },
     "sosp23_acto": {
       "path": "cases/sosp23_acto"
     },
