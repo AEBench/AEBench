@@ -45,7 +45,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
                 name="verify_cinnamon_build_artifacts",
                 cmd=(
                     "docker", "exec", "cinnamon", "sh", "-c", 
-                    "test -f /cinnamon_artifact/simulator/build/install/bin/sst"
+                    "test -f /cinnamon_artifact/simulator/build/install/custom-elements/lib/libcinnamon.so"
                 ),
                 timeout_seconds=10.0,
             )
