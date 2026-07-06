@@ -18,14 +18,6 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
             )
         )
 
-        #cinnamon running
-        checks.append(
-            CommandCheck(
-                name="cinnamon_container_is_running",
-                cmd=("docker", "exec", "cinnamon", "echo", "container is alive"),
-                timeout_seconds=10.0,
-            )
-        )
 
         #container was actually started with the correct -v flag linking the outputs folder.
         checks.append(
@@ -47,5 +39,15 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
                 timeout_seconds=10.0,
             )
         )
-
+        #
+        checks.append(
+            CommandCheck(
+                name="verify_cinnamon_build_artifacts",
+                cmd=(
+                    "docker", "exec", "cinnamon", "sh", "-c", 
+                    "test -f /cinnamon_artifact/simulator/build/install/bin/sst"
+                ),
+                timeout_seconds=10.0,
+            )
+        )
         return tuple(checks)

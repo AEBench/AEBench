@@ -12,7 +12,6 @@ from evaluator.oracles.checks import PathCheck, PathKind, CommandCheck
 _BUILD_MODE_ENV = "AE_CINNAMON_BUILD_MODE"
 _BUILD_TIMEOUT_SECONDS = 600.0
 
-#_SIMULATOR_BINARY = "cluster-sim/build/install/cluster-sim/bin/cluster-sim"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -33,7 +32,6 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 
 	def requirements(self) -> Sequence[utils.BaseCheck]:
 		repo_root = self.workspace_path()
-		#simulator_binary = repo_root / _SIMULATOR_BINARY
 
 		mode = self._build_mode()
 
