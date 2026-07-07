@@ -10,76 +10,72 @@ The current repository is organized around three layers:
 - `cases/<case_id>/`: case content for each official case
 - `src/`: the runtime, CLI, reporting, and Docker execution logic
 
-Each case contains the artifact instructions, oracle entrypoint, and reference data needed to score a case. The benchmark still supports low-level JSONL runtime tasks, but case workflows are the primary authoring and execution path.
+Each case contains the artifact instructions, oracle entrypoint, and reference data needed to score a case. In this checkout, case authoring, case validation, and standalone oracle execution are the active CLI workflows. The full agent runner, benchmark runner, JSONL export, JSONL runtime, and summary regeneration commands are present in the parser but intentionally unavailable.
 
 ## Quick Start
 
 Requirements:
 
 - Python 3.11+
-- `ANTHROPIC_API_KEY` for the default Claude SDK driver
-- Docker for official benchmark runs
+- [uv](https://docs.astral.sh/uv/) for dependency management
+- Docker only when manually reproducing artifacts or developing future Docker-mode runs
 
 Install the project:
 
 ```bash
-git clone https://github.com/sys-intelligence/AEBench.git
+git clone https://github.com/AEBench/AEBench.git
 cd AEBench
 
-pip install -e ".[dev]"
+uv sync --dev
 ```
 
-Build the repo-owned runtime image used by official Docker runs:
+Run the CLI through `uv` with `src` on `PYTHONPATH`:
 
 ```bash
-docker build -f docker/agent/Dockerfile -t aebench-agent:latest .
+PYTHONPATH=src uv run aebench --help
+PYTHONPATH=src uv run aebench case --help
 ```
 
-## Running The Benchmark
+## Current Case Workflows
 
-Run the full official catalog:
+Initialize a workspace:
 
 ```bash
-export ANTHROPIC_API_KEY=...
-aebench run --output-dir outputs/benchmark/official-baseline
+PYTHONPATH=src uv run aebench init
 ```
 
-Run a subset of official cases:
+Create or template a case bundle:
 
 ```bash
-aebench run sosp24_wasabi osdi24_anvil --output-dir outputs/benchmark/official-subset
+PYTHONPATH=src uv run aebench case init --blank --id my-case --target-dir cases/my-case
+PYTHONPATH=src uv run aebench case template cases/my-case
 ```
 
-Run a single case directly:
+Validate a registered case:
 
 ```bash
-aebench case run sosp24_wasabi
+PYTHONPATH=src uv run aebench case validate osdi24_anvil
 ```
 
-Run the low-level runtime with an explicit JSONL task file:
+Run only the oracle against an existing artifact workspace:
 
 ```bash
-aebench runtime run --input-file /path/to/tasks.jsonl
+PYTHONPATH=src uv run aebench case oracle osdi24_anvil \
+  --workspace-dir /path/to/artifact/workspace \
+  --output-dir /tmp/aebench-osdi24-anvil-oracle
 ```
 
-Official benchmark runs default to Docker runtime. Case-level workflows can still use local runtime where appropriate.
+Standalone oracle runs are the main way to audit a case after manually building and running the upstream artifact.
 
-Each benchmark run writes:
+The following workflows are not available in this checkout even though their subcommands appear in `--help`:
 
-- `benchmark_results.jsonl`: one machine-readable record per case
-- `benchmark_summary.json`: aggregate run metrics and run-level metadata
-- `benchmark_summary.md`: a human-readable review view that joins lightweight case context from the existing cases
+- `aebench run`
+- `aebench case run`
+- `aebench case export`
+- `aebench case summarize`
+- `aebench runtime run`
 
-If you run official cases individually, you can still aggregate them into the same benchmark summary format:
-
-```bash
-aebench case summarize \
-  outputs/case-runs \
-  --output-dir outputs/benchmark/official-baseline \
-  --run-label official-baseline
-```
-
-For the recommended baseline workflow, including how to aggregate per-case outputs from CI artifacts or local runs, see [docs/howtos/run_benchmark.md](docs/howtos/run_benchmark.md).
+For the current oracle workflow and the unavailable runner commands, see [docs/howtos/run_benchmark.md](docs/howtos/run_benchmark.md).
 
 
 ## Adding a New Artifact or "Cases"
@@ -89,60 +85,49 @@ New benchmark cases are added as cases rather than through the legacy benchmark-
 Common entrypoints:
 
 ```bash
-aebench init
-aebench case init --blank --id my-case
-aebench case init https://github.com/org/repo.git --id my-case --ref main
-aebench case export my-case --output /tmp/tasks.jsonl
+PYTHONPATH=src uv run aebench init
+PYTHONPATH=src uv run aebench case init --blank --id my-case --target-dir cases/my-case
+PYTHONPATH=src uv run aebench case template cases/my-case
+PYTHONPATH=src uv run aebench case validate cases/my-case
 ```
 
-For the first-time authoring walkthrough, including the current interactive wizard on `case init`, `case.toml` fields, registry behavior, and oracle implementation, see [docs/howtos/add_case.md](docs/howtos/add_case.md).
+For the first-time authoring walkthrough, including `case.toml` fields, registry behavior, and oracle implementation, see [docs/howtos/add_case.md](docs/howtos/add_case.md).
 
 ### Authoring Entry Points
 
 Initialize a workspace:
 
 ```bash
-aebench init
+PYTHONPATH=src uv run aebench init
 ```
 
 Create a new empty case:
 
 ```bash
-aebench case init --blank --id my-case
+PYTHONPATH=src uv run aebench case init --blank --id my-case --target-dir cases/my-case
 ```
 
-Create a new case from a source:
+Create a starter case from a source-like identifier:
 
 ```bash
-aebench case init ./path/to/artifact --id my-case
-aebench case init https://github.com/org/repo.git --id my-case --ref main
-aebench case init https://example.com/archive.tar.gz --id my-case
+PYTHONPATH=src uv run aebench case init ./path/to/artifact --id my-case --target-dir cases/my-case
+PYTHONPATH=src uv run aebench case init https://github.com/org/repo.git --id my-case --ref main --target-dir cases/my-case
 ```
 
-When `case init` runs in an interactive terminal, it opens the authoring wizard by default unless you pass `--no-prompt`.
+The current scaffold writes local template files. Fill in the real `case.toml` upstream metadata and oracle logic before submitting a case.
 
 ### Common Commands
 
-Run a case:
+Validate a case and run its oracle:
 
 ```bash
-aebench case run my-case
-aebench case run cases/my-case
+PYTHONPATH=src uv run aebench case validate cases/my-case
+PYTHONPATH=src uv run aebench case oracle cases/my-case \
+  --workspace-dir /path/to/artifact/workspace \
+  --output-dir /tmp/aebench-my-case-oracle
 ```
 
-Export one or more cases to low-level runtime JSONL:
-
-```bash
-aebench case export my-case --output /tmp/tasks.jsonl
-aebench case export cases --output /tmp/all-tasks.jsonl
-```
-
-Run the official benchmark catalog:
-
-```bash
-aebench run
-aebench run sosp24_wasabi osdi24_anvil
-```
+`aebench case run`, `aebench run`, and `aebench case export` currently raise "unavailable in this checkout".
 
 ### `case.toml`
 
@@ -188,7 +173,7 @@ ref = "deadbeef..."
 The runtime currently supports built-in drivers for Claude SDK, mock, Python,
 CLI, remote, and MCP-capable clients.
 
-Adding or modifying an agent driver is a code-level integration inside `src/artevalbench`.
+Adding or modifying an agent driver is a code-level integration inside `src/`.
 
 ## Adding Or Modifying An Agent Driver
 
@@ -297,12 +282,12 @@ If a driver needs different container or host behavior, express it through the r
 Useful commands:
 
 ```bash
-uv run python -m pytest
-uv run python -m pytest tests/unit/
-uv run python -m pytest tests/functional/
-uv run python -m pytest tests/integration/
-uv run python -m pytest -m sanity
-uv run --group dev mypy src
-uv run --group dev ruff check src tests
-uv run --group dev ruff format --check src tests
+PYTHONPATH=src uv run python -m pytest tests/unit tests/functional
+PYTHONPATH=src uv run python -m pytest tests/unit/
+PYTHONPATH=src uv run python -m pytest tests/functional/
+PYTHONPATH=src uv run python -m pytest tests/integration/
+PYTHONPATH=src uv run python -m pytest -m sanity
+PYTHONPATH=src uv run python -m pytest --collect-only -q
+uv run ruff check src tests
+uv run ruff format --check src tests
 ```
