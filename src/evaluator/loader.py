@@ -10,9 +10,8 @@ if sys.version_info >= (3, 11):
 else:  # pragma: no cover
 	import tomli as tomllib
 
+from constants import ARTIFACT_DIRNAME, CASE_MANIFEST_FILENAME, ORACLE_DIRNAME
 from models import CaseConfig
-
-from .constants import ARTIFACT_DIRNAME, CASE_MANIFEST_FILENAME, ORACLE_DIRNAME
 
 
 class CaseBundleError(ValueError):
