@@ -7,10 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles import utils
-from evaluator.oracles.case_base import CaseOracleExperimentRunsBase
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
-from evaluator.oracles.experiment_runs_checks import (
+from evaluator.oracles.bases import CaseOracleExperimentRunsBase
+from evaluator.oracles.checks import (
     ListSimilarityCheck,
+    PathKind,
     SimilarityMetric,
 )
 
@@ -238,25 +238,25 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
         new_data = self.workspace_path("new_data")
 
         reqs: list[utils.BaseCheck] = [
-            FilesystemPathCheck(
+            self.path_check(
                 name="new_data_dir",
                 path=new_data,
-                path_type=PathType.DIRECTORY,
+                kind=PathKind.DIRECTORY,
             ),
-            FilesystemPathCheck(
+            self.path_check(
                 name="ref_avg_jct_results",
                 path=self.ref_path("avg_jct_results.csv"),
-                path_type=PathType.FILE,
+                kind=PathKind.FILE,
             ),
-            FilesystemPathCheck(
+            self.path_check(
                 name="ref_avg_error_results",
                 path=self.ref_path("avg_error_results.csv"),
-                path_type=PathType.FILE,
+                kind=PathKind.FILE,
             ),
-            FilesystemPathCheck(
+            self.path_check(
                 name="ref_p99_error_results",
                 path=self.ref_path("p99_error_results.csv"),
-                path_type=PathType.FILE,
+                kind=PathKind.FILE,
             ),
         ]
 

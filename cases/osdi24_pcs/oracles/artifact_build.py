@@ -5,9 +5,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from evaluator.oracles import utils
-from evaluator.oracles.artifact_build_checks import BuildCommandCheck
-from evaluator.oracles.case_base import CaseOracleArtifactBuildBase
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
+from evaluator.oracles.bases import CaseOracleArtifactBuildBase
+from evaluator.oracles.checks import PathKind
 
 
 _BUILD_MODE_ENV = "AE_PCS_BUILD_MODE"
@@ -34,12 +33,12 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
         return raw or "verify"
 
     def requirements(self) -> Sequence[utils.BaseCheck]:
-        repo_root = self.paths.workspace_dir
+        repo_root = self.workspace_path()
         mode = self._build_mode()
 
         if mode == "command":
             return (
-                BuildCommandCheck(
+                self.command_check(
                     name="run_setup_sh",
                     cwd=repo_root,
                     cmd=("bash", "setup.sh"),
@@ -49,16 +48,16 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 
         if mode == "verify":
             reqs: list[utils.BaseCheck] = [
-                FilesystemPathCheck(
+                self.path_check(
                     name="requirements_txt_exists",
                     path=self.workspace_path("requirements.txt"),
-                    path_type=PathType.FILE,
+                    kind=PathKind.FILE,
                 ),
             ]
 
             for package in _REQUIRED_PACKAGES:
                 reqs.append(
-                    BuildCommandCheck(
+                    self.command_check(
                         name=f"python_import_{package}",
                         cwd=repo_root,
                         cmd=("python3", "-c", f"import {package}"),
