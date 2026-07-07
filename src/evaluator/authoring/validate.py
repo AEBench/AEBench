@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from constants import ARTIFACT_SUBDIR, CASE_MANIFEST_FILENAME, ORACLE_DIRNAME, REFS_DIRNAME
+from constants import ARTIFACT_DIRNAME, CASE_MANIFEST_FILENAME, ORACLE_DIRNAME, REFS_DIRNAME
 from evaluator.loader import CaseBundleError, load_case_spec
 from evaluator.oracles.discovery import OracleLoadError, discover_oracle_classes
 
@@ -37,7 +37,7 @@ class ValidationResult:
 def validate_case_bundle(case_dir: Path) -> ValidationResult:
 	root = case_dir.resolve()
 	manifest_path = root / CASE_MANIFEST_FILENAME
-	artifact_dir = root / ARTIFACT_SUBDIR
+	artifact_dir = root / ARTIFACT_DIRNAME
 	refs_dir = root / REFS_DIRNAME
 	oracle_dir = root / ORACLE_DIRNAME
 	issues: list[ValidationIssue] = []

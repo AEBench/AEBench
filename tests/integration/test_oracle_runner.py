@@ -33,13 +33,20 @@ _ENV_SETUP = textwrap.dedent("""	from evaluator.oracles.bases import CaseOracleE
 			return []
 """)
 
-_ARTIFACT_BUILD = textwrap.dedent("""	from evaluator.oracles.bases import CaseOracleArtifactBuildBase
-	from evaluator.oracles.checks import PathCheck, PathKind
+_ARTIFACT_BUILD = textwrap.dedent("""\
+	from evaluator.oracles.bases import CaseOracleArtifactBuildBase
+	from evaluator.oracles.checks import PathKind
 
 	class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 		def requirements(self):
-			built_txt = self.workspace_path() / "built.txt"
-			return [PathCheck(name="built_txt", path=built_txt, kind=PathKind.FILE)]
+			built_txt = self.workspace_path("built.txt")
+			return [
+				self.path_check(
+					name="built_txt",
+					path=built_txt,
+					kind=PathKind.FILE,
+				)
+			]
 """)
 
 _BENCHMARK_PREP = textwrap.dedent("""	from evaluator.oracles.bases import CaseOracleBenchmarkPrepBase
@@ -56,6 +63,7 @@ _EXPERIMENT_RUNS = textwrap.dedent("""	from evaluator.oracles.bases import CaseO
 			return []
 """)
 
+
 _FIXTURE_ORACLE = textwrap.dedent("""\
 	from evaluator.oracles.bases import (
 		CaseOracleArtifactBuildBase,
@@ -63,7 +71,7 @@ _FIXTURE_ORACLE = textwrap.dedent("""\
 		CaseOracleEnvSetupBase,
 		CaseOracleExperimentRunsBase,
 	)
-	from evaluator.oracles.checks import PathCheck, PathKind
+	from evaluator.oracles.checks import PathKind
 
 	class OracleEnvSetup(CaseOracleEnvSetupBase):
 		def requirements(self):
@@ -71,8 +79,14 @@ _FIXTURE_ORACLE = textwrap.dedent("""\
 
 	class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 		def requirements(self):
-			built_txt = self.workspace_path() / "built.txt"
-			return [PathCheck(name="built_txt", path=built_txt, kind=PathKind.FILE)]
+			built_txt = self.workspace_path("built.txt")
+			return [
+				self.path_check(
+					name="built_txt",
+					path=built_txt,
+					kind=PathKind.FILE,
+				)
+			]
 
 	class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 		def requirements(self):
