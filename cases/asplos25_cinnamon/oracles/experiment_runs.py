@@ -4,7 +4,7 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluator.oracles import utils
+from evaluator.oracles.reporting import BaseCheck
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
 from evaluator.oracles.checks import (
     ListSimilarityCheck,
@@ -43,9 +43,9 @@ def _load_reference_floats(ref_path: Path) -> list[float]:
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
-    def requirements(self) -> Sequence[utils.BaseCheck]:
+    def requirements(self) -> Sequence[BaseCheck]:
         outputs_dir = self.workspace_path() / "outputs"
-        checks: list[utils.BaseCheck] = []
+        checks: list[BaseCheck] = []
 
         #existance of pdfs
         for pdf_name in ["keyswitch_comparison.pdf", "bootstrap_comparison.pdf", "performance.pdf", "performance_per_dollar.pdf"]:

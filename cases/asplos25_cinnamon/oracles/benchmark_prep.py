@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from evaluator.oracles import utils
+from evaluator.oracles.reporting import BaseCheck
 from evaluator.oracles.bases import CaseOracleBenchmarkPrepBase
 from evaluator.oracles.checks import CommandCheck, PathCheck, PathKind
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
-    def requirements(self) -> Sequence[utils.BaseCheck]:
-        checks: list[utils.BaseCheck] = []
+    def requirements(self) -> Sequence[BaseCheck]:
+        checks: list[BaseCheck] = []
 
         #output folder created
         checks.append(
@@ -39,7 +39,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
                 timeout_seconds=10.0,
             )
         )
-        #
+        #verify build scripts ran properly 
         checks.append(
             CommandCheck(
                 name="verify_cinnamon_build_artifacts",

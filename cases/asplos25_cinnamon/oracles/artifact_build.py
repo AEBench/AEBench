@@ -4,10 +4,9 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from evaluator.oracles import utils
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 from evaluator.oracles.bases import CaseOracleArtifactBuildBase
-from evaluator.oracles.checks import PathCheck, PathKind, CommandCheck
-
+from evaluator.oracles.checks import CommandCheck
 
 _BUILD_MODE_ENV = "AE_CINNAMON_BUILD_MODE"
 _BUILD_TIMEOUT_SECONDS = 600.0
@@ -15,13 +14,14 @@ _BUILD_TIMEOUT_SECONDS = 600.0
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class InvalidBuildModeCheck(utils.BaseCheck):
+class InvalidBuildModeCheck(BaseCheck):
 	mode: str
 
-	def check(self) -> utils.CheckResult:
-		return utils.CheckResult.failure(
+	def check(self) -> CheckResult:
+		return CheckResult.failure(
 			f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
 		)
+
 
 
 class OracleArtifactBuild(CaseOracleArtifactBuildBase):
@@ -30,7 +30,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 		raw = os.environ.get(_BUILD_MODE_ENV, "verify").strip().lower()
 		return raw or "verify"
 
-	def requirements(self) -> Sequence[utils.BaseCheck]:
+	def requirements(self) -> Sequence[BaseCheck]:
 		repo_root = self.workspace_path()
 
 		mode = self._build_mode()
