@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
@@ -18,6 +18,7 @@ from constants import (
 	RENDERED_LOG_BASENAME,
 	RUNNER_LOG_BASENAME,
 	TRANSCRIPT_BASENAME,
+	OraclePhaseName,
 )
 from project_config import ArtifactMode
 from utils import safe_name
@@ -109,6 +110,40 @@ class OverlaySource(_Model):
 
 BenchSource = Annotated[
 	LocalSource | GitSource | ArchiveSource | OverlaySource,
+	Field(discriminator="type"),
+]
+
+
+class LocalOracleTargetConfig(_Model):
+	type: Literal["local"] = "local"
+
+
+class TaskOracleTargetConfig(_Model):
+	type: Literal["task"] = "task"
+
+
+class DockerImageOracleTargetConfig(_Model):
+	type: Literal["docker_image"] = "docker_image"
+	image: str
+	working_dir: str = "/"
+
+	@model_validator(mode="after")
+	def _validate_target(self) -> "DockerImageOracleTargetConfig":
+		self.image = self.image.strip()
+		if not self.image:
+			raise ValueError("oracle target image must not be empty")
+
+		working_dir_text = self.working_dir.strip()
+		working_dir = PurePosixPath(working_dir_text)
+		if not working_dir_text or not working_dir.is_absolute():
+			raise ValueError("oracle target working_dir must be an absolute POSIX path")
+
+		self.working_dir = working_dir.as_posix()
+		return self
+
+
+OracleTargetConfig = Annotated[
+	LocalOracleTargetConfig | TaskOracleTargetConfig | DockerImageOracleTargetConfig,
 	Field(discriminator="type"),
 ]
 
@@ -399,16 +434,40 @@ class CaseStatus(str, Enum):
 	PENDING = "pending"
 
 
-class OracleRuntimeConfig(_Model):
-	mode: RuntimeMode | None = None
-	image: str | None = None
-	app_dir: str = "/"
+class OraclePhaseTargetsConfig(_Model):
+	env_setup: str = "task"
+	artifact_build: str = "task"
+	benchmark_prep: str = "task"
+	experiment_runs: str = "task"
 
 	@model_validator(mode="after")
-	def _validate(self) -> "OracleRuntimeConfig":
-		if self.mode == RuntimeMode.DOCKER and not self.image:
-			raise ValueError("oracle.runtime.image is required when oracle.runtime.mode = 'docker'")
+	def _validate_names(self) -> "OraclePhaseTargetsConfig":
+		for field_name in (
+			OraclePhaseName.ENV_SETUP,
+			OraclePhaseName.ARTIFACT_BUILD,
+			OraclePhaseName.BENCHMARK_PREP,
+			OraclePhaseName.EXPERIMENT_RUNS,
+		):
+			target_name = getattr(self, field_name).strip()
+			if not target_name:
+				raise ValueError(f"oracle.phase_targets.{field_name} must not be empty")
+			setattr(self, field_name, target_name)
+
 		return self
+
+	def target_for_phase(self, phase_name: OraclePhaseName) -> str:
+		"""Return the configured target for an oracle phase."""
+		targets = {
+			OraclePhaseName.ENV_SETUP: self.env_setup,
+			OraclePhaseName.ARTIFACT_BUILD: self.artifact_build,
+			OraclePhaseName.BENCHMARK_PREP: self.benchmark_prep,
+			OraclePhaseName.EXPERIMENT_RUNS: self.experiment_runs,
+		}
+
+		try:
+			return targets[phase_name]
+		except KeyError as exc:
+			raise ValueError(f"unknown oracle phase: {phase_name}") from exc
 
 
 class OracleConfig(_Model):
@@ -416,24 +475,79 @@ class OracleConfig(_Model):
 	failure_mode: OracleFailureMode = OracleFailureMode.FAIL_FAST
 	placeholder: bool = False
 	notes: str | None = None
-	runtime: OracleRuntimeConfig = Field(default_factory=OracleRuntimeConfig)
+	targets: dict[str, OracleTargetConfig] = Field(default_factory=dict)
+	phase_targets: OraclePhaseTargetsConfig = Field(default_factory=OraclePhaseTargetsConfig)
 
 	@model_validator(mode="before")
 	@classmethod
 	def _ignore_removed_fields(cls, values: object) -> object:
 		if not isinstance(values, dict):
 			return values
+		if "runtime" in values:
+			raise ValueError(
+				"oracle.runtime was removed; define oracle.targets and oracle.phase_targets"
+			)
 		cleaned = dict(values)
 		for key in (
 			"phases",
 			"score_mode",
-			"env_setup",
-			"artifact_build",
-			"benchmark_prep",
-			"experiment_runs",
+			OraclePhaseName.ENV_SETUP,
+			OraclePhaseName.ARTIFACT_BUILD,
+			OraclePhaseName.BENCHMARK_PREP,
+			OraclePhaseName.EXPERIMENT_RUNS,
 		):
 			cleaned.pop(key, None)
 		return cleaned
+
+	@model_validator(mode="after")
+	def _validate_config(self) -> "OracleConfig":
+		if self.expected_score <= 0:
+			raise ValueError("oracle.expected_score must be positive")
+
+		if self.notes is not None:
+			self.notes = self.notes.strip() or None
+
+		targets = dict(self.targets)
+
+		for target_name in targets:
+			if not target_name or target_name.strip() != target_name:
+				raise ValueError(
+					"oracle target names must be non-empty "
+					"and must not contain surrounding whitespace"
+				)
+
+		local_target = targets.get("local")
+		if local_target is None:
+			targets["local"] = LocalOracleTargetConfig()
+		elif not isinstance(
+			local_target,
+			LocalOracleTargetConfig,
+		):
+			raise ValueError('oracle target "local" is reserved for type = "local"')
+
+		task_target = targets.get("task")
+		if task_target is None:
+			targets["task"] = TaskOracleTargetConfig()
+		elif not isinstance(
+			task_target,
+			TaskOracleTargetConfig,
+		):
+			raise ValueError('oracle target "task" is reserved for type = "task"')
+
+		for phase_name in (
+			OraclePhaseName.ENV_SETUP,
+			OraclePhaseName.ARTIFACT_BUILD,
+			OraclePhaseName.BENCHMARK_PREP,
+			OraclePhaseName.EXPERIMENT_RUNS,
+		):
+			target_name = self.phase_targets.target_for_phase(phase_name)
+			if target_name not in targets:
+				raise ValueError(
+					f"oracle.phase_targets.{phase_name} references unknown target {target_name!r}"
+				)
+
+		self.targets = targets
+		return self
 
 	@model_validator(mode="after")
 	def _validate_score(self) -> "OracleConfig":
@@ -500,17 +614,23 @@ class CaseConfig(_Model):
 
 
 class OracleInput(BaseModel):
-	model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+	model_config = ConfigDict(
+		extra="forbid",
+		arbitrary_types_allowed=True,
+	)
 
 	case_dir: Path
 	artifact_dir: Path
 	workspace_dir: Path
 	output_dir: Path
+
+	oracle_targets: dict[str, OracleTargetConfig]
+	oracle_phase_targets: OraclePhaseTargetsConfig
+
 	runtime_result: RunResult | None = None
-	runtime_executor: object | None = None
+	runtime_registry: object | None = None
 	runtime_session: object | None = None
 	runtime_backend: object | None = None
-	oracle_config: OracleConfig | None = None
 
 
 class OraclePhaseResult(_Model):
@@ -555,14 +675,6 @@ class CaseRunResult(BaseModel):
 	@property
 	def workspace_dir(self) -> str:
 		return self.runtime_result.workspace_path
-
-
-# Compatibility aliases for old imports. They intentionally no longer drive oracle logic.
-class OraclePhaseName(str, Enum):
-	ENV_SETUP = "env_setup"
-	ARTIFACT_BUILD = "artifact_build"
-	BENCHMARK_PREP = "benchmark_prep"
-	EXPERIMENT_RUNS = "experiment_runs"
 
 
 class OracleScoreMode(str, Enum):

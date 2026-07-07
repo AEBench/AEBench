@@ -156,7 +156,16 @@ def test_failed_oracle_class_marks_result_error(tmp_path: Path) -> None:
 	result = run_case(case_dir, tmp_path)
 
 	assert result.status == OracleStatus.ERROR
-	assert result.score == 1
+	assert result.score == 1, [
+		{
+			"phase": phase.phase,
+			"status": phase.status,
+			"summary": phase.summary,
+			"error": phase.error,
+		}
+		for phase in result.phases
+	]
+
 	assert result.phases[0].status == OracleStatus.SUCCESS
 
 

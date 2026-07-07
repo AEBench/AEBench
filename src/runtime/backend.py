@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
+from constants import DEFAULT_ORACLE_CHECK_TIMEOUT
 from models import RuntimeInfo, RuntimeMode
 from utils import safe_name
 
@@ -43,7 +44,7 @@ class BenchRuntime(Protocol):
 		cwd: str | None = None,
 		env: Mapping[str, str] | None = None,
 		stdin_text: str | None = None,
-		timeout: float | None = None,
+		timeout: float = DEFAULT_ORACLE_CHECK_TIMEOUT,
 	) -> subprocess.CompletedProcess[str]: ...
 
 	def open_shell(

@@ -34,19 +34,19 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 				path=self.app_path(CORRECT_PATH),
 				kind=PathKind.DIRECTORY,
 			),
-			self.direcoty_glob_count_check(
+			self.min_matching_entry_count_check(
 				name="goker_suite_has_tests",
 				directory=self.app_path(DEADLOCK_GOKER_PATH),
 				min_count=ref["deadlock/goker"],
 				pattern="**/main.go",
 			),
-			self.direcoty_glob_count_check(
+			self.min_matching_entry_count_check(
 				name="cgo_examples_has_tests",
 				directory=self.app_path(DEADLOCK_CGO_PATH),
 				min_count=ref["deadlock/cgo-examples"],
 				pattern="**/main.go",
 			),
-			self.direcoty_glob_count_check(
+			self.min_matching_entry_count_check(
 				name="correct_suite_has_tests",
 				directory=self.app_path(CORRECT_PATH),
 				min_count=ref["correct"],
