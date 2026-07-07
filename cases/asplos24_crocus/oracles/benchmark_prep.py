@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind
-from evaluator.oracles.utils import BaseCheck
+from evaluator.oracles.reporting import BaseCheck
 
 from .consts import CASE_STUDY_ISLE_FILES, EXPERIMENT_SCRIPTS
 
@@ -18,7 +18,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 			checks.append(
 				self.path_check(
 					name=f"isle_{rel}",
-					path=self.app_path(rel),
+					path=self.runtime_path(rel),
 					kind=PathKind.FILE,
 				)
 			)
@@ -27,7 +27,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 			checks.append(
 				self.path_check(
 					name=f"script_{rel}",
-					path=self.app_path(rel),
+					path=self.runtime_path(rel),
 					kind=PathKind.FILE,
 				)
 			)

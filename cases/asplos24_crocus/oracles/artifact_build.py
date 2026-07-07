@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from evaluator.oracles import CaseOracleArtifactBuildBase
-from evaluator.oracles.utils import BaseCheck
+from evaluator.oracles.reporting import BaseCheck
 
 from .consts import (
 	REQUIRED_BINARIES,
