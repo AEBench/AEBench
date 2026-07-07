@@ -34,15 +34,23 @@ profile = "artifact-eval-v1"
 
 [oracle]
 expected_score = 4
-phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
-score_mode = "phase_count"
 failure_mode = "fail_fast"
 placeholder = false
 
-[oracle.runtime]
-mode = "docker"
+# The agent-built image; benchmark_prep/artifact_build checks run inside it, with
+# runtime paths resolved against the veri_engine working dir.
+[oracle.targets.crocus]
+type = "docker_image"
 image = "crocus"
-app_dir = "/root/wasmtime/cranelift/isle/veri/veri_engine"
+working_dir = "/root/wasmtime/cranelift/isle/veri/veri_engine"
+
+# env_setup inspects the host (docker + cloned repo); experiment_runs reads the
+# agent-saved outputs from the host artifact dir. Both use the built-in "local" target.
+[oracle.phase_targets]
+env_setup = "local"
+artifact_build = "crocus"
+benchmark_prep = "crocus"
+experiment_runs = "local"
 
 [upstream]
 source_type = "git"

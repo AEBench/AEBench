@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles.utils import BaseCheck, CheckResult
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 # Table 1 row regexes. Counterexample/runtime detail is ignored; only counts matter.
 # Example rows:
@@ -59,6 +59,7 @@ class Table1CountsCheck(BaseCheck):
 	rules_failure: int
 	type_insts_total: int
 	type_insts_success: int
+	type_insts_inapplicable: int
 	type_insts_failure: int
 	success_tolerance: int
 
@@ -76,7 +77,7 @@ class Table1CountsCheck(BaseCheck):
 			)
 
 		r_total, r_succ_all, r_succ_any, r_fail = (int(g) for g in rules.groups())
-		ti_total, ti_succ, _ti_timeout, _ti_inapp, ti_fail = (int(g) for g in insts.groups())
+		ti_total, ti_succ, ti_timeout, ti_inapp, ti_fail = (int(g) for g in insts.groups())
 
 		errors: list[str] = []
 
@@ -84,20 +85,45 @@ class Table1CountsCheck(BaseCheck):
 			if got != want:
 				errors.append(f"{label}: got {got}, expected {want}")
 
-		def expect_floor(label: str, got: int, want: int) -> None:
-			if got < want - self.success_tolerance:
-				errors.append(
-					f"{label}: got {got}, expected >= {want - self.success_tolerance} "
-					f"(reference {want}, tolerance {self.success_tolerance})"
-				)
+		def expect_range(label: str, got: int, lo: int, hi: int) -> None:
+			# Floor absorbs Z3-version variance; ceiling guards against inflated output.
+			if not (lo <= got <= hi):
+				errors.append(f"{label}: got {got}, expected in [{lo}, {hi}]")
 
+		# --- Rules row ---
+		# Totals and failures are deterministic; successes vary with Z3 (floor + ceiling).
 		expect_exact("rules_total", r_total, self.rules_total)
 		expect_exact("rules_failure", r_fail, self.rules_failure)
+		expect_range(
+			"rules_success_all", r_succ_all, self.rules_success_all - self.success_tolerance, r_total
+		)
+		expect_range(
+			"rules_success_any", r_succ_any, self.rules_success_any - self.success_tolerance, r_total
+		)
+		# "all types" is a stricter criterion than "any type", so it cannot exceed it.
+		if r_succ_all > r_succ_any:
+			errors.append(
+				f"rules success ordering violated: all={r_succ_all} > any={r_succ_any}"
+			)
+
+		# --- Type Insts. row ---
+		# Total, failures, and inapplicable are structural/deterministic -> exact.
 		expect_exact("type_insts_total", ti_total, self.type_insts_total)
 		expect_exact("type_insts_failure", ti_fail, self.type_insts_failure)
-		expect_floor("rules_success_all", r_succ_all, self.rules_success_all)
-		expect_floor("rules_success_any", r_succ_any, self.rules_success_any)
-		expect_floor("type_insts_success", ti_succ, self.type_insts_success)
+		expect_exact("type_insts_inapplicable", ti_inapp, self.type_insts_inapplicable)
+		# Success floors out (Z3 variance) but is ceilinged by the total.
+		expect_range(
+			"type_insts_success", ti_succ, self.type_insts_success - self.success_tolerance, ti_total
+		)
+		# Partition identity: success + timeout + inapplicable == total. Failure is an
+		# orthogonal annotation (counterexample found; the "(0)" = 0 true failures), so it
+		# is NOT part of this sum. This pins success<->timeout (they trade off under Z3)
+		# while forbidding fabricated counts.
+		if ti_succ + ti_timeout + ti_inapp != ti_total:
+			errors.append(
+				f"type insts partition mismatch: success({ti_succ}) + timeout({ti_timeout}) "
+				f"+ inapplicable({ti_inapp}) = {ti_succ + ti_timeout + ti_inapp} != total({ti_total})"
+			)
 
 		if errors:
 			return CheckResult.failure("Table 1 mismatch: " + "; ".join(errors))
@@ -105,7 +131,8 @@ class Table1CountsCheck(BaseCheck):
 		return CheckResult.success(
 			message=(
 				f"Table 1 reproduced: rules {r_total} (success {r_succ_all}/{r_succ_any}, "
-				f"fail {r_fail}); type insts {ti_total} (success {ti_succ}, fail {ti_fail})"
+				f"fail {r_fail}); type insts {ti_total} (success {ti_succ}, timeout {ti_timeout}, "
+				f"inapplicable {ti_inapp}, fail {ti_fail})"
 			)
 		)
 

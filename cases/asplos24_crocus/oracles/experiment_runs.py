@@ -4,7 +4,7 @@ import json
 from collections.abc import Sequence
 
 from evaluator.oracles import CaseOracleExperimentRunsBase
-from evaluator.oracles.utils import BaseCheck
+from evaluator.oracles.reporting import BaseCheck
 
 from .consts import (
 	CASE_STUDY_SIGNATURES,
@@ -41,6 +41,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 				rules_failure=table1["rules_failure"],
 				type_insts_total=table1["type_insts_total"],
 				type_insts_success=table1["type_insts_success"],
+				type_insts_inapplicable=table1["type_insts_inapplicable"],
 				type_insts_failure=table1["type_insts_failure"],
 				success_tolerance=TABLE1_SUCCESS_TOLERANCE,
 			)
@@ -59,7 +60,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 		# Figure 4 CDF: file-existence only (no numeric claim). The PDF name is
 		# timestamped, so match by glob.
 		checks.append(
-			self.direcoty_glob_count_check(
+			self.min_matching_entry_count_check(
 				name="cdf_pdf_exists",
 				directory=self.artifact_path(RESULTS_DIR),
 				pattern=CDF_PDF_GLOB,
