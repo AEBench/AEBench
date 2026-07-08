@@ -8,7 +8,7 @@ from evaluator.oracles import (
 	PathKind,
 	VersionCheck,
 )
-from evaluator.oracles.utils import BaseCheck
+from evaluator.oracles.reporting import BaseCheck
 
 from .consts import (
 	DOCKER_MIN_VERSION,
