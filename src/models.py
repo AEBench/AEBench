@@ -234,10 +234,6 @@ class CasePlan(_Model):
 
 
 class InstructionsConfig(_Model):
-	# TODO: This is a temporary fix for ignoring the run.instructions.required_evidence field.
-	# Remove this and wire required_evidence back into the agent's prompt.
-	model_config = ConfigDict(extra="ignore")
-
 	path: str = "README.md"
 
 	@model_validator(mode="after")
@@ -264,6 +260,7 @@ class PromptConfig(_Model):
 
 class TaskConfig(_Model):
 	id: str
+	required_evidence: list[str] = Field(default_factory=list)
 	source: BenchSource | None = None
 	instructions: InstructionsConfig = Field(default_factory=InstructionsConfig)
 	runtime: RuntimeConfig
@@ -276,23 +273,27 @@ class TaskConfig(_Model):
 	@model_validator(mode="before")
 	@classmethod
 	def _accept_legacy_run_shape(cls, values: object) -> object:
-		if (
-			isinstance(values, dict)
-			and "instructions_path" in values
-			and "instructions" not in values
-		):
-			values = dict(values)
+		if not isinstance(values, dict):
+			return values
+		values = dict(values)
+		if "instructions_path" in values and "instructions" not in values:
 			values["instructions"] = {"path": values.pop("instructions_path")}
-		if isinstance(values, dict) and "prompt_profile" in values and "prompt" not in values:
-			values = dict(values)
+		instructions = values.get("instructions")
+		if isinstance(instructions, dict) and "required_evidence" in instructions:
+			instructions = dict(instructions)
+			legacy_required_evidence = instructions.pop("required_evidence")
+			values["instructions"] = instructions
+			values.setdefault("required_evidence", legacy_required_evidence)
+		if "prompt_profile" in values and "prompt" not in values:
 			values["prompt"] = {"profile": values.pop("prompt_profile")}
 		return values
 
 	@model_validator(mode="after")
-	def _validate_id(self) -> "TaskConfig":
+	def _validate_fields(self) -> "TaskConfig":
 		self.id = self.id.strip()
 		if not self.id:
 			raise ValueError("run.id must not be empty")
+		self.required_evidence = [item.strip() for item in self.required_evidence if item.strip()]
 		return self
 
 	def require_source(self) -> BenchSource:
@@ -305,6 +306,7 @@ class PromptArgs(_Model):
 	task_text: str
 	workspace_path: str
 	runtime_mode: RuntimeMode
+	required_evidence: list[str] = Field(default_factory=list)
 	timeout_ms: int | None = None
 	interactive: bool = False
 	prompt_profile: str = "artifact-eval-v1"
