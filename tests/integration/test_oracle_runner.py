@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import textwrap
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -63,6 +63,22 @@ _EXPERIMENT_RUNS = textwrap.dedent("""	from evaluator.oracles.bases import CaseO
 			return []
 """)
 
+_EXPERIMENT_RUNS_WITH_EVIDENCE = textwrap.dedent("""\
+	from evaluator.oracles.bases import CaseOracleExperimentRunsBase
+
+	class OracleExperimentRuns(CaseOracleExperimentRunsBase):
+		def requirements(self):
+			return [
+				self.evidence_file_check(
+					name="table_log",
+					path=self.workspace_path("results", "table.txt"),
+					required_text="bugs reproduced",
+					required_regex=r"bugs reproduced:\\s+56",
+					modified_after_run_start=True,
+				)
+			]
+""")
+
 
 _FIXTURE_ORACLE = textwrap.dedent("""\
 	from evaluator.oracles.bases import (
@@ -116,12 +132,18 @@ def _make_case_spec(id: str = "fixture_case") -> CaseConfig:
 	)
 
 
-def _make_run_result(id: str, workspace_path: str) -> RunResult:
+def _make_run_result(
+	id: str,
+	workspace_path: str,
+	*,
+	started_at: datetime | None = None,
+) -> RunResult:
 	now = datetime.now(timezone.utc)
+	started = now if started_at is None else started_at
 	return RunResult(
 		id=id,
 		status=TaskStatus.SUCCESS,
-		started_at=now,
+		started_at=started,
 		finished_at=now,
 		duration_ms=0,
 		workspace_path=workspace_path,
@@ -236,6 +258,37 @@ def test_direct_runner_phase_list_populated(
 
 	assert len(result.phases) == 4
 	assert result.phases[0].status == OracleStatus.SUCCESS
+
+
+@pytest.mark.sanity
+def test_direct_runner_supports_execution_evidence_helper(
+	fixture_case_dir: Path, valid_workspace: Path, tmp_path: Path
+) -> None:
+	(fixture_case_dir / "oracles" / "experiment_runs.py").write_text(
+		_EXPERIMENT_RUNS_WITH_EVIDENCE,
+		encoding="utf-8",
+	)
+	results_dir = valid_workspace / "results"
+	results_dir.mkdir()
+	(results_dir / "table.txt").write_text("bugs reproduced: 56\n", encoding="utf-8")
+
+	output_dir = tmp_path / "output_evidence"
+	spec = _make_case_spec()
+	runtime_result = _make_run_result(
+		"fixture_case",
+		str(valid_workspace),
+		started_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+	)
+
+	result = DirectOracleRunner().execute(
+		fixture_case_dir,
+		runtime_result=runtime_result,
+		output_dir=output_dir,
+		case=spec,
+	)
+
+	assert result.status == OracleStatus.SUCCESS
+	assert result.score == 4
 
 
 @pytest.fixture()

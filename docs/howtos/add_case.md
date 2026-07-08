@@ -108,6 +108,19 @@ Key choices to make:
 - **`required_evidence`**: list the exact logs, redirected stdout files, tables, or result artifacts the agent must leave in the workspace for the oracle to inspect
 - **`upstream.ref`**: always pin to a full commit hash. Branch names change over time and break reproducibility
 
+`required_evidence` is an instruction to the agent, not a score by itself. Pair it with oracle checks that enforce the contract. Use `evidence_file_check` for text evidence such as redirected tables, run logs, and result summaries:
+
+```python
+self.evidence_file_check(
+    name="table1_stdout",
+    path=self.workspace_path("results", "table1.txt"),
+    required_regex=r"Throughput\s+\d+",
+    modified_after_run_start=True,
+)
+```
+
+That pattern asks the agent to leave `results/table1.txt`, then verifies the file exists, is non-empty, contains the expected signature, and was written after the recorded run started.
+
 ## 4. Register the case
 
 Add an entry to `cases.json`:
