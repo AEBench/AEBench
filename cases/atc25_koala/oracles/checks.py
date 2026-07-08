@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles.utils import BaseCheck, CheckResult
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 
 def _status_lines(text: str) -> list[str]:

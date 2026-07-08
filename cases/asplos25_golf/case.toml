@@ -13,9 +13,14 @@ path = "README.md"
 
 [run.runtime]
 mode = "docker"
+image = "aebench-agent:latest"
 timeout_ms = 14400000
 gpu = false
 interactive = false
+
+[run.artifact_requirements]
+docker = true
+compose = false
 
 [run.prompt]
 profile = "artifact-eval-v1"
@@ -27,14 +32,19 @@ score_mode = "phase_count"
 failure_mode = "fail_fast"
 placeholder = false
 
-[oracle.runtime]
-mode = "docker"
+[oracle.targets.golf]
+type = "docker_image"
 image = "golf"
-app_dir = "/usr/app"
+working_dir = "/usr/app"
+
+[oracle.phase_targets]
+env_setup = "local"
+artifact_build = "golf"
+benchmark_prep = "golf"
+experiment_runs = "local"
 
 [upstream]
 source_type = "git"
 url = "https://github.com/VladSaioc/ASPLOS-artifact-2025"
 ref = "d00cf120331fc5dcaf43d37788bbc041f8b99abe"
 resolved_at = "2026-04-11T02:02:17.900240+00:00"
-
