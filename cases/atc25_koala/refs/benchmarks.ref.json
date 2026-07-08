@@ -1,0 +1,16 @@
+{
+  "_comment": "Expected number of validate.sh status lines per benchmark on --min inputs (every line must report status 0). Derived from the pinned repo's committed reference hashes / validators at ref 5b6caaf. analytics: pcaps/nginx/port_scan/ray_tracing = 4. bio: 11 .bam .hash files in hashes/min. ci-cd: riker/xz-clang + makeself = 2. covid: single aggregate line. file-mod: compress/encrypt/img_convert/thumbnail/to_mp3 = 5. ml: single aggregate line. nlp: single aggregate line. oneliners: 12 scripts. unixfun: 34 .out hashes in hashes/min. weather: max-temp (average/min/max) + tuft-weather = 4. web-search: single aggregate line.",
+  "expected_status_lines": {
+    "analytics": 4,
+    "bio": 11,
+    "ci-cd": 2,
+    "covid": 1,
+    "file-mod": 5,
+    "ml": 1,
+    "nlp": 1,
+    "oneliners": 12,
+    "unixfun": 34,
+    "weather": 4,
+    "web-search": 1
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "wasmtime": {
+    "uses_pct": 23.1,
+    "covered_pct": 19.8
+  },
+  "rustc": {
+    "uses_pct": 26.5,
+    "covered_pct": 15.8
+  }
+}
