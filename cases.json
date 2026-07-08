@@ -13,6 +13,9 @@
     "asplos25_golf": {
       "path": "cases/asplos25_golf"
     },
+    "asplos25_cinnamon": {
+      "path": "cases/asplos25_cinnamon"
+    },
     "asplos25_herbie": {
       "path": "cases/asplos25_herbie"
     },
