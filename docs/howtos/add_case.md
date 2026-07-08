@@ -21,25 +21,24 @@ cases/venue24_paperid/
 ```
 
 > [!NOTE]
-> The `artifact/` subdirectory is optional. It holds a vendored copy of the artifact when `artifact_mode = "vendor"`. For most cases the artifact is fetched from git at run time so you dont need it.
+> The `artifact/` subdirectory is optional. It holds a vendored copy of the artifact when `artifact_mode = "vendor"`. Most audit work points `aebench case oracle` at a separately prepared workspace with `--workspace-dir`.
 
 ## 2. Scaffold the bundle
 
-Use the `case init` command to create a starter bundle from a git repo:
+Use the `case init` command to create a starter bundle:
 
 ```bash
-aebench case init https://github.com/author/paper-repo.git \
+PYTHONPATH=src uv run aebench case init --blank \
   --id venue24_paperid \
-  --ref abc123def456 \
   --target-dir cases/venue24_paperid
 ```
 
 - `--id` — the case identifier. Convention: `<venue><year>_<shortname>` (e.g., `osdi24_anvil`)
-- `--ref` — the git commit hash or tag to pin. Always use a full commit hash for reproducibility
 - `--target-dir` — where to create the bundle. Defaults to a `bundles/` subdirectory
 - `--blank` — create an empty bundle with placeholder files instead of scaffolding from source
+- `--ref` — accepted by the CLI for source-style initialization, but you should still verify and fill in the generated `[upstream]` metadata by hand
 
-After the command completes it will prompt you (in interactive terminals) to fill in the case brief. Users can also create the directory and write `case.toml` by hand instead.
+The current scaffold writes template files. You can also create the directory and write `case.toml` by hand.
 
 ## 3. Write `case.toml`
 
@@ -61,9 +60,17 @@ path = "README.md"
 
 [run.runtime]
 mode = "docker"
-timeout_ms = 345600000      # 4 days — long builds need long timeouts
+image = "aebench-agent:latest"
+timeout_ms = 345600000
 gpu = false
 interactive = false
+commit_before_oracle = true
+keep_committed_snapshot = false
+snapshot_timeout_seconds = 60.0
+
+[run.artifact_requirements]
+docker = true
+compose = false
 
 [run.prompt]
 profile = "artifact-eval-v1"
@@ -74,10 +81,20 @@ phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
 score_mode = "phase_count"
 failure_mode = "fail_fast"
 
+[oracle.runtime]
+mode = "local"
+
 [upstream]
 source_type = "git"
 url = "https://github.com/josephg/egwalker-paper.git"
 ref = "4d9bef55e4f2e3b3b8b0efe8f91cd35d34ed35a8"
+artifact_mode = "hybrid"
+overlay_artifact = true
+
+[paper]
+url = "https://example.com/paper.pdf"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+title = "Artifact paper title"
 ```
 
 Key choices to make:
@@ -167,44 +184,28 @@ Check that required tools are installed at the right versions:
 from __future__ import annotations
 from collections.abc import Sequence
 
-from evaluator.oracles import utils
-from evaluator.oracles.case_base import CaseOracleEnvSetupBase
-from evaluator.oracles.env_setup_checks import (
-    DependencyVersionCheck,
-    FilesystemPathCheck,
-    PathType,
-    VersionCompare,
-)
-from .common import RepoRootLocatedCheck, find_repo_root
+from evaluator.oracles import CaseOracleEnvSetupBase, PathKind, utils
 
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
     def requirements(self) -> Sequence[utils.BaseCheck]:
-        repo_root = find_repo_root(self.paths.workspace_dir)
-        if repo_root is None:
-            return (RepoRootLocatedCheck(
-                name="repo_root_located",
-                workspace_dir=self.paths.workspace_dir,
-            ),)
-
         return (
-            DependencyVersionCheck(
-                name="python",
+            self.version_check(
+                name="python3_version",
                 cmd=("python3", "--version"),
-                required_version=(3, 10, 0),
-                compare=VersionCompare.GEQ,
+                min_version=(3, 10, 0),
             ),
-            FilesystemPathCheck(
-                name="repo_root_exists",
-                path=repo_root,
-                path_type=PathType.DIRECTORY,
+            self.path_check(
+                name="instructions_exist",
+                path=self.workspace_path("README.md"),
+                kind=PathKind.FILE,
             ),
         )
 ```
 
 ### Phase 2 — artifact_build
 
-Verify the build succeeded. The recommeded pattern is to check for expected output files (the "verify" mode), with an optional "command" mode that re-runs the build:
+Verify the build succeeded. The recommended pattern is to check for expected output files (the "verify" mode), with an optional "command" mode that re-runs the build:
 
 ```python
 from __future__ import annotations
@@ -212,11 +213,7 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluator.oracles import utils
-from evaluator.oracles.case_base import CaseOracleArtifactBuildBase
-from evaluator.oracles.artifact_build_checks import BuildCommandCheck
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
-from .common import RepoRootLocatedCheck, find_repo_root
+from evaluator.oracles import CaseOracleArtifactBuildBase, PathKind, utils
 
 _EXPECTED_OUTPUTS = ("build/my-tool", "build/lib/my-lib.so")
 _BUILD_MODE_ENV = "AE_MYPAPER_BUILD_MODE"
@@ -224,28 +221,21 @@ _BUILD_MODE_ENV = "AE_MYPAPER_BUILD_MODE"
 
 class OracleArtifactBuild(CaseOracleArtifactBuildBase):
     def requirements(self) -> Sequence[utils.BaseCheck]:
-        repo_root = find_repo_root(self.paths.workspace_dir)
-        if repo_root is None:
-            return (RepoRootLocatedCheck(
-                name="repo_root_located",
-                workspace_dir=self.paths.workspace_dir,
-            ),)
-
         mode = (os.environ.get(_BUILD_MODE_ENV, "verify") or "verify").strip().lower()
 
         if mode == "command":
-            return (BuildCommandCheck(
+            return (self.command_check(
                 name="build_artifact",
-                cwd=repo_root,
+                cwd=self.workspace_path(),
                 cmd=("make", "-j8", "all"),
                 timeout_seconds=3600.0,
             ),)
 
         return tuple(
-            FilesystemPathCheck(
+            self.path_check(
                 name=f"output_{Path(rel).name}",
-                path=repo_root / rel,
-                path_type=PathType.FILE,
+                path=self.workspace_path(rel),
+                kind=PathKind.FILE,
             )
             for rel in _EXPECTED_OUTPUTS
         )
@@ -259,31 +249,27 @@ Check that datasets were downloaded and any prep tools built:
 from __future__ import annotations
 from collections.abc import Sequence
 
-from evaluator.oracles import utils
-from evaluator.oracles.case_base import CaseOracleBenchmarkPrepBase
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
-from .common import RepoRootLocatedCheck, find_repo_root
+from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind, utils
 
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
     def requirements(self) -> Sequence[utils.BaseCheck]:
-        repo_root = find_repo_root(self.paths.workspace_dir)
-        if repo_root is None:
-            return (RepoRootLocatedCheck(
-                name="repo_root_located",
-                workspace_dir=self.paths.workspace_dir,
-            ),)
-
         return (
-            FilesystemPathCheck(
+            self.path_check(
                 name="dataset_dir",
-                path=repo_root / "data" / "my-dataset",
-                path_type=PathType.DIRECTORY,
+                path=self.workspace_path("data", "my-dataset"),
+                kind=PathKind.DIRECTORY,
             ),
-            FilesystemPathCheck(
+            self.path_check(
                 name="dataset_file",
-                path=repo_root / "data" / "my-dataset" / "train.csv",
-                path_type=PathType.FILE,
+                path=self.workspace_path("data", "my-dataset", "train.csv"),
+                kind=PathKind.FILE,
+            ),
+            self.directory_glob_count_check(
+                name="prepared_result_count",
+                directory=self.workspace_path("outputs"),
+                pattern="*.json",
+                min_count=1,
             ),
         )
 ```
@@ -298,13 +284,12 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluator.oracles import utils
-from evaluator.oracles.case_base import CaseOracleExperimentRunsBase
-from evaluator.oracles.experiment_runs_checks import (
+from evaluator.oracles import (
+    CaseOracleExperimentRunsBase,
     ListSimilarityCheck,
     SimilarityMetric,
+    utils,
 )
-from .common import RepoRootLocatedCheck, find_repo_root
 
 
 def _load_values(path: Path) -> list[float]:
@@ -314,14 +299,7 @@ def _load_values(path: Path) -> list[float]:
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
     def requirements(self) -> Sequence[utils.BaseCheck]:
-        repo_root = find_repo_root(self.paths.workspace_dir)
-        if repo_root is None:
-            return (RepoRootLocatedCheck(
-                name="repo_root_located",
-                workspace_dir=self.paths.workspace_dir,
-            ),)
-
-        observed = _load_values(repo_root / "outputs" / "results.json")
+        observed = _load_values(self.workspace_path("outputs", "results.json"))
         reference = _load_values(self.ref_path("results.ref.json"))
 
         return (
@@ -343,29 +321,28 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 Before running the full pipeline, test the oracle by itself:
 
 ```bash
-aebench case oracle cases/venue24_paperid
+PYTHONPATH=src uv run aebench case oracle cases/venue24_paperid \
+  --workspace-dir /path/to/prepared/artifact \
+  --output-dir /tmp/aebench-venue24-paperid-oracle
 ```
 
-This runs all four phases against the case directory (using it as the workspace). If a phase fails, add print statements or logging in your oracle code and re-run.
+This runs all four phases against the prepared artifact workspace. If `--workspace-dir` is omitted, the case directory itself is used as the workspace.
 
 ## 8. Run the full case
 
-Once the oracle works standalone, run the full pipeline:
+The full agent pipeline is currently unavailable in this checkout:
 
 ```bash
-AEBENCH_PRESERVE_FAILED_WORKSPACE=true aebench case run venue24_paperid
+PYTHONPATH=src uv run aebench case run venue24_paperid
 ```
 
-Check the output files:
-- `case_result.json` — full result with per-phase oracle outcomes
-- `<case_id>_report.md` — human-readable summary
-- `<case_id>.log` — captured agent output
+That command exits with `case runner is unavailable in this checkout`. Audit cases by manually preparing the artifact workspace and then running `aebench case oracle`.
 
 ## 9. Best practices
 
 - Keep `requirements()` deterministic. Given the same workspace state it must always return the same checks
 - Make checks idempotent. The oracle should only *read* the workspace, never modify it
-- Set realistic timeouts on `BuildCommandCheck`. Build times vary significantly across machines
-- Use `optional=True` for nice-to-have checks that shouldnt block the phase
+- Set realistic timeouts on `command_check`. Build times vary significantly across machines
+- Use `optional=True` for nice-to-have checks that should not block the phase
 - Write descriptive `name` strings — they show up in the oracle report. `"rustc_version"` is better than `"check1"`
-- Handle missing workspace gracefully. The repo root might not exist if the agent failed before cloning. Return a single `RepoRootLocatedCheck` in that case rather than letting the oracle crash
+- Handle missing workspace gracefully. Prefer a clear failing `path_check` or custom `utils.Check` result rather than letting the oracle crash
