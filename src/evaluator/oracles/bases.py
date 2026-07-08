@@ -5,6 +5,7 @@ from __future__ import annotations
 import abc
 import logging
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import cast
 
@@ -21,6 +22,7 @@ from .checks import (
 	CommandCheck,
 	EnvMatchMode,
 	EnvVarCheck,
+	ExecutionEvidenceFileCheck,
 	MinMatchingEntryCountCheck,
 	PathCheck,
 	PathKind,
@@ -323,6 +325,42 @@ class _CaseOracleBase(_OraclePhaseBase):
 			optional=optional,
 			observed_path=observed_path,
 			reference_path=reference_path,
+			executor=self.executor_for(target),
+		)
+
+	def evidence_file_check(
+		self,
+		*,
+		name: str,
+		path: OraclePath,
+		min_size_bytes: int = 1,
+		required_text: str | None = None,
+		required_regex: str | None = None,
+		modified_after: datetime | None = None,
+		modified_after_run_start: bool = False,
+		encoding: str = "utf-8",
+		optional: bool = False,
+		target: str | None = None,
+	) -> ExecutionEvidenceFileCheck:
+		"""Creates a target-aware evidence file check.
+
+		Use ``modified_after_run_start`` to require that host-visible evidence
+		was written after the recorded task run began.
+		"""
+		if modified_after_run_start:
+			runtime_result = self.context.runtime_result
+			modified_after = None if runtime_result is None else runtime_result.started_at
+
+		return ExecutionEvidenceFileCheck(
+			name=name,
+			optional=optional,
+			path=path,
+			min_size_bytes=min_size_bytes,
+			required_text=required_text,
+			required_regex=required_regex,
+			modified_after=modified_after,
+			modified_after_required=modified_after_run_start,
+			encoding=encoding,
 			executor=self.executor_for(target),
 		)
 
