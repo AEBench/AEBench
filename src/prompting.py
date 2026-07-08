@@ -35,6 +35,13 @@ ENVIRONMENT:
 
 YOUR TASK:
 {{ task_text }}
+{% if required_evidence %}
+
+REQUIRED EVIDENCE:
+{% for item in required_evidence %}
+- {{ item }}
+{% endfor %}
+{% endif %}
 
 {{ local_timeout_guidance }}
 {{ output_management_guidance }}
@@ -67,6 +74,13 @@ ENVIRONMENT:
 
 YOUR TASK:
 {{ task_text }}
+{% if required_evidence %}
+
+REQUIRED EVIDENCE:
+{% for item in required_evidence %}
+- {{ item }}
+{% endfor %}
+{% endif %}
 
 {{ docker_timeout_guidance }}
 {{ output_management_guidance }}
