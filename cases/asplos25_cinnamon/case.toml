@@ -1,0 +1,32 @@
+id = "asplos25_cinnamon"
+
+[case_brief]
+core_claim = "Build the Cinnamon simulator inside Docker, run the keyswitch and bootstrap comparison benchmarks, and run the full 24-hour performance simulations to verify the scale-out framework for encrypted AI."
+acceptable_evidence = "Cinnamon elements build successfully inside SST. Output PDFs and raw result tables (performance_table.txt) match the reference trends."
+allowed_tolerance = "Simulation timing and exact throughput numbers may vary across hardware but relative speedup curves must align."
+
+[run]
+id = "asplos25_cinnamon"
+
+[run.instructions]
+path = "README.md"
+
+[run.runtime]
+mode = "local"
+timeout_ms = 172800000      
+gpu = false
+interactive = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "fail_fast"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/sidjay10/asplos25_cinnamon_artifact.git"
+ref = "07db6d58e438518e99ca5ec68f0320bbf83f4077" 

@@ -7,11 +7,20 @@
     "bundles_subdir": "cases"
   },
   "cases": {
+    "asplos24_crocus": {
+      "path": "cases/asplos24_crocus"
+    },
     "asplos25_golf": {
       "path": "cases/asplos25_golf"
     },
+    "asplos25_cinnamon": {
+      "path": "cases/asplos25_cinnamon"
+    },
     "asplos25_herbie": {
       "path": "cases/asplos25_herbie"
+    },
+    "atc25_koala": {
+      "path": "cases/atc25_koala"
     },
     "atc25_ppipe": {
       "path": "cases/atc25_ppipe"

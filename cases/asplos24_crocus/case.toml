@@ -1,0 +1,58 @@
+id = "asplos24_crocus"
+
+[case_brief]
+core_claim = "Build the Crocus Docker image and reproduce the paper's empirical results: the Wasm 1.0 -> ARM aarch64 Table 1 verification counts, the six instruction-lowering case-study bug reproductions, and the Section 4.2 rule-coverage percentages."
+acceptable_evidence = "Table 1 verification counts reproduced (98 rules, 377 type instructions, failures 2/4), all six case studies show their expected verification signatures, and the Section 4.2 rule-coverage percentages match the reference."
+allowed_tolerance = "Counterexample hex/bit values differ between runs and are ignored. Table 1 success/timeout counts may vary slightly with the Z3 version, but rule/type-instruction totals and failure counts must match the reference exactly. Coverage percentages are deterministic (computed on pre-saved CSVs)."
+
+[run]
+id = "asplos24_crocus"
+
+[run.instructions]
+path = "README.md"
+required_evidence = [
+"Each experiment command's output should be stored in the artifact directory under `script-results/`", 
+"`table1.txt` for stdout of scripts/wasm1.0-to-aarch64.py",
+"The generated `cdf-*.pdf` (Figure 4 output)", 
+"`cs_4_3_1.txt`, `cs_4_3_2.txt`, `cs_4_3_3.txt`, `cs_4_4_1.txt`, `cs_4_4_2.txt`, `cs_4_4_4.txt` (stdout of each case-study command)", 
+"`coverage_wasmtime.txt`, `coverage_rustc.txt` (stdout of rule-stats.py on the pre-saved CSVs)." 
+]
+
+[run.runtime]
+mode = "docker"
+image = "aebench-agent:latest"
+timeout_ms = 14400000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = true
+compose = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+failure_mode = "fail_fast"
+placeholder = false
+
+# The agent-built image; benchmark_prep/artifact_build checks run inside it, with
+# runtime paths resolved against the veri_engine working dir.
+[oracle.targets.crocus]
+type = "docker_image"
+image = "crocus"
+working_dir = "/root/wasmtime/cranelift/isle/veri/veri_engine"
+
+# env_setup inspects the host (docker + cloned repo); experiment_runs reads the
+# agent-saved outputs from the host artifact dir. Both use the built-in "local" target.
+[oracle.phase_targets]
+env_setup = "local"
+artifact_build = "crocus"
+benchmark_prep = "crocus"
+experiment_runs = "local"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/avanhatt/asplos24-ae-crocus"
+ref = "762320d87b288ac06d67e790935f3a7d7cd7ea92"

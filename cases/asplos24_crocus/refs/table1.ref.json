@@ -1,0 +1,10 @@
+{
+  "rules_total": 98,
+  "rules_success_all": 86,
+  "rules_success_any": 93,
+  "rules_failure": 2,
+  "type_insts_total": 377,
+  "type_insts_success": 245,
+  "type_insts_inapplicable": 104,
+  "type_insts_failure": 4
+}
