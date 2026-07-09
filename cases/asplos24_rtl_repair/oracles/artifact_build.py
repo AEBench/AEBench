@@ -5,9 +5,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleArtifactBuildBase
 from evaluator.oracles.checks import PathKind
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 _BUILD_MODE_ENV = "AE_RTL_REPAIR_BUILD_MODE"
 _BUILD_TIMEOUT_SECONDS = 1800.0
@@ -21,11 +21,11 @@ _BUILD_ARTIFACTS = (
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class InvalidBuildModeCheck(utils.BaseCheck):
+class InvalidBuildModeCheck(BaseCheck):
     mode: str
 
-    def check(self) -> utils.CheckResult:
-        return utils.CheckResult.failure(
+    def check(self) -> CheckResult:
+        return CheckResult.failure(
             f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
         )
 
@@ -43,8 +43,8 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
             return str(venv_python)
         return "python3"
 
-    def requirements(self) -> Sequence[utils.BaseCheck]:
-        repo_root = self.workspace_path()
+    def requirements(self) -> Sequence[BaseCheck]:
+        repo_root = self.artifact_path()
         python = self._python_executable(repo_root)
         mode = self._build_mode()
 
@@ -78,7 +78,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
             )
 
         if mode == "verify":
-            reqs: list[utils.BaseCheck] = [
+            reqs: list[BaseCheck] = [
                 self.path_check(
                     name="requirements_txt_exists",
                     path=repo_root / "requirements.txt",

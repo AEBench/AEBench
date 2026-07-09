@@ -4,9 +4,9 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleEnvSetupBase
 from evaluator.oracles.checks import PathKind
+from evaluator.oracles.reporting import BaseCheck
 
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
@@ -31,9 +31,7 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 
         return (tool, *args)
 
-    def requirements(self) -> Sequence[utils.BaseCheck]:
-        repo_root = self.workspace_path()
-
+    def requirements(self) -> Sequence[BaseCheck]:
         return (
             self.version_check(
                 name="python3_version",
@@ -49,8 +47,10 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
             ),
             self.version_check(
                 name="bitwuzla",
-                cmd=("bitwuzla", "--version"),
-                min_version=(0, 0, 0),
+                cmd=self._eda_tool_cmd("bitwuzla", "--version"),
+                min_version=(1, 0, 0),
+                max_version=(1, 0, 0),
+                version_regex=r"1\.0-prerelease",
                 timeout_seconds=10.0,
             ),
             self.version_check(
@@ -63,7 +63,8 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
             self.version_check(
                 name="iverilog",
                 cmd=self._eda_tool_cmd("iverilog", "-V"),
-                min_version=(10, 0, 0),
+                min_version=(12, 0, 0),
+                version_regex=r"Icarus Verilog version 12\.0",
                 timeout_seconds=10.0,
             ),
             self.version_check(
@@ -73,8 +74,8 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
                 timeout_seconds=10.0,
             ),
             self.path_check(
-                name="repo_root_exists",
-                path=repo_root,
+                name="artifact_root_exists",
+                path=self.artifact_path(),
                 kind=PathKind.DIRECTORY,
             ),
         )

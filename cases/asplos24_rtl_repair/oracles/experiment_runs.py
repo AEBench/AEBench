@@ -7,9 +7,9 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
 from evaluator.oracles.checks import PathKind
+from evaluator.oracles.reporting import BaseCheck, Check, CheckResult
 
 _STATUS_PATTERN = re.compile(r'^status\s*=\s*"(?P<status>[^"]+)"\s*$', re.MULTILINE)
 
@@ -39,7 +39,7 @@ def _load_reference(path: Path) -> dict[str, Any]:
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
-    def requirements(self) -> Sequence[utils.BaseCheck]:
+    def requirements(self) -> Sequence[BaseCheck]:
         reference = _load_reference(self.ref_path("default_experiment.ref.json"))
         experiment_dir = str(reference.get("experiment_dir", "")).strip()
         if not experiment_dir:
@@ -67,7 +67,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
         if not isinstance(min_result_tomls, int) or min_result_tomls <= 0:
             raise ValueError("default experiment reference missing min_result_tomls")
 
-        experiment_root = self.workspace_path(experiment_dir)
+        experiment_root = self.artifact_path(experiment_dir)
 
         return (
             self.path_check(
@@ -75,7 +75,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
                 path=experiment_root,
                 kind=PathKind.DIRECTORY,
             ),
-            utils.Check(
+            Check(
                 name="default_experiment_status_counts",
                 fn=lambda: self._check_experiment_status_counts(
                     experiment_root=experiment_root,
@@ -93,21 +93,21 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
         expected_counts: dict[str, int],
         max_timeout: int,
         min_result_tomls: int,
-    ) -> utils.CheckResult:
+    ) -> CheckResult:
         if not self.is_dir(experiment_root):
-            return utils.CheckResult.failure(
+            return CheckResult.failure(
                 f"experiment directory missing: {experiment_root}"
             )
 
         try:
             result_files = sorted(experiment_root.rglob("result.toml"))
         except OSError as exc:
-            return utils.CheckResult.failure(
+            return CheckResult.failure(
                 f"failed to scan experiment directory {experiment_root}: {exc}"
             )
 
         if len(result_files) < min_result_tomls:
-            return utils.CheckResult.failure(
+            return CheckResult.failure(
                 f"found {len(result_files)} result.toml file(s) in {experiment_root}, "
                 f"expected at least {min_result_tomls}"
             )
@@ -132,8 +132,18 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
         if unreadable:
             preview = "; ".join(unreadable[:3])
             suffix = f" (+{len(unreadable) - 3} more)" if len(unreadable) > 3 else ""
-            return utils.CheckResult.failure(
+            return CheckResult.failure(
                 f"could not parse status from result.toml files: {preview}{suffix}"
+            )
+
+        for status, count in sorted(observed.items()):
+            if status in expected_counts or status == "timeout":
+                continue
+            self.logger.warning(
+                "unexpected experiment status %r (count=%d) not listed in "
+                "default_experiment.ref.json status_counts",
+                status,
+                count,
             )
 
         mismatches: list[str] = []
@@ -153,12 +163,15 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
             observed_summary = ", ".join(
                 f"{status}={count}" for status, count in sorted(observed.items())
             )
-            return utils.CheckResult.failure(
+            return CheckResult.failure(
                 "default experiment status counts do not match reference: "
                 + "; ".join(mismatches)
                 + f"; observed={{{observed_summary}}}"
             )
 
-        return utils.CheckResult.success(
-            f"matched default experiment status counts across {len(result_files)} result.toml files"
+        return CheckResult.success(
+            message=(
+                "matched default experiment status counts across "
+                f"{len(result_files)} result.toml files"
+            )
         )
