@@ -11,10 +11,8 @@ id = "asplos24_gaia"
 [run.instructions]
 path = "README.md"
 required_evidence = [
-"Install dependencies with `pip3 install -r requirements.txt`. NOTE: requirements.txt does not pin numpy, and a too-new numpy breaks pandas 1.4.3; install a compatible numpy (e.g. numpy==1.23.5) if imports fail.",
-"From the repo root, run all four experiment scripts: `./src/figure8-9.sh`, `./src/figure10.sh`, `./src/figure11.sh`, `./src/figure12.sh`.",
-"Each run writes results/simulation/pai_1k/<scheduling>-7000-<carbon>-AU-SA-<reserved>-<waiting>.csv (header carbon_cost,dollar_cost). Keep the results/ directory in the workspace.",
-"The helper `reproduce-gaia.sh` performs all of the above.",
+"Install dependencies should be available.",
+"For each of the four experiments, the result should be available at results/simulation/pai_1k/<scheduling>-7000-<carbon>-AU-SA-<reserved>-<waiting>.csv (header carbon_cost,dollar_cost). Keep the results/ directory in the workspace.",
 ]
 
 [run.runtime]
