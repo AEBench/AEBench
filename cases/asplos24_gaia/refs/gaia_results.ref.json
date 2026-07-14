@@ -1,0 +1,101 @@
+{
+  "rel_tolerance": 0.01,
+  "runs": {
+    "carbon-7000-cst_average-AU-SA-0-6x24.csv": {
+      "carbon_cost": 407.5113252500006,
+      "dollar_cost": 199.1758600000002
+    },
+    "carbon-7000-cst_average-AU-SA-9-6x24.csv": {
+      "carbon_cost": 407.5113252500006,
+      "dollar_cost": 181.38073200000014
+    },
+    "carbon-7000-lowest-AU-SA-0-6x24.csv": {
+      "carbon_cost": 438.5145320694446,
+      "dollar_cost": 199.17586000000023
+    },
+    "carbon-7000-oracle-AU-SA-0-0x0.csv": {
+      "carbon_cost": 562.1712562916667,
+      "dollar_cost": 199.17586000000023
+    },
+    "carbon-7000-oracle-AU-SA-9-0x0.csv": {
+      "carbon_cost": 562.1712562916667,
+      "dollar_cost": 154.39741200000003
+    },
+    "carbon-7000-waiting-AU-SA-0-6x24.csv": {
+      "carbon_cost": 384.3587458750004,
+      "dollar_cost": 199.1758600000001
+    },
+    "carbon-cost-7000-cst_average-AU-SA-0-6x24.csv": {
+      "carbon_cost": 407.5113252500006,
+      "dollar_cost": 199.1758600000002
+    },
+    "carbon-cost-7000-cst_average-AU-SA-12-6x24.csv": {
+      "carbon_cost": 499.8982301111121,
+      "dollar_cost": 124.22512266666662
+    },
+    "carbon-cost-7000-cst_average-AU-SA-15-6x24.csv": {
+      "carbon_cost": 521.4923970138892,
+      "dollar_cost": 108.9403466666666
+    },
+    "carbon-cost-7000-cst_average-AU-SA-18-6x24.csv": {
+      "carbon_cost": 540.4446264583336,
+      "dollar_cost": 106.54611066666668
+    },
+    "carbon-cost-7000-cst_average-AU-SA-21-6x24.csv": {
+      "carbon_cost": 550.8797528055553,
+      "dollar_cost": 109.02358133333334
+    },
+    "carbon-cost-7000-cst_average-AU-SA-24-6x24.csv": {
+      "carbon_cost": 556.3804733194441,
+      "dollar_cost": 110.26206533333335
+    },
+    "carbon-cost-7000-cst_average-AU-SA-3-6x24.csv": {
+      "carbon_cost": 436.4346159444447,
+      "dollar_cost": 178.26126933333356
+    },
+    "carbon-cost-7000-cst_average-AU-SA-6-6x24.csv": {
+      "carbon_cost": 458.99683843055584,
+      "dollar_cost": 159.71779200000014
+    },
+    "carbon-cost-7000-cst_average-AU-SA-9-6x24.csv": {
+      "carbon_cost": 480.3222550694454,
+      "dollar_cost": 142.1485346666667
+    },
+    "carbon-cost-spot-7000-cst_average-AU-SA-6-6x24.csv": {
+      "carbon_cost": 456.57819686111156,
+      "dollar_cost": 132.73556399999998
+    },
+    "carbon-cost-spot-7000-cst_average-AU-SA-9-6x24.csv": {
+      "carbon_cost": 484.4279513611118,
+      "dollar_cost": 117.46976800000012
+    },
+    "carbon-spot-7000-cst_average-AU-SA-0-6x24.csv": {
+      "carbon_cost": 407.5113252500006,
+      "dollar_cost": 171.08864933333348
+    },
+    "cost-7000-oracle-AU-SA-9-6x24.csv": {
+      "carbon_cost": 518.1260169166669,
+      "dollar_cost": 129.82723866666666
+    },
+    "suspend-resume-7000-oracle-AU-SA-0-6x24.csv": {
+      "carbon_cost": 307.05579408333443,
+      "dollar_cost": 199.17585999999915
+    },
+    "suspend-resume-7000-oracle-AU-SA-9-6x24.csv": {
+      "carbon_cost": 307.05579408333443,
+      "dollar_cost": 189.7458333333328
+    },
+    "suspend-resume-spot-threshold-7000-oracle-AU-SA-0-6x24.csv": {
+      "carbon_cost": 359.28654694444407,
+      "dollar_cost": 171.08864933333314
+    },
+    "suspend-resume-threshold-7000-oracle-AU-SA-0-6x24.csv": {
+      "carbon_cost": 359.28654694444407,
+      "dollar_cost": 199.1758599999998
+    },
+    "suspend-resume-threshold-7000-oracle-AU-SA-9-6x24.csv": {
+      "carbon_cost": 359.28654694444407,
+      "dollar_cost": 180.7149933333332
+    }
+  }
+}
