@@ -301,6 +301,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 			name=name,
 			optional=optional,
 			cmd=cmd,
+			cwd=cwd,
 			timeout_seconds=timeout_seconds,
 			env={} if env is None else env,
 			use_shell=use_shell,
