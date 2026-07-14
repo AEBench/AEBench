@@ -8,20 +8,18 @@ from evaluator.oracles.reporting import BaseCheck
 from .consts import (
 	PYTHON_MIN_VERSION,
 	README_PATH,
+	REQUIRED_PY_MODULES,
 	REQUIREMENTS_PATH,
 )
 
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
-	"""Confirm a usable python3 is available and the repo was fetched.
-
-	The entrypoint itself (src/run.py) is not checked here: for a pure-Python
-	artifact there is no compile step, so existence + a clean import graph IS the
-	build signal, which artifact_build verifies via `python3 src/run.py -h`.
+	"""Confirm the environment is provisioned: a usable python3, the fetched repo
+	and its dependency manifest, and the third-party deps installed & importable.
 	"""
 
 	def requirements(self) -> Sequence[BaseCheck]:
-		return (
+		checks: list[BaseCheck] = [
 			self.version_check(
 				name="python3_version",
 				cmd=("python3", "--version"),
@@ -37,4 +35,15 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 				path=self.runtime_path(REQUIREMENTS_PATH),
 				kind=PathKind.FILE,
 			),
-		)
+		]
+
+		for module in REQUIRED_PY_MODULES:
+			checks.append(
+				self.command_check(
+					name=f"dep_{module}_importable",
+					cmd=("python3", "-c", f"import {module}"),
+					timeout_seconds=120.0,
+				)
+			)
+
+		return tuple(checks)
