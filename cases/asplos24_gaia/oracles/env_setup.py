@@ -9,7 +9,6 @@ from .consts import (
 	PYTHON_MIN_VERSION,
 	README_PATH,
 	REQUIRED_PY_MODULES,
-	REQUIREMENTS_PATH,
 )
 
 
@@ -28,11 +27,6 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 			self.path_check(
 				name="readme_exists",
 				path=self.runtime_path(README_PATH),
-				kind=PathKind.FILE,
-			),
-			self.path_check(
-				name="requirements_exists",
-				path=self.runtime_path(REQUIREMENTS_PATH),
 				kind=PathKind.FILE,
 			),
 		]

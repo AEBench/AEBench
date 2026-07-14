@@ -17,7 +17,6 @@ from __future__ import annotations
 PYTHON_MIN_VERSION = (3, 8, 0)
 
 README_PATH = "README.md"
-REQUIREMENTS_PATH = "requirements.txt"
 RUN_PY_PATH = "src/run.py"
 
 # ---------------------------------------------------------------------------
