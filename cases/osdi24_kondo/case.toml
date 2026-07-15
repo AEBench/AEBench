@@ -25,6 +25,13 @@ interactive = false
 
 [run.prompt]
 profile = "artifact-eval-v1"
+append = """
+Install JDK 17. In `local-dafny`, run `make z3-ubuntu` on Linux (`make z3-mac` on macOS), then run `make`.
+
+Run `./verify-all 2>&1 | tee ../verify-all.log` from `kondoPrototypes`, then move the log to `kondoPrototypes/verify-all.log`. Run `python3 eval.py` from `kondoPrototypes/evaluation` to generate `sloc.csv`.
+
+If verification times out on a lower-core machine, increase the verification scripts' `/timeLimit`; all sections must complete with zero errors and no timeouts.
+"""
 
 [oracle]
 expected_score = 4
