@@ -16,7 +16,6 @@ from typing import Generic, TypeVar
 from constants import DEFAULT_ORACLE_CHECK_TIMEOUT
 
 from .oracle_checks_runtime import (
-	HostPath,
 	OraclePath,
 	RuntimeCheckExecutor,
 	RuntimePath,
@@ -373,7 +372,7 @@ class CommandCheck(BaseCheck):
 	"""
 
 	cmd: str | Sequence[str]
-	cwd: HostPath | None = None
+	cwd: OraclePath | None = None
 	timeout_seconds: float = DEFAULT_ORACLE_CHECK_TIMEOUT
 	env: Mapping[str, str] = dataclasses.field(default_factory=dict)
 	use_shell: bool = False
@@ -406,13 +405,10 @@ class CommandCheck(BaseCheck):
 				raise TypeError(f"{self.name}: env contains an empty variable name")
 			clean_env[key] = str(value)
 		object.__setattr__(self, "env", clean_env)
-		if self.cwd is not None:
+		if self.cwd is not None and not isinstance(self.cwd, RuntimePath):
 			object.__setattr__(self, "cwd", path_from_user_input(self.cwd))
 		if self.signature is not None and not self.signature.strip():
 			object.__setattr__(self, "signature", None)
-
-	def _cwd(self) -> pathlib.Path | None:
-		return None if self.cwd is None else pathlib.Path(self.cwd)
 
 	def _display_cmd(self) -> str:
 		if isinstance(self.cmd, str):
@@ -420,12 +416,16 @@ class CommandCheck(BaseCheck):
 		return " ".join(shlex.quote(arg) for arg in self.cmd)
 
 	def check(self) -> CheckResult:
-		cwd = self._cwd()
+		cwd = self.cwd
+		# Executors need the original OraclePath; CheckResult stores a Path for reporting.
+		reported_cwd = None if cwd is None else pathlib.Path(str(cwd))
 		if cwd is not None:
 			if not check_path_exists(cwd, executor=self.executor):
-				return CheckResult.failure(f"working directory not found: {cwd}", cwd=cwd)
+				return CheckResult.failure(f"working directory not found: {cwd}", cwd=reported_cwd)
 			if not check_path_is_dir(cwd, executor=self.executor):
-				return CheckResult.failure(f"working directory is not a directory: {cwd}", cwd=cwd)
+				return CheckResult.failure(
+					f"working directory is not a directory: {cwd}", cwd=reported_cwd
+				)
 
 		signature = self.signature
 		stdout_seen = signature is None
@@ -466,7 +466,7 @@ class CommandCheck(BaseCheck):
 			return CheckResult.failure(
 				f"failed to run command: {self._display_cmd()}: {exc}",
 				stderr=str(exc),
-				cwd=cwd,
+				cwd=reported_cwd,
 			)
 
 		if proc.timed_out:
@@ -475,7 +475,7 @@ class CommandCheck(BaseCheck):
 				stdout=proc.stdout,
 				stderr=proc.stderr,
 				timed_out=True,
-				cwd=cwd,
+				cwd=reported_cwd,
 			)
 		if proc.returncode != 0:
 			return CheckResult.failure(
@@ -483,7 +483,7 @@ class CommandCheck(BaseCheck):
 				stdout=proc.stdout,
 				stderr=proc.stderr,
 				returncode=proc.returncode,
-				cwd=cwd,
+				cwd=reported_cwd,
 			)
 		if signature is not None and not (stdout_seen or stderr_seen):
 			return CheckResult.failure(
@@ -491,13 +491,13 @@ class CommandCheck(BaseCheck):
 				stdout=proc.stdout,
 				stderr=proc.stderr,
 				returncode=proc.returncode,
-				cwd=cwd,
+				cwd=reported_cwd,
 			)
 		return CheckResult.success(
 			stdout=proc.stdout,
 			stderr=proc.stderr,
 			returncode=proc.returncode,
-			cwd=cwd,
+			cwd=reported_cwd,
 		)
 
 

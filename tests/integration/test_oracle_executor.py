@@ -141,6 +141,35 @@ def test_all_oracle_classes_pass(tmp_path: Path) -> None:
 	assert all(phase.status == OracleStatus.SUCCESS for phase in result.phases)
 
 
+def test_command_check_honors_workspace_and_runtime_cwd(tmp_path: Path) -> None:
+	case_dir = write_case(
+		tmp_path,
+		artifact_build_requirements="""[
+            self.command_check(
+                name="workspace_cwd",
+                cmd=("pwd",),
+                cwd=self.workspace_path("workspace-nested"),
+                timeout_seconds=10,
+                signature="workspace-nested",
+            ),
+            self.command_check(
+                name="runtime_cwd",
+                cmd=("pwd",),
+                cwd=self.runtime_path("runtime-nested"),
+                timeout_seconds=10,
+                signature="runtime-nested",
+            ),
+        ]""",
+	)
+	(tmp_path / "workspace" / "workspace-nested").mkdir(parents=True)
+	(tmp_path / "workspace" / "runtime-nested").mkdir()
+
+	result = run_case(case_dir, tmp_path)
+
+	assert result.status == OracleStatus.SUCCESS
+	assert result.score == 4
+
+
 def test_failed_oracle_class_marks_result_error(tmp_path: Path) -> None:
 	case_dir = write_case(
 		tmp_path,
