@@ -1,0 +1,41 @@
+id = "osdi25_verified_storage"
+
+[case_brief]
+core_claim = "CapybaraKV verifies quickly using Verus, has a proof-to-code ratio of 2.6, and achieves similar or better performance than state-of-the-art PM key-value stores. CapybaraNS verifies successfully using Dafny with a proof-to-code ratio of 2.4."
+acceptable_evidence = "Both systems build and verify without errors (CapybaraKV in <180s). Proof-to-code ratios exactly match Table 2 (2.6 for CapybaraKV, 2.4 for CapybaraNS). Storage footprint exactly matches 18 GiB. Key performance trends hold (empty startup < full, Seq Get < Rand Get, read-heavy workloads scale at 16 threads, pmem-Redis has lowest throughput)."
+allowed_tolerance = "Exact performance metrics may vary across hardware (e.g. emulated PM vs physical Optane). On emulated PM, Viper is permitted to have faster startup times and higher throughput than CapybaraKV. Memory footprint can have minor noise. No tolerance for storage footprint or proof-to-code ratios."
+
+[paper]
+title = "PoWER Never Corrupts: Tool-Agnostic Verification of Crash Consistency and Corruption Detection"
+venue = "OSDI 2025"
+url = "https://www.usenix.org/system/files/osdi25-leblanc.pdf"
+sha256 = "e0f39f87f558091bd86b344b4a555eeeec61f50cb381f37b65611d7010c026b1"
+
+[run]
+id = "osdi25_verified_storage"
+
+[run.instructions]
+path = "README.md"
+
+[run.runtime]
+mode = "local"
+timeout_ms = 172800000      
+gpu = false
+interactive = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "fail_fast"
+placeholder = false
+
+[upstream]
+source_type = "git"
+url = "https://github.com/microsoft/verified-storage"
+ref = "39e28d9b86b24369c8b240d3f7439a7af7e28e86"
+requested_ref = "osdi25-artifact"
+resolved_at = "2026-07-22T00:00:00+00:00"

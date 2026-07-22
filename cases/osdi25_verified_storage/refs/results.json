@@ -1,0 +1,7 @@
+{
+  "storage_footprint_gib": 18,
+  "memory_footprint_min_gib": 2.0,
+  "memory_footprint_max_gib": 4.0,
+  "scaling_factor": 1.5,
+  "kvs": ["pmemrocksdb", "viper", "capybarakv"]
+}
