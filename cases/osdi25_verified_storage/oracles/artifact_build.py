@@ -23,40 +23,39 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
                 ),
             )
 
-        # 2. artifact_build.py (Artifact Compilation)
-        # Verify that the agent successfully compiled the systems (Goal 2).
         return (
             # CapybaraKV Build Checks:
             # The setup script (setup.sh) installs several unverified baselines and CapybaraKV. 
             # Ensure that the expected compiled binaries or directories exist for:
             # - pmem-Redis, pmem-RocksDB, Viper, YCSB bindings
             # (Note: These are cloned inside the evaluation directory by setup.sh)
-            self.command_check(
+            self.path_check(
                 name="pmem_redis_exists",
-                cmd=("test", "-d", str(self.workspace_path("osdi25", "capybaraKV", "evaluation", "pmem-redis"))),
-                timeout_seconds=5.0,
+                path=self.workspace_path("osdi25", "capybaraKV", "evaluation", "pmem-redis"),
+                kind=PathKind.DIRECTORY,
             ),
-            self.command_check(
+            self.path_check(
                 name="pmem_rocksdb_exists",
-                cmd=("test", "-d", str(self.workspace_path("osdi25", "capybaraKV", "evaluation", "pmem-rocksdb"))),
-                timeout_seconds=5.0,
+                path=self.workspace_path("osdi25", "capybaraKV", "evaluation", "pmem-rocksdb"),
+                kind=PathKind.DIRECTORY,
             ),
-            self.command_check(
+            self.path_check(
                 name="viper_exists",
-                cmd=("test", "-d", str(self.workspace_path("osdi25", "capybaraKV", "evaluation", "viper"))),
-                timeout_seconds=5.0,
+                path=self.workspace_path("osdi25", "capybaraKV", "evaluation", "viper"),
+                kind=PathKind.DIRECTORY,
             ),
-            self.command_check(
+            self.path_check(
                 name="ycsb_bindings_exist",
-                cmd=("test", "-d", str(self.workspace_path("osdi25", "capybaraKV", "evaluation", "YCSB"))),
-                timeout_seconds=5.0,
+                path=self.workspace_path("osdi25", "capybaraKV", "evaluation", "YCSB"),
+                kind=PathKind.DIRECTORY,
             ),
             
             # CapybaraNS Build Checks:
             # - Check that the bin/NotaryServer (or .exe) executable was successfully created in the filesystem.
-            self.path_check(
+            self.command_check(
                 name="notaryserver_executable_exists",
-                path=self.workspace_path("osdi25", "capybaraNS", "bin", "NotaryServer"),
-                kind=PathKind.FILE,
+                cwd=self.workspace_path("osdi25", "capybaraNS", "bin"),
+                cmd=("bash", "-c", "ls NotaryServer* > /dev/null 2>&1"),
+                timeout_seconds=5.0,
             ),
         )
