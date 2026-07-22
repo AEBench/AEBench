@@ -1,0 +1,32 @@
+id = "osdi25_verified_storage"
+
+[case_brief]
+core_claim = "Verify CapybaraKV and CapybaraNS, and reproduce their performance and line-counting claims."
+acceptable_evidence = "Systems build and verify successfully. Line counts match Table 2 exactly. Performance trends align with paper."
+allowed_tolerance = "Simulation timing and exact throughput numbers may vary across hardware but relative speedup curves must align."
+
+[run]
+id = "osdi25_verified_storage"
+
+[run.instructions]
+path = "PLAN.md"
+
+[run.runtime]
+mode = "local"
+timeout_ms = 172800000      
+gpu = false
+interactive = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "fail_fast"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/microsoft/verified-storage.git"
+ref = "HEAD" 
