@@ -54,6 +54,11 @@ allowed_tolerance = "Timing values may vary across environments but must preserv
 
 [run]
 id = "eurosys25_egwalker"
+required_evidence = [
+  "Save the benchmark stdout to results/table1.txt.",
+  "Keep the full experiment log at logs/experiment.log.",
+  "Leave generated result files in results/ for the oracle to inspect.",
+]
 
 [run.instructions]
 path = "README.md"
@@ -100,6 +105,7 @@ title = "Artifact paper title"
 Key choices to make:
 - **`runtime.mode`**: use `"docker"` if the artifact has complex deps or needs isolation. Use `"local"` only for simple cases safe to run on the host
 - **`runtime.timeout_ms`**: set this generously. Large builds and dataset downloads can take hours. 4 hours (`14_400_000`) is reasonable for most cases
+- **`required_evidence`**: list the exact logs, redirected stdout files, tables, or result artifacts the agent must leave in the workspace for the oracle to inspect
 - **`upstream.ref`**: always pin to a full commit hash. Branch names change over time and break reproducibility
 
 ## 4. Register the case

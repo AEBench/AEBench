@@ -89,6 +89,33 @@ def test_prompt_append_present_when_set() -> None:
 	assert "ADDITIONAL TASK RULES" in bundle.system_prompt
 
 
+def test_docker_prompt_includes_required_evidence_when_provided() -> None:
+	bundle = build_prompt_bundle(
+		_docker_ctx(
+			required_evidence=[
+				"Save stdout to results/table5.txt.",
+				"Keep the full run log at logs/full-run.log.",
+			]
+		)
+	)
+	assert "REQUIRED EVIDENCE" in bundle.system_prompt
+	assert "- Save stdout to results/table5.txt." in bundle.system_prompt
+	assert "- Keep the full run log at logs/full-run.log." in bundle.system_prompt
+
+
+def test_local_prompt_includes_required_evidence_when_provided() -> None:
+	bundle = build_prompt_bundle(
+		_local_ctx(required_evidence=["Leave generated tables in the results directory."])
+	)
+	assert "REQUIRED EVIDENCE" in bundle.system_prompt
+	assert "- Leave generated tables in the results directory." in bundle.system_prompt
+
+
+def test_required_evidence_section_absent_when_empty() -> None:
+	bundle = build_prompt_bundle(_docker_ctx())
+	assert "REQUIRED EVIDENCE" not in bundle.system_prompt
+
+
 def test_bundle_has_non_empty_system_and_initial_prompts() -> None:
 	bundle = build_prompt_bundle(_docker_ctx())
 	assert bundle.system_prompt
