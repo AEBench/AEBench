@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "source_commit": "9c94b5588b1ab1a5b8c58f3cc37f7117b88887f0",
+  "toolchain": "nightly-2025-05-01",
+  "scale": "functional",
+  "notes": "Generated with reduced circuit sizes for memory-limited AE hosts. Metrics are cycle-accurate Ramulator2 TraceGen totals from <workload>.log.",
+  "metric_keys": [
+    "memory_system_cycles",
+    "total_num_read_requests",
+    "total_num_write_requests",
+    "s_total_mem_req"
+  ],
+  "workloads": {
+    "factorial": {
+      "memory_system_cycles": 1347307,
+      "total_num_read_requests": 5693826,
+      "total_num_write_requests": 3375955,
+      "s_total_mem_req": 9069781
+    },
+    "fibonacci": {
+      "memory_system_cycles": 175206,
+      "total_num_read_requests": 307003,
+      "total_num_write_requests": 202089,
+      "s_total_mem_req": 509092
+    },
+    "mvm": {
+      "memory_system_cycles": 12652191,
+      "total_num_read_requests": 52680072,
+      "total_num_write_requests": 37574565,
+      "s_total_mem_req": 90254637
+    },
+    "sha256": {
+      "memory_system_cycles": 10850477,
+      "total_num_read_requests": 38811381,
+      "total_num_write_requests": 26948549,
+      "s_total_mem_req": 65759930
+    }
+  }
+}

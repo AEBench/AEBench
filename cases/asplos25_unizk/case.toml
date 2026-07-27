@@ -1,0 +1,43 @@
+id = "asplos25_unizk"
+
+[case_brief]
+core_claim = "Build UniZK's RamSim-based simulator (thirdparty/ramsim -> ramulator2), run the Plonky2 and Starky simulation workloads, and reproduce the cycle-accurate accelerator metrics."
+acceptable_evidence = "Built ramulator2 binary, staged configs/examples/scripts, and simulation .log files whose memory_system_cycles / read / write / s_total_mem_req metrics match the bundled reference trends (Pearson >= 0.75)."
+allowed_tolerance = "Cycle-accurate totals are deterministic for a fixed workload scale. Absolute values may differ if a different circuit scale is used; metric vectors must preserve the reference trend strongly enough to achieve Pearson correlation >= 0.75."
+
+[paper]
+title = "UniZK: Accelerating Zero-Knowledge Proof with Unified Hardware and Flexible Kernel Mapping"
+venue = "ASPLOS 2025"
+url = "https://people.iiis.tsinghua.edu.cn/~gaomy/pubs/unizk.asplos25.pdf"
+sha256 = "ac49aef3425bbe41392053dcf7fe5e125b06301ef98bde2785adcf229ff1aaad"
+version = "ASPLOS '25 published PDF"
+
+[run]
+id = "asplos25_unizk"
+
+[run.instructions]
+path = "README.md"
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 345600000
+gpu = false
+interactive = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "fail_fast"
+placeholder = false
+
+[upstream]
+source_type = "git"
+url = "https://github.com/tsinghua-ideal/UniZK.git"
+ref = "9c94b5588b1ab1a5b8c58f3cc37f7117b88887f0"
+requested_ref = "main"
+resolved_at = "2026-07-26T20:00:00.000000+00:00"
+notes = "Prereqs: Ubuntu 22.04, rust nightly (pin nightly-2025-05-01), g++ 11.4, cmake 3.22. Build RamSim then run run_plonky2_test.sh / run_starky_test.sh."
