@@ -8,7 +8,7 @@ from evaluator.oracles.bases import CaseOracleArtifactBuildBase
 from evaluator.oracles.checks import PathKind
 from evaluator.oracles.reporting import BaseCheck, CheckResult
 
-from .common import (
+from .consts import (
     BUILD_MODE_ENV,
     BUILD_TIMEOUT_SECONDS,
     RAMULATOR_RELPATH,

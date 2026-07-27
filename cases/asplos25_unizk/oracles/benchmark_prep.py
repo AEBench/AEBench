@@ -7,7 +7,7 @@ from evaluator.oracles.bases import CaseOracleBenchmarkPrepBase
 from evaluator.oracles.checks import PathKind
 from evaluator.oracles.reporting import BaseCheck
 
-from .common import (
+from .consts import (
     REQUIRED_CONFIGS,
     REQUIRED_DIRECTORIES,
     find_repo_root,

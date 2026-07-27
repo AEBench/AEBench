@@ -6,7 +6,7 @@ from evaluator.oracles.bases import CaseOracleEnvSetupBase
 from evaluator.oracles.checks import PathKind
 from evaluator.oracles.reporting import BaseCheck
 
-from .common import (
+from .consts import (
     CMAKE_MIN_VERSION,
     GPP_MIN_VERSION,
     REQUIRED_SCRIPTS,

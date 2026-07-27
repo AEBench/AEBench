@@ -15,7 +15,7 @@ from evaluator.oracles.checks import (
 )
 from evaluator.oracles.reporting import BaseCheck, CheckResult
 
-from .common import (
+from .consts import (
     METRIC_KEYS,
     REQUIRED_SIM_LOGS,
     RESULTS_REF,
