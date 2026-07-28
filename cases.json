@@ -46,6 +46,9 @@
     "osdi25_bpftime": {
       "path": "cases/osdi25_bpftime"
     },
+    "osdi25_paralegal": {
+      "path": "cases/osdi25_paralegal"
+    },
     "sosp23_acto": {
       "path": "cases/sosp23_acto"
     },

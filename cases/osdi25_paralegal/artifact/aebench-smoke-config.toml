@@ -1,0 +1,20 @@
+stat-refresh-interval = "500ms"
+paralegal-home-dir = "../paralegal"
+pdg-timeout = "15min"
+repeats = 1
+
+[app-config.atomic-data]
+source-dir = "case-studies/atomic-server"
+external-annotations = "external-annotations.toml"
+flow-args = ["--target", "atomic_lib"]
+cargo-args = ["--lib", "--features", "db"]
+
+[app-config.atomic-data.version-override.proc-macro2]
+replacement = "1.0.78"
+original = "1"
+
+[[experiment.smoke]]
+mode = "case-study"
+application = "atomic-data"
+policy-mode = "unified"
+cnl = true
