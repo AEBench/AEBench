@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles import CaseOracleExperimentRunsBase, PathCheck, PathKind
+from evaluator.oracles import CaseOracleExperimentRunsBase, PathKind
 from evaluator.oracles.oracle_checks_runtime import (
 	OraclePath,
 	RuntimeCheckExecutor,
@@ -231,7 +231,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 		tex_fallback = self.artifact_path("results.tex")
 
 		return (
-			PathCheck(
+			self.path_check(
 				name="results_file_exists",
 				path=self.artifact_path("results"),
 				kind=PathKind.FILE,
@@ -250,7 +250,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 				results_path=results_path,
 				expected_count=_MIN_EXPECTED_GO_INSTRUCTIONS,
 			),
-			PathCheck(
+			self.path_check(
 				name="results_perf_csv_exists",
 				path=self.artifact_path("results-perf.csv"),
 				kind=PathKind.FILE,
@@ -259,7 +259,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 				name="rq2_perf_csv_structure",
 				csv_path=perf_csv_path,
 			),
-			PathCheck(
+			self.path_check(
 				name="rq2_boxplot_tex_exists",
 				path=tex_path or tex_fallback,
 				kind=PathKind.FILE,

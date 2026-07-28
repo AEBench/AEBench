@@ -86,8 +86,11 @@ phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
 score_mode = "phase_count"
 failure_mode = "fail_fast"
 
-[oracle.runtime]
-mode = "local"
+[oracle.phase_targets]
+env_setup = "local"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "local"
 
 [upstream]
 source_type = "git"
@@ -107,6 +110,7 @@ Key choices to make:
 - **`runtime.mode`**: use `"docker"` if the artifact has complex deps or needs isolation. Use `"local"` only for simple cases safe to run on the host
 - **`runtime.timeout_ms`**: set this generously. Large builds and dataset downloads can take hours. 4 hours (`14_400_000`) is reasonable for most cases
 - **`run.instructions.required_evidence`**: list the exact logs, redirected stdout files, tables, or result artifacts the agent must leave for the oracle; do not repeat the success criteria from `acceptable_evidence`
+- **`oracle.phase_targets`**: choose where each oracle phase runs. Use built-in `"local"` or `"task"` targets, or define a named `[oracle.targets.<name>]` Docker image target with `type = "docker_image"` and `working_dir = "/absolute/path"`
 - **`upstream.ref`**: always pin to a full commit hash. Branch names change over time and break reproducibility
 
 ## 4. Register the case
@@ -191,11 +195,12 @@ Check that required tools are installed at the right versions:
 from __future__ import annotations
 from collections.abc import Sequence
 
-from evaluator.oracles import CaseOracleEnvSetupBase, PathKind, utils
+from evaluator.oracles import CaseOracleEnvSetupBase, PathKind
+from evaluator.oracles.reporting import BaseCheck
 
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
-    def requirements(self) -> Sequence[utils.BaseCheck]:
+    def requirements(self) -> Sequence[BaseCheck]:
         return (
             self.version_check(
                 name="python3_version",
@@ -220,14 +225,15 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluator.oracles import CaseOracleArtifactBuildBase, PathKind, utils
+from evaluator.oracles import CaseOracleArtifactBuildBase, PathKind
+from evaluator.oracles.reporting import BaseCheck
 
 _EXPECTED_OUTPUTS = ("build/my-tool", "build/lib/my-lib.so")
 _BUILD_MODE_ENV = "AE_MYPAPER_BUILD_MODE"
 
 
 class OracleArtifactBuild(CaseOracleArtifactBuildBase):
-    def requirements(self) -> Sequence[utils.BaseCheck]:
+    def requirements(self) -> Sequence[BaseCheck]:
         mode = (os.environ.get(_BUILD_MODE_ENV, "verify") or "verify").strip().lower()
 
         if mode == "command":
@@ -256,11 +262,12 @@ Check that datasets were downloaded and any prep tools built:
 from __future__ import annotations
 from collections.abc import Sequence
 
-from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind, utils
+from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind
+from evaluator.oracles.reporting import BaseCheck
 
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
-    def requirements(self) -> Sequence[utils.BaseCheck]:
+    def requirements(self) -> Sequence[BaseCheck]:
         return (
             self.path_check(
                 name="dataset_dir",
@@ -272,7 +279,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
                 path=self.workspace_path("data", "my-dataset", "train.csv"),
                 kind=PathKind.FILE,
             ),
-            self.directory_glob_count_check(
+            self.min_matching_entry_count_check(
                 name="prepared_result_count",
                 directory=self.workspace_path("outputs"),
                 pattern="*.json",
@@ -295,8 +302,8 @@ from evaluator.oracles import (
     CaseOracleExperimentRunsBase,
     ListSimilarityCheck,
     SimilarityMetric,
-    utils,
 )
+from evaluator.oracles.reporting import BaseCheck
 
 
 def _load_values(path: Path) -> list[float]:
@@ -305,7 +312,7 @@ def _load_values(path: Path) -> list[float]:
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
-    def requirements(self) -> Sequence[utils.BaseCheck]:
+    def requirements(self) -> Sequence[BaseCheck]:
         observed = _load_values(self.workspace_path("outputs", "results.json"))
         reference = _load_values(self.ref_path("results.ref.json"))
 
@@ -352,4 +359,4 @@ That command exits with `case runner is unavailable in this checkout`. Audit cas
 - Set realistic timeouts on `command_check`. Build times vary significantly across machines
 - Use `optional=True` for nice-to-have checks that should not block the phase
 - Write descriptive `name` strings — they show up in the oracle report. `"rustc_version"` is better than `"check1"`
-- Handle missing workspace gracefully. Prefer a clear failing `path_check` or custom `utils.Check` result rather than letting the oracle crash
+- Handle missing workspace gracefully. Prefer a clear failing `path_check` or custom `BaseCheck` result rather than letting the oracle crash

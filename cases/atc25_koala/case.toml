@@ -39,10 +39,16 @@ score_mode = "phase_count"
 failure_mode = "fail_fast"
 placeholder = false
 
-[oracle.runtime]
-mode = "docker"
+[oracle.targets.koala]
+type = "docker_image"
 image = "koala"
-app_dir = "/koala"
+working_dir = "/koala"
+
+[oracle.phase_targets]
+env_setup = "local"
+artifact_build = "koala"
+benchmark_prep = "koala"
+experiment_runs = "local"
 
 [upstream]
 source_type = "git"
