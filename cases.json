@@ -16,6 +16,9 @@
     "asplos25_cinnamon": {
       "path": "cases/asplos25_cinnamon"
     },
+    "asplos24_gaia": {
+      "path": "cases/asplos24_gaia"
+    },
     "asplos25_herbie": {
       "path": "cases/asplos25_herbie"
     },
