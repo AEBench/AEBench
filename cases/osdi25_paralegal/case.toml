@@ -1,0 +1,62 @@
+id = "osdi25_paralegal"
+
+[case_brief]
+core_claim = "Build the pinned Paralegal artifact, reproduce its CodeQL policy comparison, and run one bounded atomic-data CI-style benchmark."
+acceptable_evidence = "All CodeQL intermediate tables semantically match the pinned expected outputs, and a fresh atomic-data smoke run records both expected pass and expected fail cases with complete, positive measurements."
+allowed_tolerance = "CodeQL table spacing and checkout-root prefixes may differ. Performance values are not compared to fixed timings, but required measurements must be finite and positive and policy outcomes must exactly match expectations."
+
+[paper]
+url = "https://cs.brown.edu/people/malte/pub/papers/2025-osdi-paralegal.pdf"
+sha256 = "420d5a290f350408642bc9dad2172d0fb5976d33163adf3223bf4ba4a821b258"
+title = "Paralegal: Practical Static Analysis for Privacy Bugs"
+version = "OSDI 2025 artifact-linked preprint"
+venue = "OSDI 2025"
+notes = "The wrapper repository and Zenodo record do not currently declare a root artifact license. This case bundles only newly authored configuration and factual metadata."
+
+[run]
+id = "osdi25_paralegal"
+
+[run.instructions]
+path = "AEBENCH.md"
+
+[run.runtime]
+mode = "local"
+timeout_ms = 14400000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = false
+compose = false
+
+[run.artifact_requirements.hardware]
+memory_gb = 64
+cpu_count = 8
+disk_gb = 100
+network = true
+notes = "Linux x86_64 is required for the published container. Source reproduction is expected to work on Linux without CloudLab-specific services; 32 GB RAM may work, while 64 GB and 100 GB disk are recommended for cold Rust and CodeQL builds."
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+failure_mode = "continue"
+placeholder = false
+notes = "Bounded first slice only: CodeQL comparison plus one atomic-data CI-style smoke benchmark. This does not reproduce the full approximately 90-minute benchmark corpus or paper plots."
+
+[oracle.phase_targets]
+env_setup = "local"
+artifact_build = "local"
+benchmark_prep = "local"
+experiment_runs = "local"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/brownsys/paralegal-osdi-2025-artifact.git"
+ref = "d26799fb0f4b0d2bc2cf7b6ad0e1b6afc732b9b4"
+requested_ref = "final"
+resolved_at = "2026-07-28T00:00:00+00:00"
+artifact_mode = "hybrid"
+overlay_artifact = true
+notes = "Initialize recursive submodules after applying a repository-local SSH-to-HTTPS URL rewrite. Exact submodule commits are recorded in refs/submodules.ref.json."
