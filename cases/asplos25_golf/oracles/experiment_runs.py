@@ -21,9 +21,7 @@ _MIN_EXPECTED_GO_INSTRUCTIONS = 121
 _RESULT_TEST_DIR_FALL_BACK = "tester"
 
 
-def _find_result_file(
-	repo_root: Path, filename: str, *, executor: RuntimeCheckExecutor
-) -> Path:
+def _find_result_file(repo_root: Path, filename: str, *, executor: RuntimeCheckExecutor) -> Path:
 	"""Find a result file in the repo root or tester/ subdirectory."""
 	candidate = repo_root / filename
 	if executor.path_is_file(candidate):
@@ -219,15 +217,11 @@ class PerfCSVStructureCheck(BaseCheck):
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	def requirements(self) -> Sequence[BaseCheck]:
-		results_path = _find_result_file(
-			self.artifact_path(), "results", executor=self.executor
-		)
+		results_path = _find_result_file(self.artifact_path(), "results", executor=self.executor)
 		perf_csv_path = _find_result_file(
 			self.artifact_path(), "results-perf.csv", executor=self.executor
 		)
-		tex_path = _find_result_file(
-			self.artifact_path(), "results.tex", executor=self.executor
-		)
+		tex_path = _find_result_file(self.artifact_path(), "results.tex", executor=self.executor)
 		tex_fallback = self.artifact_path("results.tex")
 
 		return (

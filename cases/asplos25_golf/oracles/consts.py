@@ -8,7 +8,7 @@ DOCKERFILE_PATH = "Dockerfile"
 
 # Oracle 2 & 3 (artifact_build, benchmark_prep)
 
-# Paths relative to golf container root
+# Paths relative to golf container root 
 GOLF_BINARY_PATH = "golf/bin/go"
 BASELINE_BINARY_PATH = "baseline/bin/go"
 TESTER_BINARY_PATH = "tester/golf-tester"
