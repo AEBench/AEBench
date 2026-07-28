@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind
-from evaluator.oracles.utils import BaseCheck
+from evaluator.oracles.reporting import BaseCheck
 
 from .consts import BENCHMARKS, SPEC_SCRIPTS
 
@@ -30,7 +30,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 			checks.append(
 				self.path_check(
 					name=f"{bench}_dir",
-					path=self.app_path(bench),
+					path=self.runtime_path(bench),
 					kind=PathKind.DIRECTORY,
 				)
 			)
@@ -38,7 +38,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 				checks.append(
 					self.path_check(
 						name=f"{bench}_{script}",
-						path=self.app_path(bench, script),
+						path=self.runtime_path(bench, script),
 						kind=PathKind.FILE,
 					)
 				)

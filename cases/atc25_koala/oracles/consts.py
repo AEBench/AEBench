@@ -24,7 +24,7 @@ BENCHMARKS = (
 
 # Benchmarks whose experiment_runs checks are reported as warnings instead of
 # hard failures: they still run and are logged, but a failure does not sink the
-# phase. 
+# phase.
 # I wasn't able to reproduce the weather benchmark on my machine, so I marked it
 # as optional.
 OPTIONAL_BENCHMARKS = frozenset({"weather"})

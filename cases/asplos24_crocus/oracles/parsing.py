@@ -95,16 +95,20 @@ class Table1CountsCheck(BaseCheck):
 		expect_exact("rules_total", r_total, self.rules_total)
 		expect_exact("rules_failure", r_fail, self.rules_failure)
 		expect_range(
-			"rules_success_all", r_succ_all, self.rules_success_all - self.success_tolerance, r_total
+			"rules_success_all",
+			r_succ_all,
+			self.rules_success_all - self.success_tolerance,
+			r_total,
 		)
 		expect_range(
-			"rules_success_any", r_succ_any, self.rules_success_any - self.success_tolerance, r_total
+			"rules_success_any",
+			r_succ_any,
+			self.rules_success_any - self.success_tolerance,
+			r_total,
 		)
 		# "all types" is a stricter criterion than "any type", so it cannot exceed it.
 		if r_succ_all > r_succ_any:
-			errors.append(
-				f"rules success ordering violated: all={r_succ_all} > any={r_succ_any}"
-			)
+			errors.append(f"rules success ordering violated: all={r_succ_all} > any={r_succ_any}")
 
 		# --- Type Insts. row ---
 		# Total, failures, and inapplicable are structural/deterministic -> exact.
@@ -113,7 +117,10 @@ class Table1CountsCheck(BaseCheck):
 		expect_exact("type_insts_inapplicable", ti_inapp, self.type_insts_inapplicable)
 		# Success floors out (Z3 variance) but is ceilinged by the total.
 		expect_range(
-			"type_insts_success", ti_succ, self.type_insts_success - self.success_tolerance, ti_total
+			"type_insts_success",
+			ti_succ,
+			self.type_insts_success - self.success_tolerance,
+			ti_total,
 		)
 		# Partition identity: success + timeout + inapplicable == total. Failure is an
 		# orthogonal annotation (counterexample found; the "(0)" = 0 true failures), so it
