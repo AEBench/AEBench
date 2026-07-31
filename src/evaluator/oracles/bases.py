@@ -331,7 +331,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 		self,
 		*,
 		name: str,
-		directory: Path,
+		directory: OraclePath,
 		pattern: str,
 		min_count: int = 1,
 		optional: bool = False,
