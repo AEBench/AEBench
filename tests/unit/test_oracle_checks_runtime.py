@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from evaluator.oracles.checks import MinMatchingEntryCountCheck
 from evaluator.oracles.oracle_checks_runtime import (
 	DockerRuntimeCheckExecutor,
 	LocalRuntimeCheckExecutor,
@@ -500,3 +501,47 @@ def test_local_executor_preserves_absolute_runtime_path(
 	resolved = executor.resolve_path(RuntimePath.from_parts("/usr/app/results/output.json"))
 
 	assert resolved == Path("/usr/app/results/output.json")
+
+
+@pytest.mark.parametrize(
+	"directory",
+	[
+		Path("results"),
+		RuntimePath.from_parts("results"),
+	],
+)
+def test_local_executor_globs_relative_oracle_path(
+	tmp_path: Path,
+	directory: Path | RuntimePath,
+) -> None:
+	results_dir = tmp_path / "results"
+	results_dir.mkdir()
+	expected = results_dir / "output.json"
+	expected.touch()
+	(results_dir / "output.txt").touch()
+	executor = LocalRuntimeCheckExecutor(default_cwd=tmp_path)
+
+	matches = executor.glob(directory, "*.json")
+
+	assert matches == [expected]
+
+
+def test_min_matching_entry_count_accepts_relative_runtime_path(
+	tmp_path: Path,
+) -> None:
+	results_dir = tmp_path / "results"
+	results_dir.mkdir()
+	(results_dir / "first.json").touch()
+	(results_dir / "second.json").touch()
+	executor = LocalRuntimeCheckExecutor(default_cwd=tmp_path)
+	check = MinMatchingEntryCountCheck(
+		name="result_files",
+		directory=RuntimePath.from_parts("results"),
+		pattern="*.json",
+		min_count=2,
+		executor=executor,
+	)
+
+	result = check.check()
+
+	assert result.ok is True
