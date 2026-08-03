@@ -32,11 +32,11 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 			),
 		]
 		for exp_dir, script in SCOPED_SCRIPTS:
-			name = f"{exp_dir.rsplit('/', 1)[-1]}_{script}".replace(".", "_").replace("-", "_")
+			rel_path = f"{exp_dir}/{script}"
 			checks.append(
 				self.path_check(
-					name=f"script_{name}",
-					path=self.runtime_path(f"{exp_dir}/{script}"),
+					name=f"script_{rel_path.removesuffix('.py').replace('/', '_')}",
+					path=self.runtime_path(rel_path),
 					kind=PathKind.FILE,
 				)
 			)
