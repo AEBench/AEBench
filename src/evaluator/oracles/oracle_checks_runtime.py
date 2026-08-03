@@ -187,7 +187,7 @@ class RuntimeCheckExecutor(abc.ABC):
 	) -> str:
 		"""Reads a text file."""
 
-	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+	def glob(self, path: OraclePath, pattern: str) -> list[pathlib.Path]:
 		"""For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")"""
 		raise NotImplementedError
 
@@ -348,8 +348,8 @@ class LocalRuntimeCheckExecutor(RuntimeCheckExecutor):
 		"""Reads a text file from the local filesystem."""
 		return self.resolve_path(path).read_text(encoding=encoding)
 
-	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
-		return list(path.glob(pattern))
+	def glob(self, path: OraclePath, pattern: str) -> list[pathlib.Path]:
+		return list(self.resolve_path(path).glob(pattern))
 
 	def run_process_capture(
 		self,
@@ -540,8 +540,8 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 
 		return result.stdout or ""
 
-	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
-		target = self._translate_cwd(path) or str(path)
+	def glob(self, path: OraclePath, pattern: str) -> list[pathlib.Path]:
+		target = str(self.resolve_path(path))
 		script = 'shopt -s globstar nullglob; for f in "$1"/$2; do echo "$f"; done'
 		try:
 			result = self._runtime_backend.run_process(
@@ -902,9 +902,9 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 
 		return result.stdout or ""
 
-	def glob(self, path: pathlib.Path, pattern: str) -> list[pathlib.Path]:
+	def glob(self, path: OraclePath, pattern: str) -> list[pathlib.Path]:
 		"""For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")"""
-		target = str(self.resolve_path(path) or path)
+		target = str(self.resolve_path(path))
 		script = 'shopt -s globstar nullglob; for f in "$1"/$2; do echo "$f"; done'
 		try:
 			result = self._docker_exec(
@@ -1278,7 +1278,7 @@ def check_read_file_text(
 
 
 def glob(
-	path: pathlib.Path,
+	path: OraclePath,
 	pattern: str,
 	*,
 	executor: RuntimeCheckExecutor | None = None,
@@ -1286,4 +1286,4 @@ def glob(
 	"""For recursive globbing, the pattern should include **, e.g, glob(path, "**/*.txt")"""
 	if executor is not None:
 		return executor.glob(path, pattern)
-	return list(path.glob(pattern))
+	return list(_resolve_local_check_path(path).glob(pattern))
