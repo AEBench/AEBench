@@ -17,7 +17,10 @@ def _parse_csv(text: str) -> tuple[list[str], dict[str, list[str]]]:
 
 	The first column is a row key (zone code / latency / migration label); the
 	remaining columns are numeric (possibly empty). Raises ValueError on an empty
-	table or duplicate row keys.
+	table, a row whose width differs from the header, or duplicate row keys.
+
+	Rectangularity is enforced here so callers can zip rows against the header
+	without a ragged row silently truncating the comparison.
 	"""
 	rows = list(csv.reader(text.splitlines()))
 	rows = [r for r in rows if r]
@@ -27,6 +30,8 @@ def _parse_csv(text: str) -> tuple[list[str], dict[str, list[str]]]:
 	body: dict[str, list[str]] = {}
 	for r in rows[1:]:
 		key = r[0]
+		if len(r) != len(header):
+			raise ValueError(f"row {key!r}: {len(r)} column(s), header has {len(header)}")
 		if key in body:
 			raise ValueError(f"duplicate row key {key!r}")
 		body[key] = r[1:]
@@ -90,10 +95,9 @@ class CsvNumericMatchCheck(BaseCheck):
 		errors: list[str] = []
 		for key, ref_cells in ref_rows.items():
 			obs_cells = obs_rows[key]
-			if len(obs_cells) != len(ref_cells):
-				errors.append(f"row {key!r}: {len(obs_cells)} cols != expected {len(ref_cells)}")
-				continue
-			for col, (o, r) in zip(ref_header[1:], zip(obs_cells, ref_cells)):
+			# strict=True: both tables are rectangular and their headers already
+			# matched, so a length mismatch here is an invariant violation, not data.
+			for col, o, r in zip(ref_header[1:], obs_cells, ref_cells, strict=True):
 				if not _cells_match(o, r, self.rel_tol):
 					errors.append(f"row {key!r} col {col!r}: got {o!r}, expected {r!r}")
 			if len(errors) >= 8:
@@ -131,7 +135,9 @@ class OneVsInfSavingsCheck(BaseCheck):
 
 		regions = header[1:]
 		errors: list[str] = []
-		for region, one_s, inf_s in zip(regions, rows[self.one_row], rows[self.inf_row]):
+		for region, one_s, inf_s in zip(
+			regions, rows[self.one_row], rows[self.inf_row], strict=True
+		):
 			try:
 				one_v, inf_v = float(one_s), float(inf_s)
 			except ValueError:
