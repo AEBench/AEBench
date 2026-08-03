@@ -21,12 +21,21 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 
 	def requirements(self) -> Sequence[BaseCheck]:
 		imports = ", ".join(GLOBAL_MODULES_IMPORTS)
-		compile_cmd = ("python3", "-m", "py_compile") + tuple(f"{d}/{f}" for d, f in SCOPED_SCRIPTS)
+		# Compile in-memory rather than via py_compile: py_compile writes __pycache__
+		# next to each source file even under -B, and the oracles must not alter the
+		# container they observe.
+		compile_cmd = (
+			"python3",
+			"-B",
+			"-c",
+			"import sys; [compile(open(f, 'rb').read(), f, 'exec') for f in sys.argv[1:]]",
+		) + tuple(f"{d}/{f}" for d, f in SCOPED_SCRIPTS)
 		return (
 			self.command_check(
 				name="global_modules_importable",
 				cmd=(
 					"python3",
+					"-B",
 					"-c",
 					f"import sys; sys.path.insert(0, {GLOBAL_MODULES_DIR!r}); import {imports}",
 				),

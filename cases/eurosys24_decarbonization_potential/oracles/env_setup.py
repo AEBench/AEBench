@@ -30,7 +30,7 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 			checks.append(
 				self.command_check(
 					name=f"dep_{module}_importable",
-					cmd=("python3", "-c", f"import {module}"),
+					cmd=("python3", "-B", "-c", f"import {module}"),
 					timeout_seconds=120.0,
 				)
 			)
