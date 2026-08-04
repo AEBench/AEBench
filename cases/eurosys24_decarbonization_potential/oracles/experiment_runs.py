@@ -6,12 +6,15 @@ from evaluator.oracles import CaseOracleExperimentRunsBase
 from evaluator.oracles.reporting import BaseCheck
 
 from .consts import (
+	CAPACITY_LATENCY_CAPACITIES,
 	CAPACITY_LATENCY_FILE,
+	CAPACITY_LATENCY_ROWS,
 	CLAIM_TOL,
 	DEFAULT_REL_TOL,
 	ONE_AND_INF_FILE,
 	ONE_AND_INF_INF_ROW,
 	ONE_AND_INF_ONE_ROW,
+	ONE_AND_INF_REGIONS,
 	SCOPED_OUTPUTS,
 )
 from .parsing import (
@@ -51,6 +54,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 				observed_path=self.runtime_path(ONE_AND_INF_FILE),
 				one_row=ONE_AND_INF_ONE_ROW,
 				inf_row=ONE_AND_INF_INF_ROW,
+				expected_regions=ONE_AND_INF_REGIONS,
 				tol=CLAIM_TOL,
 				executor=executor,
 			)
@@ -61,6 +65,8 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 			CapacityMonotonicCheck(
 				name="spatial_capacity_reduces_emissions",
 				observed_path=self.runtime_path(CAPACITY_LATENCY_FILE),
+				expected_capacities=CAPACITY_LATENCY_CAPACITIES,
+				expected_rows=CAPACITY_LATENCY_ROWS,
 				tol=CLAIM_TOL,
 				executor=executor,
 			)

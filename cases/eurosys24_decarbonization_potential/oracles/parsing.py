@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -42,6 +43,21 @@ def _read_csv(
 	path: OraclePath, executor: RuntimeCheckExecutor | None
 ) -> tuple[list[str], dict[str, list[str]]]:
 	return _parse_csv(check_read_file_text(path, executor=executor))
+
+
+def _label_mismatch(observed: Sequence[str], expected: Sequence[str]) -> str | None:
+	"""Describes how observed labels differ from expected, or None when identical.
+
+	The claim checks read a table positionally, so both the label set and its order
+	have to match before a claim verified over those labels means anything.
+	"""
+	if tuple(observed) == tuple(expected):
+		return None
+	missing = [x for x in expected if x not in observed]
+	extra = [x for x in observed if x not in expected]
+	if missing or extra:
+		return f"missing {missing}, unexpected {extra}"
+	return f"unexpected order: got {list(observed)}, expected {list(expected)}"
 
 
 def _cells_match(observed: str, reference: str, rel_tol: float) -> bool:
@@ -115,11 +131,15 @@ class CsvNumericMatchCheck(BaseCheck):
 class OneVsInfSavingsCheck(BaseCheck):
 	"""Paper claim (spatial): unlimited migration ("inf") yields at least as much
 	carbon savings as a single migration ("one") in every region.
+
+	"Every region" is part of the claim, so a table missing regions fails rather
+	than reporting the claim upheld across whichever subset it does contain.
 	"""
 
 	observed_path: OraclePath
 	one_row: str
 	inf_row: str
+	expected_regions: Sequence[str]
 	tol: float
 	executor: RuntimeCheckExecutor | None = field(default=None)
 
@@ -132,6 +152,8 @@ class OneVsInfSavingsCheck(BaseCheck):
 			return CheckResult.failure(
 				f"savings_mean.csv: missing {self.one_row!r}/{self.inf_row!r} rows"
 			)
+		if (mismatch := _label_mismatch(header[1:], self.expected_regions)) is not None:
+			return CheckResult.failure(f"savings_mean.csv: region columns: {mismatch}")
 
 		regions = header[1:]
 		errors: list[str] = []
@@ -158,17 +180,27 @@ class CapacityMonotonicCheck(BaseCheck):
 	"""Paper claim (spatial): within each latency budget (row), emissions are
 	non-increasing as idle capacity grows across the columns (more spare capacity
 	enables more shifting to cleaner regions). Empty cells are skipped.
+
+	The capacity columns are validated before the sweep: read left-to-right as
+	increasing capacity, a table with columns dropped or reordered would make the
+	monotonicity result meaningless rather than false.
 	"""
 
 	observed_path: OraclePath
+	expected_capacities: Sequence[str]
+	expected_rows: Sequence[str]
 	tol: float
 	executor: RuntimeCheckExecutor | None = field(default=None)
 
 	def check(self) -> CheckResult:
 		try:
-			_, rows = _read_csv(self.observed_path, self.executor)
+			header, rows = _read_csv(self.observed_path, self.executor)
 		except (OSError, ValueError) as exc:
 			return CheckResult.failure(f"emissions.csv: {exc}")
+		if (mismatch := _label_mismatch(header[1:], self.expected_capacities)) is not None:
+			return CheckResult.failure(f"emissions.csv: capacity columns: {mismatch}")
+		if (mismatch := _label_mismatch(list(rows), self.expected_rows)) is not None:
+			return CheckResult.failure(f"emissions.csv: latency rows: {mismatch}")
 
 		errors: list[str] = []
 		for key, cells in rows.items():

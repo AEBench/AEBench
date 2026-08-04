@@ -55,17 +55,26 @@ SCOPED_SCRIPTS = (
 	("sim_spatial/one_and_inf", "calculate_one_inf.py"),
 )
 
+# The claim checks below name the labels they expect. A truncated table must fail
+# rather than silently verifying the claim over the subset the agent happened to
+# emit ("holds in all 2 regions" is not the paper's claim).
+
 # --- Paper claim (spatial, Fig 5/6): more shifting freedom -> more carbon savings.
 # one_and_inf/savings_mean.csv: unlimited migration ("inf") saves at least as much
 # as a single migration ("one") in every region.
 ONE_AND_INF_FILE = "sim_spatial/one_and_inf/data_output/savings_mean.csv"
 ONE_AND_INF_ONE_ROW = "one"
 ONE_AND_INF_INF_ROW = "inf"
+ONE_AND_INF_REGIONS = ("Asia", "Americas", "Global", "Europe", "Oceania")
 
 # capacity_latency/emissions.csv: within each latency budget (row), emissions are
 # non-increasing as idle capacity grows across the columns (0 -> 50 -> 99), i.e.
 # more spare capacity enables more shifting to cleaner regions.
 CAPACITY_LATENCY_FILE = "sim_spatial/capacity_latency/data_output/emissions.csv"
+# Column order is load-bearing here: the check reads left-to-right as increasing
+# idle capacity, so it verifies the labels rather than assuming them.
+CAPACITY_LATENCY_CAPACITIES = ("0", "50", "99")
+CAPACITY_LATENCY_ROWS = ("5", "50", "100", "150", "200", "250", "300")
 
 # Small slack so float noise does not trip the relational claim checks.
 CLAIM_TOL = 1e-6
