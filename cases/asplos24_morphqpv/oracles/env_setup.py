@@ -4,9 +4,7 @@ from collections.abc import Sequence
 
 from evaluator.oracles import (
     CaseOracleEnvSetupBase,
-    PathCheck,
     PathKind,
-    VersionCheck,
 )
 from evaluator.oracles.reporting import BaseCheck
 
@@ -15,24 +13,24 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 
     def requirements(self) -> Sequence[BaseCheck]:
         return (
-            VersionCheck(
+            self.version_check(
                 name="conda",
                 cmd=("conda", "--version"),
                 min_version=(22, 9, 0), 
             ),
-            PathCheck(
+            self.path_check(
                 name="repo_root_exists",
-                path=self.artifact_path(),
+                path=self.workspace_path(),
                 kind=PathKind.DIRECTORY,
             ),
-            PathCheck(
+            self.path_check(
                 name="requirements",
-                path=self.artifact_path("requirements.txt"),
+                path=self.workspace_path("requirements.txt"),
                 kind=PathKind.FILE,
             ),
-            PathCheck(
+            self.path_check(
                 name="requirements_no_version_exists",
-                path=self.artifact_path("requirementswithnoversion.txt"),
+                path=self.workspace_path("requirementswithnoversion.txt"),
                 kind=PathKind.FILE,
             ),
         )

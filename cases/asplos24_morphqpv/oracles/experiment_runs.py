@@ -128,9 +128,9 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 
         csv_validation_targets = [
             ("table4-compare/overhead.csv", ("morph_confidence", "morph_gates_num")),
-            ("fig7-quantumlock/quantumlock.csv", ("samples",)),
+            ("fig7-quantumlock/quantumlock.csv", ("bases",)),
             ("fig15a-ablation_study/accuracy.csv", ("clliford", "basis_gate")),
-            ("fig12-confidence/distribution_samples64.csv", ("confidence",)),
+            ("fig12-confidence/distribution_samples64.csv", ("mean",)),
         ]
 
         for csv_rel_path, target_cols in csv_validation_targets:

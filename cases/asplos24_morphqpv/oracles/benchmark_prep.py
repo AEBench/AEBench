@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathCheck, PathKind
+from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind
 from evaluator.oracles.reporting import BaseCheck
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
@@ -10,14 +10,14 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 
     def requirements(self) -> Sequence[BaseCheck]:
         return (
-            PathCheck(
+            self.path_check(
                 name="qbenchmark_dir_exists",
-                path=self.runtime_path("data", "Qbenchmark"),
+                path=self.workspace_path("data/Qbenchmark"),
                 kind=PathKind.DIRECTORY,
             ),
-            PathCheck(
+            self.path_check(
                 name="examples_dir_exists",
-                path=self.runtime_path("examples"),
+                path=self.workspace_path("examples"),
                 kind=PathKind.DIRECTORY,
             ),
         )
