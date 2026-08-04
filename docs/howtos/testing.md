@@ -53,9 +53,9 @@ tests/
     ├── conftest.py           # sets PYTHONPATH for subprocess oracle runner
     ├── test_oracle_executor.py # run_oracle execution behavior
     ├── test_oracle_runner.py # DirectOracleRunner and SubprocessOracleRunner
-    └── mock-case/            # full end-to-end with mock agent
-        ├── fixture/          # self-contained workspace (aebench.toml + case bundle)
-        └── test_mock_case_e2e.py  # CaseRunner and BenchmarkRunner e2e
+	    └── mock-case/            # oracle end-to-end fixture
+	        ├── fixture/          # self-contained workspace (aebench.toml + case bundle)
+	        └── test_mock_case_e2e.py  # four-phase oracle execution
 ```
 
 ## 4. Running individual tiers
@@ -103,7 +103,7 @@ If these fail with `unsupported oracle runtime mode: None`, the failure is comin
 |---|---|
 | `test_oracle_executor.py` | `run_oracle`: phase execution, failure reporting, result output |
 | `test_oracle_runner.py` | `DirectOracleRunner` and `SubprocessOracleRunner`: pass/fail on valid/empty workspace, result written to disk |
-| `test_mock_case_e2e.py` | full pipeline with mock agent: `CaseRunner` single-case, `BenchmarkRunner` multi-case, output files, oracle scoring |
+| `test_mock_case_e2e.py` | four-phase oracle execution and result files |
 
 Integration tests are tagged `@pytest.mark.sanity`. To run only sanity tests across all tiers:
 ```bash

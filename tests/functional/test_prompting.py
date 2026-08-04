@@ -67,11 +67,10 @@ def test_docker_prompt_includes_timeout_ms_value() -> None:
 	assert "7200000" in bundle.system_prompt
 
 
-def test_local_prompt_does_not_include_specific_ms_value() -> None:
-	bundle = build_prompt_bundle(_local_ctx())
+def test_local_prompt_includes_timeout_ms_value() -> None:
+	bundle = build_prompt_bundle(_local_ctx(timeout_ms=7_200_000))
 	assert "TIMEOUT" in bundle.system_prompt
-	assert "timeout_ms" not in bundle.system_prompt.lower()
-	assert "None ms" not in bundle.system_prompt
+	assert "7200000" in bundle.system_prompt
 
 
 def test_prompt_append_included_when_provided() -> None:

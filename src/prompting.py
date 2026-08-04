@@ -8,13 +8,14 @@ _JINJA = Environment(
 	undefined=StrictUndefined, trim_blocks=True, lstrip_blocks=True, keep_trailing_newline=True
 )
 
-LOCAL_TIMEOUT_GUIDANCE = """TIMEOUT CONFIGURATION (CRITICAL):
+LOCAL_TIMEOUT_GUIDANCE = """TIMEOUT BUDGET (CRITICAL):
+- The complete agent run has a budget of {{ timeout_ms }} ms.
 - Long-running commands are expected.
 - Do not set short timeouts; let commands complete naturally.
 """
 
-DOCKER_TIMEOUT_GUIDANCE = """TIMEOUT CONFIGURATION (CRITICAL):
-- The Bash timeout is configured to {{ timeout_ms }} ms.
+DOCKER_TIMEOUT_GUIDANCE = """TIMEOUT BUDGET (CRITICAL):
+- The complete agent run has a budget of {{ timeout_ms }} ms.
 - Do not specify extra timeout parameters in Bash commands.
 - Long-running commands can take hours.
 """
@@ -99,7 +100,7 @@ def build_prompt_bundle(context: PromptArgs) -> PromptBundle:
 	profile = _resolve_profile(context)
 	values = {
 		**context.model_dump(mode="json"),
-		"local_timeout_guidance": LOCAL_TIMEOUT_GUIDANCE,
+		"local_timeout_guidance": _render(LOCAL_TIMEOUT_GUIDANCE, context),
 		"docker_timeout_guidance": _render(DOCKER_TIMEOUT_GUIDANCE, context),
 		"output_management_guidance": OUTPUT_MANAGEMENT_GUIDANCE,
 		"verify_rule": VERIFY_RULE,
