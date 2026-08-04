@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles import utils
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
 from evaluator.oracles.checks import (
     ListSimilarityCheck,
@@ -31,7 +31,6 @@ def _extract_columns_from_csv(path: Path, target_columns: tuple[str, ...]) -> li
         for col in target_columns:
             if col in row:
                 val_str = row[col].strip()
-                # Skip missing markers or strings that are not numbers
                 if not val_str or val_str in ("/", "-") or "over" in val_str:
                     continue
                 try:
@@ -43,44 +42,44 @@ def _extract_columns_from_csv(path: Path, target_columns: tuple[str, ...]) -> li
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class NonEmptyFileCheck(utils.BaseCheck):
+class NonEmptyFileCheck(BaseCheck):
     """Passes only if the file exists and has a size > 0 bytes."""
     path: Path
 
-    def check(self) -> utils.CheckResult:
+    def check(self) -> CheckResult:
         if not self.path.is_file():
-            return utils.CheckResult.failure(f"file missing: {self.path}")
+            return CheckResult.failure(f"file missing: {self.path}")
 
         try:
             size = self.path.stat().st_size
         except OSError as exc:
-            return utils.CheckResult.failure(f"cannot stat {self.path}: {exc}")
+            return CheckResult.failure(f"cannot stat {self.path}: {exc}")
 
         if size == 0:
-            return utils.CheckResult.failure(f"file is empty: {self.path}")
+            return CheckResult.failure(f"file is empty: {self.path}")
 
-        return utils.CheckResult.success()
+        return CheckResult.success()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class GenericCSVCorrelationCheck(utils.BaseCheck):
+class CorrelationCheck(BaseCheck):
     """Compare specific columns from a generated CSV against a reference CSV."""
     generated_path: Path
     reference_path: Path
     target_columns: tuple[str, ...]
     threshold: float = 0.85
 
-    def check(self) -> utils.CheckResult:
+    def check(self) -> CheckResult:
         if not self.generated_path.is_file():
-            return utils.CheckResult.failure(f"Generated file missing: {self.generated_path}")
+            return CheckResult.failure(f"Generated file missing: {self.generated_path}")
         if not self.reference_path.is_file():
-            return utils.CheckResult.failure(f"Reference file missing: {self.reference_path}")
+            return CheckResult.failure(f"Reference file missing: {self.reference_path}")
 
         observed = _extract_columns_from_csv(self.generated_path, self.target_columns)
         reference = _extract_columns_from_csv(self.reference_path, self.target_columns)
 
         if not observed or not reference:
-            return utils.CheckResult.failure(
+            return CheckResult.failure(
                 f"Could not extract target columns {self.target_columns} from {self.generated_path.name} "
                 f"(Observed: {len(observed)}, Reference: {len(reference)})"
             )
@@ -97,9 +96,9 @@ class GenericCSVCorrelationCheck(utils.BaseCheck):
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
-    def requirements(self) -> Sequence[utils.BaseCheck]:
+    def requirements(self) -> Sequence[BaseCheck]:
         examples_dir = self.workspace_path("examples")
-        reqs: list[utils.BaseCheck] = [
+        reqs: list[BaseCheck] = [
             self.path_check(
                 name="examples_dir",
                 path=examples_dir,
@@ -107,8 +106,6 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
             )
         ]
 
-        # 1. Visual Artifacts (Check for non-empty existence only)
-        # Using the actual generated folder names (e.g., fig12-confidence, fig12(b)-solvers_compare)
         visual_artifacts = [
             "fig7-quantumlock/quantumlock.svg",
             "fig11a-theorem1/fig9(a).svg",
@@ -128,8 +125,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
                 )
             )
 
-        # 2. CSV Data Validation (Extract specific columns and correlate)
-        # Format: (File Path, Tuple of columns to extract and compare)
+
         csv_validation_targets = [
             ("table4-compare/overhead.csv", ("morph_confidence", "morph_gates_num")),
             ("fig7-quantumlock/quantumlock.csv", ("samples",)),
@@ -148,9 +144,9 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
                 )
             )
 
-            # Correlate specific columns with the reference CSV
+            #  Compare with reference
             reqs.append(
-                GenericCSVCorrelationCheck(
+                CorrelationCheck(
                     name=f"correlation_{safe_name}",
                     generated_path=examples_dir / csv_rel_path,
                     reference_path=self.ref_path(csv_rel_path),
