@@ -9,7 +9,6 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from constants import (
-	DEFAULT_MODEL,
 	DEFAULT_PROMPT_PROFILE,
 	DEFAULT_TIMEOUT_MS,
 	INFRA_LOG_BASENAME,
@@ -26,9 +25,6 @@ from utils import safe_name
 
 class _Model(BaseModel):
 	model_config = ConfigDict(extra="forbid")
-
-
-AgentOptionValue = str | int | bool | None | list[str] | dict[str, str]
 
 
 class SourceType(str, Enum):
@@ -322,27 +318,6 @@ class PromptBundle(_Model):
 	initial_prompt: str
 
 
-class AgentRequest(_Model):
-	model: str = DEFAULT_MODEL
-	system_prompt: str
-	initial_prompt: str
-	combined_prompt: str = ""
-	interactive: bool = False
-	timeout_ms: int | None = None
-	agent_type: str
-	agent_options: dict[str, AgentOptionValue] = Field(default_factory=dict)
-	cwd: str | None = None
-	add_dirs: list[str] = Field(default_factory=list)
-	use_sdk_sandbox: bool = False
-	max_buffer_size: int | None = None
-
-	@model_validator(mode="after")
-	def _populate_combined_prompt(self) -> "AgentRequest":
-		if not self.combined_prompt:
-			self.combined_prompt = f"{self.system_prompt}\n\n{self.initial_prompt}".strip()
-		return self
-
-
 class AgentResult(_Model):
 	model: str
 	exit_code: int
@@ -353,6 +328,7 @@ class AgentResult(_Model):
 class RuntimeInfo(_Model):
 	mode: RuntimeMode
 	image: str | None = None
+	workspace_mount: str | None = None
 	container_id: str | None = None
 	saved_image: str | None = None
 	container_stopped: bool = False
@@ -401,8 +377,11 @@ class RunResult(_Model):
 
 
 class RunOptions(_Model):
+	agent_type: Literal["codex", "claude", "codex_non_api", "claude_non_api"] | None = None
 	model_name: str | None = None
 	interactive: bool = False
+	allow_unsafe_local: bool = False
+	allow_host_docker: bool = False
 	prompt_profile: PromptProfile | None = None
 	prompt_append: str | None = None
 	cleanup_workspace: bool = False
