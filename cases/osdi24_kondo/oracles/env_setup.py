@@ -27,7 +27,7 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 			self.version_check(
 				name="python3",
 				cmd=("python3", "--version"),
-				min_version=(3, 0, 0),
+				min_version=(3, 10, 0),
 			),
 			self.command_check(
 				name="make_available",

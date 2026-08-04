@@ -29,8 +29,12 @@ def _load_json_file(
 ) -> object:
 	try:
 		text = check_read_file_text(path, encoding="utf-8", executor=executor)
-	except (OSError, RuntimeError) as exc:
+	except OSError as exc:
 		raise ValueError(f"{label}: failed to read {path}: {exc}") from exc
+	except ValueError as exc:
+		raise ValueError(f"{label}: failed to resolve or decode {path}: {exc}") from exc
+	except RuntimeError as exc:
+		raise ValueError(f"{label}: runtime failed to read {path}: {exc}") from exc
 
 	text = text.strip()
 	if not text:
@@ -49,20 +53,36 @@ def _load_sloc_csv(
 ) -> dict[str, dict[str, int]]:
 	try:
 		text = check_read_file_text(path, encoding="utf-8", executor=executor)
-	except (OSError, RuntimeError) as exc:
+	except OSError as exc:
 		raise ValueError(f"failed to read sloc.csv: {exc}") from exc
+	except ValueError as exc:
+		raise ValueError(f"failed to resolve or decode sloc.csv: {exc}") from exc
+	except RuntimeError as exc:
+		raise ValueError(f"runtime failed to read sloc.csv: {exc}") from exc
 
 	rows: dict[str, dict[str, int]] = {}
 	reader = csv.DictReader(text.strip().splitlines())
-	for row in reader:
-		protocol = row.get("protocol", "").strip()
+	required_fields = {"protocol", *_SLOC_FIELDS}
+	fieldnames = set(reader.fieldnames or ())
+	missing_fields = sorted(required_fields - fieldnames)
+	if missing_fields:
+		raise ValueError("sloc.csv missing required column(s): " + ", ".join(missing_fields))
+
+	for line_number, row in enumerate(reader, start=2):
+		raw_protocol = row.get("protocol")
+		if raw_protocol is None:
+			raise ValueError(f"sloc.csv line {line_number}: missing protocol value")
+		protocol = raw_protocol.strip()
 		if not protocol:
 			continue
-		rows[protocol] = {
-			"sync_spec": int(row.get("sync_spec", 0)),
-			"manual_proof": int(row.get("manual_proof", 0)),
-			"sync_proof": int(row.get("sync_proof", 0)),
-		}
+		if protocol in rows:
+			raise ValueError(f"sloc.csv line {line_number}: duplicate protocol {protocol!r}")
+		try:
+			rows[protocol] = {field: int(row[field]) for field in _SLOC_FIELDS}
+		except (KeyError, TypeError, ValueError) as exc:
+			raise ValueError(
+				f"sloc.csv line {line_number}: invalid SLOC value for {protocol!r}: {exc}"
+			) from exc
 	return rows
 
 

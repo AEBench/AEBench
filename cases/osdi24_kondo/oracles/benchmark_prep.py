@@ -97,8 +97,12 @@ class VerifyAllLogCheck(BaseCheck):
 
 		try:
 			text = check_read_file_text(self.path, executor=self.executor)
-		except (OSError, RuntimeError) as exc:
+		except OSError as exc:
 			return CheckResult.failure(f"failed to read verify-all log: {exc}")
+		except ValueError as exc:
+			return CheckResult.failure(f"failed to resolve or decode verify-all log: {exc}")
+		except RuntimeError as exc:
+			return CheckResult.failure(f"runtime failed to read verify-all log: {exc}")
 
 		lines = text.splitlines()
 		positions: list[int] = []
