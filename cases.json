@@ -28,6 +28,9 @@
     "atc25_ppipe": {
       "path": "cases/atc25_ppipe"
     },
+    "eurosys24_decarbonization_potential": {
+      "path": "cases/eurosys24_decarbonization_potential"
+    },
     "eurosys25_depsurf": {
       "path": "cases/eurosys25_depsurf"
     },
