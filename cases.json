@@ -13,6 +13,9 @@
     "asplos25_golf": {
       "path": "cases/asplos25_golf"
     },
+    "asplos24_morphqpv": {
+      "path": "cases/asplos24_morphqpv"
+    },
     "asplos25_cinnamon": {
       "path": "cases/asplos25_cinnamon"
     },
