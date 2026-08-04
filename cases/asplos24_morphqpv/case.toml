@@ -12,6 +12,8 @@ id = "asplos24_morphqpv"
 path = "README.md"
 required_evidence = [
     "Output files should be successfully generated and stored in their respective output directories under `examples/`.",
+    "The README contains typos regarding the output directories. The actual directories generated will be named `fig7-quantumlock`, `fig12(b)-solvers_compare`, and `fig12-confidence`.",
+    "Do NOT use the `--earlystop` flag for any evaluation scripts, as we require the full CSV datasets to verify exact mathematical correlations.",
     "`examples/fig7-quantumlock_verify/quantumlock.csv` and its accompanying `.svg`.",
     "`examples/table4-compare/overhead.csv`.",
     "`examples/fig11a-theorem1/time.csv` and `fig9(a).svg`.",
@@ -42,17 +44,11 @@ failure_mode = "fail_fast"
 placeholder = false
 
 
-[oracle.targets.morphqpv]
-type = "docker_image"
-image = "morphqpv"
-working_dir = "/workspace/MorphQPV"
-
-
 
 [oracle.phase_targets]
 env_setup = "local"
-artifact_build = "morphqpv"
-benchmark_prep = "morphqpv"
+artifact_build = "local"
+benchmark_prep = "local"
 experiment_runs = "local"
 
 [upstream]
