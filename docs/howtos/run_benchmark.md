@@ -1,12 +1,12 @@
 # Running and Scoring Cases
 
-This checkout currently supports case authoring, validation, and standalone oracle execution. The full agent runner and benchmark runner subcommands are still present in `--help`, but they intentionally raise "unavailable in this checkout".
+This checkout supports agent runs for one case and standalone oracle execution. Commands that run multiple cases remain unavailable.
 
 ## 1. Prerequisites
 
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) for dependencies
-- Docker only when the upstream artifact itself requires Docker
+- Docker for isolated agent runs
 
 Install dependencies from the repo root:
 
@@ -67,15 +67,32 @@ Oracle status: success
 Score: 4/4
 ```
 
-If a phase fails, the score reflects how far the artifact got. With `failure_mode = "fail_fast"`, later phases are marked pending after the first failed phase.
+If a phase fails, the score includes each phase that passed before it. With `failure_mode = "fail_fast"`, later phases remain pending after the first failed phase.
 
-## 5. Unavailable Runner Commands
+## 5. Run an Agent
 
-These commands are parsed but currently unavailable:
+Build the runtime image first:
+
+```bash
+docker build -t aebench-agent:latest .
+```
+
+Then select an explicit harness and model:
+
+```bash
+uv run aebench case run osdi24_kondo \
+  --agent codex_non_api \
+  --model gpt-5.3-codex
+```
+
+Use `--allow-host-docker` when `[run.artifact_requirements] docker = true`. This gives the agent control of the host Docker daemon. Use `--allow-unsafe-local` when the case runtime is local. This runs agent commands directly on the host. Use both options only on a disposable worker.
+
+## 6. Unavailable Runner Commands
+
+The CLI accepts these commands but reports that they are unavailable:
 
 ```bash
 PYTHONPATH=src uv run aebench run
-PYTHONPATH=src uv run aebench case run osdi24_anvil
 PYTHONPATH=src uv run aebench case export osdi24_anvil --output /tmp/tasks.jsonl
 PYTHONPATH=src uv run aebench case summarize /tmp/case-output --output-dir /tmp/summary
 PYTHONPATH=src uv run aebench runtime run --input-file /tmp/tasks.jsonl
@@ -85,15 +102,12 @@ They exit with messages such as:
 
 ```text
 benchmark runner is unavailable in this checkout
-case runner is unavailable in this checkout
 case export is unavailable in this checkout
 case summarize is unavailable in this checkout
 runtime run is unavailable in this checkout
 ```
 
-Use the standalone oracle command while auditing cases manually.
-
-## 6. How Scoring Works
+## 7. How Scoring Works
 
 Each case declares an `expected_score` in `case.toml`, usually `4`, one point per phase:
 
@@ -110,29 +124,23 @@ The four standard phases are:
 - `benchmark_prep`
 - `experiment_runs`
 
-## 7. Configuration
+## 8. Configuration
 
 ### Environment variables
 
 ```bash
-export AEBENCH_DEFAULT_MODEL=claude-opus-4-6
-export AEBENCH_AGENT_KIND=cli
 export AEBENCH_DEFAULT_DOCKER_IMAGE=my-registry/my-image:latest
 export AEBENCH_PRESERVE_FAILED_WORKSPACE=true
 export AEBENCH_EPHEMERAL_WORKSPACE_ROOT=/fast-ssd/workspaces
 ```
 
-These variables are still part of the runtime configuration model, but they matter only when using code paths that actually launch agents or Docker runtimes.
+Select the harness and model explicitly with `--agent` and `--model` for every run.
 
 ### User config
 
 Create `~/.config/aebench/config.toml`:
 
 ```toml
-[agent]
-agent_type = "claude_sdk"
-default_model = "claude-opus-4-6"
-
 [logging]
 level = "info"
 ```
@@ -142,15 +150,12 @@ level = "info"
 `aebench.toml` in the project root:
 
 ```toml
-[agent]
-agent_type = "claude_sdk"
-
 [cache.git]
 root = "~/.cache/aebench/git"
 max_size_bytes = 10_737_418_240  # 10 GB
 ```
 
-## 8. Debugging Tips
+## 9. Debugging
 
 **Validate the case bundle first:**
 

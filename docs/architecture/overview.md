@@ -37,23 +37,24 @@ Each phase that passes scores one point. Most cases have all four phases, so the
 
 ## 3. How a case run works
 
-When you run a case, this is roughly what happens:
+When you run a case, AEBench performs these steps:
 
 ```
 CLI
   │
   ▼
-CaseRunner.run()
+run_case()
   ├── load case.toml → CaseConfig
   ├── prepare workspace (clone repo / copy files / extract archive)
   ├── build prompt (system prompt + task instructions)
-  ├── TaskRunner.run() → launches agent
-  │     └── Agent.execute() → agent does the work → RunResult
-  └── OracleRunner.execute() → runs four oracle phases → OracleResult
-        └── writes case_result.json
+  ├── start DockerRuntime or LocalRuntime
+  ├── run_agent() → run selected shell harness → AgentResult
+  ├── stop and optionally commit the Docker container
+  └── DirectOracleRunner.execute() → run four oracle phases → OracleResult
+        └── write case_result.json
 ```
 
-The agent reads the artifact's README (or whatever `run.instructions.path` points to), performs the actual work inside the workspace — installing dependencies, building, downloading data, running experiments — and writes a brief summary file. After the agent exits, the oracle inspects the workspace and scores what was accomplished.
+The agent reads the file selected by `run.instructions.path`. It installs dependencies, builds the artifact, downloads data, and runs experiments in the workspace. After the agent exits, the oracle inspects the workspace and scores the result.
 
 ## 4. Source layout
 
@@ -64,7 +65,7 @@ src/
 ├── config.py               # resolved runtime settings
 ├── project_config.py       # project/workspace/user config loading from TOML
 ├── constants.py            # file-name templates, defaults
-├── settings.py             # enum definitions (AgentType, McpMode, etc.)
+├── settings.py             # logging enum definitions
 ├── prompting.py            # Jinja2 prompt template rendering
 ├── sources.py              # workspace setup (git clone, copy, archive extract)
 ├── task_loader.py          # instruction text loading + case brief injection
@@ -74,12 +75,11 @@ src/
 ├── git.py                  # git bundle / checkout / cache helpers
 │
 ├── runtime/                # task execution layer
-│   ├── case_runner.py      # runs one case: task + oracle
-│   ├── task_runner.py      # runs agent (workspace → prompt → agent → result)
-│   ├── benchmark_runner.py # runs multiple cases, writes summary
+│   ├── case_runner.py      # prepares and runs one case, then starts the oracle
+│   ├── agent_runner.py     # prepares credentials and runs a shell harness
+│   ├── agent_scripts/      # Codex and Claude Code shell harnesses
 │   ├── oracle_runner.py    # in-process and subprocess oracle runners
 │   ├── backend.py          # Docker and local runtime backends
-│   ├── driver.py           # agent implementations + factory
 │   ├── session.py          # RunSession: shared state for one task run
 │   ├── workspace.py        # temp workspace creation and cleanup
 │   ├── cases.py            # case resolution, spec loading, task creation
@@ -117,9 +117,9 @@ Some commonly used environment variables:
 
 | Variable | What it does |
 |---|---|
-| `ANTHROPIC_API_KEY` | API key for Claude SDK agent |
-| `AEBENCH_DEFAULT_MODEL` | default model name |
-| `AEBENCH_AGENT_KIND` | agent type (`claude_sdk`, `cli`, `python`, `remote`, `mcp_client`) |
+| `ANTHROPIC_API_KEY` | API key for the `claude` harness |
+| `CODEX_API_KEY` or `OPENAI_API_KEY` | API key for the `codex` harness |
+| `CLAUDE_CODE_OAUTH_TOKEN` | subscription token for the `claude_non_api` harness |
 | `AEBENCH_DEFAULT_TIMEOUT_MS` | per-task timeout in milliseconds |
 | `AEBENCH_EPHEMERAL_WORKSPACE_ROOT` | where to create temp workspaces |
 | `AEBENCH_PRESERVE_FAILED_WORKSPACE` | keep workspace on failure (`true`/`false`) |

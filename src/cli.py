@@ -77,8 +77,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _add_run_options(parser: argparse.ArgumentParser) -> None:
+	parser.add_argument(
+		"--agent",
+		choices=("codex", "claude", "codex_non_api", "claude_non_api"),
+		default=None,
+	)
 	parser.add_argument("--model", default=None)
 	parser.add_argument("--interactive", action="store_true")
+	parser.add_argument("--allow-unsafe-local", action="store_true")
+	parser.add_argument("--allow-host-docker", action="store_true")
 	parser.add_argument("--cleanup-workspace", action="store_true")
 	parser.add_argument("--prompt-profile", default=None)
 	parser.add_argument("--prompt-append", default=None)
@@ -149,7 +156,20 @@ def _run_benchmark(args: argparse.Namespace) -> int:
 
 
 def _case_run(args: argparse.Namespace) -> int:
-	raise SystemExit("case runner is unavailable in this checkout")
+	from runtime.case_runner import run_case
+
+	context = _build_context()
+	case_dir = resolve_case_dir(args.case_ref, project_state=context.project_state)
+	result = run_case(
+		context,
+		case_dir,
+		options=_run_options(args),
+		save_path=_optional_path(args.save_path),
+	)
+	print(f"Case status: {result.status.value}")
+	print(f"Oracle score: {result.oracle_result.score}")
+	print(f"Output: {result.output_dir}")
+	return 0 if result.status.value == "success" else 1
 
 
 def _case_init(args: argparse.Namespace) -> int:
@@ -257,7 +277,10 @@ def _build_context() -> AppState:
 
 def _run_options(args: argparse.Namespace) -> RunOptions:
 	return RunOptions(
+		agent_type=getattr(args, "agent", None),
 		interactive=bool(getattr(args, "interactive", False)),
+		allow_unsafe_local=bool(getattr(args, "allow_unsafe_local", False)),
+		allow_host_docker=bool(getattr(args, "allow_host_docker", False)),
 		model_name=getattr(args, "model", None),
 		prompt_profile=getattr(args, "prompt_profile", None),
 		prompt_append=getattr(args, "prompt_append", None),

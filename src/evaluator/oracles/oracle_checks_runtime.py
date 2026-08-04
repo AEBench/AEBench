@@ -249,7 +249,11 @@ def _prepare_runtime_command(
 	return list(cmd)
 
 
-def build_path_mounts(context: OracleInput) -> list[_PathMount]:
+def build_path_mounts(
+	context: OracleInput,
+	*,
+	workspace_runtime_root: str = "/workspace",
+) -> list[_PathMount]:
 	"""Build host-to-runtime path mappings for an oracle invocation."""
 
 	raw_mounts: list[tuple[pathlib.Path, pathlib.PurePosixPath]] = []
@@ -264,6 +268,8 @@ def build_path_mounts(context: OracleInput) -> list[_PathMount]:
 	}
 
 	for field_name, runtime_root_str in _PATH_MOUNT_ORDER:
+		if field_name == "workspace_dir":
+			runtime_root_str = workspace_runtime_root
 		host_root = _resolved_path(values[field_name])
 
 		if host_root.exists() or field_name in {"artifact_dir", "output_dir"}:
@@ -1001,10 +1007,15 @@ def _build_task_runtime_check_executor(
 			"Cannot build oracle runtime executor: task Docker runtime has no image."
 		)
 
+	workspace_mount = runtime_result.runtime.workspace_mount or "/workspace"
 	return DockerRuntimeCheckExecutor(
 		image=image,
-		path_mounts=build_path_mounts(context),
+		path_mounts=build_path_mounts(
+			context,
+			workspace_runtime_root=workspace_mount,
+		),
 		default_cwd=context.workspace_dir,
+		runtime_cwd=pathlib.PurePosixPath(workspace_mount),
 	)
 
 

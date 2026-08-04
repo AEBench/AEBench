@@ -2,6 +2,8 @@ FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG COMPOSE_VERSION=v2.35.1
+ARG CLAUDE_CODE_VERSION=2.1.157
+ARG CODEX_VERSION=0.135.0
 
 USER root
 WORKDIR /opt/artevalbench
@@ -28,6 +30,14 @@ RUN arch="$(dpkg --print-architecture)" \
  && curl -fsSL "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-${compose_arch}" \
     -o /usr/local/lib/docker/cli-plugins/docker-compose \
  && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+# Install pinned CLI harness versions.
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+ && apt-get install -y --no-install-recommends nodejs \
+ && npm install -g \
+    "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+    "@openai/codex@${CODEX_VERSION}" \
+ && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock README.md ./
 

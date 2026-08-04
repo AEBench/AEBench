@@ -9,7 +9,7 @@ from typing import Any, Mapping, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from settings import AgentType, LogLevel, LogRenderer, McpClientKind, McpMode
+from settings import LogLevel, LogRenderer
 
 if sys.version_info >= (3, 11):
 	import tomllib
@@ -42,46 +42,6 @@ class ArtifactMode(str, Enum):
 class LoggingConfig(_Model):
 	level: LogLevel | None = None
 	renderer: LogRenderer | None = None
-
-
-class AgentClaudeSdkConfig(_Model):
-	base_url: str | None = None
-
-
-class AgentPythonConfig(_Model):
-	target: str | None = None
-
-
-class AgentCliConfig(_Model):
-	argv: list[str] | None = None
-	env: dict[str, str] | None = None
-	shim_shells: bool = False
-	expose_container_shell: bool = False
-	expose_host_shell: bool = False
-
-
-class AgentRemoteConfig(_Model):
-	base_url: str | None = None
-	auth: str | None = None
-	protocol: str | None = None
-	headers: dict[str, str] | None = None
-
-
-class AgentMcpConfig(_Model):
-	client: McpClientKind | None = None
-	argv: list[str] | None = None
-	env: dict[str, str] | None = None
-	mcp_mode: McpMode | None = None
-
-
-class AgentSettings(_Model):
-	agent_type: AgentType | None = None
-	default_model: str | None = None
-	claude_sdk: AgentClaudeSdkConfig = Field(default_factory=AgentClaudeSdkConfig)
-	python: AgentPythonConfig = Field(default_factory=AgentPythonConfig)
-	cli: AgentCliConfig = Field(default_factory=AgentCliConfig)
-	remote: AgentRemoteConfig = Field(default_factory=AgentRemoteConfig)
-	mcp: AgentMcpConfig = Field(default_factory=AgentMcpConfig)
 
 
 class GitCacheConfig(_Model):
@@ -177,7 +137,6 @@ class BundleRegistry(BaseModel):
 class UserConfig(_Model):
 	case_runs_dir: str | None = None
 	logging: LoggingConfig = Field(default_factory=LoggingConfig)
-	agent: AgentSettings = Field(default_factory=AgentSettings)
 	cache: CacheOverrideConfig = Field(default_factory=CacheOverrideConfig)
 
 
@@ -188,7 +147,6 @@ class WorkspaceConfig(_Model):
 	case_runs_dir: str | None = None
 	default_bundle_layout: str | None = None
 	logging: LoggingConfig = Field(default_factory=LoggingConfig)
-	agent: AgentSettings = Field(default_factory=AgentSettings)
 	cache: CacheOverrideConfig = Field(default_factory=CacheOverrideConfig)
 	repo_launch: RepoLaunchOverrideConfig = Field(default_factory=RepoLaunchOverrideConfig)
 
@@ -199,7 +157,6 @@ class ProjectConfig(_Model):
 	artifact_mode: ArtifactMode = ArtifactMode.VENDOR
 	default_bundle_layout: str = "structured"
 	logging: LoggingConfig = Field(default_factory=LoggingConfig)
-	agent: AgentSettings = Field(default_factory=AgentSettings)
 	cache: CacheConfig = Field(default_factory=CacheConfig)
 	bundle_source: BundleSourceConfig = Field(default_factory=BundleSourceConfig)
 	repo_launch: RepoLaunchConfig = Field(default_factory=RepoLaunchConfig)
@@ -316,7 +273,6 @@ def _merge_project_config(
 	config = config.model_copy(
 		update={
 			"logging": _apply_overrides(config.logging, user.logging),
-			"agent": _apply_overrides(config.agent, user.agent),
 			"cache": config.cache.model_copy(
 				update={"git": _apply_overrides(config.cache.git, user.cache.git)}
 			),
@@ -326,7 +282,6 @@ def _merge_project_config(
 
 	updates: dict[str, Any] = {
 		"logging": _apply_overrides(config.logging, workspace.logging),
-		"agent": _apply_overrides(config.agent, workspace.agent),
 		"cache": config.cache.model_copy(
 			update={"git": _apply_overrides(config.cache.git, workspace.cache.git)}
 		),
