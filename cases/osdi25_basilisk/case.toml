@@ -1,0 +1,56 @@
+id = "osdi25_basilisk"
+
+[case_brief]
+core_claim = "Set up the Basilisk artifact and reproduce its evaluation for all 16 distributed protocols, showing that provenance invariants automate proofs with few hints and reduce proof size relative to Kondo."
+acceptable_evidence = "The oracle accepts a complete zero-error verification log for all 16 protocols, the required generated outputs, exact hint counts, and a sloc.csv matching the bundled reference within the stated tolerances."
+allowed_tolerance = "Verification permits no errors or timeouts; hint counts and Kondo SLOC are exact; Basilisk safety and total proof SLOC may differ by at most ±5 lines per protocol."
+
+[paper]
+title = "Basilisk: Using Provenance Invariants to Automate Proofs of Undecidable Protocols"
+venue = "OSDI 2025"
+url = "https://www.usenix.org/system/files/osdi25-zhang-tony.pdf"
+sha256 = "08908d13267c18da553baf20c07ebfeebb563301ed73435238f241fdc4786ab9"
+
+[run]
+id = "osdi25_basilisk"
+
+[run.instructions]
+path = "README.md"
+required_evidence = [
+  "Preserve complete stdout and stderr for all 16 protocols in basilisk/verify-all.log, including reduce and raftLeaderElection. Give each protocol a distinct section labeled 'Verifying <protocol>' or delimited by '===== BEGIN <protocol> =====' and '===== END <protocol> status=0 ====='.",
+  "Keep each protocol's generated footprintsAutogen.json, messageInvariantsAutogen.dfy, and monotonicityInvariantsAutogen.dfy under basilisk/<protocol>/automate_gen2/, plus ownershipInvariantsAutogen.dfy where applicable.",
+  "Create basilisk/evaluation/hints.csv with header protocol,monotonicity_annotations,provenance_hints and one row for each of the 16 protocols, following the README's manual-count definitions.",
+  "Keep the basilisk/evaluation/sloc.csv produced by basilisk/evaluation/eval.py.",
+]
+
+[run.runtime]
+mode = "docker"
+image = "aebench-agent:latest"
+timeout_ms = 14400000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = false
+compose = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+failure_mode = "fail_fast"
+placeholder = false
+
+[oracle.phase_targets]
+env_setup = "task"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "task"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/GLaDOS-Michigan/Basilisk"
+ref = "5ff296e4159c1080411db4204ddbce5147d8ae3a"
+requested_ref = "main"
+resolved_at = "2026-08-04T10:44:18+00:00"

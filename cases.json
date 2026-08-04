@@ -55,6 +55,9 @@
     "osdi25_bpftime": {
       "path": "cases/osdi25_bpftime"
     },
+    "osdi25_basilisk": {
+      "path": "cases/osdi25_basilisk"
+    },
     "sosp23_acto": {
       "path": "cases/sosp23_acto"
     },
