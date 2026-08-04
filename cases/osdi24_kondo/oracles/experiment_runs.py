@@ -1,240 +1,53 @@
 from __future__ import annotations
 
-import csv
-import dataclasses
-import json
 from collections.abc import Sequence
-from dataclasses import dataclass
-from pathlib import Path
 
 from evaluator.oracles import CaseOracleExperimentRunsBase, PathKind
-from evaluator.oracles.oracle_checks_runtime import (
-	RuntimeCheckExecutor,
-	check_path_is_file,
-	check_read_file_text,
-)
-from evaluator.oracles.reporting import BaseCheck, CheckResult
+from evaluator.oracles.reporting import BaseCheck
 
 from .consts import PROTOCOLS
+from .parsing import SlocReferenceCheck, VerifyAllLogCheck
 
-_SLOC_TOLERANCE = 5
-_SLOC_FIELDS = ("sync_spec", "manual_proof", "sync_proof")
-
-
-def _load_json_file(
-	path: Path,
-	*,
-	label: str,
-	executor: RuntimeCheckExecutor | None = None,
-) -> object:
-	try:
-		text = check_read_file_text(path, encoding="utf-8", executor=executor)
-	except OSError as exc:
-		raise ValueError(f"{label}: failed to read {path}: {exc}") from exc
-	except ValueError as exc:
-		raise ValueError(f"{label}: failed to resolve or decode {path}: {exc}") from exc
-	except RuntimeError as exc:
-		raise ValueError(f"{label}: runtime failed to read {path}: {exc}") from exc
-
-	text = text.strip()
-	if not text:
-		raise ValueError(f"{label}: empty JSON content at {path}")
-
-	try:
-		return json.loads(text)
-	except json.JSONDecodeError as exc:
-		raise ValueError(f"{label}: invalid JSON in {path}: {exc}") from exc
-
-
-def _load_sloc_csv(
-	path: Path,
-	*,
-	executor: RuntimeCheckExecutor | None = None,
-) -> dict[str, dict[str, int]]:
-	try:
-		text = check_read_file_text(path, encoding="utf-8", executor=executor)
-	except OSError as exc:
-		raise ValueError(f"failed to read sloc.csv: {exc}") from exc
-	except ValueError as exc:
-		raise ValueError(f"failed to resolve or decode sloc.csv: {exc}") from exc
-	except RuntimeError as exc:
-		raise ValueError(f"runtime failed to read sloc.csv: {exc}") from exc
-
-	rows: dict[str, dict[str, int]] = {}
-	reader = csv.DictReader(text.strip().splitlines())
-	required_fields = {"protocol", *_SLOC_FIELDS}
-	fieldnames = set(reader.fieldnames or ())
-	missing_fields = sorted(required_fields - fieldnames)
-	if missing_fields:
-		raise ValueError("sloc.csv missing required column(s): " + ", ".join(missing_fields))
-
-	for line_number, row in enumerate(reader, start=2):
-		raw_protocol = row.get("protocol")
-		if raw_protocol is None:
-			raise ValueError(f"sloc.csv line {line_number}: missing protocol value")
-		protocol = raw_protocol.strip()
-		if not protocol:
-			continue
-		if protocol in rows:
-			raise ValueError(f"sloc.csv line {line_number}: duplicate protocol {protocol!r}")
-		try:
-			rows[protocol] = {field: int(row[field]) for field in _SLOC_FIELDS}
-		except (KeyError, TypeError, ValueError) as exc:
-			raise ValueError(
-				f"sloc.csv line {line_number}: invalid SLOC value for {protocol!r}: {exc}"
-			) from exc
-	return rows
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SlocExactMatchCheck(BaseCheck):
-	"""Check observed SLOC values against the checked-in reference."""
-
-	sloc_csv_path: Path
-	reference_path: Path
-	tolerance: int = _SLOC_TOLERANCE
-	executor: RuntimeCheckExecutor | None = dataclasses.field(
-		default=None, repr=False, compare=False
-	)
-
-	def check(self) -> CheckResult:
-		if self.tolerance < 0:
-			return CheckResult.failure(f"invalid tolerance: {self.tolerance}; expected >= 0")
-
-		if not check_path_is_file(self.sloc_csv_path, executor=self.executor):
-			return CheckResult.failure(f"sloc.csv not found: {self.sloc_csv_path}")
-
-		if not check_path_is_file(self.reference_path, executor=self.executor):
-			return CheckResult.failure(f"SLOC reference not found: {self.reference_path}")
-
-		try:
-			observed_data = _load_sloc_csv(self.sloc_csv_path, executor=self.executor)
-		except (ValueError, KeyError) as exc:
-			return CheckResult.failure(f"failed to parse sloc.csv: {exc}")
-
-		try:
-			ref_obj = _load_json_file(
-				self.reference_path,
-				label="sloc reference",
-				executor=self.executor,
-			)
-		except ValueError as exc:
-			return CheckResult.failure(str(exc))
-
-		if not isinstance(ref_obj, dict):
-			return CheckResult.failure("sloc reference: expected a JSON object")
-
-		missing_protocols: list[str] = []
-		malformed_reference_protocols: list[str] = []
-		mismatches: list[str] = []
-		matched = 0
-
-		for protocol in PROTOCOLS:
-			ref_entry = ref_obj.get(protocol)
-			if not isinstance(ref_entry, dict):
-				malformed_reference_protocols.append(protocol)
-				continue
-
-			obs_entry = observed_data.get(protocol)
-			if obs_entry is None:
-				missing_protocols.append(protocol)
-				continue
-
-			for field in _SLOC_FIELDS:
-				ref_val = ref_entry.get(field)
-				obs_val = obs_entry.get(field)
-
-				if ref_val is None:
-					continue
-
-				if obs_val is None:
-					mismatches.append(f"{protocol}.{field}: missing in sloc.csv")
-					continue
-
-				try:
-					ref_int = int(ref_val)
-					obs_int = int(obs_val)
-				except (TypeError, ValueError):
-					mismatches.append(
-						f"{protocol}.{field}: non-integer value "
-						f"observed={obs_val!r}, reference={ref_val!r}"
-					)
-					continue
-
-				if abs(obs_int - ref_int) > self.tolerance:
-					mismatches.append(
-						f"{protocol}.{field}: got {obs_int}, expected {ref_int} "
-						f"(+/- {self.tolerance})"
-					)
-				else:
-					matched += 1
-
-		if malformed_reference_protocols:
-			return CheckResult.failure(
-				"sloc reference missing or malformed protocol entries: "
-				+ ", ".join(malformed_reference_protocols)
-			)
-
-		if missing_protocols:
-			return CheckResult.failure(
-				"sloc.csv missing protocols: " + ", ".join(missing_protocols)
-			)
-
-		if mismatches:
-			shown = mismatches[:10]
-			more = f"\n... ({len(mismatches) - 10} more)" if len(mismatches) > 10 else ""
-			return CheckResult.failure(
-				f"{len(mismatches)} SLOC mismatch(es):\n"
-				+ "\n".join(f"- {m}" for m in shown)
-				+ more
-			)
-
-		return CheckResult.success(
-			message=(f"all {matched} SLOC values match reference (tolerance +/- {self.tolerance})")
-		)
+_COMMON_AUTOGEN_FILES = (
+	"applicationProofDraftAutogen.dfy",
+	"messageInvariantsAutogen.dfy",
+	"monotonicityInvariantsAutogen.dfy",
+)
+_OWNERSHIP_PROTOCOLS = frozenset({"distributedLock", "shardedKv", "shardedKvBatched", "lockServer"})
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
-	def requirements(self) -> Sequence[BaseCheck]:
-		kondo_protos = self.workspace_path("kondoPrototypes")
-		sloc_csv = kondo_protos / "evaluation" / "sloc.csv"
-		sloc_ref = self.ref_path("sloc.ref.json")
+	"""Validate protocol verification, generated invariants, and SLOC results."""
 
-		reqs: list[BaseCheck] = [
-			self.path_check(
-				name="sloc_csv_exists",
-				path=sloc_csv,
-				kind=PathKind.FILE,
+	def requirements(self) -> Sequence[BaseCheck]:
+		checks: list[BaseCheck] = [
+			VerifyAllLogCheck(
+				name="verify_all_succeeded",
+				path=self.runtime_path("kondoPrototypes/verify-all.log"),
+				executor=self.executor,
 			),
-			self.path_check(
-				name="sloc_reference_exists",
-				path=sloc_ref,
-				kind=PathKind.FILE,
-			),
-			SlocExactMatchCheck(
+			SlocReferenceCheck(
 				name="sloc_values_match",
-				sloc_csv_path=sloc_csv,
-				reference_path=sloc_ref,
+				sloc_csv_path=self.runtime_path("kondoPrototypes/evaluation/sloc.csv"),
+				reference_path=self.ref_path("sloc.ref.json"),
 				executor=self.executor,
 			),
 		]
 
 		for protocol in PROTOCOLS:
-			safe_protocol = protocol.replace("/", "_").replace("-", "_").replace(".", "_")
+			generated_files = list(_COMMON_AUTOGEN_FILES)
+			if protocol in _OWNERSHIP_PROTOCOLS:
+				generated_files.append("ownershipInvariantsAutogen.dfy")
 
-			reqs.append(
-				self.path_check(
-					name=f"sync_proof_{safe_protocol}",
-					path=kondo_protos / protocol / "sync" / "applicationProof.dfy",
-					kind=PathKind.FILE,
+			for filename in generated_files:
+				checks.append(
+					self.path_check(
+						name=f"{protocol}_{filename.removesuffix('.dfy')}",
+						path=self.runtime_path(
+							"kondoPrototypes", protocol, "async-kondo", filename
+						),
+						kind=PathKind.FILE,
+					)
 				)
-			)
-			reqs.append(
-				self.path_check(
-					name=f"manual_proof_{safe_protocol}",
-					path=kondo_protos / protocol / "manual" / "applicationProof.dfy",
-					kind=PathKind.FILE,
-				)
-			)
 
-		return tuple(reqs)
+		return tuple(checks)
