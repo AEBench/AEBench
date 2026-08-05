@@ -73,7 +73,7 @@ Run one case with ChatGPT subscription authentication:
 ```bash
 uv run aebench case run osdi24_kondo \
   --agent codex_non_api \
-  --model gpt-5.3-codex
+  --model gpt-5.5
 ```
 
 Run one case with Claude subscription authentication after generating a token with `claude setup-token`:
