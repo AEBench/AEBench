@@ -82,7 +82,7 @@ Then select an explicit harness and model:
 ```bash
 uv run aebench case run osdi24_kondo \
   --agent codex_non_api \
-  --model gpt-5.3-codex
+  --model gpt-5.5
 ```
 
 Use `--allow-host-docker` when `[run.artifact_requirements] docker = true`. This gives the agent control of the host Docker daemon. Use `--allow-unsafe-local` when the case runtime is local. This runs agent commands directly on the host. Use both options only on a disposable worker.
