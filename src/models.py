@@ -330,6 +330,7 @@ class PromptBundle(_Model):
 class AgentResult(_Model):
 	model: str
 	exit_code: int
+	reasoning_effort: str | None = None
 	message_count: int = 0
 	output: str = ""
 

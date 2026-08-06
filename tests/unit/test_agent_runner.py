@@ -17,6 +17,7 @@ from models import (
 	TaskConfig,
 )
 from runtime.agent_runner import (
+	_REASONING_EFFORT,
 	_agent_env,
 	_agent_shell_command,
 	_prompt_for_agent,
@@ -81,11 +82,12 @@ class FakeRuntime:
 def test_codex_script_streams_json_without_secret_echoes() -> None:
 	script = _solve_script("codex")
 	assert "printf '%s' \"$PROMPT\" | codex --search exec --json" in script
-	assert 'model_reasoning_effort="high"' in script
+	assert 'model_reasoning_effort=\\"$AEBENCH_REASONING_EFFORT\\"' in script
 	assert "model_reasoning_summary=detailed" in script
 	assert "--skip-git-repo-check --yolo" in script
 	assert "echo $OPENAI_API_KEY" not in script
 	assert "echo $CODEX_API_KEY" not in script
+	assert _REASONING_EFFORT["codex"] == "high"
 
 
 def test_claude_script_streams_json_without_permission_prompts() -> None:
@@ -94,6 +96,9 @@ def test_claude_script_streams_json_without_permission_prompts() -> None:
 	assert "claude --print --verbose" in script
 	assert "--output-format stream-json --thinking-display summarized" in script
 	assert "--dangerously-skip-permissions" in script
+	assert "claude" not in _REASONING_EFFORT
+	assert _REASONING_EFFORT["claude_non_api"] == "high"
+	assert '--effort "$AEBENCH_REASONING_EFFORT"' in _solve_script("claude_non_api")
 
 
 @pytest.mark.parametrize("agent", ["claude", "claude_non_api"])
@@ -158,10 +163,12 @@ def test_runner_passes_harness_contract_and_saves_raw_output(
 	assert runtime.env["HOME"] == "/home/agent"
 	assert runtime.env["PROMPT"] == "do the task"
 	assert runtime.env["AGENT_CONFIG"] == "gpt-test"
+	assert runtime.env["AEBENCH_REASONING_EFFORT"] == "high"
 	assert runtime.env["CODEX_API_KEY"] == "secret"
 	assert "ANTHROPIC_API_KEY" not in runtime.env
 	assert runtime.stdin_text == _solve_script("codex")
 	assert result.exit_code == 0
+	assert result.reasoning_effort == "high"
 	assert output_path.read_text(encoding="utf-8") == '{"type":"result"}\n'
 
 
@@ -247,6 +254,7 @@ def test_docker_agent_environment_does_not_copy_host_runtime(
 		include_host_runtime=False,
 	)
 	assert env == {
+		"AEBENCH_REASONING_EFFORT": "high",
 		"AGENT_CONFIG": "gpt-test",
 		"CODEX_API_KEY": "openai-secret",
 		"HOME": "/home/agent",
