@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path
@@ -108,18 +109,23 @@ def test_codex_prompt_is_unchanged() -> None:
 
 def test_docker_agent_runs_as_unprivileged_user() -> None:
 	assert _agent_shell_command(DockerRuntime()) == [
-		"runuser",
-		"--user",
-		"agent",
-		"--preserve-environment",
-		"--",
 		"bash",
-		"-s",
+		"-o",
+		"pipefail",
+		"-c",
+		"runuser --user agent --preserve-environment -- bash -s 2>&1 | "
+		'python3 "$HOME/timestamp_lines.py"',
 	]
 
 
 def test_local_agent_uses_current_user() -> None:
-	assert _agent_shell_command(LocalRuntime()) == ["bash", "-s"]
+	assert _agent_shell_command(LocalRuntime()) == [
+		"bash",
+		"-o",
+		"pipefail",
+		"-c",
+		'bash -s 2>&1 | python3 "$HOME/timestamp_lines.py"',
+	]
 
 
 def test_runner_passes_harness_contract_and_saves_raw_output(
@@ -146,7 +152,10 @@ def test_runner_passes_harness_contract_and_saves_raw_output(
 		"--kill-after=30s",
 		"600s",
 		"bash",
-		"-s",
+		"-o",
+		"pipefail",
+		"-c",
+		'bash -s 2>&1 | python3 "$HOME/timestamp_lines.py"',
 	]
 	assert runtime.cwd == "/repo"
 	assert runtime.env["HOME"] == "/home/agent"
@@ -157,6 +166,37 @@ def test_runner_passes_harness_contract_and_saves_raw_output(
 	assert runtime.stdin_text == _solve_script("codex")
 	assert result.exit_code == 0
 	assert output_path.read_text(encoding="utf-8") == '{"type":"result"}\n'
+
+
+def test_local_runner_timestamps_stdout_and_stderr(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	monkeypatch.setenv("OPENAI_API_KEY", "secret")
+	monkeypatch.setattr(
+		"runtime.agent_runner._solve_script",
+		lambda _agent: "printf 'first\\n'; printf 'second\\n' >&2; exit 7",
+	)
+	monkeypatch.setattr("runtime.agent_runner._timeout_command", lambda *_args: [])
+	home = prepare_agent_home("codex", tmp_path)
+	output_path = tmp_path / "runner_output.log"
+
+	result = run_agent(
+		"codex",
+		model="gpt-test",
+		prompt="do the task",
+		runtime=LocalRuntime(workspace=str(tmp_path)),
+		cwd=str(tmp_path),
+		runtime_home=str(home),
+		timeout_seconds=10,
+		output_path=output_path,
+	)
+
+	assert result.exit_code == 7
+	lines = output_path.read_text(encoding="utf-8").splitlines()
+	assert len(lines) == 2
+	assert all(re.match(r"^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\] ", line) for line in lines)
+	assert lines[0].endswith(" first")
+	assert lines[1].endswith(" second")
 
 
 def test_subscription_auth_is_copied_to_private_run_home(tmp_path: Path) -> None:
@@ -171,6 +211,7 @@ def test_subscription_auth_is_copied_to_private_run_home(tmp_path: Path) -> None
 	target = home / ".codex" / "auth.json"
 	assert target.read_text(encoding="utf-8") == '{"tokens":{}}'
 	assert target.stat().st_mode & 0o777 == 0o600
+	assert (home / "timestamp_lines.py").is_file()
 
 
 def test_claude_subscription_token_is_written_to_private_run_home(tmp_path: Path) -> None:
