@@ -16,6 +16,7 @@ def _case(required_evidence: list[str] | None = None) -> CaseConfig:
 		},
 		"run": {
 			"id": "test_case",
+			"instructions": {},
 			"runtime": {"mode": "local"},
 		},
 		"paper": {
@@ -24,7 +25,7 @@ def _case(required_evidence: list[str] | None = None) -> CaseConfig:
 		},
 	}
 	if required_evidence is not None:
-		payload["run"]["required_evidence"] = required_evidence
+		payload["run"]["instructions"]["required_evidence"] = required_evidence
 	return CaseConfig.model_validate(payload)
 
 
@@ -32,7 +33,7 @@ def test_case_spec_serializes_required_evidence_when_present() -> None:
 	toml = case_spec_to_toml(_case(["Save stdout to table.txt", "Keep logs under logs/"]))
 
 	assert 'required_evidence = ["Save stdout to table.txt", "Keep logs under logs/"]' in toml
-	assert "[run]\n" in toml
+	assert "[run.instructions]\n" in toml
 
 
 def test_case_spec_omits_empty_required_evidence() -> None:

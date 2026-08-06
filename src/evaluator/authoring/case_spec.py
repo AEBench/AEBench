@@ -20,13 +20,13 @@ def write_case_spec(case: CaseConfig, case_dir: Path) -> Path:
 
 def case_spec_to_toml(case: CaseConfig) -> str:
 	lines: list[str] = [f"id = {_toml_value(case.id)}", ""]
-	run_payload: dict[str, Any] = {"id": case.run.id}
-	if case.run.required_evidence:
-		run_payload["required_evidence"] = case.run.required_evidence
+	instructions_payload = case.run.instructions.model_dump(mode="json", exclude_none=True)
+	if not case.run.instructions.required_evidence:
+		instructions_payload.pop("required_evidence")
 	sections: list[tuple[str, dict[str, Any]]] = [
 		("case_brief", case.case_brief.model_dump(mode="json", exclude_none=True)),
-		("run", run_payload),
-		("run.instructions", case.run.instructions.model_dump(mode="json", exclude_none=True)),
+		("run", {"id": case.run.id}),
+		("run.instructions", instructions_payload),
 		("run.runtime", case.run.runtime.model_dump(mode="json", exclude_none=True)),
 		(
 			"run.artifact_requirements",
