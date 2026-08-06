@@ -22,10 +22,6 @@ timeout_ms = 3600000
 gpu = false
 interactive = false
 
-[run.artifact_requirements]
-docker = true
-compose = false
-
 [run.prompt]
 profile = "artifact-eval-v1"
 
