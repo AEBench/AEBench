@@ -13,6 +13,7 @@ RUN apt-get update \
     git \
     jq \
     pipx \
+    sudo \
     wget \
  && rm -rf /var/lib/apt/lists/*
 
@@ -49,6 +50,11 @@ COPY pyproject.toml uv.lock README.md ./
 
 RUN uv sync --frozen --no-dev --no-install-project
 RUN uv tool install swe-rex
+
+RUN groupadd --gid 1000 agent \
+ && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash agent \
+ && printf 'agent ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/aebench-agent \
+ && chmod 0440 /etc/sudoers.d/aebench-agent
 
 ENV PATH="/root/.local/bin:${PATH}"
 
