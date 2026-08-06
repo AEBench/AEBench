@@ -1,0 +1,10 @@
+{
+  "fctn": {"flops": 3058272000, "aten_comparable": true},
+  "getd": {"flops": 33373234375, "aten_comparable": true},
+  "mera": {"flops": 30996379542, "aten_comparable": true},
+  "syn": {"flops": 6685040640, "aten_comparable": true},
+  "tnlm": {"flops": 7076901428175, "aten_comparable": false},
+  "trn": {"flops": 1561400100, "aten_comparable": true},
+  "tt": {"flops": 39205367808, "aten_comparable": true},
+  "tw": {"flops": 301644800, "aten_comparable": true}
+}
