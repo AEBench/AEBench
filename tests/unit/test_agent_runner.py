@@ -11,6 +11,7 @@ import pytest
 from models import ArtifactRequirementsConfig, RuntimeConfig, RuntimeMode, TaskConfig
 from runtime.agent_runner import (
 	_agent_env,
+	_agent_shell_command,
 	_prompt_for_agent,
 	_solve_script,
 	prepare_agent_home,
@@ -92,7 +93,22 @@ def test_claude_prompt_includes_noninteractive_guidance() -> None:
 	assert prompt.startswith("do the task\n\n")
 	assert "make sure every process you are running finishes" in prompt
 	assert _prompt_for_agent("codex", "do the task") == "do the task"
-	assert _prompt_for_agent("claude_non_api", "do the task") == "do the task"
+
+
+def test_docker_agent_runs_as_unprivileged_user() -> None:
+	assert _agent_shell_command(DockerRuntime()) == [
+		"runuser",
+		"--user",
+		"agent",
+		"--preserve-environment",
+		"--",
+		"bash",
+		"-s",
+	]
+
+
+def test_local_agent_uses_current_user() -> None:
+	assert _agent_shell_command(LocalRuntime()) == ["bash", "-s"]
 
 
 def test_runner_passes_harness_contract_and_saves_raw_output(

@@ -10,7 +10,7 @@ from typing import Mapping
 
 from models import AgentName, AgentResult
 
-from .backend import BenchRuntime, LocalRuntime
+from .backend import BenchRuntime, DockerRuntime, LocalRuntime
 
 _RUNTIME_ENV_KEYS = ("PATH", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TERM")
 _CLAUDE_NONINTERACTIVE_GUIDANCE = (
@@ -85,7 +85,7 @@ def run_agent(
 		runtime_home=runtime_home,
 		include_host_runtime=isinstance(runtime, LocalRuntime),
 	)
-	command = _timeout_command(runtime, timeout_seconds) + ["bash", "-s"]
+	command = _timeout_command(runtime, timeout_seconds) + _agent_shell_command(runtime)
 
 	try:
 		process = runtime.run_process_to_file(
@@ -168,6 +168,20 @@ def _timeout_command(runtime: BenchRuntime, timeout_seconds: float) -> list[str]
 				f"{timeout_seconds:g}s",
 			]
 	raise RuntimeError("agent runtime requires GNU timeout (timeout or gtimeout)")
+
+
+def _agent_shell_command(runtime: BenchRuntime) -> list[str]:
+	if isinstance(runtime, DockerRuntime):
+		return [
+			"runuser",
+			"--user",
+			"agent",
+			"--preserve-environment",
+			"--",
+			"bash",
+			"-s",
+		]
+	return ["bash", "-s"]
 
 
 __all__ = ["AgentName", "clear_agent_home", "prepare_agent_home", "run_agent"]
