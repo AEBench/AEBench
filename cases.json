@@ -46,6 +46,9 @@
     "eurosys25_egwalker": {
       "path": "cases/eurosys25_egwalker"
     },
+    "eurosys25_sebs_flow": {
+      "path": "cases/eurosys25_sebs_flow"
+    },
     "eurosys25_wali": {
       "path": "cases/eurosys25_wali"
     },
