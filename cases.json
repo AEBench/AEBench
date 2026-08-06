@@ -22,6 +22,9 @@
     "asplos25_herbie": {
       "path": "cases/asplos25_herbie"
     },
+    "atc24_calchas": {
+      "path": "cases/atc24_calchas"
+    },
     "atc25_koala": {
       "path": "cases/atc25_koala"
     },
