@@ -466,6 +466,11 @@ def test_docker_executor_starts_container_lazily_and_reuses_it(
 	working_directory_index = start_command.index("-w")
 	assert start_command[working_directory_index + 1] == "/workspace"
 
+	executor.close()
+	executor.close()
+	container_removals = [command for command in calls if command[:3] == ["docker", "rm", "-f"]]
+	assert container_removals == [["docker", "rm", "-f", "container-id"]]
+
 
 def test_docker_image_target_uses_configured_image_and_working_dir(
 	tmp_path: Path,
