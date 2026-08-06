@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -17,6 +18,7 @@ _CLAUDE_NONINTERACTIVE_GUIDANCE = (
 	"You are running in a non-interactive mode. So make sure every process you are "
 	"running finishes before you write your last message."
 )
+_TIMESTAMP_SCRIPT = "timestamp_lines.py"
 
 
 def prepare_agent_home(
@@ -29,6 +31,10 @@ def prepare_agent_home(
 	home = parent / "agent-home"
 	home.mkdir(mode=0o700, parents=True)
 	try:
+		shutil.copyfile(
+			Path(__file__).with_name("agent_scripts") / _TIMESTAMP_SCRIPT,
+			home / _TIMESTAMP_SCRIPT,
+		)
 		if agent == "codex_non_api":
 			default_codex_home = Path(env.get("CODEX_HOME", "~/.codex")).expanduser()
 			source = Path(
@@ -172,7 +178,7 @@ def _timeout_command(runtime: BenchRuntime, timeout_seconds: float) -> list[str]
 
 def _agent_shell_command(runtime: BenchRuntime) -> list[str]:
 	if isinstance(runtime, DockerRuntime):
-		return [
+		agent_command = [
 			"runuser",
 			"--user",
 			"agent",
@@ -181,7 +187,10 @@ def _agent_shell_command(runtime: BenchRuntime) -> list[str]:
 			"bash",
 			"-s",
 		]
-	return ["bash", "-s"]
+	else:
+		agent_command = ["bash", "-s"]
+	pipeline = f'{shlex.join(agent_command)} 2>&1 | python3 "$HOME/{_TIMESTAMP_SCRIPT}"'
+	return ["bash", "-o", "pipefail", "-c", pipeline]
 
 
 __all__ = ["AgentName", "clear_agent_home", "prepare_agent_home", "run_agent"]
