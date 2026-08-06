@@ -108,7 +108,7 @@ def _solve_script(agent: AgentName) -> str:
 
 
 def _prompt_for_agent(agent: AgentName, prompt: str) -> str:
-	if agent != "claude":
+	if agent not in {"claude", "claude_non_api"}:
 		return prompt
 	return f"{prompt.rstrip()}\n\n{_CLAUDE_NONINTERACTIVE_GUIDANCE}"
 
