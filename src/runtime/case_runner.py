@@ -13,6 +13,7 @@ from evaluator import artifact_dir_for
 from evaluator.loader import load_case_spec
 from evaluator.oracles.discovery import discover_oracle_classes
 from models import (
+	AgentName,
 	AgentResult,
 	CaseRunResult,
 	CaseStatus,
@@ -31,7 +32,7 @@ from sources import prepare_workspace
 from task_loader import compose_task_text, read_instruction_text
 from utils import safe_name
 
-from .agent_runner import AgentName, clear_agent_home, prepare_agent_home, run_agent
+from .agent_runner import clear_agent_home, prepare_agent_home, run_agent
 from .backend import BenchRuntime, get_runtime
 from .cases import task_from_case
 from .oracle_runner import DirectOracleRunner
@@ -90,7 +91,6 @@ def run_case(
 	agent_home: Path | None = None
 	runtime: BenchRuntime | None = None
 	session: RunSession | None = None
-	scored_runtime_info: RuntimeInfo | None = None
 	agent_result = AgentResult(model=model, exit_code=1)
 	oracle_result = OracleResult(status=OracleStatus.PENDING, score=0)
 	error: str | None = None
@@ -107,15 +107,14 @@ def run_case(
 			if task.runtime.mode == RuntimeMode.LOCAL or task.artifact_requirements.docker
 			else "/repo"
 		)
-		runtime_refs = (
-			"/refs"
-			if task.runtime.mode == RuntimeMode.DOCKER and refs is not None
-			else str(refs)
-			if refs is not None
-			else None
-		)
+		runtime_refs = None if refs is None else str(refs)
+		if refs is not None and task.runtime.mode == RuntimeMode.DOCKER:
+			runtime_refs = "/refs"
 		runtime_agent_home = (
 			str(agent_home) if task.runtime.mode == RuntimeMode.LOCAL else "/home/agent"
+		)
+		prompt_append = (
+			options.prompt_append if options.prompt_append is not None else task.prompt.append
 		)
 		prompt = build_prompt_bundle(
 			PromptArgs(
@@ -126,11 +125,7 @@ def run_case(
 				runtime_mode=task.runtime.mode,
 				timeout_ms=task.runtime.timeout_ms,
 				prompt_profile=prompt_profile.value,
-				prompt_append=(
-					options.prompt_append
-					if options.prompt_append is not None
-					else task.prompt.append
-				),
+				prompt_append=prompt_append,
 				refs_path=runtime_refs,
 				host_workspace_path=str(workspace),
 				container_workspace_path=(

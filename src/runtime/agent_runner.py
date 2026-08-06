@@ -6,13 +6,11 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Literal, Mapping
+from typing import Mapping
 
-from models import AgentResult
+from models import AgentName, AgentResult
 
 from .backend import BenchRuntime, LocalRuntime
-
-AgentName = Literal["codex", "claude", "codex_non_api", "claude_non_api"]
 
 _RUNTIME_ENV_KEYS = ("PATH", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TERM")
 _CLAUDE_NONINTERACTIVE_GUIDANCE = (
@@ -46,7 +44,7 @@ def prepare_agent_home(
 			shutil.copyfile(source, target)
 			target.chmod(0o600)
 
-		if agent == "claude_non_api":
+		elif agent == "claude_non_api":
 			token = env.get("CLAUDE_CODE_OAUTH_TOKEN")
 			if token is None:
 				token_path = env.get("AEBENCH_CLAUDE_OAUTH_TOKEN_FILE")
