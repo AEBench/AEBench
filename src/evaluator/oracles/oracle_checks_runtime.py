@@ -972,6 +972,25 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 			on_chunk=on_chunk,
 		)
 
+	def close(self) -> None:
+		"""Removes the lazily created check container."""
+		if self._container_id is None:
+			return
+
+		container_id = self._container_id
+		result = subprocess.run(
+			["docker", "rm", "-f", container_id],
+			capture_output=True,
+			text=True,
+			check=False,
+		)
+		if result.returncode != 0:
+			detail = (result.stderr or result.stdout).strip()
+			raise RuntimeError(
+				f"failed to remove oracle container {container_id}: {detail or result.returncode}"
+			)
+		self._container_id = None
+
 
 def _build_task_runtime_check_executor(
 	context: OracleInput,
