@@ -70,7 +70,8 @@ ENVIRONMENT:
 - Use the container shell as the primary task-execution shell.
 - The host workspace mirror is at {{ host_workspace_path or "(host workspace)" }}.
 {% else %}
-- You are running inside the task-execution container with root permissions.
+- You are running inside the task-execution container as the agent user.
+- Passwordless sudo is available for commands that require root permissions.
 {% endif %}
 
 YOUR TASK:
@@ -88,7 +89,7 @@ REQUIRED EVIDENCE:
 IMPORTANT GUIDELINES:
 1. First, explore the current directory structure.
 2. Navigate to the artifact repository root at {{ container_workspace_path or workspace_path }}.
-3. Remove sudo from commands when needed because the container already runs as root.
+3. Use sudo for commands that require root permissions.
 4. Do not switch git branches.
 5. Follow the instructions step by step.
 6. {{ verify_rule }}
