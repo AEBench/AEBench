@@ -30,6 +30,11 @@ _DOCKER_AGENT_USER_SETUP = (
 	"fi"
 )
 _TIMESTAMP_SCRIPT = "timestamp_lines.py"
+_REASONING_EFFORT: dict[AgentName, str] = {
+	"codex": "high",
+	"codex_non_api": "high",
+	"claude_non_api": "high",
+}
 
 
 def prepare_agent_home(
@@ -95,6 +100,7 @@ def run_agent(
 ) -> AgentResult:
 	script = _solve_script(agent)
 	prompt = _prompt_for_agent(agent, prompt)
+	reasoning_effort = _REASONING_EFFORT.get(agent)
 	env = _agent_env(
 		agent,
 		model=model,
@@ -114,8 +120,12 @@ def run_agent(
 			timeout=timeout_seconds + 35,
 		)
 	except subprocess.TimeoutExpired:
-		return AgentResult(model=model, exit_code=124)
-	return AgentResult(model=model, exit_code=process.returncode)
+		return AgentResult(model=model, exit_code=124, reasoning_effort=reasoning_effort)
+	return AgentResult(
+		model=model,
+		exit_code=process.returncode,
+		reasoning_effort=reasoning_effort,
+	)
 
 
 def _solve_script(agent: AgentName) -> str:
@@ -160,6 +170,9 @@ def _agent_env(
 		else {}
 	)
 	env["HOME"] = runtime_home
+	reasoning_effort = _REASONING_EFFORT.get(agent)
+	if reasoning_effort is not None:
+		env["AEBENCH_REASONING_EFFORT"] = reasoning_effort
 	if agent == "codex":
 		key = os.environ.get("OPENAI_API_KEY") or os.environ.get("CODEX_API_KEY")
 		if not key:

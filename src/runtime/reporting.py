@@ -128,6 +128,7 @@ def write_task_report(report_path: Path, result: RunResult, agent_summary: str) 
 		f"- Container stopped: `{runtime.container_stopped}`",
 		f"- Agent driver: `{result.agent_kind}`",
 		f"- Agent model: `{result.agent.model}`",
+		f"- Agent reasoning effort: `{result.agent.reasoning_effort or 'default'}`",
 		f"- Agent exit code: `{result.agent.exit_code}`",
 		f"- Agent messages: `{result.agent.message_count}`",
 	]

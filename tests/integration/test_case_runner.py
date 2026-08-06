@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from collections.abc import Mapping
@@ -35,7 +36,7 @@ def test_case_runner_executes_agent_then_oracle(
 
 	def fake_agent(*_args: Any, output_path: Path, model: str, **_kwargs: Any) -> AgentResult:
 		output_path.write_text('{"type":"result"}\n', encoding="utf-8")
-		return AgentResult(model=model, exit_code=0)
+		return AgentResult(model=model, exit_code=0, reasoning_effort="high")
 
 	monkeypatch.setattr("runtime.case_runner.run_agent", fake_agent)
 	result = run_case(
@@ -48,11 +49,13 @@ def test_case_runner_executes_agent_then_oracle(
 	assert result.status == CaseStatus.SUCCESS
 	assert result.oracle_result.score == 4
 	assert result.runtime_result.agent_kind == "codex"
+	assert result.runtime_result.agent.reasoning_effort == "high"
 	assert (output_dir / "runner_output.log").is_file()
 	prompt = next(output_dir.glob("aebench_prompt_*.md")).read_text(encoding="utf-8")
 	assert "Acceptable Evidence" in prompt
 	assert "Allowed Tolerance" in prompt
-	assert (output_dir / "result.jsonl").is_file()
+	run_record = json.loads((output_dir / "result.jsonl").read_text(encoding="utf-8"))
+	assert run_record["agent"]["reasoning_effort"] == "high"
 	assert (output_dir / "case_result.json").is_file()
 
 
