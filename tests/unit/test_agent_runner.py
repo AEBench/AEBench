@@ -8,7 +8,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from models import ArtifactRequirementsConfig, RuntimeConfig, RuntimeMode, TaskConfig
+from models import (
+	AgentName,
+	ArtifactRequirementsConfig,
+	RuntimeConfig,
+	RuntimeMode,
+	TaskConfig,
+)
 from runtime.agent_runner import (
 	_agent_env,
 	_agent_shell_command,
@@ -88,10 +94,14 @@ def test_claude_script_streams_json_without_permission_prompts() -> None:
 	assert "--dangerously-skip-permissions" in script
 
 
-def test_claude_prompt_includes_noninteractive_guidance() -> None:
-	prompt = _prompt_for_agent("claude", "do the task\n")
+@pytest.mark.parametrize("agent", ["claude", "claude_non_api"])
+def test_claude_prompt_includes_noninteractive_guidance(agent: AgentName) -> None:
+	prompt = _prompt_for_agent(agent, "do the task\n")
 	assert prompt.startswith("do the task\n\n")
 	assert "make sure every process you are running finishes" in prompt
+
+
+def test_codex_prompt_is_unchanged() -> None:
 	assert _prompt_for_agent("codex", "do the task") == "do the task"
 
 
