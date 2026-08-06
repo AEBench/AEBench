@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from evaluator.oracles import CaseOracleArtifactBuildBase, PathKind
-from evaluator.oracles.utils import BaseCheck
+from evaluator.oracles.reporting import BaseCheck
 
 from .consts import (
 	PRESENCE_ALTERNATIVES,
@@ -57,7 +57,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 		checks.append(
 			self.path_check(
 				name="gnu_time_present",
-				path=TIME_BINARY_PATH,
+				path=self.runtime_path(TIME_BINARY_PATH),
 				kind=PathKind.FILE,
 			)
 		)

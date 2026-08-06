@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles import CaseOracleExperimentRunsBase, PathCheck, PathKind
-from evaluator.oracles.utils import BaseCheck, CheckResult
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 _MIN_DETECTION_RATE = 90.0
 _MIN_EXPECTED_GO_INSTRUCTIONS = 121
