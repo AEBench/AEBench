@@ -108,14 +108,11 @@ def test_codex_prompt_is_unchanged() -> None:
 
 
 def test_docker_agent_runs_as_unprivileged_user() -> None:
-	assert _agent_shell_command(DockerRuntime()) == [
-		"bash",
-		"-o",
-		"pipefail",
-		"-c",
-		"runuser --user agent --preserve-environment -- bash -s 2>&1 | "
-		'python3 "$HOME/timestamp_lines.py"',
-	]
+	command = _agent_shell_command(DockerRuntime())
+	assert command[:4] == ["bash", "-o", "pipefail", "-c"]
+	assert 'socket="/var/run/docker.sock"' in command[-1]
+	assert 'usermod -aG "$socket_group" agent' in command[-1]
+	assert "runuser --user agent --preserve-environment -- bash -s" in command[-1]
 
 
 def test_local_agent_uses_current_user() -> None:

@@ -18,6 +18,17 @@ _CLAUDE_NONINTERACTIVE_GUIDANCE = (
 	"You are running in a non-interactive mode. So make sure every process you are "
 	"running finishes before you write your last message."
 )
+_DOCKER_AGENT_USER_SETUP = (
+	'socket="/var/run/docker.sock"; '
+	'if [ -S "$socket" ]; then '
+	'socket_gid=$(stat -c %g "$socket"); '
+	'socket_group=$(getent group "$socket_gid" | cut -d: -f1 || true); '
+	'if [ -z "$socket_group" ]; then '
+	'socket_group=aebench-docker-host; groupadd --gid "$socket_gid" "$socket_group"; '
+	"fi; "
+	'usermod -aG "$socket_group" agent; '
+	"fi"
+)
 _TIMESTAMP_SCRIPT = "timestamp_lines.py"
 
 
@@ -187,9 +198,11 @@ def _agent_shell_command(runtime: BenchRuntime) -> list[str]:
 			"bash",
 			"-s",
 		]
+		user_setup = f"set -e; {_DOCKER_AGENT_USER_SETUP}; "
 	else:
 		agent_command = ["bash", "-s"]
-	pipeline = f'{shlex.join(agent_command)} 2>&1 | python3 "$HOME/{_TIMESTAMP_SCRIPT}"'
+		user_setup = ""
+	pipeline = f'{user_setup}{shlex.join(agent_command)} 2>&1 | python3 "$HOME/{_TIMESTAMP_SCRIPT}"'
 	return ["bash", "-o", "pipefail", "-c", pipeline]
 
 
