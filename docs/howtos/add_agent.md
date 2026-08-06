@@ -52,7 +52,7 @@ The CLI can read subscription credentials while it runs without command approval
 ## Adding another CLI
 
 1. Add `src/runtime/agent_scripts/<name>/solve.sh`.
-2. Add the name to `AgentName` and `RunOptions.agent_type`.
+2. Add the name to `AgentName` and `AGENT_NAMES` in `models.py`.
 3. Pass only the credentials required by that harness in `_agent_env()`.
 4. Add unit tests for the command, environment, time limit, and raw output.
 

@@ -8,7 +8,7 @@ from config import AppState, resolve_settings
 from evaluator.loader import load_case_spec
 from evaluator.registry import resolve_case_dir
 from log import configure_logging
-from models import RunOptions
+from models import AGENT_NAMES, RunOptions
 from project_config import load_project_config
 from runtime.oracle_runner import DirectOracleRunner
 
@@ -79,7 +79,7 @@ def _build_parser() -> argparse.ArgumentParser:
 def _add_run_options(parser: argparse.ArgumentParser) -> None:
 	parser.add_argument(
 		"--agent",
-		choices=("codex", "claude", "codex_non_api", "claude_non_api"),
+		choices=AGENT_NAMES,
 		default=None,
 	)
 	parser.add_argument("--model", default=None)

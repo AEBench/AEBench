@@ -53,6 +53,15 @@ class PromptProfile(str, Enum):
 	ARTIFACT_EVAL_DOCKER_V1 = "artifact-eval-docker-v1"
 
 
+AgentName = Literal["codex", "claude", "codex_non_api", "claude_non_api"]
+AGENT_NAMES: tuple[AgentName, ...] = (
+	"codex",
+	"claude",
+	"codex_non_api",
+	"claude_non_api",
+)
+
+
 class LiveViewMode(str, Enum):
 	AUTO = "auto"
 	COMPACT = "compact"
@@ -361,7 +370,7 @@ class RunResult(_Model):
 
 
 class RunOptions(_Model):
-	agent_type: Literal["codex", "claude", "codex_non_api", "claude_non_api"] | None = None
+	agent_type: AgentName | None = None
 	model_name: str | None = None
 	interactive: bool = False
 	allow_unsafe_local: bool = False
