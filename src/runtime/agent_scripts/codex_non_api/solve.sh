@@ -12,4 +12,7 @@ if ! grep -q "forced_login_method" ~/.codex/config.toml 2>/dev/null; then
     printf '\nforced_login_method = "chatgpt"\n' >> ~/.codex/config.toml
 fi
 
-printf '%s' "$PROMPT" | codex --search exec --json -c model_reasoning_summary=detailed --skip-git-repo-check --yolo --model "$AGENT_CONFIG"
+printf '%s' "$PROMPT" | codex --search exec --json \
+    -c 'model_reasoning_effort="high"' \
+    -c model_reasoning_summary=detailed \
+    --skip-git-repo-check --yolo --model "$AGENT_CONFIG"

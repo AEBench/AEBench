@@ -80,6 +80,7 @@ class FakeRuntime:
 def test_codex_script_streams_json_without_secret_echoes() -> None:
 	script = _solve_script("codex")
 	assert "printf '%s' \"$PROMPT\" | codex --search exec --json" in script
+	assert 'model_reasoning_effort="high"' in script
 	assert "model_reasoning_summary=detailed" in script
 	assert "--skip-git-repo-check --yolo" in script
 	assert "echo $OPENAI_API_KEY" not in script
