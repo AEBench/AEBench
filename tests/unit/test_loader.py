@@ -91,46 +91,7 @@ def test_runtime_mode_parsed(tmp_path: Path) -> None:
 	assert spec.run.runtime.mode.value == "local"
 
 
-def test_required_evidence_parsed_from_run(tmp_path: Path) -> None:
-	case_dir = tmp_path / "test_case"
-	case_dir.mkdir()
-	_setup_valid_case(
-		case_dir,
-		"""\
-		id = "test_case"
-
-		[case_brief]
-		core_claim = "Verify the artifact builds correctly."
-		acceptable_evidence = "The binary exists and runs."
-		allowed_tolerance = "None."
-
-		[run]
-		id = "test_case"
-		required_evidence = [
-		  " Save stdout to table.txt ",
-		  "Keep logs under logs/",
-		  "",
-		]
-
-		[run.runtime]
-		mode = "local"
-
-		[oracle]
-		phases = ["env_setup"]
-		""",
-	)
-
-	spec = load_case_spec(case_dir)
-
-	assert spec.run.required_evidence == [
-		"Save stdout to table.txt",
-		"Keep logs under logs/",
-	]
-
-
-def test_required_evidence_parsed_from_legacy_instructions_location(
-	tmp_path: Path,
-) -> None:
+def test_required_evidence_parsed_from_instructions(tmp_path: Path) -> None:
 	case_dir = tmp_path / "test_case"
 	case_dir.mkdir()
 	_setup_valid_case(
@@ -148,7 +109,11 @@ def test_required_evidence_parsed_from_legacy_instructions_location(
 
 		[run.instructions]
 		path = "README.md"
-		required_evidence = ["Save nested evidence to results/table.txt"]
+		required_evidence = [
+		  " Save stdout to table.txt ",
+		  "Keep logs under logs/",
+		  "",
+		]
 
 		[run.runtime]
 		mode = "local"
@@ -160,8 +125,10 @@ def test_required_evidence_parsed_from_legacy_instructions_location(
 
 	spec = load_case_spec(case_dir)
 
-	assert spec.run.instructions.path == "README.md"
-	assert spec.run.required_evidence == ["Save nested evidence to results/table.txt"]
+	assert spec.run.instructions.required_evidence == [
+		"Save stdout to table.txt",
+		"Keep logs under logs/",
+	]
 
 
 def test_nonexistent_dir_raises(tmp_path: Path) -> None:

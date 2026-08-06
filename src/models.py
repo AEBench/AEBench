@@ -235,15 +235,17 @@ class CasePlan(_Model):
 
 class InstructionsConfig(_Model):
 	path: str = "README.md"
+	required_evidence: list[str] = Field(default_factory=list)
 
 	@model_validator(mode="after")
-	def _validate_path(self) -> "InstructionsConfig":
+	def _validate_fields(self) -> "InstructionsConfig":
 		path = Path(self.path.strip())
 		if not self.path.strip() or path.is_absolute() or ".." in path.parts:
 			raise ValueError(
 				"run.instructions.path must be a non-empty relative path inside the workspace"
 			)
 		self.path = path.as_posix()
+		self.required_evidence = [item.strip() for item in self.required_evidence if item.strip()]
 		return self
 
 
@@ -260,7 +262,6 @@ class PromptConfig(_Model):
 
 class TaskConfig(_Model):
 	id: str
-	required_evidence: list[str] = Field(default_factory=list)
 	source: BenchSource | None = None
 	instructions: InstructionsConfig = Field(default_factory=InstructionsConfig)
 	runtime: RuntimeConfig
@@ -278,12 +279,6 @@ class TaskConfig(_Model):
 		values = dict(values)
 		if "instructions_path" in values and "instructions" not in values:
 			values["instructions"] = {"path": values.pop("instructions_path")}
-		instructions = values.get("instructions")
-		if isinstance(instructions, dict) and "required_evidence" in instructions:
-			instructions = dict(instructions)
-			legacy_required_evidence = instructions.pop("required_evidence")
-			values["instructions"] = instructions
-			values.setdefault("required_evidence", legacy_required_evidence)
 		if "prompt_profile" in values and "prompt" not in values:
 			values["prompt"] = {"profile": values.pop("prompt_profile")}
 		return values
@@ -293,7 +288,6 @@ class TaskConfig(_Model):
 		self.id = self.id.strip()
 		if not self.id:
 			raise ValueError("run.id must not be empty")
-		self.required_evidence = [item.strip() for item in self.required_evidence if item.strip()]
 		return self
 
 	def require_source(self) -> BenchSource:
