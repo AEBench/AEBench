@@ -1,0 +1,41 @@
+id = "eurosys25_visualinux"
+
+[case_brief]
+core_claim = "CapybaraKV verifies quickly using Verus, has a proof-to-code ratio of 2.6, and achieves similar or better performance than state-of-the-art PM key-value stores. CapybaraNS verifies successfully using Dafny with a proof-to-code ratio of 2.4."
+acceptable_evidence = "Both systems build and verify without errors (CapybaraKV in <180s). Proof-to-code ratios exactly match Table 2 (2.6 for CapybaraKV, 2.4 for CapybaraNS). Storage footprint exactly matches 18 GiB. Key performance trends hold (empty startup < full, Seq Get < Rand Get, read-heavy workloads scale at 16 threads, pmem-Redis has lowest throughput)."
+allowed_tolerance = "Exact performance metrics may vary across hardware (e.g. emulated PM vs physical Optane). On emulated PM, Viper is permitted to have faster startup times and higher throughput than CapybaraKV. Memory footprint can have minor noise. No tolerance for storage footprint or proof-to-code ratios."
+
+[paper]
+title = "Understanding the Linux Kernel, Visually"
+venue = "EuroSys 2025"
+url = "https://www.usenix.org/system/files/osdi25-leblanc.pdf"
+sha256 = "0a06c653f7c62860fd64848e598e63942d49be951acd2aa945eceb667a298ab6"
+
+[run]
+id = "eurosys25_visualinux"
+
+[run.instructions]
+path = "README.md"
+
+[run.runtime]
+mode = "local"
+timeout_ms = 172800000      
+gpu = false
+interactive = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "fail_fast"
+placeholder = false
+
+[upstream]
+source_type = "git"
+url = "https://github.com/icsnju/visualinux"
+ref = "a734762425b276150fe7cad978b8077085e3ea4d"
+requested_ref = "master"
+resolved_at = "2026-08-05T00:00:00+00:00"

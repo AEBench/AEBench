@@ -1,0 +1,6 @@
+{
+  "Bootstrap": {"Cinnamon-M": 1.87, "Cinnamon-4": 1.98, "Cinnamon-8": 1.71, "Cinnamon-12": 1.63, "CraterLake": 6.33, "CiFHER": 5.58, "ARK": 3.50},
+  "Resnet": {"Cinnamon-M": 105.94, "Cinnamon-4": 94.52, "Cinnamon-8": 73.85, "Cinnamon-12": 70.57, "CraterLake": 321.00, "CiFHER": 189.00, "ARK": 125.00},
+  "HELR": {"Cinnamon-M": 73.20, "Cinnamon-4": 87.61, "Cinnamon-8": 68.74, "Cinnamon-12": 48.76, "CraterLake": 121.91, "CiFHER": 106.88},
+  "BERT": {"Cinnamon-M": 3.83, "Cinnamon-4": 3.83, "Cinnamon-8": 2.07, "Cinnamon-12": 1.66}
+}
