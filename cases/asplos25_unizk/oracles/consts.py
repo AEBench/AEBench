@@ -50,16 +50,17 @@ REQUIRED_CONFIGS = (
     "configs/fac_starky_recursive.yaml",
 )
 
-# Simulation workloads that write <name>.log via RamConfig::new + ramsim.run().
-# Names match RamConfig file_name / configs/<name>.yaml.
-# Default functional AE set (see refs/simulation_metrics.ref.json); oracle prefers
-# whatever workloads are listed in that reference file.
-REQUIRED_SIM_LOGS = (
-    "factorial.log",
-    "fibonacci.log",
-    "mvm.log",
-    "sha256.log",
+# Allowed RamConfig workload names (must match configs/<name>.yaml stems).
+# Used as an allowlist so reference JSON cannot drive path traversal.
+REQUIRED_WORKLOADS = (
+    "factorial",
+    "fibonacci",
+    "mvm",
+    "sha256",
 )
+
+# Simulation logs written by RamConfig::new + ramsim.run() for REQUIRED_WORKLOADS.
+REQUIRED_SIM_LOGS = tuple(f"{name}.log" for name in REQUIRED_WORKLOADS)
 
 # Metrics emitted by Ramulator2 TraceGen / GenericDRAM into <workload>.log.
 METRIC_KEYS = (
@@ -74,6 +75,8 @@ SIMILARITY_THRESHOLD = 0.75
 
 BUILD_MODE_ENV = "AE_UNIZK_BUILD_MODE"
 BUILD_TIMEOUT_SECONDS = 3600.0
+# Cap make parallelism (README uses unbounded `make -j`).
+MAKE_JOBS_CAP = 8
 
 
 def find_repo_root(workspace_dir: Path) -> Path:

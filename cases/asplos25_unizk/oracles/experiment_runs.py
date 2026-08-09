@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -18,6 +18,7 @@ from evaluator.oracles.reporting import BaseCheck, CheckResult
 from .consts import (
     METRIC_KEYS,
     REQUIRED_SIM_LOGS,
+    REQUIRED_WORKLOADS,
     RESULTS_REF,
     SIMILARITY_THRESHOLD,
     find_repo_root,
@@ -41,6 +42,8 @@ _METRIC_PATTERNS: dict[str, re.Pattern[str]] = {
         re.MULTILINE,
     ),
 }
+
+_ALLOWED_WORKLOADS = frozenset(REQUIRED_WORKLOADS)
 
 
 def _parse_sim_log(path: Path) -> dict[str, int] | None:
@@ -69,16 +72,20 @@ def _load_reference(path: Path) -> dict[str, Any]:
     return data
 
 
-def _flatten_metrics(workloads: dict[str, Any], *, keys: Sequence[str]) -> list[float]:
+def _metric_sequence(
+    workloads: Mapping[str, Any],
+    *,
+    metric: str,
+    names: Sequence[str],
+) -> list[float]:
     values: list[float] = []
-    for name in sorted(workloads):
+    for name in names:
         entry = workloads[name]
         if not isinstance(entry, dict):
             raise ValueError(f"workload {name!r} must be an object")
-        for key in keys:
-            if key not in entry:
-                raise ValueError(f"workload {name!r} missing metric {key!r}")
-            values.append(float(entry[key]))
+        if metric not in entry:
+            raise ValueError(f"workload {name!r} missing metric {metric!r}")
+        values.append(float(entry[metric]))
     return values
 
 
@@ -118,12 +125,11 @@ class SimulationLogsPresentCheck(BaseCheck):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class SimulationMetricsSimilarityCheck(BaseCheck):
-    """Pearson-correlate observed RamSim metrics against the reference."""
+class ReferenceWorkloadsExactCheck(BaseCheck):
+    """Fail unless the reference workloads match REQUIRED_WORKLOADS exactly."""
 
-    repo_root: Path
     reference_path: Path
-    threshold: float
+    required_workloads: tuple[str, ...]
 
     def check(self) -> CheckResult:
         try:
@@ -132,33 +138,90 @@ class SimulationMetricsSimilarityCheck(BaseCheck):
             return CheckResult.failure(f"cannot load reference: {exc}")
 
         workloads = reference["workloads"]
-        assert isinstance(workloads, dict)
+        if not isinstance(workloads, dict):
+            return CheckResult.failure("reference workloads must be an object")
+
+        observed = set(workloads)
+        expected = set(self.required_workloads)
+        disallowed = sorted(name for name in observed if name not in _ALLOWED_WORKLOADS)
+        missing = sorted(expected - observed)
+        extra = sorted(observed - expected)
+
+        if disallowed or missing or extra:
+            parts: list[str] = []
+            if disallowed:
+                parts.append("disallowed workload names: " + ", ".join(disallowed))
+            if missing:
+                parts.append("missing required workloads: " + ", ".join(missing))
+            if extra:
+                parts.append("unexpected workloads: " + ", ".join(extra))
+            return CheckResult.failure("; ".join(parts))
+
+        return CheckResult.success(
+            message=f"reference workloads match required set ({len(expected)})"
+        )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SimulationMetricSimilarityCheck(BaseCheck):
+    """Pearson-correlate one metric across the fixed required workloads."""
+
+    repo_root: Path
+    reference_path: Path
+    metric: str
+    threshold: float
+    required_workloads: tuple[str, ...]
+
+    def check(self) -> CheckResult:
+        try:
+            reference = _load_reference(self.reference_path)
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            return CheckResult.failure(f"cannot load reference: {exc}")
+
+        workloads = reference["workloads"]
+        if not isinstance(workloads, dict):
+            return CheckResult.failure("reference workloads must be an object")
+
+        ordered = list(self.required_workloads)
+        for name in ordered:
+            if name not in _ALLOWED_WORKLOADS:
+                return CheckResult.failure(f"disallowed workload name: {name!r}")
+            if name not in workloads:
+                return CheckResult.failure(f"reference missing workload {name!r}")
 
         observed_workloads: dict[str, dict[str, int]] = {}
         missing: list[str] = []
-        for name in sorted(workloads):
-            log_name = f"{name}.log"
-            metrics = _parse_sim_log(self.repo_root / log_name)
+        for name in ordered:
+            # Only allowlisted stems are used to build paths.
+            metrics = _parse_sim_log(self.repo_root / f"{name}.log")
             if metrics is None:
-                missing.append(log_name)
+                missing.append(f"{name}.log")
                 continue
             observed_workloads[name] = metrics
 
         if missing:
             return CheckResult.failure(
-                "missing or unparsable simulation logs for reference workloads: "
-                + ", ".join(missing)
+                "missing or unparsable simulation logs: " + ", ".join(missing)
             )
 
         try:
-            observed = _flatten_metrics(observed_workloads, keys=METRIC_KEYS)
-            expected = _flatten_metrics(workloads, keys=METRIC_KEYS)
+            observed = _metric_sequence(
+                observed_workloads,
+                metric=self.metric,
+                names=ordered,
+            )
+            expected = _metric_sequence(
+                workloads,
+                metric=self.metric,
+                names=ordered,
+            )
         except ValueError as exc:
             return CheckResult.failure(str(exc))
 
         if len(observed) < 2:
             return CheckResult.failure(
-                f"need at least 2 metric values for correlation, found {len(observed)}"
+                f"need at least 2 values for {self.metric} correlation, "
+                f"found {len(observed)}"
             )
 
         return ListSimilarityCheck(
@@ -176,32 +239,34 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
         repo_root = find_repo_root(self.workspace_path())
         reference_path = self.ref_path(RESULTS_REF)
 
-        required_logs = list(REQUIRED_SIM_LOGS)
-        try:
-            reference = _load_reference(reference_path)
-            workloads = reference.get("workloads")
-            if isinstance(workloads, dict) and workloads:
-                required_logs = [f"{name}.log" for name in sorted(workloads)]
-        except (OSError, json.JSONDecodeError, ValueError):
-            pass
-
         checks: list[BaseCheck] = [
             self.path_check(
                 name="simulation_metrics_ref_exists",
                 path=reference_path,
                 kind=PathKind.FILE,
             ),
+            ReferenceWorkloadsExactCheck(
+                name="reference_workloads_exact",
+                reference_path=reference_path,
+                required_workloads=REQUIRED_WORKLOADS,
+            ),
             SimulationLogsPresentCheck(
                 name="required_simulation_logs_present",
                 repo_root=repo_root,
-                required_logs=tuple(required_logs),
-            ),
-            SimulationMetricsSimilarityCheck(
-                name="simulation_metrics_correlation",
-                repo_root=repo_root,
-                reference_path=reference_path,
-                threshold=SIMILARITY_THRESHOLD,
+                required_logs=REQUIRED_SIM_LOGS,
             ),
         ]
+
+        for metric in METRIC_KEYS:
+            checks.append(
+                SimulationMetricSimilarityCheck(
+                    name=f"simulation_{metric}_correlation",
+                    repo_root=repo_root,
+                    reference_path=reference_path,
+                    metric=metric,
+                    threshold=SIMILARITY_THRESHOLD,
+                    required_workloads=REQUIRED_WORKLOADS,
+                )
+            )
 
         return tuple(checks)
