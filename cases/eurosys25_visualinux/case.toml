@@ -1,9 +1,9 @@
 id = "eurosys25_visualinux"
 
 [case_brief]
-core_claim = "CapybaraKV verifies quickly using Verus, has a proof-to-code ratio of 2.6, and achieves similar or better performance than state-of-the-art PM key-value stores. CapybaraNS verifies successfully using Dafny with a proof-to-code ratio of 2.4."
-acceptable_evidence = "Both systems build and verify without errors (CapybaraKV in <180s). Proof-to-code ratios exactly match Table 2 (2.6 for CapybaraKV, 2.4 for CapybaraNS). Storage footprint exactly matches 18 GiB. Key performance trends hold (empty startup < full, Seq Get < Rand Get, read-heavy workloads scale at 16 threads, pmem-Redis has lowest throughput)."
-allowed_tolerance = "Exact performance metrics may vary across hardware (e.g. emulated PM vs physical Optane). On emulated PM, Viper is permitted to have faster startup times and higher throughput than CapybaraKV. Memory footprint can have minor noise. No tolerance for storage footprint or proof-to-code ratios."
+core_claim = "Visualinux can handle various data structures and components in the Linux kernel by extracting expected kernel object graphs (C1), and it achieves this with an acceptable performance overhead (C4)."
+acceptable_evidence = "The Linux kernel builds successfully with vmlinux and bzImage. Expected JSON plots are successfully exported and contain all structures and files matching the reference results.json. The performance overhead profile (visualinux-sync.perf) has a Pearson correlation >= 0.8 against the reference baseline."
+allowed_tolerance = "Exact performance metrics may vary across different hardware environments, but the overall statistical distribution of the top 50 execution overheads must preserve the reference trend (Pearson correlation >= 0.8)."
 
 [paper]
 title = "Understanding the Linux Kernel, Visually"
