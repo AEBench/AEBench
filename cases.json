@@ -31,6 +31,9 @@
     "eurosys24_decarbonization_potential": {
       "path": "cases/eurosys24_decarbonization_potential"
     },
+    "eurosys24_unison": {
+      "path": "cases/eurosys24_unison"
+    },
     "eurosys25_depsurf": {
       "path": "cases/eurosys25_depsurf"
     },
