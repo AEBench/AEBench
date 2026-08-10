@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 from collections.abc import Sequence
 
-from evaluator.oracles.reporting import BaseCheck, PathKind
+from evaluator.oracles.reporting import BaseCheck
+from evaluator.oracles import PathKind
 from evaluator.oracles.bases import CaseOracleArtifactBuildBase
 
 _DEFAULT_CONDA_ENV_NAME = "morphenv"
