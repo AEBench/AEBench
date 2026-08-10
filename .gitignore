@@ -116,3 +116,6 @@ AGENT_SCRATCH.md
 TODO.agent.md
 *.agent.md
 *.scratch.md
+
+# Rust shim build output
+src/runtime/shim/target/
