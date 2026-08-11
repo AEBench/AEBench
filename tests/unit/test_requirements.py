@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles import checks
 from evaluator.oracles.process import ProcResult
+from evaluator.oracles.reporting import Check, CheckResult, build_oracle_report
 
 
 @dataclass
@@ -63,14 +65,14 @@ class FakeExecutor:
 def test_version_check_success() -> None:
 	executor = FakeExecutor(stdout="tool version 1.2.3")
 	chk = checks.VersionCheck(name="tool", cmd=["tool"], min_version=(1, 2, 0), executor=executor)
-	result = chk.check()
+	result = chk.check(executor)
 	assert result.ok is True
 
 
 def test_version_check_failure_for_low_version() -> None:
 	executor = FakeExecutor(stdout="tool version 1.1.9")
 	chk = checks.VersionCheck(name="tool", cmd=["tool"], min_version=(1, 2, 0), executor=executor)
-	result = chk.check()
+	result = chk.check(executor)
 	assert result.ok is False
 	assert "does not satisfy" in result.message
 
@@ -80,7 +82,7 @@ def test_env_var_check_exact_match() -> None:
 	chk = checks.EnvVarCheck(
 		name="env", env_var="EGWALKER_HOME", expected="/tmp/egwalker", executor=executor
 	)
-	result = chk.check()
+	result = chk.check(executor)
 	assert result.ok is True
 
 
@@ -93,7 +95,7 @@ def test_env_var_check_contains_match() -> None:
 		match_mode=checks.EnvMatchMode.CONTAINS,
 		executor=executor,
 	)
-	result = chk.check()
+	result = chk.check(executor)
 	assert result.ok is True
 
 
@@ -108,8 +110,8 @@ def test_path_check_file_and_directory() -> None:
 		name="dir", path=Path("."), kind=checks.PathKind.DIRECTORY, executor=dir_exec
 	)
 
-	assert file_check.check().ok is True
-	assert dir_check.check().ok is True
+	assert file_check.check(file_exec).ok is True
+	assert dir_check.check(dir_exec).ok is True
 
 
 def test_path_check_reports_missing_path() -> None:
@@ -117,6 +119,37 @@ def test_path_check_reports_missing_path() -> None:
 	chk = checks.PathCheck(
 		name="path", path=Path("missing.txt"), kind=checks.PathKind.FILE, executor=executor
 	)
-	result = chk.check()
+	result = chk.check(executor)
 	assert result.ok is False
 	assert "not found" in result.message
+
+
+def test_build_oracle_report_passes_phase_executor_to_callable() -> None:
+	executor = FakeExecutor()
+	seen: list[FakeExecutor] = []
+	check = Check(
+		name="records_executor",
+		fn=lambda received: seen.append(received) or CheckResult.success(),
+	)
+
+	report = build_oracle_report(
+		logger=logging.getLogger(__name__),
+		requirements=lambda: (check,),
+		executor=executor,  # type: ignore[arg-type]
+	)
+
+	assert report.ok is True
+	assert seen == [executor]
+
+
+def test_bound_check_executor_overrides_phase_executor() -> None:
+	bound = FakeExecutor(exists=True, is_file=True)
+	phase = FakeExecutor(exists=False, is_file=False)
+	check = checks.PathCheck(
+		name="file",
+		path=Path("README.md"),
+		kind=checks.PathKind.FILE,
+		executor=bound,  # type: ignore[arg-type]
+	)
+
+	assert check.check(phase).ok is True  # type: ignore[arg-type]

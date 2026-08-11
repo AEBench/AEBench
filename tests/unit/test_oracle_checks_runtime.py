@@ -542,6 +542,6 @@ def test_min_matching_entry_count_accepts_relative_runtime_path(
 		executor=executor,
 	)
 
-	result = check.check()
+	result = check.check(executor)
 
 	assert result.ok is True

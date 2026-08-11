@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles import utils
-
-_log = logging.getLogger(__name__)
 from evaluator.oracles.bases import CaseOracleBenchmarkPrepBase
 from evaluator.oracles.checks import PathCheck, PathKind
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor, RuntimePath
 
+_log = logging.getLogger(__name__)
 
 _MIN_BENCH_FPCORE_FILES = 30
 _MIN_HAMMING_FPCORE_FILES = 4
@@ -23,17 +23,18 @@ class FPCoreBenchmarkCheck(utils.BaseCheck):
 	path: Path
 	min_count: int
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
-		if not self.path.is_dir():
+	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
+		if not executor.path_is_dir(self.path):
 			return utils.CheckResult.failure(f"benchmark directory does not exist: {self.path}")
 
 		count = 0
 		try:
-			for fpcore_file in self.path.rglob("*.fpcore"):
-				if not fpcore_file.is_file():
+			for fpcore_file in executor.glob(self.path, "**/*.fpcore"):
+				runtime_file = RuntimePath.from_parts(fpcore_file.as_posix())
+				if not executor.path_is_file(runtime_file):
 					continue
 				try:
-					head = fpcore_file.read_text("utf-8", errors="replace")[:1024]
+					head = executor.read_file_text(runtime_file)[:1024]
 					if "FPCore" in head:
 						count += 1
 				except OSError as exc:

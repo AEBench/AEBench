@@ -4,9 +4,10 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from evaluator.oracles.reporting import BaseCheck, CheckResult
 from evaluator.oracles.bases import CaseOracleArtifactBuildBase
 from evaluator.oracles.checks import CommandCheck
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 _BUILD_MODE_ENV = "AE_CINNAMON_BUILD_MODE"
 _BUILD_TIMEOUT_SECONDS = 600.0
@@ -17,7 +18,7 @@ _BUILD_TIMEOUT_SECONDS = 600.0
 class InvalidBuildModeCheck(BaseCheck):
 	mode: str
 
-	def check(self) -> CheckResult:
+	def check(self, _executor: RuntimeCheckExecutor) -> CheckResult:
 		return CheckResult.failure(
 			f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
 		)

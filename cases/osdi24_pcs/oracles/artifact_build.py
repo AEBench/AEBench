@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleArtifactBuildBase
 from evaluator.oracles.checks import PathKind
-
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 
 _BUILD_MODE_ENV = "AE_PCS_BUILD_MODE"
 _BUILD_TIMEOUT_SECONDS = 600.0
@@ -20,7 +20,7 @@ _REQUIRED_PACKAGES = ("numpy", "pandas", "scipy", "ray", "matplotlib", "seaborn"
 class InvalidBuildModeCheck(utils.BaseCheck):
     mode: str
 
-    def check(self) -> utils.CheckResult:
+    def check(self, _executor: RuntimeCheckExecutor) -> utils.CheckResult:
         return utils.CheckResult.failure(
             f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
         )

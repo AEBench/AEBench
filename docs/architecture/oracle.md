@@ -16,12 +16,11 @@ The oracle runs after the agent has finished. It does not interact with the agen
 ## 2. Class hierarchy
 
 ```
-BaseCheck                  (abstract, in oracles/utils.py)
-    └── DependencyVersionCheck
-    └── EnvironmentVariableCheck
-    └── FilesystemPathCheck
-    └── BuildCommandCheck
-    └── BenchmarkCommandCheck
+BaseCheck                  (abstract, in oracles/reporting.py)
+    └── VersionCheck
+    └── EnvVarCheck
+    └── PathCheck
+    └── CommandCheck
     └── ListSimilarityCheck
     └── ... (custom checks for specific cases)
 
@@ -86,7 +85,7 @@ For each discovered phase, the execution engine (`oracles/execution.py`):
 
 1. Instantiates the class: `instance = phase_def.cls(context=context, logger=logger)`
 2. Calls `instance.report()` which internally runs `build_oracle_report()`
-3. `build_oracle_report()` calls `requirements()` to get the check objects, then runs `check.check()` on each one
+3. `build_oracle_report()` calls `requirements()` to get the check objects, then runs `check.check(executor)` on each one using the phase's configured executor
 4. Result is an `OracleReport` containing one `CheckEntry` per check
 
 If `report().ok` is True, the phase passes. If not, it fails. With `failure_mode = "fail_fast"` the remaining phases are marked PENDING and evaluation stops.
@@ -99,7 +98,9 @@ Every check has:
 - `name`: unique identifier within the phase (e.g., `"rustc"`, `"dataset_file_exists"`)
 - `optional`: if True, failure is a warning not an error
 
-The `check()` method returns a `CheckResult`:
+The `check(executor: RuntimeCheckExecutor)` method returns a `CheckResult`. Custom checks and callables must use that executor for filesystem, environment, and process access so they cannot silently fall back to the evaluator host. Built-in helper checks use the phase executor by default; an explicit per-check `target=` override still takes precedence.
+
+`CheckResult` contains:
 - `ok`: whether the check passed
 - `message`: human-readable description
 - `stdout`, `stderr`: captured output (for command-based checks)

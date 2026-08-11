@@ -6,7 +6,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles import CaseOracleExperimentRunsBase, utils  # type: ignore[import-untyped]
-from evaluator.oracles.checks import BaseCheck, ListSimilarityCheck, SimilarityMetric  # type: ignore[import-untyped]
+from evaluator.oracles.checks import (  # type: ignore[import-untyped]
+    BaseCheck,
+    ListSimilarityCheck,
+    SimilarityMetric,
+)
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 
 _SIMILARITY_RATIO = 0.75
 
@@ -69,12 +74,11 @@ class TimingsJSONSimilarityCheck(utils.BaseCheck):  # type: ignore[misc]
     reference_path: Path
     threshold: float
     field: str | None = None
-    executor: utils.RuntimeCheckExecutor | None = None
 
-    def check(self) -> utils.CheckResult:
+    def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
         try:
-            results = json.loads(utils.check_read_file_text(self.results_path, executor=self.executor))
-            reference = json.loads(utils.check_read_file_text(self.reference_path, executor=self.executor))
+            results = json.loads(utils.check_read_file_text(self.results_path, executor=executor))
+            reference = json.loads(utils.check_read_file_text(self.reference_path, executor=executor))
 
             ref_values = _values(reference, field=self.field, label="timings reference")
             got_values = _values(results, field=self.field, label="timings results")
@@ -99,7 +103,7 @@ class TimingsJSONSimilarityCheck(utils.BaseCheck):  # type: ignore[misc]
             reference=expected,
             metric=SimilarityMetric.PEARSON,
             min_similarity=self.threshold,
-        ).check()
+        ).check(executor)
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):  # type: ignore[misc]
@@ -120,7 +124,6 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):  # type: ignore[misc]
                     results_path=results_path,
                     reference_path=reference_path,
                     threshold=_SIMILARITY_RATIO,
-                    executor=self.executor,
                 ),
             )
 
@@ -131,7 +134,6 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):  # type: ignore[misc]
                 reference_path=reference_path,
                 threshold=_SIMILARITY_RATIO,
                 field=field,
-                executor=self.executor,
             )
             for field in fields
         )
