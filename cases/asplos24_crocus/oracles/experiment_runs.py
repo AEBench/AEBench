@@ -25,8 +25,8 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	"""Validate the agent-saved experiment outputs under crocus-results/."""
 
 	def requirements(self) -> Sequence[BaseCheck]:
-		table1 = json.loads(self.ref_path(TABLE1_REF).read_text(encoding="utf-8"))
-		coverage = json.loads(self.ref_path(COVERAGE_REF).read_text(encoding="utf-8"))
+		table1 = json.loads(self.read_text(self.ref_path(TABLE1_REF)))
+		coverage = json.loads(self.read_text(self.ref_path(COVERAGE_REF)))
 
 		checks: list[BaseCheck] = []
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import dataclasses
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -87,16 +86,13 @@ def _safe_name_part(value: str) -> str:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class VerifyAllLogCheck(BaseCheck):
 	path: Path
-	executor: RuntimeCheckExecutor | None = dataclasses.field(
-		default=None, repr=False, compare=False
-	)
 
-	def check(self) -> CheckResult:
-		if not check_path_is_file(self.path, executor=self.executor):
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
+		if not check_path_is_file(self.path, executor=executor):
 			return CheckResult.failure(f"verify-all log not found: {self.path}")
 
 		try:
-			text = check_read_file_text(self.path, executor=self.executor)
+			text = check_read_file_text(self.path, executor=executor)
 		except OSError as exc:
 			return CheckResult.failure(f"failed to read verify-all log: {exc}")
 		except ValueError as exc:
@@ -160,7 +156,6 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 			VerifyAllLogCheck(
 				name="verify_all_succeeded",
 				path=protos_dir / _VERIFY_LOG,
-				executor=self.executor,
 			),
 		]
 

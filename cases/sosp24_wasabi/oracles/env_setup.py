@@ -2,14 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from evaluator.oracles import utils
-from evaluator.oracles.discovery import env_setup
 from evaluator.oracles.env_setup_checks import (
 	DependencyVersionCheck,
 	FilesystemPathCheck,
 	PathType,
 )
 from evaluator.oracles.utils import Checkable, RuntimeCheckExecutor
+
+from evaluator.oracles import utils
+from evaluator.oracles.discovery import env_setup
 from models import OracleInput
 
 
@@ -18,8 +19,9 @@ def oracle_env_setup(context: OracleInput) -> Sequence[Checkable]:
 	repo_root = context.workspace_dir
 	benchmarks_root = context.workspace_dir / "benchmarks"
 
-	def _check_runtime_dir_env(var_name: str) -> utils.CheckResult:
-		executor: RuntimeCheckExecutor | None = context.runtime_executor  # type: ignore[assignment]
+	def _check_runtime_dir_env(
+		executor: RuntimeCheckExecutor, var_name: str
+	) -> utils.CheckResult:
 		try:
 			raw_value = utils.read_check_env_var(var_name, executor=executor)
 		except (RuntimeError, ValueError) as exc:
@@ -118,7 +120,7 @@ def oracle_env_setup(context: OracleInput) -> Sequence[Checkable]:
 		),
 		utils.Check(
 			name="WASABI_ROOT_DIR_is_directory",
-			fn=lambda: _check_runtime_dir_env("WASABI_ROOT_DIR"),
+			fn=lambda executor: _check_runtime_dir_env(executor, "WASABI_ROOT_DIR"),
 		),
 		FilesystemPathCheck(
 			name="wasabi_root_directory_exists",
@@ -127,7 +129,7 @@ def oracle_env_setup(context: OracleInput) -> Sequence[Checkable]:
 		),
 		utils.Check(
 			name="JAVA_HOME_is_directory",
-			fn=lambda: _check_runtime_dir_env("JAVA_HOME"),
+			fn=lambda executor: _check_runtime_dir_env(executor, "JAVA_HOME"),
 		),
 		FilesystemPathCheck(
 			name="benchmarks_directory_exists",

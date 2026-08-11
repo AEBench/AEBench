@@ -5,8 +5,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from evaluator.oracles import utils
-from evaluator.oracles.checks import CommandCheck
 from evaluator.oracles.bases import CaseOracleArtifactBuildBase
+from evaluator.oracles.checks import CommandCheck
+from evaluator.oracles.oracle_checks_runtime import OraclePath, RuntimeCheckExecutor, RuntimePath
 
 _BUILD_COMMAND: tuple[str, ...] = ("make", "install")
 _BUILD_TIMEOUT_SECONDS = 3600.0
@@ -17,13 +18,12 @@ _BUILD_MODE_ENV = "AE_HERBIE_BUILD_MODE"
 class HerbieBinaryLocatedCheck(utils.BaseCheck):
 	"""Fail if herbie binary or Racket entry point is unavailable."""
 
-	repo_root: "os.PathLike[str]"
-	executor: utils.RuntimeCheckExecutor | None = None
+	repo_root: OraclePath
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
 		from pathlib import Path
 
-		resolved = utils.resolve_check_executable("herbie", executor=self.executor)
+		resolved = utils.resolve_check_executable("herbie", executor=executor)
 		if resolved is not None:
 			return utils.CheckResult.success()
 
@@ -32,13 +32,12 @@ class HerbieBinaryLocatedCheck(utils.BaseCheck):
 			# arith25 tag uses src/main.rkt instead of src/herbie.rkt.
 			Path(self.repo_root) / "src" / "main.rkt",
 		)
-		if any(rkt_path.is_file() for rkt_path in rkt_paths):
+		if any(executor.path_is_file(rkt_path) for rkt_path in rkt_paths):
 			return utils.CheckResult.success()
 
-		home = Path.home()
-		for candidate in home.glob(".racket/*/bin/herbie"):
-			if candidate.is_file():
-				return utils.CheckResult.success()
+		home = executor.read_env_var("HOME")
+		if home and executor.glob(RuntimePath.from_parts(home), ".racket/*/bin/herbie"):
+			return utils.CheckResult.success()
 
 		return utils.CheckResult.failure(
 			"herbie binary not found on PATH, in ~/.racket/*/bin/, "
@@ -50,7 +49,7 @@ class HerbieBinaryLocatedCheck(utils.BaseCheck):
 class InvalidBuildModeCheck(utils.BaseCheck):
 	mode: str
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
+	def check(self, _executor: RuntimeCheckExecutor) -> utils.CheckResult:
 		return utils.CheckResult.failure(
 			f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
 		)

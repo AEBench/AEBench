@@ -8,16 +8,16 @@ from typing import Any
 
 from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
-from evaluator.oracles.checks import CommandCheck, PathCheck, PathKind
-
+from evaluator.oracles.checks import ListSimilarityCheck, PathCheck, PathKind, SimilarityMetric
+from evaluator.oracles.oracle_checks_runtime import OraclePath, RuntimeCheckExecutor, RuntimePath
 
 _START_ERROR_SIMILARITY = 0.90
 _END_ERROR_SIMILARITY = 0.50
 
 
-def _load_results_json(path: Path) -> dict[str, Any]:
+def _load_results_json(path: OraclePath, *, executor: RuntimeCheckExecutor) -> dict[str, Any]:
 	"""Load and validate a Herbie results.json file."""
-	text = path.read_text("utf-8")
+	text = executor.read_file_text(path)
 	data = json.loads(text)
 	if not isinstance(data, dict) or "tests" not in data:
 		raise ValueError("results.json must be an object with a 'tests' array")
@@ -26,25 +26,28 @@ def _load_results_json(path: Path) -> dict[str, Any]:
 	return data
 
 
-def _discover_herbie_report(repo_root: Path) -> tuple[Path, Path] | None:
+def _discover_herbie_report(
+	repo_root: Path, *, executor: RuntimeCheckExecutor
+) -> tuple[OraclePath, OraclePath] | None:
 	"""Find the best Herbie report directory under the workspace root."""
-	best: tuple[int, Path, Path] | None = None
-	for results_path in repo_root.glob("*/results.json"):
+	best: tuple[int, OraclePath, OraclePath] | None = None
+	for results_path in executor.glob(repo_root, "*/results.json"):
 		report_dir = results_path.parent
 		if report_dir.name.startswith("."):
 			continue
 
-		html_path: Path | None = None
+		html_path: OraclePath | None = None
 		for html_name in ("report.html", "index.html"):
-			candidate_html = report_dir / html_name
-			if candidate_html.is_file():
+			candidate_html = RuntimePath.from_parts((report_dir / html_name).as_posix())
+			if executor.path_is_file(candidate_html):
 				html_path = candidate_html
 				break
 		if html_path is None:
 			continue
 
 		try:
-			data = _load_results_json(results_path)
+			runtime_results_path = RuntimePath.from_parts(results_path.as_posix())
+			data = _load_results_json(runtime_results_path, executor=executor)
 		except (OSError, json.JSONDecodeError, ValueError):
 			continue
 
@@ -53,7 +56,7 @@ def _discover_herbie_report(repo_root: Path) -> tuple[Path, Path] | None:
 			continue
 
 		if best is None or len(tests) > best[0]:
-			best = (len(tests), html_path, results_path)
+			best = (len(tests), html_path, runtime_results_path)
 
 	if best is None:
 		return None
@@ -64,11 +67,11 @@ def _discover_herbie_report(repo_root: Path) -> tuple[Path, Path] | None:
 class ResultsJSONStructureCheck(utils.BaseCheck):
 	"""Fail if results.json is missing or has invalid structure."""
 
-	results_path: Path
+	results_path: OraclePath
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
 		try:
-			data = _load_results_json(self.results_path)
+			data = _load_results_json(self.results_path, executor=executor)
 		except (OSError, json.JSONDecodeError, ValueError) as exc:
 			return utils.CheckResult.failure(f"cannot read or parse {self.results_path}: {exc}")
 
@@ -95,11 +98,11 @@ class ResultsJSONStructureCheck(utils.BaseCheck):
 class HerbieNoRegressionCheck(utils.BaseCheck):
 	"""Fail if any test has end > start (accuracy regression)."""
 
-	results_path: Path
+	results_path: OraclePath
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
 		try:
-			data = _load_results_json(self.results_path)
+			data = _load_results_json(self.results_path, executor=executor)
 		except (OSError, json.JSONDecodeError, ValueError) as exc:
 			return utils.CheckResult.failure(f"cannot load results: {exc}")
 
@@ -128,13 +131,13 @@ class HerbieNoRegressionCheck(utils.BaseCheck):
 class BenchmarkCountCheck(utils.BaseCheck):
 	"""Fail if the results have fewer tests than the reference."""
 
-	results_path: Path
-	reference_path: Path
+	results_path: OraclePath
+	reference_path: OraclePath
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
 		try:
-			results = _load_results_json(self.results_path)
-			reference = _load_results_json(self.reference_path)
+			results = _load_results_json(self.results_path, executor=executor)
+			reference = _load_results_json(self.reference_path, executor=executor)
 		except (OSError, json.JSONDecodeError, ValueError) as exc:
 			return utils.CheckResult.failure(f"cannot load results: {exc}")
 
@@ -152,12 +155,14 @@ class BenchmarkCountCheck(utils.BaseCheck):
 
 
 def _extract_values(
-	results_path: Path,
-	reference_path: Path,
+	results_path: OraclePath,
+	reference_path: OraclePath,
 	field: str,
+	*,
+	executor: RuntimeCheckExecutor,
 ) -> tuple[list[float], list[float]]:
-	results = _load_results_json(results_path)
-	reference = _load_results_json(reference_path)
+	results = _load_results_json(results_path, executor=executor)
+	reference = _load_results_json(reference_path, executor=executor)
 
 	ref_by_name: dict[str, float] = {}
 	for test in reference["tests"]:
@@ -182,17 +187,18 @@ def _extract_values(
 class HerbieValueSimilarityCheck(utils.BaseCheck):
 	"""Pearson similarity of a numeric field against reference."""
 
-	results_path: Path
-	reference_path: Path
+	results_path: OraclePath
+	reference_path: OraclePath
 	field: str
 	threshold: float
 
-	def check(self, *_args: object, **_kwargs: object) -> utils.CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
 		try:
 			observed, reference = _extract_values(
 				self.results_path,
 				self.reference_path,
 				self.field,
+				executor=executor,
 			)
 		except (OSError, json.JSONDecodeError, ValueError) as exc:
 			return utils.CheckResult.failure(f"cannot extract {self.field}: {exc}")
@@ -211,13 +217,13 @@ class HerbieValueSimilarityCheck(utils.BaseCheck):
 			metric=SimilarityMetric.PEARSON,
 			min_similarity=self.threshold,
 		)
-		return delegated.check()
+		return delegated.check(executor)
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	def requirements(self) -> Sequence[utils.BaseCheck]:
 		repo_root = self._workspace_dir
-		report = _discover_herbie_report(repo_root)
+		report = _discover_herbie_report(repo_root, executor=self.executor)
 		reference_path = self.ref_path("results.ref.json")
 
 		checks: list[utils.BaseCheck] = []

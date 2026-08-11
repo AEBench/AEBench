@@ -8,6 +8,7 @@ from typing import Any
 from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleBenchmarkPrepBase
 from evaluator.oracles.checks import PathKind
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor, RuntimePath
 
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
@@ -62,10 +63,11 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
         reqs.append(
             utils.Check(
                 name="dataset_basenames_present",
-                fn=lambda: self._check_dataset_basenames_present(
+                fn=lambda executor: self._check_dataset_basenames_present(
                     dataset_root=dataset_root,
                     subdirs=clean_subdirs,
                     expected_basenames=expected_basenames,
+                    executor=executor,
                 ),
             )
         )
@@ -92,6 +94,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
         dataset_root,
         subdirs: Sequence[str],
         expected_basenames: Sequence[str],
+        executor: RuntimeCheckExecutor,
     ) -> utils.CheckResult:
         expected = set(expected_basenames)
         missing: list[str] = []
@@ -99,14 +102,15 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
         for subdir in subdirs:
             subdir_path = dataset_root / subdir
 
-            if not self.is_dir(subdir_path):
+            if not executor.path_is_dir(subdir_path):
                 continue
 
             try:
                 present = {
                     path.stem
-                    for path in subdir_path.iterdir()
-                    if path.is_file() and not path.name.startswith(".")
+                    for path in executor.glob(subdir_path, "*")
+                    if executor.path_is_file(RuntimePath.from_parts(path.as_posix()))
+                    and not path.name.startswith(".")
                 }
             except OSError as exc:
                 return utils.CheckResult.failure(

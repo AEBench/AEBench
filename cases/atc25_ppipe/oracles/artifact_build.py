@@ -5,10 +5,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from evaluator.oracles import utils
-from evaluator.oracles.checks import CommandCheck
 from evaluator.oracles.bases import CaseOracleArtifactBuildBase
-from evaluator.oracles.checks import PathCheck, PathKind, VersionCheck
-
+from evaluator.oracles.checks import CommandCheck, PathCheck, PathKind, VersionCheck
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 
 _CONDA_ENV_NAME_ENV = "AE_PPIPE_CONDA_ENV"
 _DEFAULT_CONDA_ENV_NAME = "ppipe"
@@ -30,7 +29,7 @@ _REQUIRED_IMPORTS = "gurobipy, pandas, numpy, matplotlib, fire"
 class InvalidBuildModeCheck(utils.BaseCheck):
 	mode: str
 
-	def check(self) -> utils.CheckResult:
+	def check(self, _executor: RuntimeCheckExecutor) -> utils.CheckResult:
 		return utils.CheckResult.failure(
 			f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
 		)

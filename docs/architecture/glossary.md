@@ -38,7 +38,7 @@ Quick reference for the main types and functions. Not everything is listed here:
 
 ## Oracle (in `evaluator/oracles/`)
 
-- **BaseCheck**: abstract base for all oracle checks. Subclass this and implement `check()`.
+- **BaseCheck**: abstract base for all oracle checks. Subclass this and implement `check(executor)`; the phase runner supplies its configured runtime executor.
 - **CheckResult**: pass/fail outcome of one check, with message, stdout/stderr, exit code.
 - **CheckEntry**: one row in an oracle report: name, outcome (passed/failed/warning), message.
 - **CheckOutcome**: enum: PASSED, FAILED, WARNING.

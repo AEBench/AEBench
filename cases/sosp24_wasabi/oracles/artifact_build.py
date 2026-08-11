@@ -1,45 +1,74 @@
 from __future__ import annotations
 
 import fnmatch
-import hashlib
 import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from evaluator.oracles.utils import Checkable
+
 from evaluator.oracles import utils
 from evaluator.oracles.discovery import artifact_build
-from evaluator.oracles.utils import Checkable
+from evaluator.oracles.oracle_checks_runtime import OraclePath, RuntimeCheckExecutor, RuntimePath
 from models import OracleInput
 
-_MAVEN_REPO_DIR = Path.home() / ".m2" / "repository"
 _PRIMARY_ARTIFACT = "edu.uchicago.cs.systems:wasabi"
 
 
-def _sha256(path: Path) -> str:
-	hasher = hashlib.sha256()
-	with path.open("rb") as handle:
-		for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-			hasher.update(chunk)
-	return hasher.hexdigest()
+def _sha256(path: OraclePath, *, executor: RuntimeCheckExecutor) -> str:
+	result = executor.run_process_capture(
+		cmd=(
+			"python3",
+			"-c",
+			"import hashlib, pathlib, sys; print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())",
+			str(executor.resolve_path(path)),
+		),
+		cwd=None,
+		env=None,
+		timeout_seconds=30.0,
+	)
+	if result.returncode != 0:
+		raise OSError(result.stderr or f"failed to hash {path}")
+	return result.stdout.strip()
 
 
-def _pick_primary_jar(dir_path: Path, artifact_id: str, version: str) -> Path | None:
-	if not dir_path.is_dir():
+def _pick_primary_jar(
+	dir_path: OraclePath,
+	artifact_id: str,
+	version: str,
+	*,
+	executor: RuntimeCheckExecutor,
+) -> OraclePath | None:
+	if not executor.path_is_dir(dir_path):
 		return None
 
 	bad_tokens = ("-sources", "-javadoc", "-tests", "original-")
 	pattern = f"{artifact_id}-{version}*.jar"
 	candidates = [
 		path
-		for path in dir_path.glob("*.jar")
-		if path.is_file()
+		for path in executor.glob(dir_path, "*.jar")
+		if executor.path_is_file(RuntimePath.from_parts(path.as_posix()))
 		and fnmatch.fnmatch(path.name, pattern)
 		and not any(token in path.name for token in bad_tokens)
 	]
 	if not candidates:
 		return None
-	return max(candidates, key=lambda path: path.stat().st_mtime)
+	resolved = {str(path): path for path in candidates}
+	result = executor.run_process_capture(
+		cmd=(
+			"python3",
+			"-c",
+			"import os, sys; print(max(sys.argv[1:], key=os.path.getmtime))",
+			*resolved,
+		),
+		cwd=None,
+		env=None,
+		timeout_seconds=10.0,
+	)
+	if result.returncode != 0:
+		raise OSError(result.stderr or f"failed to inspect jars under {dir_path}")
+	return RuntimePath.from_parts(resolved[result.stdout.strip()].as_posix())
 
 
 def _strip_ns(tag: str) -> str:
@@ -58,10 +87,14 @@ def _xget(element: ET.Element | None, tag: str) -> str | None:
 	return None
 
 
-def _parse_pom(pom_path: Path, *, top_defaults: dict[str, str] | None) -> dict[str, Any]:
+def _parse_pom(
+	pom_path: Path,
+	*,
+	top_defaults: dict[str, str] | None,
+	executor: RuntimeCheckExecutor,
+) -> dict[str, Any]:
 	try:
-		tree = ET.parse(pom_path)
-		root = tree.getroot()
+		root = ET.fromstring(executor.read_file_text(pom_path))
 	except Exception as exc:
 		return {"dir": pom_path.parent, "pom": pom_path, "error": f"XML parse error: {exc}"}
 
@@ -93,12 +126,21 @@ def _parse_pom(pom_path: Path, *, top_defaults: dict[str, str] | None) -> dict[s
 	}
 
 
-def _find_poms(base: Path) -> list[Path]:
-	return sorted(base.rglob("pom.xml"))
+def _find_poms(base: Path, *, executor: RuntimeCheckExecutor) -> list[Path]:
+	runtime_base = Path(executor.resolve_path(base))
+	return sorted(
+		base / path.relative_to(runtime_base)
+		for path in executor.glob(base, "**/pom.xml")
+	)
 
 
-def _repo_path(group_id: str, artifact_id: str, version: str) -> Path:
-	return _MAVEN_REPO_DIR.joinpath(*group_id.split("."), artifact_id, version)
+def _repo_path(
+	group_id: str, artifact_id: str, version: str, *, executor: RuntimeCheckExecutor
+) -> RuntimePath:
+	home = executor.read_env_var("HOME") or "/root"
+	return RuntimePath.from_parts(
+		home, ".m2", "repository", *group_id.split("."), artifact_id, version
+	)
 
 
 @artifact_build
@@ -106,22 +148,22 @@ def oracle_artifact_build(context: OracleInput) -> Sequence[Checkable]:
 	repo_root = context.workspace_dir
 	cache: dict[str, list[dict[str, Any]]] = {}
 
-	def _load_modules() -> list[dict[str, Any]]:
+	def _load_modules(executor: RuntimeCheckExecutor) -> list[dict[str, Any]]:
 		modules = cache.get("modules")
 		if modules is not None:
 			return modules
 
-		if not repo_root.exists() or not repo_root.is_dir():
+		if not executor.path_is_dir(repo_root):
 			raise ValueError(f"base project directory not found: {repo_root}")
 
-		poms = _find_poms(repo_root)
+		poms = _find_poms(repo_root, executor=executor)
 		if not poms:
 			raise ValueError(f"no pom.xml files found under {repo_root}")
 
 		root_pom = repo_root / "pom.xml"
 		top_defaults: dict[str, str] = {}
-		if root_pom.exists():
-			root_module = _parse_pom(root_pom, top_defaults=None)
+		if executor.path_exists(root_pom):
+			root_module = _parse_pom(root_pom, top_defaults=None, executor=executor)
 			if "error" not in root_module:
 				group_id = root_module.get("groupId")
 				version = root_module.get("version")
@@ -133,7 +175,7 @@ def oracle_artifact_build(context: OracleInput) -> Sequence[Checkable]:
 		errors: list[str] = []
 		parsed_modules: list[dict[str, Any]] = []
 		for pom in poms:
-			module = _parse_pom(pom, top_defaults=top_defaults)
+			module = _parse_pom(pom, top_defaults=top_defaults, executor=executor)
 			error = module.get("error")
 			if isinstance(error, str):
 				errors.append(f"{pom}: {error}")
@@ -162,16 +204,16 @@ def oracle_artifact_build(context: OracleInput) -> Sequence[Checkable]:
 		cache["modules"] = parsed_modules
 		return parsed_modules
 
-	def _check_build_inputs() -> utils.CheckResult:
+	def _check_build_inputs(executor: RuntimeCheckExecutor) -> utils.CheckResult:
 		try:
-			_load_modules()
+			_load_modules(executor)
 		except ValueError as exc:
 			return utils.CheckResult.failure(str(exc))
 		return utils.CheckResult.success(f"loaded Maven module metadata under {repo_root}")
 
-	def _check_primary_module_artifact() -> utils.CheckResult:
+	def _check_primary_module_artifact(executor: RuntimeCheckExecutor) -> utils.CheckResult:
 		try:
-			modules = _load_modules()
+			modules = _load_modules(executor)
 		except ValueError as exc:
 			return utils.CheckResult.failure(str(exc))
 
@@ -198,15 +240,20 @@ def oracle_artifact_build(context: OracleInput) -> Sequence[Checkable]:
 		version = str(chosen["version"]).strip()
 		module_dir = Path(chosen["dir"])
 
-		built = _pick_primary_jar(module_dir / "target", artifact_id, version)
+		built = _pick_primary_jar(
+			module_dir / "target", artifact_id, version, executor=executor
+		)
 		installed = _pick_primary_jar(
-			_repo_path(group_id, artifact_id, version), artifact_id, version
+			_repo_path(group_id, artifact_id, version, executor=executor),
+			artifact_id,
+			version,
+			executor=executor,
 		)
 		if built is None or installed is None:
 			return utils.CheckResult.failure("missing built jar and/or installed artifact")
 
-		built_sha = _sha256(built)
-		installed_sha = _sha256(installed)
+		built_sha = _sha256(built, executor=executor)
+		installed_sha = _sha256(installed, executor=executor)
 		if built_sha != installed_sha:
 			return utils.CheckResult.failure(
 				"primary artifact mismatch: target jar does not match local Maven repo jar"

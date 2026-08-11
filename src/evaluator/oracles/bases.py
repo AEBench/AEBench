@@ -45,6 +45,7 @@ from .oracle_checks_runtime import (
 from .process import ProcResult
 from .reporting import (
 	BaseCheck,
+	Check,
 	OracleReport,
 	build_oracle_report,
 	log_oracle_report,
@@ -98,11 +99,18 @@ class _OraclePhaseBase(abc.ABC):
 		"""Returns the checks evaluated by this phase."""
 		raise NotImplementedError
 
+	@property
+	@abc.abstractmethod
+	def executor(self) -> RuntimeCheckExecutor:
+		"""Returns the executor used by checks in this phase."""
+		raise NotImplementedError
+
 	def report(self) -> OracleReport:
 		"""Evaluates this phase and returns its structured report."""
 		return build_oracle_report(
 			logger=self._logger,
 			requirements=self.requirements,
+			executor=self.executor,
 		)
 
 	def run(self, *, verbose: bool = False) -> bool:
@@ -176,7 +184,11 @@ class _CaseOracleBase(_OraclePhaseBase):
 		self,
 		target: str | None = None,
 	) -> RuntimeCheckExecutor:
-		"""Return the executor for a target or the phase default."""
+		"""Return the phase-default executor, or the named target executor.
+
+		``None`` selects the target configured for this phase. An unknown named
+		target raises ``KeyError`` through the runtime registry.
+		"""
 
 		registry = self._runtime_registry
 		if registry is None:
@@ -189,6 +201,16 @@ class _CaseOracleBase(_OraclePhaseBase):
 	def executor(self) -> RuntimeCheckExecutor:
 		"""Returns the phase-default runtime executor."""
 		return self.executor_for()
+
+	def _check_for_target(self, check: BaseCheck, target: str | None) -> BaseCheck:
+		"""Uses the phase executor unless a check explicitly names a target."""
+		if target is None:
+			return check
+		return Check(
+			name=check.name,
+			optional=check.optional,
+			fn=lambda _phase_executor: check.check(self.executor_for(target)),
+		)
 
 	def case_path(self, *parts: str | Path) -> Path:
 		"""Returns a host path relative to the case directory."""
@@ -232,9 +254,9 @@ class _CaseOracleBase(_OraclePhaseBase):
 		timeout_seconds: float = DEFAULT_ORACLE_CHECK_TIMEOUT,
 		optional: bool = False,
 		target: str | None = None,
-	) -> VersionCheck:
+	) -> BaseCheck:
 		"""Creates a target-aware command version check."""
-		return VersionCheck(
+		check = VersionCheck(
 			name=name,
 			optional=optional,
 			cmd=cmd,
@@ -242,8 +264,8 @@ class _CaseOracleBase(_OraclePhaseBase):
 			max_version=max_version,
 			version_regex=version_regex,
 			timeout_seconds=timeout_seconds,
-			executor=self.executor_for(target),
 		)
+		return self._check_for_target(check, target)
 
 	def env_var_check(
 		self,
@@ -254,16 +276,16 @@ class _CaseOracleBase(_OraclePhaseBase):
 		match_mode: EnvMatchMode = EnvMatchMode.EXACT,
 		optional: bool = False,
 		target: str | None = None,
-	) -> EnvVarCheck:
+	) -> BaseCheck:
 		"""Creates a target-aware environment variable check."""
-		return EnvVarCheck(
+		check = EnvVarCheck(
 			name=name,
 			optional=optional,
 			env_var=env_var,
 			expected=expected,
 			match_mode=match_mode,
-			executor=self.executor_for(target),
 		)
+		return self._check_for_target(check, target)
 
 	def path_check(
 		self,
@@ -273,15 +295,15 @@ class _CaseOracleBase(_OraclePhaseBase):
 		kind: PathKind = PathKind.ANY,
 		optional: bool = False,
 		target: str | None = None,
-	) -> PathCheck:
+	) -> BaseCheck:
 		"""Creates a target-aware filesystem path check."""
-		return PathCheck(
+		check = PathCheck(
 			name=name,
 			optional=optional,
 			path=path,
 			kind=kind,
-			executor=self.executor_for(target),
 		)
+		return self._check_for_target(check, target)
 
 	def command_check(
 		self,
@@ -295,9 +317,9 @@ class _CaseOracleBase(_OraclePhaseBase):
 		signature: str | None = None,
 		optional: bool = False,
 		target: str | None = None,
-	) -> CommandCheck:
+	) -> BaseCheck:
 		"""Creates a target-aware command execution check."""
-		return CommandCheck(
+		check = CommandCheck(
 			name=name,
 			optional=optional,
 			cmd=cmd,
@@ -306,8 +328,8 @@ class _CaseOracleBase(_OraclePhaseBase):
 			env={} if env is None else env,
 			use_shell=use_shell,
 			signature=signature,
-			executor=self.executor_for(target),
 		)
+		return self._check_for_target(check, target)
 
 	def text_file_equal(
 		self,
@@ -317,15 +339,15 @@ class _CaseOracleBase(_OraclePhaseBase):
 		reference_path: OraclePath,
 		optional: bool = False,
 		target: str | None = None,
-	) -> TextFileEqualityCheck:
+	) -> BaseCheck:
 		"""Creates a target-aware text-file equality check."""
-		return TextFileEqualityCheck(
+		check = TextFileEqualityCheck(
 			name=name,
 			optional=optional,
 			observed_path=observed_path,
 			reference_path=reference_path,
-			executor=self.executor_for(target),
 		)
+		return self._check_for_target(check, target)
 
 	def min_matching_entry_count_check(
 		self,
@@ -336,15 +358,15 @@ class _CaseOracleBase(_OraclePhaseBase):
 		min_count: int = 1,
 		optional: bool = False,
 		target: str | None = None,
-	) -> MinMatchingEntryCountCheck:
-		return MinMatchingEntryCountCheck(
+	) -> BaseCheck:
+		check = MinMatchingEntryCountCheck(
 			name=name,
 			optional=optional,
 			directory=directory,
 			pattern=pattern,
 			min_count=min_count,
-			executor=self.executor_for(target),
 		)
+		return self._check_for_target(check, target)
 
 	def read_text(
 		self,

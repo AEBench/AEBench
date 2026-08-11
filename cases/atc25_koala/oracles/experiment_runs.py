@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 
-from evaluator.oracles import CaseOracleExperimentRunsBase, PathKind
 from evaluator.oracles.utils import BaseCheck
+
+from evaluator.oracles import CaseOracleExperimentRunsBase, PathKind
 
 from .checks import KoalaCorrectnessCheck, KoalaPassLogCheck
 from .consts import (
@@ -26,7 +27,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	"""
 
 	def requirements(self) -> Sequence[BaseCheck]:
-		ref = json.loads(self.ref_path(BENCHMARKS_REF).read_text(encoding="utf-8"))
+		ref = json.loads(self.read_text(self.ref_path(BENCHMARKS_REF)))
 		expected = ref["expected_status_lines"]
 
 		checks: list[BaseCheck] = []

@@ -7,7 +7,7 @@ from pathlib import Path
 from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleBenchmarkPrepBase
 from evaluator.oracles.checks import PathCheck, PathKind
-
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 
 _LFS_POINTER_MAX_BYTES = 200
 
@@ -33,18 +33,27 @@ class LFSFileResolvedCheck(utils.BaseCheck):
 	path: Path
 	min_size: int = _LFS_POINTER_MAX_BYTES
 
-	def check(self) -> utils.CheckResult:
-		if not self.path.is_file():
+	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
+		if not executor.path_is_file(self.path):
 			return utils.CheckResult.failure(f"file missing: {self.path}")
 
 		try:
-			size = self.path.stat().st_size
-		except OSError as exc:
-			return utils.CheckResult.failure(f"cannot stat {self.path}: {exc}")
+			result = executor.run_process_capture(
+				cmd=("wc", "-c", str(executor.resolve_path(self.path))),
+				cwd=None,
+				env=None,
+				timeout_seconds=10.0,
+			)
+			size = int(result.stdout.split()[0]) if result.returncode == 0 else -1
+		except (OSError, ValueError, IndexError) as exc:
+			return utils.CheckResult.failure(f"cannot determine size of {self.path}: {exc}")
+
+		if size < 0:
+			return utils.CheckResult.failure(f"cannot determine size of {self.path}")
 
 		if size <= self.min_size:
 			try:
-				head = self.path.read_bytes()[:64]
+				head = executor.read_file_text(self.path)[:64].encode()
 			except OSError as exc:
 				return utils.CheckResult.failure(
 					f"{self.path.name} is unexpectedly small ({size} bytes) "
@@ -71,14 +80,14 @@ class ModelListCountCheck(utils.BaseCheck):
 	path: Path
 	expected_count: int
 
-	def check(self) -> utils.CheckResult:
-		if not self.path.is_file():
+	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
+		if not executor.path_is_file(self.path):
 			return utils.CheckResult.failure(f"file missing: {self.path}")
 
 		try:
 			lines = [
 				line.strip()
-				for line in self.path.read_text(encoding="utf-8").splitlines()
+				for line in executor.read_file_text(self.path).splitlines()
 				if line.strip()
 			]
 		except OSError as exc:

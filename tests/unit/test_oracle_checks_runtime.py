@@ -539,9 +539,8 @@ def test_min_matching_entry_count_accepts_relative_runtime_path(
 		directory=RuntimePath.from_parts("results"),
 		pattern="*.json",
 		min_count=2,
-		executor=executor,
 	)
 
-	result = check.check()
+	result = check.check(executor)
 
 	assert result.ok is True

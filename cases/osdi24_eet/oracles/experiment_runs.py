@@ -5,14 +5,18 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluator.oracles import utils
 from evaluator.oracles.case_base import CaseOracleExperimentRunsBase
 from evaluator.oracles.experiment_runs_checks import ElementwiseSimilarityThresholdCheck
 
+from evaluator.oracles import utils
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor, RuntimePath
 
-def _load_expected_counts(path: Path) -> dict[str, int]:
+
+def _load_expected_counts(
+	path: Path, *, executor: RuntimeCheckExecutor
+) -> dict[str, int]:
 	try:
-		raw = json.loads(path.read_text(encoding="utf-8"))
+		raw = json.loads(executor.read_file_text(path))
 	except OSError as exc:
 		raise ValueError(f"failed to read expected bug counts: {exc}") from exc
 	except json.JSONDecodeError as exc:
@@ -32,12 +36,16 @@ def _load_expected_counts(path: Path) -> dict[str, int]:
 	return counts
 
 
-def _count_bug_dirs(path: Path) -> int:
-	if not path.is_dir():
+def _count_bug_dirs(path: Path, *, executor: RuntimeCheckExecutor) -> int:
+	if not executor.path_is_dir(path):
 		return 0
 
 	try:
-		return sum(1 for entry in path.iterdir() if entry.is_dir())
+		return sum(
+			1
+			for entry in executor.glob(path, "*")
+			if executor.path_is_dir(RuntimePath.from_parts(entry.as_posix()))
+		)
 	except OSError:
 		return 0
 
@@ -53,25 +61,37 @@ class BugTotalsCheck(utils.BaseCheck):
 		object.__setattr__(self, "workspace_dir", Path(self.workspace_dir))
 		object.__setattr__(self, "observed_path", Path(self.observed_path))
 
-	def check(self) -> utils.CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
 		try:
-			expected = _load_expected_counts(self.expected_path)
+			expected = _load_expected_counts(self.expected_path, executor=executor)
 		except ValueError as exc:
 			return utils.CheckResult.failure(str(exc))
 
 		benchmarks = list(expected.keys())
 		observed = {
-			benchmark: _count_bug_dirs(self.workspace_dir / f"{benchmark}_test" / "bugs")
+			benchmark: _count_bug_dirs(
+				self.workspace_dir / f"{benchmark}_test" / "bugs", executor=executor
+			)
 			for benchmark in benchmarks
 		}
 
 		try:
-			self.observed_path.parent.mkdir(parents=True, exist_ok=True)
-			self.observed_path.write_text(
-				json.dumps(observed, indent=2, sort_keys=True) + "\n",
-				encoding="utf-8",
+			result = executor.run_process_capture(
+				cmd=(
+					"sh",
+					"-c",
+					'mkdir -p "$(dirname "$1")" && printf "%s\\n" "$2" > "$1"',
+					"sh",
+					str(executor.resolve_path(self.observed_path)),
+					json.dumps(observed, indent=2, sort_keys=True),
+				),
+				cwd=None,
+				env=None,
+				timeout_seconds=10.0,
 			)
-		except OSError as exc:
+			if result.returncode != 0:
+				raise OSError(result.stderr or f"exit code {result.returncode}")
+		except (OSError, ValueError) as exc:
 			return utils.CheckResult.failure(f"failed to write observed bug totals: {exc}")
 
 		result = ElementwiseSimilarityThresholdCheck(
@@ -79,7 +99,7 @@ class BugTotalsCheck(utils.BaseCheck):
 			observed=[float(observed[benchmark]) for benchmark in benchmarks],
 			reference=[float(expected[benchmark]) for benchmark in benchmarks],
 			threshold=1.0,
-		).check()
+		).check(executor)
 
 		if result.ok:
 			return utils.CheckResult.success()

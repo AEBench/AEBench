@@ -7,6 +7,7 @@ from pathlib import Path
 from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleArtifactBuildBase
 from evaluator.oracles.checks import PathKind
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 
 
 class OracleArtifactBuild(CaseOracleArtifactBuildBase):
@@ -78,7 +79,9 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
             ),
             utils.Check(
                 name="depsurf_bcc_objects_exist",
-                fn=lambda: self._check_bcc_objects_exist(bcc_output_dir),
+                fn=lambda executor: self._check_bcc_objects_exist(
+                    bcc_output_dir, executor=executor
+                ),
             ),
             self.command_check(
                 name="depsurf_make_tracee_bpf",
@@ -93,14 +96,16 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
             ),
         )
 
-    def _check_bcc_objects_exist(self, output_dir: Path) -> utils.CheckResult:
-        if not self.is_dir(output_dir):
+    def _check_bcc_objects_exist(
+        self, output_dir: Path, *, executor: RuntimeCheckExecutor
+    ) -> utils.CheckResult:
+        if not executor.path_is_dir(output_dir):
             return utils.CheckResult.failure(
                 f"BCC output directory missing or not a directory: {output_dir}"
             )
 
         try:
-            objects = sorted(output_dir.glob("*.bpf.o"))
+            objects = sorted(executor.glob(output_dir, "*.bpf.o"))
         except OSError as exc:
             return utils.CheckResult.failure(
                 f"failed to list BCC output directory {output_dir}: {exc}"
