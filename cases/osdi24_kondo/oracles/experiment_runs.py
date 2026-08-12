@@ -24,13 +24,11 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 			VerifyAllLogCheck(
 				name="verify_all_succeeded",
 				path=self.runtime_path("kondoPrototypes/verify-all.log"),
-				executor=self.executor,
 			),
 			SlocReferenceCheck(
 				name="sloc_values_match",
 				sloc_csv_path=self.runtime_path("kondoPrototypes/evaluation/sloc.csv"),
 				reference_path=self.ref_path("sloc.ref.json"),
-				executor=self.executor,
 			),
 		]
 

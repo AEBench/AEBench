@@ -6,6 +6,7 @@ from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind
 from evaluator.oracles.reporting import BaseCheck
 
 from .consts import PROTOCOLS
+from .parsing import ProtocolManifestCheck
 
 _REQUIRED_SYNC_FILES = (
 	"applicationProof.dfy",
@@ -51,10 +52,9 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 				path=self.runtime_path("kondoPrototypes/evaluation/file_sloc.py"),
 				kind=PathKind.FILE,
 			),
-			self.path_check(
-				name="protocol_manifest",
+			ProtocolManifestCheck(
+				name="protocol_manifest_matches_case",
 				path=self.runtime_path("kondoPrototypes/evaluation/protocols.csv"),
-				kind=PathKind.FILE,
 			),
 		]
 

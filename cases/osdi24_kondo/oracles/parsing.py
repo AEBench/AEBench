@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles.oracle_checks_runtime import (
@@ -64,7 +64,7 @@ def _read_runtime_text(
 	path: OraclePath,
 	*,
 	label: str,
-	executor: RuntimeCheckExecutor | None,
+	executor: RuntimeCheckExecutor,
 ) -> str:
 	try:
 		return check_read_file_text(path, encoding="utf-8", executor=executor)
@@ -79,7 +79,7 @@ def _read_runtime_text(
 def _load_sloc_csv(
 	path: OraclePath,
 	*,
-	executor: RuntimeCheckExecutor | None,
+	executor: RuntimeCheckExecutor,
 ) -> dict[str, dict[str, int]]:
 	text = _read_runtime_text(path, label="sloc.csv", executor=executor)
 	rows: dict[str, dict[str, int]] = {}
@@ -127,16 +127,44 @@ def _load_reference(path: Path) -> object:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class ProtocolManifestCheck(BaseCheck):
+	path: OraclePath
+
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
+		try:
+			text = _read_runtime_text(self.path, label="protocols.csv", executor=executor)
+			reader = csv.reader(text.splitlines())
+			rows = [row for row in reader if any(field.strip() for field in row)]
+		except (csv.Error, ValueError) as exc:
+			return CheckResult.failure(str(exc))
+
+		protocols: list[str] = []
+		for line_number, row in enumerate(rows, start=1):
+			if not row or not row[0].strip() or any(field.strip() for field in row[1:]):
+				return CheckResult.failure(f"protocols.csv line {line_number}: malformed row")
+			protocols.append(row[0].strip())
+		if len(protocols) != len(set(protocols)):
+			return CheckResult.failure("protocols.csv contains duplicate protocols")
+		observed = set(protocols)
+		expected = set(PROTOCOLS)
+		if observed != expected:
+			return CheckResult.failure(
+				"protocols.csv protocol mismatch; "
+				f"missing={sorted(expected - observed)}, unexpected={sorted(observed - expected)}"
+			)
+		return CheckResult.success(f"protocols.csv contains exactly {len(PROTOCOLS)} protocols")
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class VerifyAllLogCheck(BaseCheck):
 	path: OraclePath
-	executor: RuntimeCheckExecutor | None = field(default=None, repr=False, compare=False)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
 			text = _read_runtime_text(
 				self.path,
 				label="verify-all log",
-				executor=self.executor,
+				executor=executor,
 			)
 		except ValueError as exc:
 			return CheckResult.failure(str(exc))
@@ -198,14 +226,13 @@ class SlocReferenceCheck(BaseCheck):
 	sloc_csv_path: OraclePath
 	reference_path: Path
 	tolerance: int = _SLOC_TOLERANCE
-	executor: RuntimeCheckExecutor | None = field(default=None, repr=False, compare=False)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		if self.tolerance < 0:
 			return CheckResult.failure(f"invalid tolerance: {self.tolerance}; expected >= 0")
 
 		try:
-			observed_data = _load_sloc_csv(self.sloc_csv_path, executor=self.executor)
+			observed_data = _load_sloc_csv(self.sloc_csv_path, executor=executor)
 			ref_obj = _load_reference(self.reference_path)
 		except ValueError as exc:
 			return CheckResult.failure(str(exc))

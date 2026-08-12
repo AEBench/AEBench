@@ -4,7 +4,7 @@ import csv
 import io
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles.oracle_checks_runtime import (
@@ -36,6 +36,7 @@ _SLOC_HEADER = (
 	"protocol",
 	"basilisk_safety",
 	"basilisk_total",
+	# Basilisk's evaluator reports its bundled Kondo baseline in the same CSV.
 	"kondo_safety",
 	"kondo_total",
 )
@@ -45,7 +46,7 @@ def _read_runtime_text(
 	path: OraclePath,
 	*,
 	label: str,
-	executor: RuntimeCheckExecutor | None,
+	executor: RuntimeCheckExecutor,
 ) -> str:
 	try:
 		return check_read_file_text(path, executor=executor)
@@ -118,11 +119,10 @@ def _load_reference(path: Path) -> dict[str, object]:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class VerificationLogCheck(BaseCheck):
 	path: OraclePath
-	executor: RuntimeCheckExecutor | None = field(default=None)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			text = _read_runtime_text(self.path, label="verification log", executor=self.executor)
+			text = _read_runtime_text(self.path, label="verification log", executor=executor)
 		except ValueError as exc:
 			return CheckResult.failure(str(exc))
 
@@ -219,11 +219,10 @@ class VerificationLogCheck(BaseCheck):
 class HintsCsvCheck(BaseCheck):
 	path: OraclePath
 	reference_path: Path
-	executor: RuntimeCheckExecutor | None = field(default=None)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			text = _read_runtime_text(self.path, label="hints.csv", executor=self.executor)
+			text = _read_runtime_text(self.path, label="hints.csv", executor=executor)
 			observed = _parse_integer_csv(text, header=_HINTS_HEADER, label="hints.csv")
 			ref = _load_reference(self.reference_path)
 		except ValueError as exc:
@@ -261,11 +260,10 @@ class HintsCsvCheck(BaseCheck):
 class SlocCsvCheck(BaseCheck):
 	path: OraclePath
 	reference_path: Path
-	executor: RuntimeCheckExecutor | None = field(default=None)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			text = _read_runtime_text(self.path, label="sloc.csv", executor=self.executor)
+			text = _read_runtime_text(self.path, label="sloc.csv", executor=executor)
 			observed = _parse_integer_csv(text, header=_SLOC_HEADER, label="sloc.csv")
 			ref = _load_reference(self.reference_path)
 		except ValueError as exc:

@@ -19,25 +19,21 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	"""Validate full verification coverage and both paper-evaluation tables."""
 
 	def requirements(self) -> Sequence[BaseCheck]:
-		executor = self.executor
 		ref_path = self.ref_path(_RESULTS_REF)
 		checks: list[BaseCheck] = [
 			VerificationLogCheck(
 				name="all_protocols_verify",
 				path=self.runtime_path(_VERIFY_LOG),
-				executor=executor,
 			),
 			HintsCsvCheck(
 				name="hint_counts_match",
 				path=self.runtime_path(_HINTS_CSV),
 				reference_path=ref_path,
-				executor=executor,
 			),
 			SlocCsvCheck(
 				name="sloc_results_match",
 				path=self.runtime_path(_SLOC_CSV),
 				reference_path=ref_path,
-				executor=executor,
 			),
 		]
 
