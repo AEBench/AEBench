@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import traceback
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -55,6 +56,7 @@ def run_case(
 	*,
 	options: RunOptions,
 	save_path: Path | None = None,
+	on_output_dir: Callable[[Path], None] | None = None,
 ) -> CaseRunResult:
 	case_root = case_dir.expanduser().resolve()
 	case = load_case_spec(case_root)
@@ -81,6 +83,8 @@ def run_case(
 		root=context.project_state.config.resolve_case_runs_dir(context.project_state.root),
 		explicit=save_path,
 	)
+	if on_output_dir is not None:
+		on_output_dir(output_dir)
 	paths = task_paths_for(output_dir, safe_name(case.id))
 	started = datetime.now(timezone.utc)
 	prepare_finished = started

@@ -165,10 +165,10 @@ def _case_run(args: argparse.Namespace) -> int:
 		case_dir,
 		options=_run_options(args),
 		save_path=_optional_path(args.save_path),
+		on_output_dir=lambda path: print(f"Output: {path}", flush=True),
 	)
 	print(f"Case status: {result.status.value}")
 	print(f"Oracle score: {result.oracle_result.score}")
-	print(f"Output: {result.output_dir}")
 	return 0 if result.status.value == "success" else 1
 
 
