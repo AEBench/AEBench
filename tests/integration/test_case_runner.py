@@ -33,10 +33,16 @@ def test_case_runner_executes_agent_then_oracle(
 	state = load_project_config(project)
 	context = AppState(project_state=state, settings=resolve_settings(state))
 	output_dir = tmp_path / "output"
+	events: list[str] = []
 
 	def fake_agent(*_args: Any, output_path: Path, model: str, **_kwargs: Any) -> AgentResult:
+		events.append("agent")
 		output_path.write_text('{"type":"result"}\n', encoding="utf-8")
 		return AgentResult(model=model, exit_code=0, reasoning_effort="high")
+
+	def record_output_dir(path: Path) -> None:
+		assert path.is_dir()
+		events.append(f"output:{path}")
 
 	monkeypatch.setattr("runtime.case_runner.run_agent", fake_agent)
 	result = run_case(
@@ -44,8 +50,10 @@ def test_case_runner_executes_agent_then_oracle(
 		project / "bundles" / "mock_apt_case",
 		options=RunOptions(agent_type="codex", model_name="gpt-test", allow_unsafe_local=True),
 		save_path=output_dir,
+		on_output_dir=record_output_dir,
 	)
 
+	assert events == [f"output:{output_dir}", "agent"]
 	assert result.status == CaseStatus.SUCCESS
 	assert result.oracle_result.score == 4
 	assert result.runtime_result.agent_kind == "codex"
