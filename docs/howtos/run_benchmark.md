@@ -71,19 +71,40 @@ If a phase fails, the score includes each phase that passed before it. With `fai
 
 ## 5. Run an Agent
 
-Build the runtime image first:
+On a Chameleon worker, install the project dependencies and build the agent
+runtime image:
 
 ```bash
+uv sync --dev
 docker build -t aebench-agent:latest .
 ```
 
-Then select an explicit harness and model:
+For a ChatGPT subscription, authenticate Codex on the worker and run the case
+with `codex_non_api`:
 
 ```bash
-uv run aebench case run osdi24_kondo \
+codex login
+codex login status
+
+uv run aebench case run asplos24_gaia \
   --agent codex_non_api \
   --model gpt-5.5
 ```
+
+For a Claude subscription, generate a token as described in
+[Adding an Agent Harness](add_agent.md#claude-subscription), copy it to the
+worker, and run the case with `claude_non_api`:
+
+```bash
+export AEBENCH_CLAUDE_OAUTH_TOKEN_FILE=~/.config/aebench/claude_oauth_token
+
+uv run aebench case run osdi24_kondo \
+  --agent claude_non_api \
+  --model claude-opus-4-8
+```
+
+The command prints the run output directory before it starts the agent. It
+prints the case status and oracle score after the run finishes.
 
 Use `--allow-host-docker` when `[run.artifact_requirements] docker = true`. This gives the agent control of the host Docker daemon. Use `--allow-unsafe-local` when the case runtime is local. This runs agent commands directly on the host. Use both options only on a disposable worker.
 
