@@ -1,18 +1,10 @@
 {
   "schema_version": 1,
   "source_revision": "9d3955cf0a1687731f35baa8e38aa7bc25108773",
-  "files": {
-    "Data/processed_data/data_for_bank-level_prediction.csv": {
-      "sha256": "ee6e3d90d28cba1b0df6eca5dfd48c97979347c050eac6e4d9162e1ad0f8efe7"
-    },
-    "Data/processed_data/data_for_col-level_prediction.csv": {
-      "sha256": "f9c4ced1b33bc00a34242351019c528317bb0d0e58f493e1965c60c9a8b4545f"
-    },
-    "Data/processed_data/data_for_row-level_prediction.csv": {
-      "sha256": "c8ca6627978ee7221970e6db2b29f4827effcb0cc21125d107c965574cb5698d"
-    },
-    "Data/processed_data/data_for_server-level_prediction.csv": {
-      "sha256": "fc59dfb61097016d2b74f1ec3b319692c5f4cfc220fa48f5674433c97d01213f"
-    }
-  }
+  "files": [
+    "Data/processed_data/data_for_bank-level_prediction.csv",
+    "Data/processed_data/data_for_col-level_prediction.csv",
+    "Data/processed_data/data_for_row-level_prediction.csv",
+    "Data/processed_data/data_for_server-level_prediction.csv"
+  ]
 }

@@ -19,6 +19,5 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 				name="released_dataset_manifest",
 				root=self.runtime_path(),
 				files=manifest["files"],
-				executor=self.executor,
 			),
 		)

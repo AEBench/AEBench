@@ -20,19 +20,16 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 				path=self.runtime_path("evaluation", "figure12.log"),
 				figure="figure12",
 				required=tuple(reference["log_signatures"]["figure12"]),
-				executor=self.executor,
 			),
 			ExperimentLogCheck(
 				name="figure13_log",
 				path=self.runtime_path("evaluation", "figure13.log"),
 				figure="figure13",
 				required=tuple(reference["log_signatures"]["figure13"]),
-				executor=self.executor,
 			),
 			CalchasMetricsCheck(
 				name="prediction_metrics",
 				root=self.runtime_path("evaluation"),
 				reference=reference,
-				executor=self.executor,
 			),
 		)

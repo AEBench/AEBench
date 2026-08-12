@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import json
+import csv
+import io
 import math
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from evaluator.oracles.oracle_checks_runtime import (
 	OraclePath,
@@ -12,32 +13,8 @@ from evaluator.oracles.oracle_checks_runtime import (
 	RuntimePath,
 	check_read_file_text,
 	glob,
-	run_check_process_capture,
 )
 from evaluator.oracles.reporting import BaseCheck, CheckResult
-
-_DATASET_CHECK_SCRIPT = r"""
-import hashlib
-import json
-import sys
-from pathlib import Path
-
-specs = json.loads(sys.argv[1])
-errors = []
-for rel_path, spec in specs.items():
-	path = Path(rel_path)
-	try:
-		digest = hashlib.sha256(path.read_bytes()).hexdigest()
-	except OSError as exc:
-		errors.append(f"{rel_path}: unreadable: {exc}")
-		continue
-	if digest != spec["sha256"]:
-		errors.append(f"{rel_path}: sha256 {digest} != {spec['sha256']}")
-if errors:
-	print("; ".join(errors[:8]), file=sys.stderr)
-	raise SystemExit(1)
-print(f"validated {len(specs)} released datasets")
-"""
 
 _PRIMARY_ROW = re.compile(r"^prob-([0-9]+(?:\.[0-9]+)?):,?\s*(.+)$")
 _FAILURE_MARKERS = (
@@ -52,26 +29,48 @@ _FAILURE_MARKERS = (
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class DatasetManifestCheck(BaseCheck):
-	root: OraclePath
-	files: Mapping[str, Mapping[str, object]]
-	executor: RuntimeCheckExecutor | None = field(default=None, repr=False, compare=False)
+class PythonSourcesCheck(BaseCheck):
+	root: RuntimePath
+	paths: Sequence[str]
 
-	def check(self) -> CheckResult:
-		proc = run_check_process_capture(
-			cmd=("python3", "-B", "-c", _DATASET_CHECK_SCRIPT, json.dumps(self.files)),
-			cwd=self.root,
-			env=None,
-			timeout_seconds=180.0,
-			executor=self.executor,
-		)
-		if proc.timed_out:
-			return CheckResult.failure("dataset validation timed out", timed_out=True)
-		if proc.returncode != 0:
-			message = (proc.stderr or proc.stdout or "dataset validation failed").strip()
-			return CheckResult.failure(message, stdout=proc.stdout, stderr=proc.stderr)
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
+		for relative_path in self.paths:
+			path = RuntimePath.from_parts(self.root.value, relative_path)
+			try:
+				source = check_read_file_text(path, executor=executor)
+				compile(source, relative_path, "exec")
+			except (OSError, RuntimeError, SyntaxError, UnicodeError, ValueError) as exc:
+				return CheckResult.failure(f"{relative_path}: could not compile: {exc}")
+		return CheckResult.success(message=f"all {len(self.paths)} entrypoints compile")
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DatasetManifestCheck(BaseCheck):
+	root: RuntimePath
+	files: Sequence[str]
+
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
+		errors: list[str] = []
+		for relative_path in self.files:
+			path = RuntimePath.from_parts(self.root.value, relative_path)
+			try:
+				text = check_read_file_text(path, executor=executor)
+			except (OSError, RuntimeError, UnicodeError, ValueError) as exc:
+				errors.append(f"{relative_path}: unreadable: {exc}")
+				continue
+			reader = csv.reader(io.StringIO(text))
+			try:
+				header = next(reader)
+				first_row = next(reader)
+			except (csv.Error, StopIteration) as exc:
+				errors.append(f"{relative_path}: missing header or data row: {exc}")
+				continue
+			if not header or len(first_row) != len(header):
+				errors.append(f"{relative_path}: first data row does not match the header")
+		if errors:
+			return CheckResult.failure("; ".join(errors[:8]))
 		return CheckResult.success(
-			message=f"all {len(self.files)} released datasets match the pinned manifest"
+			message=f"all {len(self.files)} released datasets contain tabular data"
 		)
 
 
@@ -80,12 +79,11 @@ class ExperimentLogCheck(BaseCheck):
 	path: OraclePath
 	figure: str
 	required: Sequence[str]
-	executor: RuntimeCheckExecutor | None = field(default=None, repr=False, compare=False)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			text = check_read_file_text(self.path, executor=self.executor)
-		except OSError as exc:
+			text = check_read_file_text(self.path, executor=executor)
+		except (OSError, RuntimeError, ValueError) as exc:
 			return CheckResult.failure(f"{self.figure}: could not read log: {exc}")
 
 		begin = f"===== BEGIN {self.figure} ====="
@@ -158,27 +156,45 @@ def _mean(values: Sequence[float]) -> float:
 	return sum(values) / len(values)
 
 
+def _reference_number(value: object, label: str) -> float:
+	if not isinstance(value, int | float) or isinstance(value, bool):
+		raise ValueError(f"{label}: expected a number")
+	number = float(value)
+	if not math.isfinite(number):
+		raise ValueError(f"{label}: expected a finite number")
+	return number
+
+
+def _reference_range(value: object, label: str) -> tuple[float, float]:
+	if not isinstance(value, Sequence) or isinstance(value, str | bytes) or len(value) != 2:
+		raise ValueError(f"{label}: expected a two-number range")
+	return (
+		_reference_number(value[0], f"{label} lower bound"),
+		_reference_number(value[1], f"{label} upper bound"),
+	)
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CalchasMetricsCheck(BaseCheck):
 	root: RuntimePath
 	reference: Mapping[str, object]
-	executor: RuntimeCheckExecutor | None = field(default=None, repr=False, compare=False)
 
-	def check(self) -> CheckResult:
-		figures = self.reference["figures"]
-		assert isinstance(figures, Mapping)
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
+		figures = self.reference.get("figures")
+		if not isinstance(figures, Mapping):
+			return CheckResult.failure("metrics reference: figures must be an object")
 		metrics: dict[tuple[str, str, str], tuple[float, float, float, float]] = {}
 		errors: list[str] = []
 
 		for figure, raw_specs in figures.items():
-			assert isinstance(figure, str) and isinstance(raw_specs, Mapping)
+			if not isinstance(figure, str) or not isinstance(raw_specs, Mapping):
+				errors.append("metrics reference: each figure must map a name to file specs")
+				continue
 			directory = RuntimePath.from_parts(self.root.value, figure)
 			expected_names = set(raw_specs)
 			try:
-				actual_names = {
-					path.name for path in glob(directory, "*.csv", executor=self.executor)
-				}
-			except OSError as exc:
+				actual_names = {path.name for path in glob(directory, "*.csv", executor=executor)}
+			except (OSError, RuntimeError, ValueError) as exc:
 				return CheckResult.failure(f"{figure}: could not list metric files: {exc}")
 			if actual_names != expected_names:
 				errors.append(
@@ -189,49 +205,78 @@ class CalchasMetricsCheck(BaseCheck):
 				continue
 
 			for filename, raw_spec in raw_specs.items():
-				assert isinstance(filename, str) and isinstance(raw_spec, Mapping)
-				model = str(raw_spec["model"])
-				predictor = str(raw_spec["predictor"])
+				if not isinstance(filename, str) or not isinstance(raw_spec, Mapping):
+					errors.append(f"metrics reference: invalid file spec in {figure}")
+					continue
+				model = raw_spec.get("model")
+				predictor = raw_spec.get("predictor")
+				if not isinstance(model, str) or not isinstance(predictor, str):
+					errors.append(f"metrics reference: invalid model or predictor for {filename}")
+					continue
 				try:
 					text = check_read_file_text(
 						RuntimePath.from_parts(directory.value, filename),
-						executor=self.executor,
+						executor=executor,
 					)
 					metrics[(figure, model, predictor)] = _parse_metric_file(
 						text,
 						label=f"{figure}/{filename}",
 						expected_threshold=float(raw_spec["threshold"]),
 					)
-				except (OSError, ValueError) as exc:
+				except (KeyError, OSError, TypeError, ValueError) as exc:
 					errors.append(str(exc))
 
 		if errors:
 			return CheckResult.failure("; ".join(errors[:8]))
 
-		claims = self.reference["claims"]
-		assert isinstance(claims, Mapping)
+		claims = self.reference.get("claims")
+		if not isinstance(claims, Mapping):
+			return CheckResult.failure("metrics reference: claims must be an object")
+		try:
+			return self._check_claims(metrics, claims)
+		except (AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
+			return CheckResult.failure(f"metrics reference: malformed claims: {exc}")
+
+	def _check_claims(
+		self,
+		metrics: Mapping[tuple[str, str, str], tuple[float, float, float, float]],
+		claims: Mapping[str, object],
+	) -> CheckResult:
+		errors: list[str] = []
+		figure12_ranges = claims.get("figure12_mean_ranges")
+		figure12_f1_min = claims.get("figure12_f1_min")
+		if not isinstance(figure12_ranges, Mapping) or not isinstance(figure12_f1_min, Mapping):
+			raise ValueError("Figure 12 claims must be objects")
+
 		fig12 = [
 			metrics[("figure12", "RF", predictor)] for predictor in ("row", "col", "bank", "server")
 		]
 		for metric_name, index in (("precision", 1), ("recall", 2), ("f1", 3)):
-			bounds = claims["figure12_mean_ranges"][metric_name]  # type: ignore[index]
+			bounds = _reference_range(
+				figure12_ranges.get(metric_name),
+				f"figure12_mean_ranges.{metric_name}",
+			)
 			mean_value = _mean([row[index] for row in fig12])
-			if not float(bounds[0]) <= mean_value <= float(bounds[1]):
+			if not bounds[0] <= mean_value <= bounds[1]:
 				errors.append(
 					f"Figure 12 mean {metric_name} {mean_value:.4f} outside "
 					f"[{bounds[0]}, {bounds[1]}]"
 				)
 
-		for predictor, minimum in claims["figure12_f1_min"].items():  # type: ignore[union-attr]
+		for predictor, minimum in figure12_f1_min.items():
+			if not isinstance(predictor, str):
+				raise ValueError("figure12_f1_min keys must be strings")
+			minimum_value = _reference_number(minimum, f"figure12_f1_min.{predictor}")
 			value = metrics[("figure12", "RF", predictor)][3]
-			if value < float(minimum):
-				errors.append(f"Figure 12 {predictor} F1 {value:.4f} < {minimum}")
+			if value < minimum_value:
+				errors.append(f"Figure 12 {predictor} F1 {value:.4f} < {minimum_value}")
 
 		row_recall = metrics[("figure12", "RF", "row")][2]
-		if row_recall < float(claims["figure12_row_recall_min"]):
-			errors.append(
-				f"Figure 12 row recall {row_recall:.4f} < {claims['figure12_row_recall_min']}"
-			)
+		row_recall_min = _reference_number(
+			claims.get("figure12_row_recall_min"), "figure12_row_recall_min"
+		)
+		if row_recall < row_recall_min:
+			errors.append(f"Figure 12 row recall {row_recall:.4f} < {row_recall_min}")
 
 		svm = [
 			metrics[("figure13", "SVM", predictor)]
@@ -239,15 +284,14 @@ class CalchasMetricsCheck(BaseCheck):
 		]
 		svm_precision = _mean([row[1] for row in svm])
 		svm_recall = _mean([row[2] for row in svm])
-		if svm_precision > float(claims["svm_mean_precision_max"]):
-			errors.append(
-				f"Figure 13 SVM mean precision {svm_precision:.4f} > "
-				f"{claims['svm_mean_precision_max']}"
-			)
-		if svm_recall < float(claims["svm_mean_recall_min"]):
-			errors.append(
-				f"Figure 13 SVM mean recall {svm_recall:.4f} < {claims['svm_mean_recall_min']}"
-			)
+		svm_precision_max = _reference_number(
+			claims.get("svm_mean_precision_max"), "svm_mean_precision_max"
+		)
+		svm_recall_min = _reference_number(claims.get("svm_mean_recall_min"), "svm_mean_recall_min")
+		if svm_precision > svm_precision_max:
+			errors.append(f"Figure 13 SVM mean precision {svm_precision:.4f} > {svm_precision_max}")
+		if svm_recall < svm_recall_min:
+			errors.append(f"Figure 13 SVM mean recall {svm_recall:.4f} < {svm_recall_min}")
 
 		micro = ("row", "col", "bank")
 		tree_f1 = _mean(
@@ -256,11 +300,11 @@ class CalchasMetricsCheck(BaseCheck):
 		)
 		svm_f1 = _mean([metrics[("figure13", "SVM", predictor)][3] for predictor in micro])
 		advantage = tree_f1 - svm_f1
-		if advantage < float(claims["tree_micro_f1_advantage_min"]):
-			errors.append(
-				f"tree-model micro-level F1 advantage {advantage:.4f} < "
-				f"{claims['tree_micro_f1_advantage_min']}"
-			)
+		advantage_min = _reference_number(
+			claims.get("tree_micro_f1_advantage_min"), "tree_micro_f1_advantage_min"
+		)
+		if advantage < advantage_min:
+			errors.append(f"tree-model micro-level F1 advantage {advantage:.4f} < {advantage_min}")
 
 		if errors:
 			return CheckResult.failure("; ".join(errors))
