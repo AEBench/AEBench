@@ -543,7 +543,7 @@ class TextFileEqualityCheck(BaseCheck):
 class MinMatchingEntryCountCheck(BaseCheck):
 	"""Fail if fewer than min_count entries match the glob pattern."""
 
-	directory: pathlib.Path
+	directory: OraclePath
 	pattern: str
 	min_count: int = 1
 	executor: RuntimeCheckExecutor | None = dataclasses.field(

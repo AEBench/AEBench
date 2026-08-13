@@ -16,6 +16,10 @@ id = "osdi24_kondo"
 
 [run.instructions]
 path = "README.md"
+required_evidence = [
+  "Preserve the complete verify-all output as kondoPrototypes/verify-all.log.",
+  "Keep the generated kondoPrototypes/evaluation/sloc.csv.",
+]
 
 [run.runtime]
 mode = "docker"

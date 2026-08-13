@@ -1,0 +1,49 @@
+id = "asplos24_gaia"
+
+[case_brief]
+core_claim = "Install GAIA's Python dependencies and run its four figure scripts (figure8-9, figure10, figure11, figure12) to reproduce the deterministic carbon-aware scheduling simulation: the per-run carbon_cost/dollar_cost totals under results/simulation/pai_1k/ match the reference, and the paper's headline trends hold (carbon-aware policies emit less carbon than the agnostic baseline; more reserved instances lower dollar cost)."
+acceptable_evidence = "For every run of the four figure scripts, results/simulation/pai_1k/<policy>.csv reproduces the reference carbon_cost and dollar_cost within relative tolerance; the five carbon-aware Fig 8/9 policies each have carbon_cost below the No-Jobs-Wait baseline; and the Fig 11 carbon-cost sweep has non-increasing dollar_cost as reserved instances grow 0->24."
+allowed_tolerance = "The simulation path is deterministic (no RNG), so numeric values are compared with a 1% relative tolerance that only absorbs cross-machine float-formatting drift. The shipped figure scripts reproduce a subset of the paper (single carbon start-index 7000, pai_1k task trace) rather than the multi-index / large-trace aggregates. Per-task dynamic details (details-*.csv, runtime-*.csv) are not scored."
+
+[run]
+id = "asplos24_gaia"
+
+[run.instructions]
+path = "README.md"
+required_evidence = [
+"Install dependencies should be available.",
+"For each of the four experiments, the result should be available at results/simulation/pai_1k/<scheduling>-7000-<carbon>-AU-SA-<reserved>-<waiting>.csv (header carbon_cost,dollar_cost). Keep the results/ directory in the workspace.",
+]
+
+[run.runtime]
+mode = "docker"
+image = "aebench-agent:latest"
+timeout_ms = 3600000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = true
+compose = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+failure_mode = "fail_fast"
+placeholder = false
+
+# GAIA is pure Python with no compiled artifact and no custom image. All four
+# phases run in the default `task` target (the committed agent container), where
+# both the pip-installed deps and the produced results/ live.
+[oracle.phase_targets]
+env_setup = "task"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "task"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/umassos/GAIA"
+ref = "62a5efccb20fa04d6e507e12350eb4468eab9888"

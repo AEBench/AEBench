@@ -1,0 +1,48 @@
+id = "eurosys24_decarbonization_potential"
+
+[case_brief]
+core_claim = "Install the Python dependencies and run the self-contained trace-analysis and spatial experiments (paper Figs 3, 5, 6) of the carbon-savings upper-bound study. Each experiment's calculate_*.py writes CSVs to its data_output/ that reproduce the committed reference values, and the paper's spatial findings hold: unlimited migration saves at least as much carbon as a single migration per region, and more idle capacity yields non-increasing emissions."
+acceptable_evidence = "For all six scoped experiments (trace_analysis mean_and_cv + change_over_time; spatial geo_grouping_capacity, global_idle_capacity, capacity_latency, one_and_inf), each produced data_output/*.csv matches the reference CSV cell-for-cell within relative tolerance; one_and_inf shows inf-migration savings >= one-migration savings in every region; and capacity_latency emissions are non-increasing as idle capacity grows."
+allowed_tolerance = "The analysis is deterministic (byte-identical output on the pinned deps); numeric cells are compared with a 1e-3 relative tolerance only to absorb cross-machine float-formatting drift. SCOPE: this case covers the self-contained tier that reads only the committed carbon/latency inputs. It excludes (a) periodicity (Fig 4), which ships no calculate script and is not reproducible from the repo, and (b) the sim_temporal / sim_what_ifs sweeps (multi-GB committed output, hours-long regeneration). Plot outputs (PNGs) are not scored."
+
+[run]
+id = "eurosys24_decarbonization_potential"
+
+[run.instructions]
+path = "readme.md"
+required_evidence = [
+"Keep each experiment's data_output/*.csv in place.",
+]
+
+[run.runtime]
+mode = "docker"
+image = "aebench-agent:latest"
+timeout_ms = 3600000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = true
+compose = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+failure_mode = "fail_fast"
+placeholder = false
+
+# Pure Python, no compiled artifact and no custom image: every phase runs in the
+# default `task` target (the committed agent container), where the installed deps
+# and the produced data_output/ live.
+[oracle.phase_targets]
+env_setup = "task"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "task"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/umassos/decarbonization-potential"
+ref = "3493a63016bd2aaa71cae1f33809576786b331d4"
