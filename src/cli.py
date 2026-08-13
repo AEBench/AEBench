@@ -64,7 +64,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 	case_oracle = case_sub.add_parser("oracle", help="Run oracle evaluation for a case.")
 	case_oracle.add_argument("case_ref")
-	case_oracle.add_argument("--output-dir", default=None)
+	oracle_output = case_oracle.add_mutually_exclusive_group()
+	oracle_output.add_argument("--output-dir", default=None)
+	oracle_output.add_argument("--run-dir", default=None)
 	case_oracle.add_argument("--workspace-dir", default=None)
 
 	runtime_p = sub.add_parser("runtime", help="Low-level runtime workflows.")
@@ -213,22 +215,36 @@ def _case_summarize(args: argparse.Namespace) -> int:
 
 
 def _case_oracle(args: argparse.Namespace) -> int:
-	from models import RunResult
+	from runtime.reevaluation import read_run_result, reevaluate_completed_run
 
 	context = _build_context()
 	case_dir = resolve_case_dir(args.case_ref, project_state=context.project_state)
 	case = load_case_spec(case_dir)
+	run_dir = _optional_path(args.run_dir)
+	if run_dir is not None:
+		if args.workspace_dir:
+			raise SystemExit("--workspace-dir cannot be used with --run-dir")
+		try:
+			record, evaluation_dir = reevaluate_completed_run(
+				case_dir=case_dir,
+				case=case,
+				run_dir=run_dir,
+				project_root=context.project_state.root,
+			)
+		except ValueError as exc:
+			raise SystemExit(str(exc)) from exc
+		result = record.oracle_result
+		print(f"Oracle status: {result.status.value}")
+		print(f"Score: {result.score}/{case.oracle.expected_score}")
+		print(f"Evaluation: {evaluation_dir}")
+		if result.error:
+			print(f"Error: {result.error}", file=sys.stderr)
+		return 0 if result.status.value != "error" else 1
+
 	output_dir = _optional_path(args.output_dir) or (case_dir / "output")
 	output_dir.mkdir(parents=True, exist_ok=True)
 
-	runtime_result = None
-	result_jsonl = output_dir / "result.jsonl"
-	if result_jsonl.is_file():
-		lines = [
-			line for line in result_jsonl.read_text(encoding="utf-8").splitlines() if line.strip()
-		]
-		if lines:
-			runtime_result = RunResult.model_validate_json(lines[-1])
+	runtime_result = read_run_result(output_dir)
 
 	result = DirectOracleRunner().execute(
 		case_dir,
