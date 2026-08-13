@@ -11,6 +11,7 @@ import re
 import shlex
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
+from datetime import datetime
 from typing import Generic, TypeVar
 
 from constants import DEFAULT_ORACLE_CHECK_TIMEOUT
@@ -361,6 +362,132 @@ class PathCheck(BaseCheck):
 			return CheckResult.success()
 
 		return CheckResult.failure(f"expected a directory: {path_text}")
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class ExecutionEvidenceFileCheck(BaseCheck):
+	"""Checks that a text file records evidence from artifact execution."""
+
+	path: OraclePath
+	min_size_bytes: int = 1
+	required_text: str | None = None
+	required_regex: str | None = None
+	modified_after: datetime | None = None
+	modified_after_required: bool = False
+	encoding: str = "utf-8"
+	executor: RuntimeCheckExecutor | None = dataclasses.field(
+		default=None,
+		repr=False,
+		compare=False,
+	)
+
+	_pattern: re.Pattern[str] | None = dataclasses.field(init=False, repr=False, default=None)
+
+	def __post_init__(self) -> None:
+		if isinstance(self.path, RuntimePath):
+			pass
+		else:
+			path_text = os.fspath(self.path).strip()
+			if not path_text:
+				raise ValueError(f"{self.name}: path cannot be empty")
+			object.__setattr__(self, "path", pathlib.Path(path_text))
+
+		if self.min_size_bytes < 0:
+			raise ValueError(f"{self.name}: min_size_bytes must be >= 0")
+		if self.required_text is not None and not self.required_text:
+			raise ValueError(f"{self.name}: required_text cannot be empty")
+		if self.required_regex is not None:
+			if not self.required_regex:
+				raise ValueError(f"{self.name}: required_regex cannot be empty")
+			try:
+				pattern = re.compile(self.required_regex)
+			except re.error as exc:
+				raise ValueError(f"{self.name}: invalid required_regex: {exc}") from exc
+			object.__setattr__(self, "_pattern", pattern)
+		if not self.encoding:
+			raise ValueError(f"{self.name}: encoding cannot be empty")
+
+	def _host_path_for_mtime(self) -> pathlib.Path | None:
+		"""Returns a host-visible path for mtime checks, when available."""
+		if isinstance(self.path, RuntimePath):
+			return None
+
+		host_path = pathlib.Path(self.path).expanduser()
+		if host_path.is_absolute():
+			return host_path.resolve(strict=False)
+
+		if self.executor is None:
+			return host_path.resolve(strict=False)
+
+		resolved = self.executor.resolve_path(self.path)
+		if isinstance(resolved, pathlib.Path):
+			return resolved
+
+		return None
+
+	def _check_mtime(self) -> CheckResult | None:
+		if self.modified_after is None:
+			if self.modified_after_required:
+				return CheckResult.failure(
+					"mtime threshold unavailable for evidence freshness check"
+				)
+			return None
+
+		host_path = self._host_path_for_mtime()
+		if host_path is None:
+			return CheckResult.failure(
+				f"mtime check requires a host-visible evidence path: {self.path}"
+			)
+
+		try:
+			modified_at = datetime.fromtimestamp(
+				host_path.stat().st_mtime,
+				tz=self.modified_after.tzinfo,
+			)
+		except OSError as exc:
+			return CheckResult.failure(f"failed to stat evidence file: {exc}")
+
+		if modified_at <= self.modified_after:
+			return CheckResult.failure(
+				f"evidence file is older than required threshold: {self.path}"
+			)
+
+		return None
+
+	def check(self) -> CheckResult:
+		path = self.path
+		path_text = str(path)
+
+		if not check_path_exists(path, executor=self.executor):
+			return CheckResult.failure(f"evidence file not found: {path_text}")
+		if not check_path_is_file(path, executor=self.executor):
+			return CheckResult.failure(f"evidence path is not a file: {path_text}")
+
+		try:
+			text = check_read_file_text(path, encoding=self.encoding, executor=self.executor)
+			size_bytes = len(text.encode(self.encoding))
+		except (OSError, UnicodeError, LookupError) as exc:
+			return CheckResult.failure(f"failed to read evidence file: {exc}")
+
+		if size_bytes < self.min_size_bytes:
+			return CheckResult.failure(
+				f"evidence file too small: {path_text} has {size_bytes} byte(s), "
+				f"expected at least {self.min_size_bytes}"
+			)
+		if self.required_text is not None and self.required_text not in text:
+			return CheckResult.failure(
+				f"required evidence text not found in {path_text}: {self.required_text!r}"
+			)
+		if self._pattern is not None and self._pattern.search(text) is None:
+			return CheckResult.failure(
+				f"required evidence regex did not match {path_text}: {self.required_regex!r}"
+			)
+
+		mtime_result = self._check_mtime()
+		if mtime_result is not None:
+			return mtime_result
+
+		return CheckResult.success(f"evidence file satisfied requirements: {path_text}")
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
