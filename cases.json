@@ -16,6 +16,9 @@
     "asplos25_cinnamon": {
       "path": "cases/asplos25_cinnamon"
     },
+    "asplos25_einsum_ir": {
+      "path": "cases/asplos25_einsum_ir"
+    },
     "asplos24_gaia": {
       "path": "cases/asplos24_gaia"
     },
