@@ -105,7 +105,7 @@ def test_claude_script_streams_json_without_permission_prompts() -> None:
 def test_claude_prompt_includes_noninteractive_guidance(agent: AgentName) -> None:
 	prompt = _prompt_for_agent(agent, "do the task\n")
 	assert prompt.startswith("do the task\n\n")
-	assert "make sure every process you are running finishes" in prompt
+	assert "Wait for every process that you start to finish" in prompt
 
 
 def test_codex_prompt_is_unchanged() -> None:
