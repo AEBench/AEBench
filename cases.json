@@ -59,7 +59,10 @@
       "path": "cases/sosp24_wasabi"
     },
     "asplos24_rtl_repair": {
-		"path": "cases/asplos24_rtl_repair"
-	}
+      "path": "cases/asplos24_rtl_repair"
+    },
+    "asplos25_unizk": {
+      "path": "cases/asplos25_unizk"
+    }
   }
 }
