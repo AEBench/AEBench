@@ -69,11 +69,13 @@ def run_case(
 		raise ValueError("agent harnesses require non-interactive execution")
 	if task.runtime.mode == RuntimeMode.LOCAL and not options.allow_unsafe_local:
 		raise ValueError(
-			"local agent execution is not isolated; use --allow-unsafe-local only on a disposable host"
+			"local agent execution has no process isolation; run it on a disposable machine "
+			"and pass --allow-unsafe-local"
 		)
 	if task.artifact_requirements.docker and not options.allow_host_docker:
 		raise ValueError(
-			"this case exposes the host Docker daemon; use --allow-host-docker only on a disposable host"
+			"this case requires access to the host Docker daemon; run it on a disposable "
+			"machine and pass --allow-host-docker"
 		)
 	if task.runtime.mode == RuntimeMode.INHERIT:
 		raise ValueError("case execution requires runtime.mode to be local or docker")

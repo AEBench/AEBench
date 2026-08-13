@@ -73,7 +73,7 @@ def test_case_runner_rejects_unisolated_local_agent(tmp_path: Path) -> None:
 	state = load_project_config(project)
 	context = AppState(project_state=state, settings=resolve_settings(state))
 
-	with pytest.raises(ValueError, match="not isolated"):
+	with pytest.raises(ValueError, match="no process isolation"):
 		run_case(
 			context,
 			project / "bundles" / "mock_apt_case",

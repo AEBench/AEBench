@@ -1,4 +1,4 @@
-"""Read and compose the task contract supplied to an agent."""
+"""Read the instructions and case brief supplied to an agent."""
 
 from __future__ import annotations
 

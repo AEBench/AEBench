@@ -1,4 +1,4 @@
-"""Translate an AEBench case into a materializable task."""
+"""Translate an AEBench case into a runtime task."""
 
 from __future__ import annotations
 

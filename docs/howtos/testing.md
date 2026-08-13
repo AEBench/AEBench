@@ -53,9 +53,9 @@ tests/
     ├── conftest.py           # sets PYTHONPATH for subprocess oracle runner
     ├── test_oracle_executor.py # run_oracle execution behavior
     ├── test_oracle_runner.py # DirectOracleRunner and SubprocessOracleRunner
-	    └── mock-case/            # oracle end-to-end fixture
-	        ├── fixture/          # self-contained workspace (aebench.toml + case bundle)
-	        └── test_mock_case_e2e.py  # four-phase oracle execution
+    └── mock-case/            # oracle end-to-end fixture
+        ├── fixture/          # self-contained workspace (aebench.toml + case bundle)
+        └── test_mock_case_e2e.py  # four-phase oracle execution
 ```
 
 ## 4. Running individual tiers

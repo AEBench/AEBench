@@ -1,4 +1,4 @@
-# Running and Scoring Cases
+# Case Runs and Scoring
 
 This checkout supports agent runs for one case and standalone oracle execution. Commands that run multiple cases remain unavailable.
 
@@ -71,7 +71,7 @@ If a phase fails, the score includes each phase that passed before it. With `fai
 
 ## 5. Run an Agent
 
-On a Chameleon worker, install the project dependencies and build the agent
+On a Chameleon instance, install the project dependencies and build the agent
 runtime image:
 
 ```bash
@@ -79,23 +79,47 @@ uv sync --dev
 docker build -t aebench-agent:latest .
 ```
 
-For a ChatGPT subscription, authenticate Codex on the worker and run the case
-with `codex_non_api`:
+The image includes the Codex and Claude Code CLIs. No agent CLI installation is
+required on the Chameleon instance.
+
+For a ChatGPT subscription, run `codex login` on your local computer. Copy the
+generated auth file to the Chameleon instance:
 
 ```bash
-codex login
-codex login status
+scp ~/.codex/auth.json cc@<floating-ip>:~/codex_auth.json
+```
+
+On the Chameleon instance:
+
+```bash
+mkdir -p ~/.config/aebench
+chmod 700 ~/.config/aebench
+install -m 600 ~/codex_auth.json ~/.config/aebench/codex_auth.json
+rm ~/codex_auth.json
+export AEBENCH_CODEX_AUTH_FILE=~/.config/aebench/codex_auth.json
 
 uv run aebench case run asplos24_gaia \
   --agent codex_non_api \
   --model gpt-5.5
 ```
 
-For a Claude subscription, generate a token as described in
-[Adding an Agent Harness](add_agent.md#claude-subscription), copy it to the
-worker, and run the case with `claude_non_api`:
+For a Claude subscription, run `claude setup-token` on your local computer. Copy
+the printed token into `~/.config/aebench/claude_oauth_token`; the file must
+contain only the token. Restrict access to the file and copy it to the Chameleon
+instance:
 
 ```bash
+chmod 600 ~/.config/aebench/claude_oauth_token
+scp ~/.config/aebench/claude_oauth_token cc@<floating-ip>:~/claude_oauth_token
+```
+
+On the Chameleon instance:
+
+```bash
+mkdir -p ~/.config/aebench
+chmod 700 ~/.config/aebench
+install -m 600 ~/claude_oauth_token ~/.config/aebench/claude_oauth_token
+rm ~/claude_oauth_token
 export AEBENCH_CLAUDE_OAUTH_TOKEN_FILE=~/.config/aebench/claude_oauth_token
 
 uv run aebench case run osdi24_kondo \
@@ -103,10 +127,47 @@ uv run aebench case run osdi24_kondo \
   --model claude-opus-4-8
 ```
 
+See [Adding an Agent Harness](add_agent.md) for alternate auth file locations
+and credential handling.
+
+To use API keys instead of subscriptions, select `codex` or `claude`:
+
+```bash
+export OPENAI_API_KEY=...
+uv run aebench case run asplos24_gaia \
+  --agent codex \
+  --model gpt-5.5
+
+export ANTHROPIC_API_KEY=...
+uv run aebench case run osdi24_kondo \
+  --agent claude \
+  --model claude-opus-4-8
+```
+
+The four built-in harnesses are:
+
+| `--agent` | Credential |
+| --- | --- |
+| `codex` | `OPENAI_API_KEY` or `CODEX_API_KEY` |
+| `claude` | `ANTHROPIC_API_KEY` |
+| `codex_non_api` | ChatGPT subscription auth file |
+| `claude_non_api` | Claude subscription OAuth token |
+
+AEBench passes `--model` to the selected CLI. The examples above use the models
+tested with this implementation. Replace the case ID with any case listed by
+`uv run aebench case list`, and use a model available to the selected account.
+
 The command prints the run output directory before it starts the agent. It
 prints the case status and oracle score after the run finishes.
 
-Use `--allow-host-docker` when `[run.artifact_requirements] docker = true`. This gives the agent control of the host Docker daemon. Use `--allow-unsafe-local` when the case runtime is local. This runs agent commands directly on the host. Use both options only on a disposable worker.
+If a case manifest sets `[run.artifact_requirements] docker = true`, add
+`--allow-host-docker` to its `aebench case run` command. This mounts the host
+Docker socket and gives the agent control of the Chameleon instance's Docker
+daemon.
+
+If a case sets `[run.runtime] mode = "local"`, add `--allow-unsafe-local`.
+This runs agent commands directly on the Chameleon instance. Use either option
+only on a disposable instance.
 
 ## 6. Unavailable Runner Commands
 

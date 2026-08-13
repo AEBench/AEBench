@@ -69,7 +69,7 @@ def test_docker_prompt_includes_timeout_ms_value() -> None:
 
 def test_local_prompt_includes_timeout_ms_value() -> None:
 	bundle = build_prompt_bundle(_local_ctx(timeout_ms=7_200_000))
-	assert "TIMEOUT" in bundle.system_prompt
+	assert "TIME LIMIT" in bundle.system_prompt
 	assert "7200000" in bundle.system_prompt
 
 
@@ -85,7 +85,7 @@ def test_prompt_append_section_absent_when_none() -> None:
 
 def test_prompt_append_present_when_set() -> None:
 	bundle = build_prompt_bundle(_local_ctx(prompt_append="Custom constraint."))
-	assert "ADDITIONAL TASK RULES" in bundle.system_prompt
+	assert "ADDITIONAL REQUIREMENTS" in bundle.system_prompt
 
 
 def test_docker_prompt_includes_required_evidence_when_provided() -> None:

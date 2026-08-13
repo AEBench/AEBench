@@ -81,11 +81,20 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
 		"--agent",
 		choices=AGENT_NAMES,
 		default=None,
+		help="Agent harness to run.",
 	)
-	parser.add_argument("--model", default=None)
+	parser.add_argument("--model", default=None, help="Model name passed to the agent CLI.")
 	parser.add_argument("--interactive", action="store_true")
-	parser.add_argument("--allow-unsafe-local", action="store_true")
-	parser.add_argument("--allow-host-docker", action="store_true")
+	parser.add_argument(
+		"--allow-unsafe-local",
+		action="store_true",
+		help="Allow the agent to run directly on the host machine.",
+	)
+	parser.add_argument(
+		"--allow-host-docker",
+		action="store_true",
+		help="Allow the agent to control the host Docker daemon.",
+	)
 	parser.add_argument("--cleanup-workspace", action="store_true")
 	parser.add_argument("--prompt-profile", default=None)
 	parser.add_argument("--prompt-append", default=None)
