@@ -15,8 +15,8 @@ from .backend import BenchRuntime, DockerRuntime, LocalRuntime
 
 _RUNTIME_ENV_KEYS = ("PATH", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TERM")
 _CLAUDE_NONINTERACTIVE_GUIDANCE = (
-	"You are running in a non-interactive mode. So make sure every process you are "
-	"running finishes before you write your last message."
+	"You cannot receive interactive input. Wait for every process that you start to "
+	"finish before you write your final response."
 )
 _DOCKER_AGENT_USER_SETUP = (
 	'socket="/var/run/docker.sock"; '
@@ -153,7 +153,9 @@ def clear_agent_home(runtime: BenchRuntime, runtime_home: str) -> None:
 	)
 	if result.returncode != 0:
 		detail = (result.stderr or result.stdout).strip()
-		raise RuntimeError(f"failed to clear per-run agent home: {detail or result.returncode}")
+		raise RuntimeError(
+			f"failed to clear the temporary agent home directory: {detail or result.returncode}"
+		)
 
 
 def _agent_env(

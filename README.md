@@ -68,24 +68,47 @@ PYTHONPATH=src uv run aebench case oracle osdi24_anvil \
 
 Standalone oracle runs are the main way to audit a case after manually building and running the upstream artifact.
 
-Run one case with ChatGPT subscription authentication:
+For a ChatGPT subscription, run `codex login` on your local computer. Copy
+`~/.codex/auth.json` to the Chameleon instance, restrict access to the copy,
+and run a case:
 
 ```bash
+scp ~/.codex/auth.json cc@<floating-ip>:~/codex_auth.json
+
+# On the Chameleon instance
+mkdir -p ~/.config/aebench
+chmod 700 ~/.config/aebench
+install -m 600 ~/codex_auth.json ~/.config/aebench/codex_auth.json
+rm ~/codex_auth.json
+export AEBENCH_CODEX_AUTH_FILE=~/.config/aebench/codex_auth.json
+
 uv run aebench case run osdi24_kondo \
   --agent codex_non_api \
   --model gpt-5.5
 ```
 
-Run one case with Claude subscription authentication after generating a token with `claude setup-token`:
+For a Claude subscription, run `claude setup-token` on your local computer.
+Save the printed token in `~/.config/aebench/claude_oauth_token`, copy the file
+to the Chameleon instance, restrict access to the copy, and run a case:
 
 ```bash
-export CLAUDE_CODE_OAUTH_TOKEN=...
+scp ~/.config/aebench/claude_oauth_token cc@<floating-ip>:~/claude_oauth_token
+
+# On the Chameleon instance
+mkdir -p ~/.config/aebench
+chmod 700 ~/.config/aebench
+install -m 600 ~/claude_oauth_token ~/.config/aebench/claude_oauth_token
+rm ~/claude_oauth_token
+export AEBENCH_CLAUDE_OAUTH_TOKEN_FILE=~/.config/aebench/claude_oauth_token
+
 uv run aebench case run osdi24_kondo \
   --agent claude_non_api \
-  --model claude-opus-4-6
+  --model claude-opus-4-8
 ```
 
-Cases that use the host Docker daemon also require `--allow-host-docker`. Use that option only on a disposable worker.
+If the case sets `[run.artifact_requirements] docker = true`, add
+`--allow-host-docker`. This option gives the agent control of the Chameleon
+instance's Docker daemon. Use it only on a disposable instance.
 
 The following workflows are not available in this checkout even though their subcommands appear in `--help`:
 
@@ -196,7 +219,9 @@ ref = "deadbeef..."
 - `claude`
 - `claude_non_api`
 
-Select the harness and model with `--agent` and `--model`. AEBench does not read agent selection from project or user configuration. See [docs/howtos/add_agent.md](docs/howtos/add_agent.md) for authentication and extension details.
+Select the harness and model for each run with `--agent` and `--model`. See
+[docs/howtos/add_agent.md](docs/howtos/add_agent.md) for authentication and
+instructions for adding another harness.
 
 
 ## Runtime Backends

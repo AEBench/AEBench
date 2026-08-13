@@ -126,7 +126,7 @@ def write_task_report(report_path: Path, result: RunResult, agent_summary: str) 
 		f"- Container ID: `{runtime.container_id}`",
 		f"- Saved image: `{runtime.saved_image}`",
 		f"- Container stopped: `{runtime.container_stopped}`",
-		f"- Agent driver: `{result.agent_kind}`",
+		f"- Agent harness: `{result.agent_kind}`",
 		f"- Agent model: `{result.agent.model}`",
 		f"- Agent reasoning effort: `{result.agent.reasoning_effort or 'default'}`",
 		f"- Agent exit code: `{result.agent.exit_code}`",

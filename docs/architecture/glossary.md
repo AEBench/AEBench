@@ -13,7 +13,7 @@ Quick reference for the main types and functions. Not everything is listed here:
 - **RunResult**: outcome of one agent task run: status, timings, workspace path, agent output.
 - **OracleResult**: outcome of oracle evaluation: status, score, per-phase results.
 - **CaseRunResult**: combined runtime + oracle result for one case.
-- **AgentResult**: what comes back from an agent: model, exit_code, output, message_count.
+- **AgentResult**: agent model, exit code, output, and message count.
 
 ## Config loading (in `project_config.py` and `config.py`)
 
@@ -23,7 +23,7 @@ Quick reference for the main types and functions. Not everything is listed here:
 
 ## Runtime (in `runtime/`)
 
-- **run_case()**: prepares one case, runs the selected shell harness, and starts oracle evaluation.
+- **run_case()**: prepares one case, runs the selected shell harness, and runs the oracle.
 - **run_agent()**: runs one Codex or Claude Code shell harness.
 - **RunSession**: frozen dataclass with per-task state shared between runtime backend and agent.
 - **BenchRuntime** (Protocol): interface for Docker/local runtime backends.
