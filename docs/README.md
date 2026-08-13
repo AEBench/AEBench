@@ -14,6 +14,7 @@ Background on how things are put together. Good starting point before making cha
 Step-by-step instructions for common tasks.
 
 - [**Run the benchmark**](howtos/run_benchmark.md): environment setup, running individual cases or the full benchmark, understanding scores and output files
+- [**Agent trace viewer**](howtos/view_agent_trace.md): export and view completed Codex or Claude Code runs
 - [**Add a case**](howtos/add_case.md): scaffold a case bundle, write `case.toml`, implement oracle phases, test
 - [**Add an agent harness**](howtos/add_agent.md): configure Codex or Claude Code authentication and add another CLI harness
 - [**Run the tests**](howtos/testing.md): unit, functional, and integration tests with pytest

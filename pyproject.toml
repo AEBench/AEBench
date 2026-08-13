@@ -58,6 +58,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 runtime = ["agent_scripts/*/solve.sh", "agent_scripts/timestamp_lines.py"]
+trace_viewer = ["assets/*"]
 
 [tool.ruff]
 target-version = "py310"
