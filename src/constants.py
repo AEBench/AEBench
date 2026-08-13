@@ -14,10 +14,8 @@ class OraclePhaseName(str, Enum):
 
 DEFAULT_TIMEOUT_MS: int = 345_600_000
 DEFAULT_DOCKER_IMAGE: str = "aebench-agent:latest"
-DEFAULT_MODEL: str = "claude-sonnet-4-5-20250929"
 DEFAULT_PROMPT_PROFILE: str = "artifact-eval-v1"
 DEFAULT_OUTPUTS_DIR: str = "./outputs"
-DEFAULT_AGENT_MAX_BUFFER_SIZE: int = 8 * 1024 * 1024
 
 CASE_MANIFEST_FILENAME: str = "case.toml"
 ORACLE_RESULT_FILENAME: str = "oracle_result.json"

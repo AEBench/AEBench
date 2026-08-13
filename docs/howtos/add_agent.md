@@ -1,177 +1,153 @@
-# Adding an Agent
+# Agent Harnesses
 
-AEBench supports multiple agent backends. This guide covers all the ways to plug in an agent, from a config-only change to writing a custom agent class.
+AEBench invokes Codex and Claude Code through shell scripts. Each script
+receives two environment variables:
 
-## 1. How agents get invoked
+- `PROMPT`: the complete AEBench prompt
+- `AGENT_CONFIG`: the selected model name
 
-`TaskRunner` assembles two things and passes them to the agent:
+AEBench starts each agent CLI without prompts for user input and writes its JSON
+output to `runner_output.log`. GNU `timeout` terminates the CLI when the
+`run.runtime.timeout_ms` limit expires.
 
-1. **`AgentRequest`**: model name, system prompt, initial prompt, timeout, agent-specific options
-2. **`RunSession`**: workspace paths, runtime context (local vs Docker), infrastructure handles
+The AEBench runtime image includes the Codex and Claude Code CLIs. Install
+Docker on the Chameleon instance. No agent CLI installation is required there.
 
-The agent translates these into actual model calls and returns an `AgentResult` with exit code, output text, and message count.
+## Available harnesses
 
-Which agent to use is controlled by `settings.agent.agent_type`, which can be set in config files or environment variables.
+| `--agent` | Authentication |
+| --- | --- |
+| `codex` | `CODEX_API_KEY` or `OPENAI_API_KEY` |
+| `claude` | `ANTHROPIC_API_KEY` |
+| `codex_non_api` | ChatGPT subscription from `~/.codex/auth.json` |
+| `claude_non_api` | Claude subscription OAuth token |
 
-## 2. CLI agent (easiest, no code needed)
+Pass the model with `--model`. AEBench passes this value to the selected
+agent CLI. This implementation was tested with `gpt-5.5` and
+`claude-opus-4-8`. Use a model available to the selected account.
 
-The `cli` agent runs any external command and feeds it the prompts via environment variables and stdin. Simplest way to connect a new agent if it already has a CLI.
+API and subscription modes use separate agent names. Selecting `codex` or
+`claude` requires an API key. Selecting `codex_non_api` or `claude_non_api`
+requires a subscription credential.
 
-```toml
-# aebench.toml or ~/.config/aebench/config.toml
-[agent]
-agent_type = "cli"
+## Codex subscription
 
-[agent.cli]
-argv = ["my-agent", "--some-flag"]
-env = {"MY_AGENT_API_KEY" = "..."}
-```
-
-Or using environment variables:
-```bash
-export AEBENCH_AGENT_KIND=cli
-export AEBENCH_AGENT_CLI_ARGV='["my-agent", "--some-flag"]'
-aebench case run my-case
-```
-
-The CLI agent sets `AEBENCH_SYSTEM_PROMPT`, `AEBENCH_INITIAL_PROMPT`, `AEBENCH_WORKSPACE` as environment variables, passes the initial prompt on stdin, and captures stdout+stderr as the agent output.
-
-## 3. Python agent
-
-The `python` agent calls a Python callable in-process. Useful if your agent is a library or you want to avoid subprocess overhead.
-
-```toml
-[agent]
-agent_type = "python"
-
-[agent.python]
-target = "my_agent.runner:run_agent"
-```
-
-The target must be importable as `module:attribute`. The callable should accept these kwargs:
-
-```python
-def run_agent(*, prompt: str, cwd: Path, env: dict, timeout: float | None) -> str:
-    result = my_model_library.complete(user=prompt, cwd=str(cwd), timeout=timeout)
-    return result.text
-```
-
-Return value can be a `str` (treated as output, exit code 0), a `dict` (validated as AgentResult fields), or an `AgentResult` directly.
-
-## 4. Remote agent
-
-The `remote` agent sends a JSON POST request to an HTTP endpoint and reads back an `AgentResult`.
-
-```toml
-[agent]
-agent_type = "remote"
-
-[agent.remote]
-base_url = "http://my-agent-server:8080/run"
-auth = "Bearer my-token"
-```
-
-Request body:
-```json
-{
-  "model": "...",
-  "system_prompt": "...",
-  "initial_prompt": "...",
-  "workspace_path": "/path/to/workspace",
-  "timeout_ms": 3600000,
-  "interactive": false
-}
-```
-
-Response must be a JSON object matching the `AgentResult` schema (`model`, `exit_code`, `output`, `message_count`).
-
-## 5. MCP client agent
-
-For Claude Code, Codex CLI, and other MCP-compatible tools:
-
-```toml
-[agent]
-agent_type = "mcp_client"
-
-[agent.mcp]
-client = "claude_code"
-argv = ["claude", "--dangerously-skip-permissions"]
-mcp_mode = "mcp_local"
-```
-
-## 6. Writing a custom agent class
-
-If none of the built-in agents fit, users can implement the `Agent` protocol directly:
-
-```python
-from runtime.driver import Agent
-from models import AgentRequest, AgentResult
-
-class MyAgent:
-    name: str = "my_agent"
-
-    def prepare(self, session, listener=None) -> None:
-        pass
-
-    def execute(self, request: AgentRequest, session, listener=None) -> AgentResult:
-        # session.host_workspace: workspace path on host
-        # session.runtime_workspace: workspace path inside the container
-        # request.system_prompt, request.initial_prompt: prompts
-        # request.timeout_ms: timeout
-        ...
-        return AgentResult(
-            model=request.model,
-            exit_code=0,
-            output="Agent summary here",
-            message_count=42,
-        )
-
-    def cleanup(self, session, listener=None) -> None:
-        pass
-```
-
-Then register it in `runtime/driver.py`'s `get_agent()` function:
-
-```python
-if agent_type == AgentType.MY_AGENT:
-    return MyAgent()
-```
-
-And add `MY_AGENT = "my_agent"` to the `AgentType` enum in `settings.py`.
-
-> [!NOTE]
-> Before writing a custom agent, try the `python` agent with a thin wrapper function. It gets you the same result with less code and no changes to the core.
-
-## 7. RunSession attributes
-
-The `session` argument passed to `prepare()` and `execute()` is a `RunSession` frozen dataclass. Key attributes:
-
-- `host_workspace`: workspace path on the host
-- `runtime_workspace`: workspace path inside the container (`"/repo"` for Docker)
-- `host_refs` / `runtime_refs`: refs directory paths
-- `summary_path`: where the agent should write its summary
-- `task_id`: shortcut for `run_spec.id`
-- `timeout_ms`: shortcut for `run_spec.runtime.timeout_ms`
-- `runtime_backend`: the active runtime backend (Docker or local); use it to run commands inside the container
-
-## 8. Testing
-
-Use the `mock` agent to verify the rest of the pipeline works before connecting a real model:
+On your local computer, authenticate with Codex:
 
 ```bash
-export AEBENCH_AGENT_KIND=mock
-aebench case run my-case
+codex login
+codex login status
 ```
 
-The mock agent always returns exit code 0. This lets you verify workspace setup, oracle logic, and output files without spending API tokens. Once it works, swap in the real agent.
+Copy the generated auth file to the Chameleon instance:
 
-## 9. Summary
+```bash
+scp ~/.codex/auth.json cc@<floating-ip>:~/codex_auth.json
+```
 
-| Option | When to use |
-|---|---|
-| `cli` | agent has a command-line interface; simplest |
-| `python` | agent is a Python library; no subprocess overhead |
-| `remote` | agent runs on a separate server |
-| `mcp_client` | Claude Code, Codex, or other MCP tool |
-| `claude_sdk` | direct Claude API access (the default) |
-| custom class | you need full control over the execution |
+On the Chameleon instance, restrict access to the file and select it for the
+run:
+
+```bash
+mkdir -p ~/.config/aebench
+chmod 700 ~/.config/aebench
+install -m 600 ~/codex_auth.json ~/.config/aebench/codex_auth.json
+rm ~/codex_auth.json
+export AEBENCH_CODEX_AUTH_FILE=~/.config/aebench/codex_auth.json
+
+uv run aebench case run asplos24_gaia \
+  --agent codex_non_api \
+  --model gpt-5.5
+```
+
+If Codex is installed on the Chameleon instance, you can run `codex login`
+there. AEBench reads `~/.codex/auth.json` by default.
+
+For each case run, AEBench creates a temporary `HOME` directory and copies the
+selected auth file into it. Codex may update this copy when it refreshes a
+token. AEBench deletes the directory after the agent exits. The original auth
+file remains unchanged.
+
+## Claude subscription
+
+On your local computer, generate a long-lived token:
+
+```bash
+claude setup-token
+```
+
+Copy the token printed by this command into
+`~/.config/aebench/claude_oauth_token`. The file must contain only the token.
+Restrict access to the file, then copy it to the Chameleon instance:
+
+```bash
+chmod 600 ~/.config/aebench/claude_oauth_token
+scp ~/.config/aebench/claude_oauth_token cc@<floating-ip>:~/claude_oauth_token
+```
+
+On the Chameleon instance, restrict access to the token and select it for the
+run:
+
+```bash
+mkdir -p ~/.config/aebench
+chmod 700 ~/.config/aebench
+install -m 600 ~/claude_oauth_token ~/.config/aebench/claude_oauth_token
+rm ~/claude_oauth_token
+export AEBENCH_CLAUDE_OAUTH_TOKEN_FILE=~/.config/aebench/claude_oauth_token
+
+uv run aebench case run osdi24_kondo \
+  --agent claude_non_api \
+  --model claude-opus-4-8
+```
+
+You can also set `CLAUDE_CODE_OAUTH_TOKEN` directly on the Chameleon instance.
+
+For each case run, AEBench creates a temporary `HOME` directory and copies the
+token into it. AEBench deletes the directory after the agent exits. The
+original token file remains unchanged.
+
+## API authentication
+
+Set the provider key on the Chameleon instance and select the matching API
+harness:
+
+```bash
+export OPENAI_API_KEY=...
+uv run aebench case run asplos24_gaia \
+  --agent codex \
+  --model gpt-5.5
+
+export ANTHROPIC_API_KEY=...
+uv run aebench case run osdi24_kondo \
+  --agent claude \
+  --model claude-opus-4-8
+```
+
+Replace the example case ID with any case listed by `uv run aebench case list`.
+
+The agent CLI can read its credential and can run commands without approval.
+Use a credential that you can revoke and a disposable Chameleon instance.
+
+Some case manifests set `[run.artifact_requirements] docker = true` because the
+artifact must build or run its own Docker image. Add `--allow-host-docker` only
+for those cases:
+
+```bash
+uv run aebench case run asplos24_crocus \
+  --agent codex_non_api \
+  --model gpt-5.5 \
+  --allow-host-docker
+```
+
+This option mounts the host Docker socket and gives the agent control of the
+Chameleon instance's Docker daemon.
+
+## Adding another CLI
+
+1. Add `src/runtime/agent_scripts/<name>/solve.sh`.
+2. Add the name to `AgentName` and `AGENT_NAMES` in `models.py`.
+3. Pass only the credentials required by that harness in `_agent_env()`.
+4. Add unit tests for the command, environment, time limit, and CLI output.
+
+The solve script starts the agent. AEBench prepares the source, manages the
+runtime, runs the oracle, and stores the result.

@@ -1,12 +1,12 @@
-# Running and Scoring Cases
+# Case Runs and Scoring
 
-This checkout currently supports case authoring, validation, and standalone oracle execution. The full agent runner and benchmark runner subcommands are still present in `--help`, but they intentionally raise "unavailable in this checkout".
+This checkout supports agent runs for one case and standalone oracle execution. Commands that run multiple cases remain unavailable.
 
 ## 1. Prerequisites
 
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) for dependencies
-- Docker only when the upstream artifact itself requires Docker
+- Docker for isolated agent runs
 
 Install dependencies from the repo root:
 
@@ -67,15 +67,114 @@ Oracle status: success
 Score: 4/4
 ```
 
-If a phase fails, the score reflects how far the artifact got. With `failure_mode = "fail_fast"`, later phases are marked pending after the first failed phase.
+If a phase fails, the score includes each phase that passed before it. With `failure_mode = "fail_fast"`, later phases remain pending after the first failed phase.
 
-## 5. Unavailable Runner Commands
+## 5. Run an Agent
 
-These commands are parsed but currently unavailable:
+On a Chameleon instance, install the project dependencies and build the agent
+runtime image:
+
+```bash
+uv sync --dev
+docker build -t aebench-agent:latest .
+```
+
+The image includes the Codex and Claude Code CLIs. No agent CLI installation is
+required on the Chameleon instance.
+
+For a ChatGPT subscription, run `codex login` on your local computer. Copy the
+generated auth file to the Chameleon instance:
+
+```bash
+scp ~/.codex/auth.json cc@<floating-ip>:~/codex_auth.json
+```
+
+On the Chameleon instance:
+
+```bash
+mkdir -p ~/.config/aebench
+chmod 700 ~/.config/aebench
+install -m 600 ~/codex_auth.json ~/.config/aebench/codex_auth.json
+rm ~/codex_auth.json
+export AEBENCH_CODEX_AUTH_FILE=~/.config/aebench/codex_auth.json
+
+uv run aebench case run asplos24_gaia \
+  --agent codex_non_api \
+  --model gpt-5.5
+```
+
+For a Claude subscription, run `claude setup-token` on your local computer. Copy
+the printed token into `~/.config/aebench/claude_oauth_token`; the file must
+contain only the token. Restrict access to the file and copy it to the Chameleon
+instance:
+
+```bash
+chmod 600 ~/.config/aebench/claude_oauth_token
+scp ~/.config/aebench/claude_oauth_token cc@<floating-ip>:~/claude_oauth_token
+```
+
+On the Chameleon instance:
+
+```bash
+mkdir -p ~/.config/aebench
+chmod 700 ~/.config/aebench
+install -m 600 ~/claude_oauth_token ~/.config/aebench/claude_oauth_token
+rm ~/claude_oauth_token
+export AEBENCH_CLAUDE_OAUTH_TOKEN_FILE=~/.config/aebench/claude_oauth_token
+
+uv run aebench case run osdi24_kondo \
+  --agent claude_non_api \
+  --model claude-opus-4-8
+```
+
+See [Adding an Agent Harness](add_agent.md) for alternate auth file locations
+and credential handling.
+
+To use API keys instead of subscriptions, select `codex` or `claude`:
+
+```bash
+export OPENAI_API_KEY=...
+uv run aebench case run asplos24_gaia \
+  --agent codex \
+  --model gpt-5.5
+
+export ANTHROPIC_API_KEY=...
+uv run aebench case run osdi24_kondo \
+  --agent claude \
+  --model claude-opus-4-8
+```
+
+The four built-in harnesses are:
+
+| `--agent` | Credential |
+| --- | --- |
+| `codex` | `OPENAI_API_KEY` or `CODEX_API_KEY` |
+| `claude` | `ANTHROPIC_API_KEY` |
+| `codex_non_api` | ChatGPT subscription auth file |
+| `claude_non_api` | Claude subscription OAuth token |
+
+AEBench passes `--model` to the selected CLI. The examples above use the models
+tested with this implementation. Replace the case ID with any case listed by
+`uv run aebench case list`, and use a model available to the selected account.
+
+The command prints the run output directory before it starts the agent. It
+prints the case status and oracle score after the run finishes.
+
+If a case manifest sets `[run.artifact_requirements] docker = true`, add
+`--allow-host-docker` to its `aebench case run` command. This mounts the host
+Docker socket and gives the agent control of the Chameleon instance's Docker
+daemon.
+
+If a case sets `[run.runtime] mode = "local"`, add `--allow-unsafe-local`.
+This runs agent commands directly on the Chameleon instance. Use either option
+only on a disposable instance.
+
+## 6. Unavailable Runner Commands
+
+The CLI accepts these commands but reports that they are unavailable:
 
 ```bash
 PYTHONPATH=src uv run aebench run
-PYTHONPATH=src uv run aebench case run osdi24_anvil
 PYTHONPATH=src uv run aebench case export osdi24_anvil --output /tmp/tasks.jsonl
 PYTHONPATH=src uv run aebench case summarize /tmp/case-output --output-dir /tmp/summary
 PYTHONPATH=src uv run aebench runtime run --input-file /tmp/tasks.jsonl
@@ -85,15 +184,12 @@ They exit with messages such as:
 
 ```text
 benchmark runner is unavailable in this checkout
-case runner is unavailable in this checkout
 case export is unavailable in this checkout
 case summarize is unavailable in this checkout
 runtime run is unavailable in this checkout
 ```
 
-Use the standalone oracle command while auditing cases manually.
-
-## 6. How Scoring Works
+## 7. How Scoring Works
 
 Each case declares an `expected_score` in `case.toml`, usually `4`, one point per phase:
 
@@ -110,29 +206,23 @@ The four standard phases are:
 - `benchmark_prep`
 - `experiment_runs`
 
-## 7. Configuration
+## 8. Configuration
 
 ### Environment variables
 
 ```bash
-export AEBENCH_DEFAULT_MODEL=claude-opus-4-6
-export AEBENCH_AGENT_KIND=cli
 export AEBENCH_DEFAULT_DOCKER_IMAGE=my-registry/my-image:latest
 export AEBENCH_PRESERVE_FAILED_WORKSPACE=true
 export AEBENCH_EPHEMERAL_WORKSPACE_ROOT=/fast-ssd/workspaces
 ```
 
-These variables are still part of the runtime configuration model, but they matter only when using code paths that actually launch agents or Docker runtimes.
+Select the harness and model explicitly with `--agent` and `--model` for every run.
 
 ### User config
 
 Create `~/.config/aebench/config.toml`:
 
 ```toml
-[agent]
-agent_type = "claude_sdk"
-default_model = "claude-opus-4-6"
-
 [logging]
 level = "info"
 ```
@@ -142,15 +232,12 @@ level = "info"
 `aebench.toml` in the project root:
 
 ```toml
-[agent]
-agent_type = "claude_sdk"
-
 [cache.git]
 root = "~/.cache/aebench/git"
 max_size_bytes = 10_737_418_240  # 10 GB
 ```
 
-## 8. Debugging Tips
+## 9. Debugging
 
 **Validate the case bundle first:**
 

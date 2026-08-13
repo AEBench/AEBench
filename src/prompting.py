@@ -8,20 +8,21 @@ _JINJA = Environment(
 	undefined=StrictUndefined, trim_blocks=True, lstrip_blocks=True, keep_trailing_newline=True
 )
 
-LOCAL_TIMEOUT_GUIDANCE = """TIMEOUT CONFIGURATION (CRITICAL):
+LOCAL_TIMEOUT_GUIDANCE = """TIME LIMIT:
+- The agent has {{ timeout_ms }} ms to complete the task.
 - Long-running commands are expected.
-- Do not set short timeouts; let commands complete naturally.
+- Do not give commands a shorter time limit.
 """
 
-DOCKER_TIMEOUT_GUIDANCE = """TIMEOUT CONFIGURATION (CRITICAL):
-- The Bash timeout is configured to {{ timeout_ms }} ms.
+DOCKER_TIMEOUT_GUIDANCE = """TIME LIMIT:
+- The agent has {{ timeout_ms }} ms to complete the task.
 - Do not specify extra timeout parameters in Bash commands.
 - Long-running commands can take hours.
 """
 
-OUTPUT_MANAGEMENT_GUIDANCE = """OUTPUT MANAGEMENT (CRITICAL):
+OUTPUT_MANAGEMENT_GUIDANCE = """COMMAND OUTPUT:
 - Redirect very long command output to log files.
-- Inspect progress with bounded summaries such as tail, grep, sed, and wc.
+- Inspect progress with `tail`, `grep`, `sed`, or `wc` instead of printing an entire log.
 """
 
 VERIFY_RULE = "You must execute every verification step the instructions require. Do not skip steps because they take a long time."
@@ -38,14 +39,14 @@ YOUR TASK:
 
 {{ local_timeout_guidance }}
 {{ output_management_guidance }}
-IMPORTANT GUIDELINES:
+REQUIREMENTS:
 1. First, cd to {{ workspace_path }} and examine the directory structure.
 2. Follow the instructions step by step.
 3. {{ verify_rule }}
-4. Debug and resolve errors methodically.
+4. When a command fails, inspect the error and fix it.
 {% if prompt_append %}
 
-ADDITIONAL TASK RULES:
+ADDITIONAL REQUIREMENTS:
 {{ prompt_append }}
 {% endif %}
 """
@@ -54,15 +55,16 @@ DOCKER_SYSTEM_PROMPT_TEMPLATE = """\
 You are an experienced software engineer completing an artifact task.
 
 ENVIRONMENT:
-- The task-execution environment is a Docker container.
+- You are working in an agent container.
 - The artifact repository is available at {{ container_workspace_path or workspace_path }}.
 - Read-only benchmark references are mounted at {{ refs_path or "/refs" }}.
 {% if host_agent_controls_container_shell %}
-- You are controlling this Docker environment from the host side.
-- Use the container shell as the primary task-execution shell.
-- The host workspace mirror is at {{ host_workspace_path or "(host workspace)" }}.
+- You are controlling the agent container from the host machine.
+- Run artifact commands in the container shell.
+- The host copy of the workspace is at {{ host_workspace_path or "(host workspace)" }}.
 {% else %}
-- You are running inside the task-execution container with root permissions.
+- You are running inside the agent container as the `agent` user.
+- Passwordless sudo is available for commands that require root permissions.
 {% endif %}
 
 YOUR TASK:
@@ -70,23 +72,27 @@ YOUR TASK:
 
 {{ docker_timeout_guidance }}
 {{ output_management_guidance }}
-IMPORTANT GUIDELINES:
+REQUIREMENTS:
 1. First, explore the current directory structure.
 2. Navigate to the artifact repository root at {{ container_workspace_path or workspace_path }}.
-3. Remove sudo from commands when needed because the container already runs as root.
+3. Use sudo for commands that require root permissions.
 4. Do not switch git branches.
 5. Follow the instructions step by step.
 6. {{ verify_rule }}
-7. Debug and resolve errors methodically.
+7. When a command fails, inspect the error and fix it.
 {% if prompt_append %}
 
-ADDITIONAL TASK RULES:
+ADDITIONAL REQUIREMENTS:
 {{ prompt_append }}
 {% endif %}
 """
 
-LOCAL_INITIAL_PROMPT_TEMPLATE = "Please start the artifact task. Begin by changing to {{ workspace_path }} and examining its contents."
-DOCKER_INITIAL_PROMPT_TEMPLATE = "Please start the artifact task. Begin by changing to {{ workspace_path }} and examining its contents."
+LOCAL_INITIAL_PROMPT_TEMPLATE = (
+	"Start the artifact task. Change to {{ workspace_path }} and examine its contents."
+)
+DOCKER_INITIAL_PROMPT_TEMPLATE = (
+	"Start the artifact task. Change to {{ workspace_path }} and examine its contents."
+)
 
 DOCKER_INTERACTIVE_PROMPT_TEMPLATE = """\
 You are an experienced software engineer in an interactive Docker session.
@@ -99,7 +105,7 @@ def build_prompt_bundle(context: PromptArgs) -> PromptBundle:
 	profile = _resolve_profile(context)
 	values = {
 		**context.model_dump(mode="json"),
-		"local_timeout_guidance": LOCAL_TIMEOUT_GUIDANCE,
+		"local_timeout_guidance": _render(LOCAL_TIMEOUT_GUIDANCE, context),
 		"docker_timeout_guidance": _render(DOCKER_TIMEOUT_GUIDANCE, context),
 		"output_management_guidance": OUTPUT_MANAGEMENT_GUIDANCE,
 		"verify_rule": VERIFY_RULE,
