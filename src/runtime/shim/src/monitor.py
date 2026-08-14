@@ -2,16 +2,21 @@ import json
 import os
 import socket
 import struct
+import threading
 import uuid
 
 SOCKET_PATH = "/run/aebench/command.sock"
 LOG_PATH = "/tmp/commands.jsonl"
+
+MAX_FRAME_BYTES = 16 * 1024 * 1024
 
 COMMAND_INFO = 0
 STDOUT = 1
 STDERR = 2
 END = 3
 DECISION = 4
+
+log_lock = threading.Lock()
 
 
 def read_buffer(sock, size):
@@ -40,6 +45,9 @@ def read_frame(sock):
     length = struct.unpack(">I", header[:4])[0]
     kind = header[4]
 
+    if length > MAX_FRAME_BYTES:
+        raise ValueError("frame too large")
+
     payload = read_buffer(sock, length)
 
     if payload is None and length:
@@ -55,8 +63,9 @@ def send_frame(sock, kind, payload):
 
 
 def write_record(record):
-    with open(LOG_PATH, "a", encoding="utf-8") as file:
-        file.write(json.dumps(record) + "\n")
+    with log_lock:
+        with open(LOG_PATH, "a", encoding="utf-8") as file:
+            file.write(json.dumps(record) + "\n")
 
 
 def handle_connection(connection):
@@ -103,11 +112,17 @@ def handle_connection(connection):
             frame = read_frame(connection)
 
             if frame is None:
+                # Shim disappeared before END.
                 break
 
             kind, payload = frame
 
-            if kind in (STDOUT, STDERR):
+            if kind == STDOUT:
+                # We are not storing output yet,
+                # but we must consume it.
+                continue
+
+            if kind == STDERR:
                 continue
 
             if kind == END:
@@ -133,6 +148,7 @@ def handle_connection(connection):
 
     finally:
         write_record(record)
+        connection.close()
 
 
 def main():
@@ -150,10 +166,11 @@ def main():
     while True:
         connection, _ = server.accept()
 
-        try:
-            handle_connection(connection)
-        finally:
-            connection.close()
+        threading.Thread(
+            target=handle_connection,
+            args=(connection,),
+            daemon=True,
+        ).start()
 
 
 if __name__ == "__main__":
