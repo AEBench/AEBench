@@ -2,8 +2,10 @@ import json
 import os
 import socket
 import struct
+import uuid
 
 SOCKET_PATH = "/run/aebench/command.sock"
+LOG_PATH = "/tmp/commands.jsonl"
 
 COMMAND_INFO = 0
 STDOUT = 1
@@ -13,17 +15,20 @@ DECISION = 4
 
 
 def read_buffer(sock, size):
-    data = b""
+    data = bytearray()
 
     while len(data) < size:
         chunk = sock.recv(size - len(data))
 
         if not chunk:
-            return None
+            if not data:
+                return None
 
-        data += chunk
+            raise EOFError("connection ended mid-frame")
 
-    return data
+        data.extend(chunk)
+
+    return bytes(data)
 
 
 def read_frame(sock):
@@ -37,7 +42,10 @@ def read_frame(sock):
 
     payload = read_buffer(sock, length)
 
-    return kind, payload
+    if payload is None and length:
+        raise EOFError("connection ended mid-frame")
+
+    return kind, payload or b""
 
 
 def send_frame(sock, kind, payload):
@@ -46,59 +54,85 @@ def send_frame(sock, kind, payload):
     sock.sendall(header + payload)
 
 
+def write_record(record):
+    with open(LOG_PATH, "a", encoding="utf-8") as file:
+        file.write(json.dumps(record) + "\n")
+
+
 def handle_connection(connection):
-    frame = read_frame(connection)
+    command_id = uuid.uuid4().hex
 
-    if frame is None:
-        return
-
-    kind, payload = frame
-
-    if kind != COMMAND_INFO:
-        raise ValueError("expected command_info")
-
-    command = json.loads(payload)
-
-    print("running:", command["argv"])
-
-    decision = {
-        "command_id": "1",
-        "allow": True,
-        "reason": "",
-        "exit_code": 126,
+    record = {
+        "command_id": command_id,
+        "complete": False,
+        "exit_code": None,
+        "signal": None,
+        "return_code": None,
     }
 
-    send_frame(
-        connection,
-        DECISION,
-        json.dumps(decision).encode("utf-8"),
-    )
+    try:
+        first = read_frame(connection)
 
-    while True:
-        frame = read_frame(connection)
-
-        if frame is None:
-            print("connection closed before end")
+        if first is None:
             return
 
-        kind, payload = frame
+        kind, payload = first
 
-        if kind == STDOUT:
-            continue
+        if kind != COMMAND_INFO:
+            raise ValueError("expected command_info")
 
-        if kind == STDERR:
-            continue
+        command_info = json.loads(payload)
 
-        if kind == END:
-            result = json.loads(payload)
+        record["argv"] = command_info.get("argv")
+        record["pid"] = command_info.get("pid")
 
-            print(
-                "finished:",
-                command["argv"],
-                result,
-            )
+        decision = {
+            "command_id": command_id,
+            "allow": True,
+            "reason": "",
+            "exit_code": 126,
+        }
 
-            return
+        send_frame(
+            connection,
+            DECISION,
+            json.dumps(decision).encode("utf-8"),
+        )
+
+        while True:
+            frame = read_frame(connection)
+
+            if frame is None:
+                break
+
+            kind, payload = frame
+
+            if kind in (STDOUT, STDERR):
+                continue
+
+            if kind == END:
+                end = json.loads(payload)
+
+                exit_code = end.get("exit_code")
+                signal = end.get("signal")
+
+                record["exit_code"] = exit_code
+                record["signal"] = signal
+
+                if exit_code is not None:
+                    record["return_code"] = exit_code
+
+                elif signal is not None:
+                    record["return_code"] = 128 + signal
+
+                record["complete"] = True
+                break
+
+    except Exception as exc:
+        record["monitor_error"] = str(exc)
+
+    finally:
+        write_record(record)
 
 
 def main():
