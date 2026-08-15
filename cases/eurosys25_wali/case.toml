@@ -1,0 +1,65 @@
+id = "eurosys25_wali"
+
+[case_brief]
+core_claim = "Build the pinned WALI runtime, execute representative ported Linux applications and libuvwasi over WALI, and rerun the released Bash, Lua, and SQLite comparison against Docker and QEMU."
+acceptable_evidence = "A real WALI runtime executes Bash, SQLite, Vim, and Memcached with dynamic WALI syscall traces; the libuvwasi CTest log reports all 22 tests passed; and newly measured benchmark tables cover every released workload in native, WALI, Docker, Docker-inner, and QEMU modes while preserving the paper's startup, memory, and execution-time relations."
+allowed_tolerance = "Application exits and all 22 libuvwasi tests require exact success. Benchmark values are hardware-sensitive and are not compared with fixed numbers; each complete finite result matrix must differ from the bundled paper data and show lower WALI startup intercept and memory use than Docker, plus a lower WALI execution slope than QEMU, for all three benchmark families."
+
+[paper]
+title = "Empowering WebAssembly with Thin Kernel Interfaces"
+venue = "EuroSys 2025"
+url = "https://users.ece.cmu.edu/~agr/resources/publications/WALI_EuroSys_25.pdf"
+sha256 = "260268ccb1668c8f339da4432106cec18a82818291b7a944a3335346abd36e53"
+version = "EuroSys 2025 preprint with artifact appendix"
+
+[run]
+id = "eurosys25_wali"
+
+[run.instructions]
+path = "README.md"
+required_evidence = [
+  "Keep complete stdout and stderr for successful WALI runs of Bash, SQLite, Vim, and Memcached in evaluation/portability.log. Delimit each run with exact lines '===== BEGIN <application> =====' and '===== END <application> status=0 ====='.",
+  "Keep the complete 22-test libuvwasi CTest output in evaluation/libuvwasi-tests.log.",
+  "Place the WALI experiments repository pinned at ac83120c0bc0317094d6c6f948f6de163ccf9ffe under wali-eurosys25-data/.",
+  "Keep wali-eurosys25-data/benchmark.log with successful native, docker, wali, qemu, and docker-inner sections; all raw results and summarized results/{bash,lua,sqlite3}.csv files; and figures/memory.pdf plus figures/runtime_{a,b,c}.pdf.",
+]
+
+[run.runtime]
+mode = "local"
+timeout_ms = 43200000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = true
+compose = false
+
+[run.artifact_requirements.hardware]
+memory_gb = 16
+cpu_count = 8
+disk_gb = 50
+network = true
+notes = "The official Ubuntu 22.04 VM uses 8 CPUs and 8 GB RAM. Building LLVM instead of using the packaged toolchain can require about 130 GB of disk."
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+failure_mode = "fail_fast"
+placeholder = false
+
+[oracle.phase_targets]
+env_setup = "task"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "task"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/arjunr2/WALI.git"
+ref = "1e22d2eaab369257306e82fbbcd6a868b6e0f547"
+requested_ref = "1e22d2e"
+artifact_mode = "hybrid"
+overlay_artifact = true
+notes = "The artifact appendix also pins https://github.com/arjunr2/wali-eurosys25-data at ac83120c0bc0317094d6c6f948f6de163ccf9ffe and the VM distribution at DOI 10.5281/zenodo.14790613."
