@@ -20,6 +20,7 @@ log_lock = threading.Lock()
 
 
 def read_buffer(sock, size):
+    """Reads exactly <size> bytes from a shell shim stream socket."""
     data = bytearray()
 
     while len(data) < size:
@@ -37,13 +38,14 @@ def read_buffer(sock, size):
 
 
 def read_frame(sock):
+    """Read one complete message from a shell shim socket."""
     header = read_buffer(sock, 5)
 
     if header is None:
         return None
 
     length = struct.unpack(">I", header[:4])[0]
-    kind = header[4]
+    message_type = header[4]
 
     if length > MAX_FRAME_BYTES:
         raise ValueError("frame too large")
@@ -53,11 +55,11 @@ def read_frame(sock):
     if payload is None and length:
         raise EOFError("connection ended mid-frame")
 
-    return kind, payload or b""
+    return message_type, payload or b""
 
 
-def send_frame(sock, kind, payload):
-    header = struct.pack(">I", len(payload)) + bytes([kind])
+def send_frame(sock, message_type, payload):
+    header = struct.pack(">I", len(payload)) + bytes([message_type])
 
     sock.sendall(header + payload)
 
@@ -68,7 +70,8 @@ def write_record(record):
             file.write(json.dumps(record) + "\n")
 
 
-def handle_connection(connection):
+def process_connection(connection):
+    """Process and monitor the session for one shell invocation."""
     command_id = uuid.uuid4().hex
 
     record = {
@@ -85,9 +88,9 @@ def handle_connection(connection):
         if first is None:
             return
 
-        kind, payload = first
+        message_type, payload = first
 
-        if kind != COMMAND_INFO:
+        if message_type != COMMAND_INFO:
             raise ValueError("expected command_info")
 
         command_info = json.loads(payload)
@@ -108,24 +111,26 @@ def handle_connection(connection):
             json.dumps(decision).encode("utf-8"),
         )
 
+        # Read command output until the shell shim reports completion or disconnects
         while True:
             frame = read_frame(connection)
 
             if frame is None:
-                # Shim disappeared before END.
+                # Shim process disappeared before END marker
                 break
 
-            kind, payload = frame
+            message_type, payload = frame
 
-            if kind == STDOUT:
-                # We are not storing output yet,
-                # but we must consume it.
+            if message_type == STDOUT:
+                # Do not store output yet; wait for END marker
                 continue
 
-            if kind == STDERR:
+            if message_type == STDERR:
                 continue
 
-            if kind == END:
+            # Record the command outcome since END marker observed
+            # and also label session complete
+            if message_type == END:
                 end = json.loads(payload)
 
                 exit_code = end.get("exit_code")
@@ -167,7 +172,7 @@ def main():
         connection, _ = server.accept()
 
         threading.Thread(
-            target=handle_connection,
+            target=process_connection,
             args=(connection,),
             daemon=True,
         ).start()
