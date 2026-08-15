@@ -37,6 +37,9 @@
     "eurosys25_egwalker": {
       "path": "cases/eurosys25_egwalker"
     },
+    "eurosys25_sebs_flow": {
+      "path": "cases/eurosys25_sebs_flow"
+    },
     "osdi24_anvil": {
       "path": "cases/osdi24_anvil"
     },
