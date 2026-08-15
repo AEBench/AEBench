@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "source_revision": "9d3955cf0a1687731f35baa8e38aa7bc25108773",
+  "figures": {
+    "figure12": {
+      "RF_bank.csv": {"model": "RF", "predictor": "bank", "threshold": 0.55},
+      "RF_col.csv": {"model": "RF", "predictor": "col", "threshold": 0.6},
+      "RF_row.csv": {"model": "RF", "predictor": "row", "threshold": 0.55},
+      "RF_server.csv": {"model": "RF", "predictor": "server", "threshold": 0.6}
+    },
+    "figure13": {
+      "GBDT_bank.csv": {"model": "GBDT", "predictor": "bank", "threshold": 0.95},
+      "GBDT_col.csv": {"model": "GBDT", "predictor": "col", "threshold": 0.7},
+      "GBDT_row.csv": {"model": "GBDT", "predictor": "row", "threshold": 0.8},
+      "GBDT_server.csv": {"model": "GBDT", "predictor": "server", "threshold": 0.8},
+      "SVM_bank.csv": {"model": "SVM", "predictor": "bank", "threshold": 0.95},
+      "SVM_col.csv": {"model": "SVM", "predictor": "col", "threshold": 0.7},
+      "SVM_row.csv": {"model": "SVM", "predictor": "row", "threshold": 0.8},
+      "SVM_server.csv": {"model": "SVM", "predictor": "server", "threshold": 0.8}
+    }
+  },
+  "log_signatures": {
+    "figure12": [
+      "Results of row-level predictor (Precision, Recall, F1_score)",
+      "Results of col-level predictor (Precision, Recall, F1_score)",
+      "Results of bank-level predictor (Precision, Recall, F1_score)",
+      "Results of server-level predictor (Precision, Recall, F1_score)"
+    ],
+    "figure13": [
+      "Results of row-level predictor based on SVM (Precision, Recall, F1_score)",
+      "Results of col-level predictor based on SVM (Precision, Recall, F1_score)",
+      "Results of bank-level predictor based on SVM (Precision, Recall, F1_score)",
+      "Results of server-level predictor based on SVM (Precision, Recall, F1_score)",
+      "Results of row-level predictor based on GBDT (Precision, Recall, F1_score)",
+      "Results of col-level predictor based on GBDT (Precision, Recall, F1_score)",
+      "Results of bank-level predictor based on GBDT (Precision, Recall, F1_score)",
+      "Results of server-level predictor based on GBDT (Precision, Recall, F1_score)"
+    ]
+  },
+  "claims": {
+    "figure12_mean_ranges": {
+      "precision": [0.45, 0.75],
+      "recall": [0.65, 0.9],
+      "f1": [0.55, 0.8]
+    },
+    "figure12_f1_min": {
+      "row": 0.55,
+      "col": 0.6,
+      "bank": 0.5,
+      "server": 0.25
+    },
+    "figure12_row_recall_min": 0.75,
+    "svm_mean_precision_max": 0.35,
+    "svm_mean_recall_min": 0.5,
+    "tree_micro_f1_advantage_min": 0.15
+  }
+}
