@@ -6,6 +6,9 @@ import struct
 SOCKET_PATH = "/run/aebench/command.sock"
 
 COMMAND_INFO = 0
+STDOUT = 1
+STDERR = 2
+END = 3
 DECISION = 4
 
 
@@ -56,7 +59,7 @@ def handle_connection(connection):
 
     command = json.loads(payload)
 
-    print("command:", command["argv"])
+    print("running:", command["argv"])
 
     decision = {
         "command_id": "1",
@@ -70,6 +73,32 @@ def handle_connection(connection):
         DECISION,
         json.dumps(decision).encode("utf-8"),
     )
+
+    while True:
+        frame = read_frame(connection)
+
+        if frame is None:
+            print("connection closed before end")
+            return
+
+        kind, payload = frame
+
+        if kind == STDOUT:
+            continue
+
+        if kind == STDERR:
+            continue
+
+        if kind == END:
+            result = json.loads(payload)
+
+            print(
+                "finished:",
+                command["argv"],
+                result,
+            )
+
+            return
 
 
 def main():
