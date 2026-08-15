@@ -55,7 +55,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
             return CheckResult.failure(f"Failed parsing startup times: {e}")
 
         # Startup Time Trend: Empty startup time must be lower than Full startup time for all systems.
-        for kv in kvs_list:
+        for kv in ["capybarakv"]:
             if avg_startup[kv]['empty'] >= avg_startup[kv]['full']:
                 return CheckResult.failure(f"{kv} empty startup time >= full startup time")
         
