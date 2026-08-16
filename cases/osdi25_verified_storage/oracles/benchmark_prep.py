@@ -42,7 +42,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
             self.command_check(
                 name="capybarakv_line_counts_exact",
                 cwd=self.workspace_path("osdi25", "capybaraKV", "capybarakv", "src"),
-                cmd=("bash", "-c", f"(./verify-ae.sh --emit=dep-info || true) && /usr/bin/python3 count_capybarakv_lines.py lib.d ../../pmcopy {self.workspace_path().parent / 'verus'} | awk '/Total/ {{ if ($4==5244 && $6==14255 && $8==5531) {{ printf \"%.1f\\n\", $6/$8 }} }}'"),
+                cmd=("bash", "-c", f"rm -f lib.d; (./verify-ae.sh --emit=dep-info || true) && /usr/bin/python3 count_capybarakv_lines.py lib.d ../../pmcopy {self.workspace_path().parent / 'verus'} | awk '/Total/ {{ if ($4==5244 && $6==14255 && $8==5531) {{ printf \"%.1f\\n\", $6/$8 }} }}'"),
                 signature="2.6",
                 timeout_seconds=60.0,
             ),

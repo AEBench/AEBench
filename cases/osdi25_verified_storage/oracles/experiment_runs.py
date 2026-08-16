@@ -30,11 +30,14 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
         except Exception as e:
             return CheckResult.failure(f"Failed to load reference data: {e}")
 
-        kvs_list = reference["kvs"]
-        storage_fp = reference["storage_footprint_gib"]
-        mem_min = reference["memory_footprint_min_gib"]
-        mem_max = reference["memory_footprint_max_gib"]
-        scaling = reference["scaling_factor"]
+        try:
+            kvs_list = reference["kvs"]
+            storage_fp = reference["storage_footprint_gib"]
+            mem_min = reference["memory_footprint_min_gib"]
+            mem_max = reference["memory_footprint_max_gib"]
+            scaling = reference["scaling_factor"]
+        except KeyError as e:
+            return CheckResult.failure(f"Missing expected key in reference data: {e}")
 
         try:
             res_startup = {kv: {"full": [], "empty": []} for kv in kvs_list}
@@ -55,15 +58,18 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
             return CheckResult.failure(f"Failed parsing startup times: {e}")
 
         # Startup Time Trend: Empty startup time must be lower than Full startup time for all systems.
-        for kv in ["capybarakv"]:
-            if avg_startup[kv]['empty'] >= avg_startup[kv]['full']:
-                return CheckResult.failure(f"{kv} empty startup time >= full startup time")
-        
-        # Hardware Discrepancy: Assert that Viper starts faster than CapybaraKV (both empty and full).
-        if avg_startup['viper']['empty'] >= avg_startup['capybarakv']['empty']:
-            return CheckResult.failure("Viper empty startup >= CapybaraKV empty startup")
-        if avg_startup['viper']['full'] >= avg_startup['capybarakv']['full']:
-            return CheckResult.failure("Viper full startup >= CapybaraKV full startup")
+        try:
+            for kv in ["capybarakv"]:
+                if avg_startup[kv]['empty'] >= avg_startup[kv]['full']:
+                    return CheckResult.failure(f"{kv} empty startup time >= full startup time")
+            
+            # Hardware Discrepancy: Assert that Viper starts faster than CapybaraKV (both empty and full).
+            if avg_startup['viper']['empty'] >= avg_startup['capybarakv']['empty']:
+                return CheckResult.failure("Viper empty startup >= CapybaraKV empty startup")
+            if avg_startup['viper']['full'] >= avg_startup['capybarakv']['full']:
+                return CheckResult.failure("Viper full startup >= CapybaraKV full startup")
+        except KeyError as e:
+            return CheckResult.failure(f"Missing expected key in avg_startup: {e}")
 
         # Latency Trend: Sequential Reads (Seq Get) latency must be lower than Random Reads (Rand Get) latency.
         try:
