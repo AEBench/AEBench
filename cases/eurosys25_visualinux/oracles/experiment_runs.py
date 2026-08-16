@@ -7,7 +7,7 @@ from pathlib import Path
 
 from evaluator.oracles.reporting import BaseCheck, CheckResult
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
-from evaluator.oracles.checks import CommandCheck, PathCheck, PathKind, ListSimilarityCheck
+from evaluator.oracles.checks import ListSimilarityCheck
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class JSONPlotAggregateStructCheck(BaseCheck):
