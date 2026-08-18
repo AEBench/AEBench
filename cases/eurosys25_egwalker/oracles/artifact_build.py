@@ -8,6 +8,7 @@ from pathlib import Path
 
 from evaluator.oracles import CaseOracleArtifactBuildBase, utils  # type: ignore[import-untyped]
 from evaluator.oracles.checks import BaseCheck  # type: ignore[import-untyped]
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 
 _BUILD_COMMAND: tuple[str, ...] = (
     "make",
@@ -29,7 +30,7 @@ _BUILD_MODE_ENV = "AE_EGWALKER_BUILD_MODE"
 class InvalidBuildModeCheck(utils.BaseCheck):  # type: ignore[misc]
     mode: str
 
-    def check(self) -> utils.CheckResult:
+    def check(self, _executor: RuntimeCheckExecutor) -> utils.CheckResult:
         return utils.CheckResult.failure(
             f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
         )

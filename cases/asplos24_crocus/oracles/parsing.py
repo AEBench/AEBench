@@ -3,8 +3,12 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from pathlib import Path
 
+from evaluator.oracles.oracle_checks_runtime import (
+	OraclePath,
+	RuntimeCheckExecutor,
+	check_read_file_text,
+)
 from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 # Table 1 row regexes. Counterexample/runtime detail is ignored; only counts matter.
@@ -28,13 +32,13 @@ _NAMED_COVERED = re.compile(r"Named covered:.*?=\s*([\d.]+)\s*%")
 class FileContainsCheck(BaseCheck):
 	"""Pass iff the file exists and contains every required substring."""
 
-	path: Path
+	path: OraclePath
 	required: tuple[str, ...]
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			text = self.path.read_text(encoding="utf-8", errors="replace")
-		except OSError as exc:
+			text = check_read_file_text(self.path, encoding="utf-8", executor=executor)
+		except (OSError, UnicodeError) as exc:
 			return CheckResult.failure(f"failed to read {self.path}: {exc}")
 
 		missing = [needle for needle in self.required if needle not in text]
@@ -52,7 +56,7 @@ class Table1CountsCheck(BaseCheck):
 	tolerance below the reference (Z3-version-dependent timeouts can reduce them).
 	"""
 
-	path: Path
+	path: OraclePath
 	rules_total: int
 	rules_success_all: int
 	rules_success_any: int
@@ -63,10 +67,10 @@ class Table1CountsCheck(BaseCheck):
 	type_insts_failure: int
 	success_tolerance: int
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			text = self.path.read_text(encoding="utf-8", errors="replace")
-		except OSError as exc:
+			text = check_read_file_text(self.path, encoding="utf-8", executor=executor)
+		except (OSError, UnicodeError) as exc:
 			return CheckResult.failure(f"failed to read {self.path}: {exc}")
 
 		rules = _RULES_ROW.search(text)
@@ -141,15 +145,15 @@ class Table1CountsCheck(BaseCheck):
 class CoveragePercentCheck(BaseCheck):
 	"""Validate 'Named uses'/'Named covered' percentages (deterministic on saved CSVs)."""
 
-	path: Path
+	path: OraclePath
 	expected_uses_pct: float
 	expected_covered_pct: float
 	epsilon: float
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			text = self.path.read_text(encoding="utf-8", errors="replace")
-		except OSError as exc:
+			text = check_read_file_text(self.path, encoding="utf-8", executor=executor)
+		except (OSError, UnicodeError) as exc:
 			return CheckResult.failure(f"failed to read {self.path}: {exc}")
 
 		uses = _last_pct(_NAMED_USES.findall(text))

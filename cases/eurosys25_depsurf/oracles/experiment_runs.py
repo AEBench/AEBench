@@ -10,6 +10,7 @@ from typing import Any
 from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
 from evaluator.oracles.checks import PathKind
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
@@ -55,7 +56,9 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
             reqs.append(
                 utils.Check(
                     name=f"result_file_parseable_{safe_name}",
-                    fn=lambda path=result_path: self._check_csv_result_file_parseable(path),
+                    fn=lambda executor, path=result_path: self._check_csv_result_file_parseable(
+                        path, executor=executor
+                    ),
                 )
             )
 
@@ -75,12 +78,14 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 
         return data
 
-    def _check_csv_result_file_parseable(self, path) -> utils.CheckResult:
-        if not self.is_file(path):
+    def _check_csv_result_file_parseable(
+        self, path, *, executor: RuntimeCheckExecutor
+    ) -> utils.CheckResult:
+        if not executor.path_is_file(path):
             return utils.CheckResult.failure(f"missing result file: {path}")
 
         try:
-            text = self.read_text(path)
+            text = executor.read_file_text(path)
             rows = [
                 row
                 for row in csv.reader(io.StringIO(text))

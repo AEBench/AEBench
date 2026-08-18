@@ -1,20 +1,25 @@
 from __future__ import annotations
 
 import csv
+import io
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluator.oracles import utils
-from evaluator.oracles.discovery import experiment_runs
 from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
 from evaluator.oracles.experiment_runs_checks import ElementwiseSimilarityThresholdCheck
 from evaluator.oracles.utils import Checkable
+
+from evaluator.oracles import utils
+from evaluator.oracles.discovery import experiment_runs
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor, RuntimePath
 from models import OracleInput
 
 
-def _load_ground_truth(path: Path) -> dict[tuple[str, str], set[str]]:
+def _load_ground_truth(
+	path: Path, *, executor: RuntimeCheckExecutor
+) -> dict[tuple[str, str], set[str]]:
 	try:
-		lines = path.read_text(encoding="utf-8").splitlines()
+		lines = executor.read_file_text(path).splitlines()
 	except OSError as exc:
 		raise ValueError(f"failed to read ground-truth CSV: {exc}") from exc
 
@@ -36,25 +41,26 @@ def _load_observed(
 	results_root: Path,
 	*,
 	location_to_benchmark: dict[tuple[str, str], str],
+	executor: RuntimeCheckExecutor,
 ) -> dict[tuple[str, str], set[str]]:
 	observed: dict[tuple[str, str], set[str]] = {}
-	for csv_path in results_root.rglob("*.csv"):
+	for csv_path in executor.glob(results_root, "**/*.csv"):
 		try:
-			with csv_path.open("r", encoding="utf-8", newline="") as handle:
-				reader = csv.reader(handle)
-				for row in reader:
-					if len(row) < 3:
-						continue
-					line = ",".join(row)
-					if ("how-bug" not in line) and ("when-missing-" not in line):
-						continue
-					bug_type = row[1].strip()
-					location = row[2].strip()
-					benchmark = location_to_benchmark.get((bug_type, location))
-					if benchmark is None:
-						continue
-					key = (bug_type, benchmark)
-					observed.setdefault(key, set()).add(location)
+			text = executor.read_file_text(RuntimePath.from_parts(csv_path.as_posix()))
+			reader = csv.reader(io.StringIO(text))
+			for row in reader:
+				if len(row) < 3:
+					continue
+				line = ",".join(row)
+				if ("how-bug" not in line) and ("when-missing-" not in line):
+					continue
+				bug_type = row[1].strip()
+				location = row[2].strip()
+				benchmark = location_to_benchmark.get((bug_type, location))
+				if benchmark is None:
+					continue
+				key = (bug_type, benchmark)
+				observed.setdefault(key, set()).add(location)
 		except OSError as exc:
 			raise ValueError(f"failed to read result CSV {csv_path}: {exc}") from exc
 		except csv.Error as exc:
@@ -68,9 +74,9 @@ def oracle_experiment_runs(context: OracleInput) -> Sequence[Checkable]:
 	results_root = repo_root / "results"
 	truth_path = context.case_dir / "refs" / "bugs_ground_truth.csv"
 
-	def _check_ground_truth_coverage() -> utils.CheckResult:
+	def _check_ground_truth_coverage(executor: RuntimeCheckExecutor) -> utils.CheckResult:
 		try:
-			truth = _load_ground_truth(truth_path)
+			truth = _load_ground_truth(truth_path, executor=executor)
 			location_to_benchmark = {
 				(bug_type, location): benchmark
 				for (bug_type, benchmark), locations in truth.items()
@@ -79,6 +85,7 @@ def oracle_experiment_runs(context: OracleInput) -> Sequence[Checkable]:
 			observed = _load_observed(
 				results_root,
 				location_to_benchmark=location_to_benchmark,
+				executor=executor,
 			)
 		except ValueError as exc:
 			return utils.CheckResult.failure(str(exc))
@@ -93,7 +100,7 @@ def oracle_experiment_runs(context: OracleInput) -> Sequence[Checkable]:
 			observed=observed_counts,
 			reference=reference_counts,
 			threshold=0.75,
-		).check()
+		).check(executor)
 		if result.ok:
 			matched = int(sum(observed_counts))
 			total = int(sum(reference_counts))

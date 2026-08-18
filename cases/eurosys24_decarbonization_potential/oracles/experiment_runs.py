@@ -30,7 +30,6 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	"""
 
 	def requirements(self) -> Sequence[BaseCheck]:
-		executor = self.executor
 		checks: list[BaseCheck] = []
 
 		# (A+B) Per-experiment numeric reproduction vs committed reference CSVs.
@@ -43,7 +42,6 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 					observed_path=self.runtime_path(exp_dir, "data_output", filename),
 					reference_path=self.ref_path(ref_key, filename),
 					rel_tol=DEFAULT_REL_TOL,
-					executor=executor,
 				)
 			)
 
@@ -56,7 +54,6 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 				inf_row=ONE_AND_INF_INF_ROW,
 				expected_regions=ONE_AND_INF_REGIONS,
 				tol=CLAIM_TOL,
-				executor=executor,
 			)
 		)
 
@@ -68,7 +65,6 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 				expected_capacities=CAPACITY_LATENCY_CAPACITIES,
 				expected_rows=CAPACITY_LATENCY_ROWS,
 				tol=CLAIM_TOL,
-				executor=executor,
 			)
 		)
 

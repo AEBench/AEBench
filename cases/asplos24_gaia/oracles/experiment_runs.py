@@ -27,11 +27,9 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 		return self.runtime_path(RESULTS_SUBDIR, filename)
 
 	def requirements(self) -> Sequence[BaseCheck]:
-		ref = json.loads(self.ref_path(RESULTS_REF).read_text(encoding="utf-8"))
+		ref = json.loads(self.read_text(self.ref_path(RESULTS_REF)))
 		runs = ref["runs"]
 		rel_tol = float(ref.get("rel_tolerance", DEFAULT_REL_TOL))
-		executor = self.executor
-
 		checks: list[BaseCheck] = []
 
 		# the results directory exists.
@@ -55,7 +53,6 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 					expected_carbon=float(expected["carbon_cost"]),
 					expected_dollar=float(expected["dollar_cost"]),
 					rel_tol=rel_tol,
-					executor=executor,
 				)
 			)
 
@@ -68,7 +65,6 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 				aware_paths=tuple(
 					(f, self._summary_path(f)) for f in FIG89_CARBON_AWARE
 				),
-				executor=executor,
 			)
 		)
 
@@ -80,7 +76,6 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 				baseline_label=FIG11_RESERVED_BASELINE,
 				baseline_path=self._summary_path(FIG11_RESERVED_BASELINE),
 				steps=tuple((f, self._summary_path(f)) for f in FIG11_RESERVED_STEPS),
-				executor=executor,
 			)
 		)
 

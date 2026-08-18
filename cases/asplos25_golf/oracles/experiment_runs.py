@@ -8,7 +8,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles import CaseOracleExperimentRunsBase, PathCheck, PathKind
-from evaluator.oracles.utils import BaseCheck, CheckResult
+from evaluator.oracles.oracle_checks_runtime import (
+	OraclePath,
+	RuntimeCheckExecutor,
+	check_read_file_text,
+)
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 _MIN_DETECTION_RATE = 90.0
 _MIN_EXPECTED_GO_INSTRUCTIONS = 121
@@ -16,10 +21,12 @@ _MIN_EXPECTED_GO_INSTRUCTIONS = 121
 _RESULT_TEST_DIR_FALL_BACK = "tester"
 
 
-def _find_result_file(repo_root: Path, filename: str) -> Path:
+def _find_result_file(
+	repo_root: Path, filename: str, *, executor: RuntimeCheckExecutor
+) -> Path:
 	"""Find a result file in the repo root or tester/ subdirectory."""
 	candidate = repo_root / filename
-	if candidate.is_file():
+	if executor.path_is_file(candidate):
 		return candidate
 	else:
 		return repo_root / _RESULT_TEST_DIR_FALL_BACK / filename
@@ -89,13 +96,13 @@ def _has_cgo_examples_entries(results_text: str) -> bool:
 class AggregatedDetectionRateCheck(BaseCheck):
 	"""Fail if the aggregated detection rate is below the threshold."""
 
-	results_path: Path
+	results_path: OraclePath
 	min_rate: float
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			text = self.results_path.read_text(encoding="utf-8")
-		except OSError as exc:
+			text = check_read_file_text(self.results_path, executor=executor)
+		except (OSError, UnicodeError) as exc:
 			return CheckResult.failure(f"failed to read results file {self.results_path}: {exc}")
 
 		rate = _parse_aggregated_total(text)
@@ -116,12 +123,12 @@ class AggregatedDetectionRateCheck(BaseCheck):
 class NoCgoExamplesCheck(BaseCheck):
 	"""Fail if the aggregated report lists cgo-examples entries."""
 
-	results_path: Path
+	results_path: OraclePath
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			text = self.results_path.read_text(encoding="utf-8")
-		except OSError as exc:
+			text = check_read_file_text(self.results_path, executor=executor)
+		except (OSError, UnicodeError) as exc:
 			return CheckResult.failure(f"failed to read results file {self.results_path}: {exc}")
 
 		if _has_cgo_examples_entries(text):
@@ -136,13 +143,13 @@ class NoCgoExamplesCheck(BaseCheck):
 class TotalGoInstructionsCheck(BaseCheck):
 	"""Fail if the total go instruction count is less than  expected."""
 
-	results_path: Path
+	results_path: OraclePath
 	expected_count: int
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			text = self.results_path.read_text(encoding="utf-8")
-		except OSError as exc:
+			text = check_read_file_text(self.results_path, executor=executor)
+		except (OSError, UnicodeError) as exc:
 			return CheckResult.failure(f"failed to read results file {self.results_path}: {exc}")
 
 		count = _count_total_go_instructions(text)
@@ -161,7 +168,7 @@ class TotalGoInstructionsCheck(BaseCheck):
 class PerfCSVStructureCheck(BaseCheck):
 	"""Fail if the performance CSV is missing expected columns."""
 
-	csv_path: Path
+	csv_path: OraclePath
 
 	_EXPECTED_COLUMNS = (
 		"Target",
@@ -172,10 +179,10 @@ class PerfCSVStructureCheck(BaseCheck):
 		"CPU utilization ON",
 	)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			text = self.csv_path.read_text(encoding="utf-8").strip()
-		except OSError as exc:
+			text = check_read_file_text(self.csv_path, executor=executor).strip()
+		except (OSError, UnicodeError) as exc:
 			return CheckResult.failure(f"failed to read CSV file {self.csv_path}: {exc}")
 
 		if not text:
@@ -212,9 +219,15 @@ class PerfCSVStructureCheck(BaseCheck):
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	def requirements(self) -> Sequence[BaseCheck]:
-		results_path = _find_result_file(self.artifact_path(), "results")
-		perf_csv_path = _find_result_file(self.artifact_path(), "results-perf.csv")
-		tex_path = _find_result_file(self.artifact_path(), "results.tex")
+		results_path = _find_result_file(
+			self.artifact_path(), "results", executor=self.executor
+		)
+		perf_csv_path = _find_result_file(
+			self.artifact_path(), "results-perf.csv", executor=self.executor
+		)
+		tex_path = _find_result_file(
+			self.artifact_path(), "results.tex", executor=self.executor
+		)
 		tex_fallback = self.artifact_path("results.tex")
 
 		return (

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles.oracle_checks_runtime import (
@@ -40,7 +40,7 @@ def _parse_csv(text: str) -> tuple[list[str], dict[str, list[str]]]:
 
 
 def _read_csv(
-	path: OraclePath, executor: RuntimeCheckExecutor | None
+	path: OraclePath, executor: RuntimeCheckExecutor
 ) -> tuple[list[str], dict[str, list[str]]]:
 	return _parse_csv(check_read_file_text(path, executor=executor))
 
@@ -82,15 +82,13 @@ class CsvNumericMatchCheck(BaseCheck):
 	observed_path: OraclePath
 	reference_path: Path
 	rel_tol: float
-	executor: RuntimeCheckExecutor | None = field(default=None)
-
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			ref_header, ref_rows = _parse_csv(self.reference_path.read_text(encoding="utf-8"))
+			ref_header, ref_rows = _read_csv(self.reference_path, executor)
 		except (OSError, ValueError) as exc:
 			return CheckResult.failure(f"{self.label}: reference unreadable: {exc}")
 		try:
-			obs_header, obs_rows = _read_csv(self.observed_path, self.executor)
+			obs_header, obs_rows = _read_csv(self.observed_path, executor)
 		except OSError as exc:
 			return CheckResult.failure(f"{self.label}: could not read output: {exc}")
 		except ValueError as exc:
@@ -141,11 +139,9 @@ class OneVsInfSavingsCheck(BaseCheck):
 	inf_row: str
 	expected_regions: Sequence[str]
 	tol: float
-	executor: RuntimeCheckExecutor | None = field(default=None)
-
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			header, rows = _read_csv(self.observed_path, self.executor)
+			header, rows = _read_csv(self.observed_path, executor)
 		except (OSError, ValueError) as exc:
 			return CheckResult.failure(f"savings_mean.csv: {exc}")
 		if self.one_row not in rows or self.inf_row not in rows:
@@ -190,11 +186,9 @@ class CapacityMonotonicCheck(BaseCheck):
 	expected_capacities: Sequence[str]
 	expected_rows: Sequence[str]
 	tol: float
-	executor: RuntimeCheckExecutor | None = field(default=None)
-
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			header, rows = _read_csv(self.observed_path, self.executor)
+			header, rows = _read_csv(self.observed_path, executor)
 		except (OSError, ValueError) as exc:
 			return CheckResult.failure(f"emissions.csv: {exc}")
 		if (mismatch := _label_mismatch(header[1:], self.expected_capacities)) is not None:

@@ -10,6 +10,8 @@ import pathlib
 from collections.abc import Callable, Sequence
 from typing import Protocol, runtime_checkable
 
+from .oracle_checks_runtime import RuntimeCheckExecutor
+
 
 class CheckOutcome(enum.Enum):
 	"""Final reporting status for an individual oracle check."""
@@ -100,7 +102,7 @@ class Checkable(Protocol):
 		"""Returns whether failure should be reported as a warning."""
 		raise NotImplementedError
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		"""Evaluates the check and returns its detailed result."""
 		raise NotImplementedError
 
@@ -154,7 +156,7 @@ class BaseCheck(Checkable, abc.ABC):
 	optional: bool = False
 
 	@abc.abstractmethod
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		"""Evaluates the check."""
 		raise NotImplementedError
 
@@ -163,17 +165,18 @@ class BaseCheck(Checkable, abc.ABC):
 class Check(BaseCheck):
 	"""Adapts a callable into a check object."""
 
-	fn: Callable[[], CheckResult]
+	fn: Callable[[RuntimeCheckExecutor], CheckResult]
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		"""Evaluates the wrapped callable."""
-		return self.fn()
+		return self.fn(executor)
 
 
 def run_checks(
 	checks: Sequence[Checkable],
 	*,
 	logger: logging.Logger,
+	executor: RuntimeCheckExecutor,
 ) -> OracleReport:
 	"""Evaluates checks and converts their results into a report.
 
@@ -184,6 +187,7 @@ def run_checks(
 	Args:
 		checks: Checks to evaluate in order.
 		logger: Logger used for unexpected check exceptions.
+		executor: Phase executor supplied to every check.
 
 	Returns:
 		A report containing one entry per check.
@@ -192,7 +196,7 @@ def run_checks(
 
 	for check in checks:
 		try:
-			result = check.check()
+			result = check.check(executor)
 			if result.ok:
 				outcome = CheckOutcome.PASSED
 				message = result.message or "ok"
@@ -225,6 +229,7 @@ def build_oracle_report(
 	*,
 	logger: logging.Logger,
 	requirements: Callable[[], Sequence[BaseCheck]],
+	executor: RuntimeCheckExecutor,
 ) -> OracleReport:
 	"""Enumerates and evaluates the checks for an oracle phase.
 
@@ -234,6 +239,7 @@ def build_oracle_report(
 	Args:
 		logger: Logger used for requirement and check failures.
 		requirements: Callable that generates the phase checks.
+		executor: Phase executor forwarded to the generated checks.
 
 	Returns:
 		The completed oracle report.
@@ -256,7 +262,7 @@ def build_oracle_report(
 			)
 		)
 
-	return run_checks(checks, logger=logger)
+	return run_checks(checks, logger=logger, executor=executor)
 
 
 def log_oracle_report(

@@ -9,6 +9,7 @@ from typing import Any
 
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
 from evaluator.oracles.checks import PathKind
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor, RuntimePath
 from evaluator.oracles.reporting import BaseCheck, Check, CheckResult
 
 _STATUS_PATTERN = re.compile(r'^status\s*=\s*"(?P<status>[^"]+)"\s*$', re.MULTILINE)
@@ -31,8 +32,8 @@ def _parse_custom_status(text: str) -> str | None:
     return None
 
 
-def _load_reference(path: Path) -> dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
+def _load_reference(path: Path, *, executor: RuntimeCheckExecutor) -> dict[str, Any]:
+    data = json.loads(executor.read_file_text(path))
     if not isinstance(data, dict):
         raise ValueError("default experiment reference must be a JSON object")
     return data
@@ -40,7 +41,9 @@ def _load_reference(path: Path) -> dict[str, Any]:
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
     def requirements(self) -> Sequence[BaseCheck]:
-        reference = _load_reference(self.ref_path("default_experiment.ref.json"))
+        reference = _load_reference(
+            self.ref_path("default_experiment.ref.json"), executor=self.executor
+        )
         experiment_dir = str(reference.get("experiment_dir", "")).strip()
         if not experiment_dir:
             raise ValueError("default experiment reference missing experiment_dir")
@@ -77,11 +80,12 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
             ),
             Check(
                 name="default_experiment_status_counts",
-                fn=lambda: self._check_experiment_status_counts(
+                fn=lambda executor: self._check_experiment_status_counts(
                     experiment_root=experiment_root,
                     expected_counts=expected_counts,
                     max_timeout=max_timeout,
                     min_result_tomls=min_result_tomls,
+                    executor=executor,
                 ),
             ),
         )
@@ -93,14 +97,15 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
         expected_counts: dict[str, int],
         max_timeout: int,
         min_result_tomls: int,
+        executor: RuntimeCheckExecutor,
     ) -> CheckResult:
-        if not self.is_dir(experiment_root):
+        if not executor.path_is_dir(experiment_root):
             return CheckResult.failure(
                 f"experiment directory missing: {experiment_root}"
             )
 
         try:
-            result_files = sorted(experiment_root.rglob("result.toml"))
+            result_files = sorted(executor.glob(experiment_root, "**/result.toml"))
         except OSError as exc:
             return CheckResult.failure(
                 f"failed to scan experiment directory {experiment_root}: {exc}"
@@ -117,7 +122,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 
         for result_path in result_files:
             try:
-                text = self.read_text(result_path)
+                text = executor.read_file_text(RuntimePath.from_parts(result_path.as_posix()))
             except OSError as exc:
                 unreadable.append(f"{result_path}: {exc}")
                 continue

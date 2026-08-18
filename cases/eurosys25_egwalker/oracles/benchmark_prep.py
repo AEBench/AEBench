@@ -7,6 +7,7 @@ from pathlib import Path
 
 from evaluator.oracles import CaseOracleBenchmarkPrepBase, utils  # type: ignore[import-untyped]
 from evaluator.oracles.checks import BaseCheck  # type: ignore[import-untyped]
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 
 
 def _dataset_entries(payload: object) -> Iterable[tuple[str, int]]:
@@ -34,12 +35,11 @@ def _dataset_entries(payload: object) -> Iterable[tuple[str, int]]:
 class DatasetManifestCheck(utils.BaseCheck):  # type: ignore[misc]
     workspace_root: Path
     reference_path: Path
-    executor: utils.RuntimeCheckExecutor | None = None
     max_items_to_report: int = 10
 
-    def check(self) -> utils.CheckResult:
+    def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
         try:
-            text = utils.check_read_file_text(self.reference_path, executor=self.executor)
+            text = utils.check_read_file_text(self.reference_path, executor=executor)
             entries = list(_dataset_entries(json.loads(text)))
         except Exception as exc:
             return utils.CheckResult.failure(f"{self.name}: failed to read dataset reference: {exc}")
@@ -50,11 +50,25 @@ class DatasetManifestCheck(utils.BaseCheck):  # type: ignore[misc]
         for rel_path, expected_size in entries:
             path = self.workspace_root / rel_path
 
-            if not utils.check_path_is_file(path, executor=self.executor):
+            if not utils.check_path_is_file(path, executor=executor):
                 missing.append(rel_path)
                 continue
 
-            actual_size = utils.check_file_size(path, executor=self.executor)
+            resolved = str(executor.resolve_path(path))
+            result = executor.run_process_capture(
+                cmd=("wc", "-c", resolved),
+                cwd=None,
+                env=None,
+                timeout_seconds=10.0,
+            )
+            if result.returncode != 0:
+                wrong_size.append(f"{rel_path}: failed to read size")
+                continue
+            try:
+                actual_size = int(result.stdout.split()[0])
+            except (ValueError, IndexError):
+                wrong_size.append(f"{rel_path}: failed to parse size")
+                continue
             if actual_size != expected_size:
                 wrong_size.append(f"{rel_path}: expected {expected_size}, got {actual_size}")
 
@@ -79,6 +93,5 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):  # type: ignore[misc]
                 name="dataset_manifest_matches_reference",
                 workspace_root=self.workspace_path(),
                 reference_path=self.ref_path("datasets.ref.json"),
-                executor=self.executor,
             ),
         )

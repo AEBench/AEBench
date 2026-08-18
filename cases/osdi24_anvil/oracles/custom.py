@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 
-def _parse_table3(path: Path) -> dict[str, tuple[float, float]]:
+
+def _parse_table3(
+	path: Path, *, executor: RuntimeCheckExecutor
+) -> dict[str, tuple[float, float]]:
 	headers = (
 		"Controller",
 		"Verified (Anvil) Mean",
@@ -12,7 +16,7 @@ def _parse_table3(path: Path) -> dict[str, tuple[float, float]]:
 		"Reference (unverified) Max",
 	)
 	rows: dict[str, tuple[float, float]] = {}
-	for line in path.read_text(encoding="utf-8").splitlines():
+	for line in executor.read_file_text(path).splitlines():
 		stripped = line.strip()
 		if not stripped.startswith("|") or stripped.count("|") < 5:
 			continue

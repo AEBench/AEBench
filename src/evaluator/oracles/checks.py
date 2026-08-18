@@ -176,10 +176,11 @@ class VersionCheck(BaseCheck):
 		assert self.max_version is not None
 		return f"<= {self._format_version(self.max_version)}"
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
+		executor = self.executor if self.executor is not None else executor
 		executable = self.cmd[0]
 		try:
-			resolved = resolve_check_executable(executable, executor=self.executor)
+			resolved = resolve_check_executable(executable, executor=executor)
 		except (RuntimeError, ValueError) as exc:
 			return CheckResult.failure(str(exc))
 		if resolved is None:
@@ -192,7 +193,7 @@ class VersionCheck(BaseCheck):
 				env=None,
 				timeout_seconds=self.timeout_seconds,
 				capture_limit_chars=DEFAULT_MAX_CAPTURE_CHARS,
-				executor=self.executor,
+				executor=executor,
 			)
 		except (OSError, RuntimeError) as exc:
 			return CheckResult.failure(f"failed to run {executable!r}: {exc}", stderr=str(exc))
@@ -289,9 +290,10 @@ class EnvVarCheck(BaseCheck):
 				raise ValueError(f"{self.name}: invalid regex: {exc}") from exc
 			object.__setattr__(self, "_pattern", pattern)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
+		executor = self.executor if self.executor is not None else executor
 		try:
-			actual = read_check_env_var(self.env_var, executor=self.executor)
+			actual = read_check_env_var(self.env_var, executor=executor)
 		except (RuntimeError, ValueError) as exc:
 			return CheckResult.failure(str(exc))
 		if actual is None:
@@ -336,11 +338,12 @@ class PathCheck(BaseCheck):
 			pathlib.Path(path_text),
 		)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
+		executor = self.executor if self.executor is not None else executor
 		path = self.path
 		path_text = str(path)
 
-		if not check_path_exists(path, executor=self.executor):
+		if not check_path_exists(path, executor=executor):
 			label = "path"
 			if self.kind == PathKind.FILE:
 				label = "file"
@@ -352,11 +355,11 @@ class PathCheck(BaseCheck):
 			return CheckResult.success()
 
 		if self.kind == PathKind.FILE:
-			if check_path_is_file(path, executor=self.executor):
+			if check_path_is_file(path, executor=executor):
 				return CheckResult.success()
 			return CheckResult.failure(f"expected a file: {path_text}")
 
-		if check_path_is_dir(path, executor=self.executor):
+		if check_path_is_dir(path, executor=executor):
 			return CheckResult.success()
 
 		return CheckResult.failure(f"expected a directory: {path_text}")
@@ -415,14 +418,15 @@ class CommandCheck(BaseCheck):
 			return self.cmd
 		return " ".join(shlex.quote(arg) for arg in self.cmd)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
+		executor = self.executor if self.executor is not None else executor
 		cwd = self.cwd
 		# Executors need the original OraclePath; CheckResult stores a Path for reporting.
 		reported_cwd = None if cwd is None else pathlib.Path(str(cwd))
 		if cwd is not None:
-			if not check_path_exists(cwd, executor=self.executor):
+			if not check_path_exists(cwd, executor=executor):
 				return CheckResult.failure(f"working directory not found: {cwd}", cwd=reported_cwd)
-			if not check_path_is_dir(cwd, executor=self.executor):
+			if not check_path_is_dir(cwd, executor=executor):
 				return CheckResult.failure(
 					f"working directory is not a directory: {cwd}", cwd=reported_cwd
 				)
@@ -460,7 +464,7 @@ class CommandCheck(BaseCheck):
 				capture_limit_chars=DEFAULT_MAX_CAPTURE_CHARS,
 				drain_after_kill=False,
 				on_chunk=on_chunk,
-				executor=self.executor,
+				executor=executor,
 			)
 		except (OSError, RuntimeError) as exc:
 			return CheckResult.failure(
@@ -511,16 +515,17 @@ class TextFileEqualityCheck(BaseCheck):
 		default=None, repr=False, compare=False
 	)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
+		executor = self.executor if self.executor is not None else executor
 		observed_path = self.observed_path
 		reference_path = self.reference_path
-		if not check_path_is_file(observed_path, executor=self.executor):
+		if not check_path_is_file(observed_path, executor=executor):
 			return CheckResult.failure(f"observed file missing: {observed_path}")
-		if not check_path_is_file(reference_path, executor=self.executor):
+		if not check_path_is_file(reference_path, executor=executor):
 			return CheckResult.failure(f"reference file missing: {reference_path}")
 		try:
-			observed = check_read_file_text(observed_path, executor=self.executor)
-			reference = check_read_file_text(reference_path, executor=self.executor)
+			observed = check_read_file_text(observed_path, executor=executor)
+			reference = check_read_file_text(reference_path, executor=executor)
 		except OSError as exc:
 			return CheckResult.failure(f"failed to read file: {exc}")
 		if observed == reference:
@@ -550,11 +555,12 @@ class MinMatchingEntryCountCheck(BaseCheck):
 		default=None, repr=False, compare=False
 	)
 
-	def check(self) -> CheckResult:
-		if not check_path_is_dir(self.directory, executor=self.executor):
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
+		executor = self.executor if self.executor is not None else executor
+		if not check_path_is_dir(self.directory, executor=executor):
 			return CheckResult.failure(f"directory missing: {self.directory}")
 		try:
-			matches = glob(self.directory, self.pattern, executor=self.executor)
+			matches = glob(self.directory, self.pattern, executor=executor)
 		except OSError as exc:
 			return CheckResult.failure(f"cannot scan {self.directory}: {exc}")
 		if len(matches) < self.min_count:
@@ -596,7 +602,7 @@ class ListSimilarityCheck(BaseCheck):
 		object.__setattr__(self, "observed", tuple(self.observed))
 		object.__setattr__(self, "reference", tuple(self.reference))
 
-	def check(self) -> CheckResult:
+	def check(self, _executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
 			score = compute_similarity(self.metric, self.observed, self.reference)
 		except ValueError as exc:
@@ -622,7 +628,7 @@ class ElementwiseEqualityCheck(BaseCheck):
 		object.__setattr__(self, "observed", tuple(self.observed))
 		object.__setattr__(self, "reference", tuple(self.reference))
 
-	def check(self) -> CheckResult:
+	def check(self, _executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
 			comparisons = elementwise_equal(self.observed, self.reference)
 		except ValueError as exc:
@@ -658,7 +664,7 @@ class ElementwiseSimilarityThresholdCheck(BaseCheck):
 		object.__setattr__(self, "observed", tuple(self.observed))
 		object.__setattr__(self, "reference", tuple(self.reference))
 
-	def check(self) -> CheckResult:
+	def check(self, _executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
 			scores = elementwise_similarity_scores(
 				self.observed,

@@ -98,11 +98,18 @@ class _OraclePhaseBase(abc.ABC):
 		"""Returns the checks evaluated by this phase."""
 		raise NotImplementedError
 
+	@property
+	@abc.abstractmethod
+	def executor(self) -> RuntimeCheckExecutor:
+		"""Returns the executor used by checks in this phase."""
+		raise NotImplementedError
+
 	def report(self) -> OracleReport:
 		"""Evaluates this phase and returns its structured report."""
 		return build_oracle_report(
 			logger=self._logger,
 			requirements=self.requirements,
+			executor=self.executor,
 		)
 
 	def run(self, *, verbose: bool = False) -> bool:
@@ -242,7 +249,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 			max_version=max_version,
 			version_regex=version_regex,
 			timeout_seconds=timeout_seconds,
-			executor=self.executor_for(target),
+			executor=None if target is None else self.executor_for(target),
 		)
 
 	def env_var_check(
@@ -262,7 +269,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 			env_var=env_var,
 			expected=expected,
 			match_mode=match_mode,
-			executor=self.executor_for(target),
+			executor=None if target is None else self.executor_for(target),
 		)
 
 	def path_check(
@@ -280,7 +287,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 			optional=optional,
 			path=path,
 			kind=kind,
-			executor=self.executor_for(target),
+			executor=None if target is None else self.executor_for(target),
 		)
 
 	def command_check(
@@ -306,7 +313,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 			env={} if env is None else env,
 			use_shell=use_shell,
 			signature=signature,
-			executor=self.executor_for(target),
+			executor=None if target is None else self.executor_for(target),
 		)
 
 	def text_file_equal(
@@ -324,7 +331,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 			optional=optional,
 			observed_path=observed_path,
 			reference_path=reference_path,
-			executor=self.executor_for(target),
+			executor=None if target is None else self.executor_for(target),
 		)
 
 	def min_matching_entry_count_check(
@@ -343,7 +350,7 @@ class _CaseOracleBase(_OraclePhaseBase):
 			directory=directory,
 			pattern=pattern,
 			min_count=min_count,
-			executor=self.executor_for(target),
+			executor=None if target is None else self.executor_for(target),
 		)
 
 	def read_text(
