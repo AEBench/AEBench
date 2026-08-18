@@ -5,16 +5,14 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluator.oracles import utils
-from evaluator.oracles.discovery import experiment_runs
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
-from evaluator.oracles.experiment_runs_checks import (
+from evaluator.oracles import (
+	CaseOracleExperimentRunsBase,
 	ElementwiseSimilarityThresholdCheck,
 	ListSimilarityCheck,
+	PathKind,
 	SimilarityMetric,
+	utils,
 )
-from evaluator.oracles.utils import Checkable
-from models import OracleInput
 
 from . import custom
 
@@ -51,81 +49,80 @@ def _load_reference_ratios(path: Path) -> dict[str, tuple[float, float]]:
 	return rows
 
 
-@experiment_runs
-def oracle_experiment_runs(context: OracleInput) -> Sequence[Checkable]:
-	anvil_root = context.workspace_dir
-	results_path = anvil_root / "results" / "table3.md"
-	reference_path = context.case_dir / "refs" / "anvil-table-3.ref.json"
-	cache: dict[str, tuple[dict[str, tuple[float, float]], dict[str, tuple[float, float]]]] = {}
+class OracleExperimentRuns(CaseOracleExperimentRunsBase):
+	def requirements(self) -> Sequence[utils.BaseCheck]:
+		results_path = self.workspace_path("results", "table3.md")
+		reference_path = self.ref_path("anvil-table-3.ref.json")
+		cache: dict[str, tuple[dict[str, tuple[float, float]], dict[str, tuple[float, float]]]] = {}
 
-	def _load_data() -> tuple[dict[str, tuple[float, float]], dict[str, tuple[float, float]]]:
-		data = cache.get("table3")
-		if data is not None:
+		def _load_data() -> tuple[dict[str, tuple[float, float]], dict[str, tuple[float, float]]]:
+			data = cache.get("table3")
+			if data is not None:
+				return data
+			observed = custom._parse_table3(results_path)
+			reference = _load_reference_ratios(reference_path)
+			data = (observed, reference)
+			cache["table3"] = data
 			return data
-		observed = custom._parse_table3(results_path)
-		reference = _load_reference_ratios(reference_path)
-		data = (observed, reference)
-		cache["table3"] = data
-		return data
 
-	def _check_controllers() -> utils.CheckResult:
-		try:
-			observed, reference = _load_data()
-		except ValueError as exc:
-			return utils.CheckResult.failure(str(exc))
+		def _check_controllers() -> utils.CheckResult:
+			try:
+				observed, reference = _load_data()
+			except ValueError as exc:
+				return utils.CheckResult.failure(str(exc))
 
-		observed_ids = [_controller_id_as_float(controller) for controller in observed]
-		reference_ids = [_controller_id_as_float(controller) for controller in reference]
-		return ListSimilarityCheck(
-			name="table3_controllers",
-			observed=observed_ids,
-			reference=reference_ids,
-			metric=SimilarityMetric.JACCARD_SET,
-			min_similarity=1.0,
-		).check()
+			observed_ids = [_controller_id_as_float(controller) for controller in observed]
+			reference_ids = [_controller_id_as_float(controller) for controller in reference]
+			return ListSimilarityCheck(
+				name="table3_controllers",
+				observed=observed_ids,
+				reference=reference_ids,
+				metric=SimilarityMetric.JACCARD_SET,
+				min_similarity=1.0,
+			).check()
 
-	def _check_ratio(index: int, label: str) -> utils.CheckResult:
-		try:
-			observed, reference = _load_data()
-		except ValueError as exc:
-			return utils.CheckResult.failure(str(exc))
+		def _check_ratio(index: int, label: str) -> utils.CheckResult:
+			try:
+				observed, reference = _load_data()
+			except ValueError as exc:
+				return utils.CheckResult.failure(str(exc))
 
-		if set(observed) != set(reference):
-			return utils.CheckResult.failure(
-				"controller sets differ between observed and reference tables"
-			)
+			if set(observed) != set(reference):
+				return utils.CheckResult.failure(
+					"controller sets differ between observed and reference tables"
+				)
 
-		controllers = sorted(reference)
-		observed_values = [observed[controller][index] for controller in controllers]
-		reference_values = [reference[controller][index] for controller in controllers]
-		return ElementwiseSimilarityThresholdCheck(
-			name=label,
-			observed=observed_values,
-			reference=reference_values,
-			threshold=0.75,
-		).check()
+			controllers = sorted(reference)
+			observed_values = [observed[controller][index] for controller in controllers]
+			reference_values = [reference[controller][index] for controller in controllers]
+			return ElementwiseSimilarityThresholdCheck(
+				name=label,
+				observed=observed_values,
+				reference=reference_values,
+				threshold=0.75,
+			).check()
 
-	return (
-		FilesystemPathCheck(
-			name="results_table3_exists",
-			path=results_path,
-			path_type=PathType.FILE,
-		),
-		FilesystemPathCheck(
-			name="reference_table3_exists",
-			path=reference_path,
-			path_type=PathType.FILE,
-		),
-		utils.Check(
-			name="table3_controllers",
-			fn=_check_controllers,
-		),
-		utils.Check(
-			name="table3_mean_ratio",
-			fn=lambda: _check_ratio(0, "table3_mean_ratio"),
-		),
-		utils.Check(
-			name="table3_max_ratio",
-			fn=lambda: _check_ratio(1, "table3_max_ratio"),
-		),
-	)
+		return (
+			self.path_check(
+				name="results_table3_exists",
+				path=results_path,
+				kind=PathKind.FILE,
+			),
+			self.path_check(
+				name="reference_table3_exists",
+				path=reference_path,
+				kind=PathKind.FILE,
+			),
+			utils.Check(
+				name="table3_controllers",
+				fn=_check_controllers,
+			),
+			utils.Check(
+				name="table3_mean_ratio",
+				fn=lambda: _check_ratio(0, "table3_mean_ratio"),
+			),
+			utils.Check(
+				name="table3_max_ratio",
+				fn=lambda: _check_ratio(1, "table3_max_ratio"),
+			),
+		)
