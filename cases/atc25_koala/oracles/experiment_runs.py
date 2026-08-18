@@ -4,7 +4,7 @@ import json
 from collections.abc import Sequence
 
 from evaluator.oracles import CaseOracleExperimentRunsBase, PathKind
-from evaluator.oracles.utils import BaseCheck
+from evaluator.oracles.reporting import BaseCheck
 
 from .checks import KoalaCorrectnessCheck, KoalaPassLogCheck
 from .consts import (

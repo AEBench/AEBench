@@ -12,17 +12,17 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 		return (
 			self.path_check(
 				name="golf_binary",
-				path=self.app_path(GOLF_BINARY_PATH),
+				path=self.runtime_path(GOLF_BINARY_PATH),
 				kind=PathKind.FILE,
 			),
 			self.path_check(
 				name="baseline_binary",
-				path=self.app_path(BASELINE_BINARY_PATH),
+				path=self.runtime_path(BASELINE_BINARY_PATH),
 				kind=PathKind.FILE,
 			),
 			self.path_check(
 				name="tester_binary",
-				path=self.app_path(TESTER_BINARY_PATH),
+				path=self.runtime_path(TESTER_BINARY_PATH),
 				kind=PathKind.FILE,
 			),
 		)
