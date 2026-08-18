@@ -57,6 +57,11 @@ id = "eurosys25_egwalker"
 
 [run.instructions]
 path = "README.md"
+required_evidence = [
+  "Save the benchmark stdout to results/table1.txt.",
+  "Keep the full experiment log at logs/experiment.log.",
+  "Leave generated result files in results/ for the oracle to inspect.",
+]
 
 [run.runtime]
 mode = "docker"
@@ -98,8 +103,10 @@ title = "Artifact paper title"
 ```
 
 Key choices to make:
+- **`case_brief.acceptable_evidence`**: describe the result conditions that demonstrate the artifact's claim succeeded
 - **`runtime.mode`**: use `"docker"` if the artifact has complex deps or needs isolation. Use `"local"` only for simple cases safe to run on the host
 - **`runtime.timeout_ms`**: set this generously. Large builds and dataset downloads can take hours. 4 hours (`14_400_000`) is reasonable for most cases
+- **`run.instructions.required_evidence`**: list the exact logs, redirected stdout files, tables, or result artifacts the agent must leave for the oracle; do not repeat the success criteria from `acceptable_evidence`
 - **`upstream.ref`**: always pin to a full commit hash. Branch names change over time and break reproducibility
 
 ## 4. Register the case

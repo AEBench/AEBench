@@ -39,8 +39,8 @@ _ORACLE_STUB = """\
 """
 
 
-def _setup_valid_case(case_dir: Path) -> None:
-	_write(case_dir / "case.toml", _MINIMAL_TOML)
+def _setup_valid_case(case_dir: Path, case_toml: str = _MINIMAL_TOML) -> None:
+	_write(case_dir / "case.toml", case_toml)
 	(case_dir / "refs").mkdir(exist_ok=True)
 	oracle_dir = case_dir / "oracles"
 	oracle_dir.mkdir(exist_ok=True)
@@ -89,6 +89,46 @@ def test_runtime_mode_parsed(tmp_path: Path) -> None:
 	_setup_valid_case(case_dir)
 	spec = load_case_spec(case_dir)
 	assert spec.run.runtime.mode.value == "local"
+
+
+def test_required_evidence_parsed_from_instructions(tmp_path: Path) -> None:
+	case_dir = tmp_path / "test_case"
+	case_dir.mkdir()
+	_setup_valid_case(
+		case_dir,
+		"""\
+		id = "test_case"
+
+		[case_brief]
+		core_claim = "Verify the artifact builds correctly."
+		acceptable_evidence = "The binary exists and runs."
+		allowed_tolerance = "None."
+
+		[run]
+		id = "test_case"
+
+		[run.instructions]
+		path = "README.md"
+		required_evidence = [
+		  " Save stdout to table.txt ",
+		  "Keep logs under logs/",
+		  "",
+		]
+
+		[run.runtime]
+		mode = "local"
+
+		[oracle]
+		phases = ["env_setup"]
+		""",
+	)
+
+	spec = load_case_spec(case_dir)
+
+	assert spec.run.instructions.required_evidence == [
+		"Save stdout to table.txt",
+		"Keep logs under logs/",
+	]
 
 
 def test_nonexistent_dir_raises(tmp_path: Path) -> None:
