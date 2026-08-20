@@ -227,9 +227,33 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
             Stdio::piped()
         });
 
+    // The child clears its own signal mask: the mask survives both fork and
+    // exec, and the parent is about to block signals around the spawn. Only
+    // async-signal-safe calls are legal between fork and exec, which these are.
+    //
+    // SAFETY: the closure touches nothing but its own stack and two
+    // async-signal-safe libc calls.
+    unsafe {
+        command.pre_exec(|| {
+            let mut empty: libc::sigset_t = std::mem::zeroed();
+            libc::sigemptyset(&mut empty);
+            libc::sigprocmask(libc::SIG_SETMASK, &empty, std::ptr::null_mut());
+            Ok(())
+        });
+    }
+
+    // The forwarders go up before the spawn, and everything they catch stays
+    // blocked until the child's pid has been recorded. A signal arriving in
+    // that window is then held by the kernel rather than killing this process
+    // at its default disposition, which would orphan a child that had already
+    // started and leave the server with no `end` frame for it.
+    let outer_mask = block_forwarded_signals();
+    install_signal_forwarders();
+
     let mut child: Child = match command.spawn() {
         Ok(child) => child,
         Err(err) => {
+            restore_signal_mask(outer_mask);
             let _ = writeln!(
                 io::stderr(),
                 "aeshell: cannot spawn {}: {err}",
@@ -239,8 +263,10 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
         }
     };
 
+    // Recording the pid first means the signals released on the next line find
+    // a handler that knows where to send them.
     CHILD_PID.store(child.id() as i32, Ordering::SeqCst);
-    install_signal_forwarders();
+    restore_signal_mask(outer_mask);
 
     // Both pipes must be drained concurrently: a child that fills one while we
     // read the other would block forever.
@@ -435,10 +461,11 @@ extern "C" fn forward_signal(signal: libc::c_int) {
     }
 }
 
+/// The signals a shell is expected to pass down to the command it is running.
+const FORWARDED_SIGNALS: [libc::c_int; 4] =
+    [libc::SIGINT, libc::SIGTERM, libc::SIGHUP, libc::SIGQUIT];
+
 fn install_signal_forwarders() {
-    /// The signals a shell is expected to pass down to the command it is running.
-    const FORWARDED_SIGNALS: [libc::c_int; 4] =
-        [libc::SIGINT, libc::SIGTERM, libc::SIGHUP, libc::SIGQUIT];
     // SAFETY: `action` is fully initialised before it is read, the handler is
     // async-signal-safe, and every signal number involved is a constant.
     unsafe {
@@ -458,6 +485,30 @@ fn install_signal_forwarders() {
             libc::sigaction(signal, &action, std::ptr::null_mut());
         }
     }
+}
+
+/// Blocks every forwarded signal, returning the mask that was in force.
+fn block_forwarded_signals() -> libc::sigset_t {
+    // SAFETY: both sets are initialised before they are read, and this runs
+    // while the process is still single-threaded.
+    unsafe {
+        let mut blocked: libc::sigset_t = std::mem::zeroed();
+        libc::sigemptyset(&mut blocked);
+        for signal in FORWARDED_SIGNALS {
+            libc::sigaddset(&mut blocked, signal);
+        }
+
+        let mut previous: libc::sigset_t = std::mem::zeroed();
+        libc::pthread_sigmask(libc::SIG_BLOCK, &blocked, &mut previous);
+        previous
+    }
+}
+
+/// Restores a mask saved by [`block_forwarded_signals`], which delivers
+/// whatever arrived while it was in force.
+fn restore_signal_mask(previous: libc::sigset_t) {
+    // SAFETY: `previous` came from `pthread_sigmask` and is a valid mask.
+    unsafe { libc::pthread_sigmask(libc::SIG_SETMASK, &previous, std::ptr::null_mut()) };
 }
 
 fn is_tty(fd: libc::c_int) -> bool {
