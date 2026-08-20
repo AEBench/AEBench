@@ -53,6 +53,9 @@ timestamps.
   Ctrl-C, Ctrl-\, a hangup — are *not* forwarded: the kernel delivers those to
   every process in the foreground group, so the child already has one, and a
   second copy reads as a second Ctrl-C to anything that escalates on one.
+- **A signal ignored on entry stays ignored**, so `nohup` still works. No
+  handler is installed over an inherited `SIG_IGN`, and the child inherits the
+  ignore across `exec` just as it would under the real shell.
 - **The exit status is reproduced exactly** — the child's code, or `128+signal`
   when it was killed.
 - **Failure is always open.** A missing socket, a refused connection, or a

@@ -313,7 +313,7 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
 /// This is required to make sure that the agent sees the output live.
 fn spawn_pump<R: Read + Send + 'static>(
     mut source: R,
-    kind: FrameKind,
+    message_type: FrameKind,
 ) -> thread::JoinHandle<Vec<u8>> {
     thread::spawn(move || {
         let mut collected = Vec::new();
@@ -327,7 +327,7 @@ fn spawn_pump<R: Read + Send + 'static>(
             };
             let chunk = &buffer[..read];
 
-            if kind == FrameKind::Stdout {
+            if message_type == FrameKind::Stdout {
                 let mut out = io::stdout().lock();
                 let _ = out.write_all(chunk);
                 let _ = out.flush();
@@ -501,6 +501,14 @@ fn install_signal_forwarders() {
         }
 
         for signal in FORWARDED_SIGNALS {
+            // A signal already ignored when this process started stays ignored.
+            let mut current: libc::sigaction = std::mem::zeroed();
+            if libc::sigaction(signal, std::ptr::null(), &mut current) == 0
+                && current.sa_sigaction == libc::SIG_IGN
+            {
+                continue;
+            }
+
             // EINVAL for an uncatchable signal is the only documented failure,
             // and all four of these can be caught, so this cannot fail.
             libc::sigaction(signal, &action, std::ptr::null_mut());
