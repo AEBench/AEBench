@@ -436,8 +436,27 @@ extern "C" fn forward_signal(signal: libc::c_int) {
 }
 
 fn install_signal_forwarders() {
-    for signal in [libc::SIGINT, libc::SIGTERM, libc::SIGHUP, libc::SIGQUIT] {
-        unsafe { libc::signal(signal, forward_signal as *const () as libc::sighandler_t) };
+    /// The signals a shell is expected to pass down to the command it is running.
+    const FORWARDED_SIGNALS: [libc::c_int; 4] =
+        [libc::SIGINT, libc::SIGTERM, libc::SIGHUP, libc::SIGQUIT];
+    // SAFETY: `action` is fully initialised before it is read, the handler is
+    // async-signal-safe, and every signal number involved is a constant.
+    unsafe {
+        let mut action: libc::sigaction = std::mem::zeroed();
+        action.sa_sigaction = forward_signal as *const () as libc::sighandler_t;
+        action.sa_flags = libc::SA_RESTART;
+        // Every forwarded signal stays blocked for the duration of the handler,
+        // so one forward is never interrupted part-way through by the next.
+        libc::sigemptyset(&mut action.sa_mask);
+        for signal in FORWARDED_SIGNALS {
+            libc::sigaddset(&mut action.sa_mask, signal);
+        }
+
+        for signal in FORWARDED_SIGNALS {
+            // EINVAL for an uncatchable signal is the only documented failure,
+            // and all four of these can be caught, so this cannot fail.
+            libc::sigaction(signal, &action, std::ptr::null_mut());
+        }
     }
 }
 
