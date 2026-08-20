@@ -49,7 +49,10 @@ timestamps.
   child and colour, progress bars, and buffering behave normally. The broker
   records that stream as `skipped_tty`.
 - **SIGINT, SIGTERM, SIGHUP, and SIGQUIT are forwarded** to the child, so an
-  outer `timeout` still terminates the real work.
+  outer `timeout` still terminates the real work. Terminal-generated ones —
+  Ctrl-C, Ctrl-\, a hangup — are *not* forwarded: the kernel delivers those to
+  every process in the foreground group, so the child already has one, and a
+  second copy reads as a second Ctrl-C to anything that escalates on one.
 - **The exit status is reproduced exactly** — the child's code, or `128+signal`
   when it was killed.
 - **Failure is always open.** A missing socket, a refused connection, or a

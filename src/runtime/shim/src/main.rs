@@ -453,7 +453,28 @@ fn exec_real(real_shell: &OsStr, argv: &[OsString]) -> ! {
     std::process::exit(127);
 }
 
-extern "C" fn forward_signal(signal: libc::c_int) {
+/// Forwards a signal to the child, unless the child already has it.
+///
+/// The child shares this process's group, so anything the kernel aimed at the
+/// whole foreground group — Ctrl-C, Ctrl-\\, a hangup — reached it directly and
+/// a forward would be a *second* copy.
+///
+/// Those arrive as `SI_KERNEL`; an ordinary `kill(2)` arrives as `SI_USER` and
+/// is forwarded. `kill(2)` aimed at the whole group is indistinguishable from
+/// one aimed at this pid and so is still doubled, which is the lesser of the
+/// two mistakes: the alternative drops the forward for a plain
+/// `kill(shim_pid, SIGTERM)` and leaves the real work running.
+extern "C" fn forward_signal(
+    signal: libc::c_int,
+    info: *mut libc::siginfo_t,
+    _context: *mut libc::c_void,
+) {
+    // SAFETY: SA_SIGINFO means the kernel always supplies `info`. The null
+    // check only ensures an unexpected null forwards rather than faults.
+    if !info.is_null() && unsafe { (*info).si_code } == libc::SI_KERNEL {
+        return;
+    }
+
     let pid = CHILD_PID.load(Ordering::SeqCst);
     if pid > 0 {
         // kill() is async-signal-safe, so this is legal inside a handler.
@@ -471,7 +492,7 @@ fn install_signal_forwarders() {
     unsafe {
         let mut action: libc::sigaction = std::mem::zeroed();
         action.sa_sigaction = forward_signal as *const () as libc::sighandler_t;
-        action.sa_flags = libc::SA_RESTART;
+        action.sa_flags = libc::SA_RESTART | libc::SA_SIGINFO;
         // Every forwarded signal stays blocked for the duration of the handler,
         // so one forward is never interrupted part-way through by the next.
         libc::sigemptyset(&mut action.sa_mask);
