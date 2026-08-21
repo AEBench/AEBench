@@ -72,6 +72,7 @@ markers = [
   "docker_sanity: requires docker, API key, and a prepared image",
   "bundle_ci: repo-owned official bundle validation entry points",
   "bundle_deep: non-blocking deep official bundle oracle probes",
+  "shim: integration tests that build and drive the aeshell binary",
 ]
 
 [tool.mypy]

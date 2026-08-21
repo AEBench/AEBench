@@ -1,0 +1,545 @@
+//! AEBench command-monitoring shim.
+//!
+//! Installed in place of `bash`. It must be indistinguishable from the real
+//! shell to everything above and below it: argv, stdin, the controlling
+//! terminal, signals, and the exit status all pass through untouched. Its only
+//! added behaviour is to announce the invocation to the server, obey the
+//! verdict, and report the output and outcome once the command is over.
+//!
+//! Output is forwarded to the agent live but sent to the server only at the
+//! end since the agent might want it in real time.
+//!
+//! Failure Policy: if the socket is missing, unreachable, or speaks nonsense,
+//! the real shell runs anyway. There is no point in tracking if the server is down,
+//!
+//! # Protocol
+//!
+//! Frame:
+//! ```text
+//! u32 payload_length (big endian) | u8 frame_kind | payload
+//! ```
+//!
+//! FrameKind:
+//!
+//! | kind | message        | direction       | payload            |
+//! |------|----------------|-----------------|--------------------|
+//! | 0    | `command_info` | shim -> server  | JSON               |
+//! | 4    | `decision`     | shim <- server  | JSON               |
+//! | 1    | `stdout`       | shim -> server  | raw bytes          |
+//! | 2    | `stderr`       | shim -> server  | raw bytes          |
+//! | 3    | `end`          | shim -> server  | JSON               |
+//!
+//! Communication:
+//! ```text
+//! shim -> command_info   what is about to run
+//!      <- decision       the command's id, and whether it may run
+//! shim -> stdout         the child's stdout, after it has exited
+//! shim -> stderr         the child's stderr, after it has exited
+//! shim -> end            how the child finished
+//! ```
+//!
+//! ## `command_info` — shim to server
+//!
+//! | field      | type       | meaning                                            |
+//! |------------|------------|----------------------------------------------------|
+//! | `argv`     | `[string]` | this shell's argv, `argv[0]` included, unmodified  |
+//! | `cwd`      | `string`   | working directory; empty if it cannot be read      |
+//! | `pid`      | `int`      | this process's pid, the root of the `/proc` walk   |
+//! | `env_keys` | `[string]` | environment variable **names** only, never values  |
+//!
+//! ## `decision` — server to shim
+//!
+//! | field        | type          | meaning                                       |
+//! |--------------|---------------|-----------------------------------------------|
+//! | `command_id` | `string`      | the server's id for this command              |
+//! | `allow`      | `bool`        | `false` means the command must not run        |
+//! | `reason`     | `string`      | shown to the agent on stderr when denied      |
+//! | `exit_code`  | `int`         | what to exit with when denied, normally 126   |
+//!
+//! `command_id` is for the server's own records; the shim does not use it.
+//!
+//! ## `end` — shim to server
+//!
+//! | field       | type         | meaning                                        |
+//! |-------------|--------------|------------------------------------------------|
+//! | `exit_code` | `int | null` | the child's exit code, `null` if it was killed  |
+//! | `signal`    | `int | null` | the signal that killed it, `null` otherwise     |
+//!
+//! Byte counts and a duration are absent on purpose: nothing is dropped, so the
+//! server counts what it read and times the command itself.
+
+use std::env;
+use std::ffi::{OsStr, OsString};
+use std::io::{self, Read, Write};
+use std::os::unix::net::UnixStream;
+use std::os::unix::process::{CommandExt, ExitStatusExt};
+use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicI32, Ordering};
+use std::thread;
+
+use serde::{Deserialize, Serialize};
+
+const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
+const READ_BYTES: usize = 64 * 1024;
+
+const ENV_SOCKET: &str = "AEBENCH_COMMAND_SOCKET";
+const ENV_REAL_SHELL: &str = "AEBENCH_REAL_SHELL";
+
+const DEFAULT_SOCKET: &str = "/run/aebench/command.sock";
+const DEFAULT_REAL_SHELL: &str = "/usr/lib/aebench/bash.real";
+
+/// Set once the child exists so the signal handler can forward to it.
+static CHILD_PID: AtomicI32 = AtomicI32::new(0);
+
+fn main() {
+    let argv: Vec<OsString> = env::args_os().collect();
+    if argv.is_empty() {
+        eprintln!("aeshell: empty argv");
+        std::process::exit(127);
+    }
+
+    let real_shell = env::var_os(ENV_REAL_SHELL).unwrap_or_else(|| DEFAULT_REAL_SHELL.into());
+    let socket_path = env::var_os(ENV_SOCKET).unwrap_or_else(|| DEFAULT_SOCKET.into());
+
+    let Ok(stream) = UnixStream::connect(&socket_path) else {
+        exec_real(&real_shell, &argv);
+    };
+
+    match negotiate(stream, &argv) {
+        Ok(Session::Denied { reason, exit_code }) => {
+            let _ = writeln!(io::stderr(), "aeshell: {reason}");
+            std::process::exit(exit_code);
+        }
+        Ok(Session::Monitored { stream }) => {
+            std::process::exit(run_monitored(stream, &real_shell, &argv));
+        }
+        Err(_) => exec_real(&real_shell, &argv),
+    }
+}
+
+enum Session {
+    Denied { reason: String, exit_code: i32 },
+    Monitored { stream: UnixStream },
+}
+
+/// The body of the `command_info` message.
+#[derive(Serialize)]
+struct CommandInfo {
+    argv: Vec<String>,
+    cwd: String,
+    pid: i64,
+    env_keys: Vec<String>,
+}
+
+impl CommandInfo {
+    /// Describes a given command into a CommandInfo.
+    fn describe(argv: &[OsString]) -> Self {
+        Self {
+            argv: argv
+                .iter()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect(),
+            cwd: env::current_dir()
+                .map(|path| path.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            pid: std::process::id() as i64,
+            env_keys: env::vars_os()
+                .map(|(key, _)| {
+                    let value: &OsStr = &key;
+                    value.to_string_lossy().into_owned()
+                })
+                .collect(),
+        }
+    }
+}
+
+/// The body of the `end` message.
+#[derive(Serialize)]
+struct End {
+    exit_code: Option<i32>,
+    signal: Option<i32>,
+}
+
+/// The body of the `decision` message, reduced to what the shim acts on.
+///
+/// `command_id` is deliberately absent: it exists for the server's records, and
+/// serde ignores fields the struct does not name.
+#[derive(Deserialize)]
+struct Decision {
+    #[serde(default)]
+    allow: bool,
+    #[serde(default)]
+    reason: String,
+    #[serde(default)]
+    exit_code: i32,
+}
+
+/// Negotiates the command with the server.
+fn negotiate(mut stream: UnixStream, argv: &[OsString]) -> io::Result<Session> {
+    let body = serde_json::to_vec(&CommandInfo::describe(argv))
+        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+    stream.write_all(&encode_frame(FrameKind::CommandInfo, &body))?;
+
+    let Some((kind, payload)) = read_frame(&mut stream)? else {
+        return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "no decision"));
+    };
+    if kind != FrameKind::Decision {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "expected a decision frame",
+        ));
+    }
+
+    let decision: Decision = serde_json::from_slice(&payload)
+        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+
+    if !decision.allow {
+        return Ok(Session::Denied {
+            reason: decision.reason,
+            exit_code: decision.exit_code,
+        });
+    }
+
+    Ok(Session::Monitored { stream })
+}
+
+/// Runs the real shell, then reports its output and outcome.
+fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) -> i32 {
+    let stdout_tty = is_tty(libc::STDOUT_FILENO);
+    let stderr_tty = is_tty(libc::STDERR_FILENO);
+
+    let mut command = Command::new(real_shell);
+    command
+        .arg0(&argv[0])
+        .args(&argv[1..])
+        .stdin(Stdio::inherit())
+        // A pipe would flip isatty() for the child and change how programs
+        // buffer and color their output, so a terminal is left attached and
+        // simply goes uncaptured.
+        .stdout(if stdout_tty {
+            Stdio::inherit()
+        } else {
+            Stdio::piped()
+        })
+        .stderr(if stderr_tty {
+            Stdio::inherit()
+        } else {
+            Stdio::piped()
+        });
+
+    // The child clears its own signal mask: the mask survives both fork and
+    // exec, and the parent is about to block signals around the spawn. Only
+    // async-signal-safe calls are legal between fork and exec, which these are.
+    //
+    // SAFETY: the closure touches nothing but its own stack and two
+    // async-signal-safe libc calls.
+    unsafe {
+        command.pre_exec(|| {
+            let mut empty: libc::sigset_t = std::mem::zeroed();
+            libc::sigemptyset(&mut empty);
+            libc::sigprocmask(libc::SIG_SETMASK, &empty, std::ptr::null_mut());
+            Ok(())
+        });
+    }
+
+    // The forwarders go up before the spawn, and everything they catch stays
+    // blocked until the child's pid has been recorded. A signal arriving in
+    // that window is then held by the kernel rather than killing this process
+    // at its default disposition, which would orphan a child that had already
+    // started and leave the server with no `end` frame for it.
+    let outer_mask = block_forwarded_signals();
+    install_signal_forwarders();
+
+    let mut child: Child = match command.spawn() {
+        Ok(child) => child,
+        Err(err) => {
+            restore_signal_mask(outer_mask);
+            let _ = writeln!(
+                io::stderr(),
+                "aeshell: cannot spawn {}: {err}",
+                real_shell.to_string_lossy()
+            );
+            return 127;
+        }
+    };
+
+    // Recording the pid first means the signals released on the next line find
+    // a handler that knows where to send them.
+    CHILD_PID.store(child.id() as i32, Ordering::SeqCst);
+    restore_signal_mask(outer_mask);
+
+    // Both pipes must be drained concurrently: a child that fills one while we
+    // read the other would block forever.
+    let stdout_pump = child
+        .stdout
+        .take()
+        .map(|pipe| spawn_pump(pipe, FrameKind::Stdout));
+    let stderr_pump = child
+        .stderr
+        .take()
+        .map(|pipe| spawn_pump(pipe, FrameKind::Stderr));
+
+    let status = child.wait();
+    let stdout = stdout_pump
+        .and_then(|pump| pump.join().ok())
+        .unwrap_or_default();
+    let stderr = stderr_pump
+        .and_then(|pump| pump.join().ok())
+        .unwrap_or_default();
+
+    let (exit_code, signal) = match &status {
+        Ok(status) => (status.code(), status.signal()),
+        Err(_) => (None, None),
+    };
+    // The server only needs the output now that the command is over, and
+    // nothing comes back: bytes already written reach it whether or not this
+    // process has exited by the time it reads them. A server that has gone
+    // away costs the record, never the command.
+    let _ = send_output(&mut stream, FrameKind::Stdout, &stdout);
+    let _ = send_output(&mut stream, FrameKind::Stderr, &stderr);
+    if let Ok(body) = serde_json::to_vec(&End { exit_code, signal }) {
+        let _ = stream.write_all(&encode_frame(FrameKind::End, &body));
+    }
+
+    match (exit_code, signal) {
+        (Some(code), _) => code,
+        (None, Some(signal)) => 128 + signal,
+        _ => 127,
+    }
+}
+
+/// Forwards one pipe to the inherited descriptor and accumulates a copy.
+///
+/// This is required to make sure that the agent sees the output live.
+fn spawn_pump<R: Read + Send + 'static>(
+    mut source: R,
+    message_type: FrameKind,
+) -> thread::JoinHandle<Vec<u8>> {
+    thread::spawn(move || {
+        let mut collected = Vec::new();
+        let mut buffer = vec![0_u8; READ_BYTES];
+        loop {
+            let read = match source.read(&mut buffer) {
+                Ok(0) => return collected,
+                Ok(read) => read,
+                Err(ref err) if err.kind() == io::ErrorKind::Interrupted => continue,
+                Err(_) => return collected,
+            };
+            let chunk = &buffer[..read];
+
+            if message_type == FrameKind::Stdout {
+                let mut out = io::stdout().lock();
+                let _ = out.write_all(chunk);
+                let _ = out.flush();
+            } else {
+                let mut err = io::stderr().lock();
+                let _ = err.write_all(chunk);
+                let _ = err.flush();
+            }
+            collected.extend_from_slice(chunk);
+        }
+    })
+}
+
+/// Sends a whole captured stream, split to respect the frame ceiling.
+fn send_output(stream: &mut UnixStream, kind: FrameKind, payload: &[u8]) -> io::Result<()> {
+    for chunk in payload.chunks(MAX_FRAME_BYTES) {
+        stream.write_all(&encode_frame(kind, chunk))?;
+    }
+    Ok(())
+}
+
+/// Every variant is a byte the server understands, so no encode call can put an
+/// unknown kind on the wire. An unrecognised byte is rejected on read instead.
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+enum FrameKind {
+    CommandInfo,
+    Stdout,
+    Stderr,
+    End,
+    Decision,
+}
+
+impl FrameKind {
+    fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(FrameKind::CommandInfo),
+            1 => Some(FrameKind::Stdout),
+            2 => Some(FrameKind::Stderr),
+            3 => Some(FrameKind::End),
+            4 => Some(FrameKind::Decision),
+            _ => None,
+        }
+    }
+
+    fn to_u8(self) -> u8 {
+        match self {
+            FrameKind::CommandInfo => 0,
+            FrameKind::Stdout => 1,
+            FrameKind::Stderr => 2,
+            FrameKind::End => 3,
+            FrameKind::Decision => 4,
+        }
+    }
+}
+
+fn encode_frame(kind: FrameKind, payload: &[u8]) -> Vec<u8> {
+    let mut frame = Vec::with_capacity(5 + payload.len());
+    frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+    frame.push(kind.to_u8());
+    frame.extend_from_slice(payload);
+    frame
+}
+
+fn read_frame(stream: &mut UnixStream) -> io::Result<Option<(FrameKind, Vec<u8>)>> {
+    let mut header = [0_u8; 5];
+    if !read_exact_or_eof(stream, &mut header)? {
+        return Ok(None);
+    }
+
+    let kind = FrameKind::from_u8(header[4])
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "unknown frame kind"))?;
+
+    let length = u32::from_be_bytes([header[0], header[1], header[2], header[3]]) as usize;
+    if length > MAX_FRAME_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "frame too large",
+        ));
+    }
+
+    let mut payload = vec![0_u8; length];
+    if length > 0 && !read_exact_or_eof(stream, &mut payload)? {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "stream ended mid-frame",
+        ));
+    }
+    Ok(Some((kind, payload)))
+}
+
+/// Fills `buffer`. Returns `false` only for a clean end of stream before any
+/// byte of it arrived; a stream that ends part-way through is an error.
+fn read_exact_or_eof(stream: &mut UnixStream, buffer: &mut [u8]) -> io::Result<bool> {
+    let mut filled = 0;
+    while filled < buffer.len() {
+        match stream.read(&mut buffer[filled..]) {
+            Ok(0) if filled == 0 => return Ok(false),
+            Ok(0) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "stream ended mid-frame",
+                ))
+            }
+            Ok(read) => filled += read,
+            Err(ref err) if err.kind() == io::ErrorKind::Interrupted => continue,
+            Err(err) => return Err(err),
+        }
+    }
+    Ok(true)
+}
+
+/// Replaces this process with the real shell. Never returns on success.
+fn exec_real(real_shell: &OsStr, argv: &[OsString]) -> ! {
+    let error = Command::new(real_shell)
+        .arg0(&argv[0])
+        .args(&argv[1..])
+        .exec();
+    let _ = writeln!(
+        io::stderr(),
+        "aeshell: cannot exec {}: {error}",
+        real_shell.to_string_lossy()
+    );
+    std::process::exit(127);
+}
+
+/// Forwards a signal to the child, unless the child already has it.
+///
+/// The child shares this process's group, so anything the kernel aimed at the
+/// whole foreground group — Ctrl-C, Ctrl-\\, a hangup — reached it directly and
+/// a forward would be a *second* copy.
+///
+/// Those arrive as `SI_KERNEL`; an ordinary `kill(2)` arrives as `SI_USER` and
+/// is forwarded. `kill(2)` aimed at the whole group is indistinguishable from
+/// one aimed at this pid and so is still doubled, which is the lesser of the
+/// two mistakes: the alternative drops the forward for a plain
+/// `kill(shim_pid, SIGTERM)` and leaves the real work running.
+extern "C" fn forward_signal(
+    signal: libc::c_int,
+    info: *mut libc::siginfo_t,
+    _context: *mut libc::c_void,
+) {
+    // SAFETY: SA_SIGINFO means the kernel always supplies `info`. The null
+    // check only ensures an unexpected null forwards rather than faults.
+    if !info.is_null() && unsafe { (*info).si_code } == libc::SI_KERNEL {
+        return;
+    }
+
+    let pid = CHILD_PID.load(Ordering::SeqCst);
+    if pid > 0 {
+        // kill() is async-signal-safe, so this is legal inside a handler.
+        unsafe { libc::kill(pid, signal) };
+    }
+}
+
+/// The signals a shell is expected to pass down to the command it is running.
+const FORWARDED_SIGNALS: [libc::c_int; 4] =
+    [libc::SIGINT, libc::SIGTERM, libc::SIGHUP, libc::SIGQUIT];
+
+fn install_signal_forwarders() {
+    // SAFETY: `action` is fully initialised before it is read, the handler is
+    // async-signal-safe, and every signal number involved is a constant.
+    unsafe {
+        let mut action: libc::sigaction = std::mem::zeroed();
+        action.sa_sigaction = forward_signal as *const () as libc::sighandler_t;
+        action.sa_flags = libc::SA_RESTART | libc::SA_SIGINFO;
+        // Every forwarded signal stays blocked for the duration of the handler,
+        // so one forward is never interrupted part-way through by the next.
+        libc::sigemptyset(&mut action.sa_mask);
+        for signal in FORWARDED_SIGNALS {
+            libc::sigaddset(&mut action.sa_mask, signal);
+        }
+
+        for signal in FORWARDED_SIGNALS {
+            // A signal already ignored when this process started stays ignored.
+            let mut current: libc::sigaction = std::mem::zeroed();
+            if libc::sigaction(signal, std::ptr::null(), &mut current) == 0
+                && current.sa_sigaction == libc::SIG_IGN
+            {
+                continue;
+            }
+
+            // EINVAL for an uncatchable signal is the only documented failure,
+            // and all four of these can be caught, so this cannot fail.
+            libc::sigaction(signal, &action, std::ptr::null_mut());
+        }
+    }
+}
+
+/// Blocks every forwarded signal, returning the mask that was in force.
+fn block_forwarded_signals() -> libc::sigset_t {
+    // SAFETY: both sets are initialised before they are read, and this runs
+    // while the process is still single-threaded.
+    unsafe {
+        let mut blocked: libc::sigset_t = std::mem::zeroed();
+        libc::sigemptyset(&mut blocked);
+        for signal in FORWARDED_SIGNALS {
+            libc::sigaddset(&mut blocked, signal);
+        }
+
+        let mut previous: libc::sigset_t = std::mem::zeroed();
+        libc::pthread_sigmask(libc::SIG_BLOCK, &blocked, &mut previous);
+        previous
+    }
+}
+
+/// Restores a mask saved by [`block_forwarded_signals`], which delivers
+/// whatever arrived while it was in force.
+fn restore_signal_mask(previous: libc::sigset_t) {
+    // SAFETY: `previous` came from `pthread_sigmask` and is a valid mask.
+    unsafe { libc::pthread_sigmask(libc::SIG_SETMASK, &previous, std::ptr::null_mut()) };
+}
+
+fn is_tty(fd: libc::c_int) -> bool {
+    unsafe { libc::isatty(fd) == 1 }
+}
