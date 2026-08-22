@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "source_commit": "7b3274167615c55ae8d69f7edee4e2dc2d81f706",
+  "source_branch": "unison-evaluations",
+  "scale": "functional",
+  "notes": "Generated from accuracy-style fat-tree runs (k=4, cluster={2,4}, time=1s, seed=GREAT-NASA, web-search CDF) comparing Unison (MTP, thread=cluster) vs default DES. Flow-monitor metrics match across simulators; wall-clock t is omitted from scoring.",
+  "metric_keys": [
+    "flow_count",
+    "fflow_count",
+    "fct",
+    "ffct",
+    "e2ed",
+    "throughput",
+    "nthroughput",
+    "ev"
+  ],
+  "runs": {
+    "unison_c2": {
+      "flow_count": 94.0,
+      "fflow_count": 71.0,
+      "fct": 140977.0,
+      "ffct": 78854.9,
+      "e2ed": 10710.0,
+      "throughput": 0.0101106,
+      "nthroughput": 0.252327,
+      "ev": 892718.0
+    },
+    "unison_c4": {
+      "flow_count": 167.0,
+      "fflow_count": 119.0,
+      "fct": 194320.0,
+      "ffct": 118333.0,
+      "e2ed": 8132.44,
+      "throughput": 0.0093106,
+      "nthroughput": 0.396904,
+      "ev": 1570876.0
+    },
+    "default_c2": {
+      "flow_count": 94.0,
+      "fflow_count": 71.0,
+      "fct": 140977.0,
+      "ffct": 78854.9,
+      "e2ed": 10710.0,
+      "throughput": 0.0101106,
+      "nthroughput": 0.252327,
+      "ev": 892718.0
+    },
+    "default_c4": {
+      "flow_count": 167.0,
+      "fflow_count": 119.0,
+      "fct": 194320.0,
+      "ffct": 118333.0,
+      "e2ed": 8132.44,
+      "throughput": 0.0093106,
+      "nthroughput": 0.396904,
+      "ev": 1570876.0
+    }
+  }
+}
