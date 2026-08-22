@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,9 +34,28 @@ def _as_float(value: Any) -> float | None:
     if value is None or value == "":
         return None
     try:
-        return float(value)
+        parsed = float(value)
     except (TypeError, ValueError):
         return None
+    # NaN is truthy as an object but invalid as a metric / cluster id.
+    if math.isnan(parsed):
+        return None
+    return parsed
+
+
+def _as_cluster_id(value: Any) -> int | None:
+    """Parse a fat-tree cluster id used as a RUN_KEY_BY_SIM_CLUSTER key.
+
+    Upstream accuracy CSVs use integer clusters (2 / 4). Reject non-integral
+    floats (e.g. 1.42) instead of silently truncating with ``int(...)``.
+    """
+    parsed = _as_float(value)
+    if parsed is None:
+        return None
+    cluster = int(parsed)
+    if float(cluster) != parsed:
+        return None
+    return cluster
 
 
 def _parse_run_metrics(entry: Mapping[str, Any]) -> dict[str, float] | None:
@@ -69,9 +89,10 @@ def _metric_sequence(
         entry = runs[name]
         if not isinstance(entry, dict):
             raise ValueError(f"run {name!r} must be an object")
-        if metric not in entry:
-            raise ValueError(f"run {name!r} missing metric {metric!r}")
-        values.append(float(entry[metric]))
+        parsed = _as_float(entry.get(metric))
+        if parsed is None:
+            raise ValueError(f"run {name!r} missing or invalid metric {metric!r}")
+        values.append(parsed)
     return values
 
 
@@ -138,10 +159,10 @@ def _load_runs_from_accuracy_csv(results_dir: Path) -> dict[str, dict[str, float
     parsed: dict[str, dict[str, float]] = {}
     for row in rows:
         simulator = str(row.get("simulator", "")).strip().lower()
-        cluster = _as_float(row.get("cluster"))
+        cluster = _as_cluster_id(row.get("cluster"))
         if cluster is None:
             continue
-        key = RUN_KEY_BY_SIM_CLUSTER.get((simulator, int(cluster)))
+        key = RUN_KEY_BY_SIM_CLUSTER.get((simulator, cluster))
         if key is None or key not in _ALLOWED_RUNS:
             continue
         metrics = _parse_run_metrics(row)
@@ -209,16 +230,14 @@ class ReferenceRunsExactCheck(BaseCheck):
         if not isinstance(runs, dict):
             return CheckResult.failure("reference runs must be an object")
 
+        # required_runs is REQUIRED_RUNS / _ALLOWED_RUNS; compare sets directly.
         observed = set(runs)
         expected = set(self.required_runs)
-        disallowed = sorted(name for name in observed if name not in _ALLOWED_RUNS)
         missing = sorted(expected - observed)
         extra = sorted(observed - expected)
 
-        if disallowed or missing or extra:
+        if missing or extra:
             parts: list[str] = []
-            if disallowed:
-                parts.append("disallowed run names: " + ", ".join(disallowed))
             if missing:
                 parts.append("missing required runs: " + ", ".join(missing))
             if extra:
