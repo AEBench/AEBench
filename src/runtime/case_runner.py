@@ -349,10 +349,12 @@ def _run_result(
 
 
 def _case_status(run_result: RunResult, oracle_result: OracleResult) -> CaseStatus:
+	if run_result.status != TaskStatus.SUCCESS:
+		return CaseStatus.ERROR
 	if oracle_result.status == OracleStatus.ERROR:
 		return CaseStatus.ERROR
 	if oracle_result.status == OracleStatus.PENDING:
-		return CaseStatus.ERROR if run_result.error else CaseStatus.PENDING
+		return CaseStatus.PENDING
 	return CaseStatus.SUCCESS
 
 
