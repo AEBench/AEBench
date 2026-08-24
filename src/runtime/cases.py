@@ -32,14 +32,14 @@ def _source_from_case(case_dir: Path, case: CaseConfig) -> BenchSource:
 	upstream = case.upstream
 	artifact_dir = artifact_dir_for(case_dir)
 
-	if upstream.artifact_mode == ArtifactMode.VENDOR:
+	if upstream.artifact_mode == ArtifactMode.UPSTREAM:
 		if not has_local_artifact(case_dir):
-			raise RuntimeError(f"case {case.id} has no vendored artifact")
+			raise RuntimeError(f"case {case.id} has no upstream artifact")
 		return LocalSource(path=str(artifact_dir))
 
 	base = _source_from_upstream(case_dir, upstream)
 
-	if upstream.artifact_mode == ArtifactMode.HYBRID and upstream.overlay_artifact:
+	if upstream.artifact_mode == ArtifactMode.OVERLAY and upstream.overlay_artifact:
 		if not has_local_artifact(case_dir):
 			raise RuntimeError(f"case {case.id} has no artifact overlay")
 		return OverlaySource(

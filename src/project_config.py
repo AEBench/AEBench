@@ -34,9 +34,9 @@ def _require_relative(path_text: str, field_name: str) -> None:
 
 
 class ArtifactMode(str, Enum):
-	VENDOR = "vendor"
-	POINTER = "pointer"
-	HYBRID = "hybrid"
+	LOCAL = "local"
+	UPSTREAM = "upstream"
+	OVERLAY = "overlay"
 
 
 class LoggingConfig(_Model):
@@ -154,7 +154,7 @@ class WorkspaceConfig(_Model):
 class ProjectConfig(_Model):
 	bundles_dir: str = "cases"
 	case_runs_dir: str = _DEFAULT_CASE_RUNS_DIR
-	artifact_mode: ArtifactMode = ArtifactMode.VENDOR
+	artifact_mode: ArtifactMode = ArtifactMode.UPSTREAM
 	default_bundle_layout: str = "structured"
 	logging: LoggingConfig = Field(default_factory=LoggingConfig)
 	cache: CacheConfig = Field(default_factory=CacheConfig)
