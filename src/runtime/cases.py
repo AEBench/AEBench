@@ -31,28 +31,22 @@ def task_from_case(case_dir: Path, case: CaseConfig) -> TaskConfig:
 def _source_from_case(case_dir: Path, case: CaseConfig) -> BenchSource:
 	upstream = case.upstream
 	artifact_dir = artifact_dir_for(case_dir)
-	materialized = has_local_artifact(case_dir)
 
 	if upstream.artifact_mode == ArtifactMode.VENDOR:
-		if not materialized:
+		if not has_local_artifact(case_dir):
 			raise RuntimeError(f"case {case.id} has no vendored artifact")
 		return LocalSource(path=str(artifact_dir))
 
-	if upstream.source_type == UpstreamSourceType.VENDORED:
-		if materialized:
-			return LocalSource(path=str(artifact_dir))
-		raise RuntimeError(f"case {case.id} has no usable artifact source")
+	base = _source_from_upstream(case_dir, upstream)
 
-	try:
-		base = _source_from_upstream(case_dir, upstream)
-	except RuntimeError:
-		if materialized:
-			return LocalSource(path=str(artifact_dir))
-		raise
 	if upstream.artifact_mode == ArtifactMode.HYBRID and upstream.overlay_artifact:
-		if not materialized:
+		if not has_local_artifact(case_dir):
 			raise RuntimeError(f"case {case.id} has no artifact overlay")
-		return OverlaySource(base=base, overlay=LocalSource(path=str(artifact_dir)))
+		return OverlaySource(
+			base=base,
+			overlay=LocalSource(path=str(artifact_dir)),
+		)
+
 	return base
 
 
