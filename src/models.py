@@ -399,7 +399,6 @@ class RunOptions(_Model):
 
 
 class UpstreamSourceType(str, Enum):
-	VENDORED = "vendored"
 	LOCAL = "local"
 	GIT = "git"
 	ARCHIVE = "archive"
@@ -548,7 +547,7 @@ class OracleConfig(_Model):
 
 
 class UpstreamConfig(_Model):
-	source_type: UpstreamSourceType = UpstreamSourceType.VENDORED
+	source_type: UpstreamSourceType | None = None
 	path: str | None = None
 	url: str | None = None
 	ref: str | None = None
