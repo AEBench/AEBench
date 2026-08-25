@@ -1,0 +1,43 @@
+id = "eurosys24_unison"
+
+[case_brief]
+core_claim = "Build Unison's MTP-enabled ns-3 fat-tree simulator, run the accuracy-style Unison vs default fat-tree workloads, and reproduce the flow-monitor fidelity metrics from the EuroSys'24 artifact."
+acceptable_evidence = "Built ns3*-fat-tree-optimized binary with MTP enabled, staged scratch topologies / CDFs / exp.py drivers, and accuracy-style result metrics (flow_count / fct / e2ed / throughput / ev) whose per-metric vectors correlate with the bundled reference (Pearson >= 0.75)."
+allowed_tolerance = "Absolute wall-clock simulation time varies by host. Flow-monitor fidelity metrics are deterministic for a fixed seed and scale; vectors across the required Unison/default cluster configs must preserve the reference trend strongly enough to achieve Pearson correlation >= 0.75."
+
+[paper]
+title = "Unison: A Parallel-Efficient and User-Transparent Network Simulation Kernel"
+venue = "EuroSys 2024"
+url = "https://doi.org/10.1145/3627703.3629574"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+version = "ACM DL DOI (closed access PDF unavailable for hashing); Zenodo AE 10.5281/zenodo.10077300"
+
+[run]
+id = "eurosys24_unison"
+
+[run.instructions]
+path = "README.md"
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 345600000
+gpu = false
+interactive = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "fail_fast"
+placeholder = false
+
+[upstream]
+source_type = "git"
+url = "https://github.com/NASA-NJU/UNISON-for-ns-3.git"
+ref = "7b3274167615c55ae8d69f7edee4e2dc2d81f706"
+requested_ref = "unison-evaluations"
+resolved_at = "2026-08-10T22:00:00.000000+00:00"
+notes = "Prereqs: Ubuntu 22.04; Python >= 3.8; cmake >= 3.16; g++ >= 7 (or clang/Xcode); git >= 2.25; OpenMPI/MPICH >= 4 optional for functional accuracy, required for distributed/MPI experiments. Functional AE uses the README accuracy experiment (fat-tree Unison vs default, k=4, cluster={2,4}). Full paper-scale runs need up to 144 cores / multi-day clusters with NFS."
