@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from evaluator.oracles.oracle_checks_runtime import (
 	OraclePath,
@@ -34,7 +34,7 @@ def _parse_summary(text: str) -> tuple[float, float]:
 
 def _read_summary(
 	path: OraclePath,
-	executor: RuntimeCheckExecutor | None,
+	executor: RuntimeCheckExecutor,
 ) -> tuple[float, float]:
 	"""Read and parse a summary CSV through the target executor."""
 	text = check_read_file_text(path, executor=executor)
@@ -57,11 +57,9 @@ class GaiaSummaryCheck(BaseCheck):
 	expected_carbon: float
 	expected_dollar: float
 	rel_tol: float
-	executor: RuntimeCheckExecutor | None = field(default=None)
-
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			carbon, dollar = _read_summary(self.path, self.executor)
+			carbon, dollar = _read_summary(self.path, executor)
 		except OSError as exc:
 			return CheckResult.failure(f"{self.filename}: could not read file: {exc}")
 		except ValueError as exc:
@@ -96,18 +94,16 @@ class CarbonReductionCheck(BaseCheck):
 	baseline_path: OraclePath
 	baseline_label: str
 	aware_paths: tuple[tuple[str, OraclePath], ...]
-	executor: RuntimeCheckExecutor | None = field(default=None)
-
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			baseline_carbon, _ = _read_summary(self.baseline_path, self.executor)
+			baseline_carbon, _ = _read_summary(self.baseline_path, executor)
 		except (OSError, ValueError) as exc:
 			return CheckResult.failure(f"baseline {self.baseline_label}: {exc}")
 
 		errors: list[str] = []
 		for label, path in self.aware_paths:
 			try:
-				carbon, _ = _read_summary(path, self.executor)
+				carbon, _ = _read_summary(path, executor)
 			except (OSError, ValueError) as exc:
 				errors.append(f"{label}: {exc}")
 				continue
@@ -142,18 +138,16 @@ class ReservedCostReductionCheck(BaseCheck):
 	baseline_label: str
 	baseline_path: OraclePath
 	steps: tuple[tuple[str, OraclePath], ...]
-	executor: RuntimeCheckExecutor | None = field(default=None)
-
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			_, baseline = _read_summary(self.baseline_path, self.executor)
+			_, baseline = _read_summary(self.baseline_path, executor)
 		except (OSError, ValueError) as exc:
 			return CheckResult.failure(f"baseline {self.baseline_label}: {exc}")
 
 		errors: list[str] = []
 		for label, path in self.steps:
 			try:
-				_, dollar = _read_summary(path, self.executor)
+				_, dollar = _read_summary(path, executor)
 			except (OSError, ValueError) as exc:
 				errors.append(f"{label}: {exc}")
 				continue

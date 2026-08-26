@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from filecmp import cmp
 from pathlib import Path
 
-from evaluator.oracles import utils
 from evaluator.oracles.benchmark_prep_checks import BenchmarkCommandCheck
-from evaluator.oracles.discovery import benchmark_prep
 from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
 from evaluator.oracles.utils import Checkable
+
+from evaluator.oracles import utils
+from evaluator.oracles.discovery import benchmark_prep
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor, RuntimePath
 from models import OracleInput
 
 _BENCHMARK_SPECS: dict[str, dict[str, str]] = {
@@ -48,10 +49,12 @@ _ASPECTJ_MARKERS: tuple[str, ...] = (
 )
 
 
-def _find_class_dirs(app_root: Path) -> tuple[list[Path], str | None]:
+def _find_class_dirs(
+	app_root: Path, *, executor: RuntimeCheckExecutor
+) -> tuple[list[Path], str | None]:
 	class_dirs: set[Path] = set()
 	try:
-		for class_file in app_root.rglob("*.class"):
+		for class_file in executor.glob(app_root, "**/*.class"):
 			if any(part in {".git", ".m2", ".gradle"} for part in class_file.parts):
 				continue
 			class_dirs.add(class_file.parent)
@@ -60,9 +63,13 @@ def _find_class_dirs(app_root: Path) -> tuple[list[Path], str | None]:
 	return sorted(class_dirs), None
 
 
-def _iter_class_files(classes_dir: Path, *, limit: int) -> list[Path]:
+def _iter_class_files(
+	classes_dir: Path, *, limit: int, executor: RuntimeCheckExecutor
+) -> list[Path]:
 	try:
-		files = sorted(classes_dir.rglob("*.class"))
+		files = sorted(
+			executor.glob(RuntimePath.from_parts(classes_dir.as_posix()), "**/*.class")
+		)
 	except OSError:
 		return []
 	if limit and len(files) > limit:
@@ -71,15 +78,29 @@ def _iter_class_files(classes_dir: Path, *, limit: int) -> list[Path]:
 	return files
 
 
-def _classfile_has_aspect_markers(class_path: Path) -> tuple[bool, str]:
+def _classfile_has_aspect_markers(
+	class_path: Path, *, executor: RuntimeCheckExecutor
+) -> tuple[bool, str]:
 	try:
-		content = class_path.read_bytes()
-	except OSError:
+		result = executor.run_process_capture(
+			cmd=(
+				"python3",
+				"-c",
+				(
+					"import pathlib, sys; data=pathlib.Path(sys.argv[1]).read_bytes(); "
+					"print(next((m for m in sys.argv[2:] if m.encode() in data), ''))"
+				),
+				str(class_path),
+				*_ASPECTJ_MARKERS,
+			),
+			cwd=None,
+			env=None,
+			timeout_seconds=10.0,
+		)
+	except (OSError, RuntimeError):
 		return False, ""
-	for marker in _ASPECTJ_MARKERS:
-		if marker.encode("utf-8") in content:
-			return True, marker
-	return False, ""
+	marker = result.stdout.strip() if result.returncode == 0 else ""
+	return bool(marker), marker
 
 
 @benchmark_prep
@@ -116,10 +137,10 @@ def oracle_benchmark_prep(context: OracleInput) -> Sequence[Checkable]:
 		)
 
 		def _make_weaving_check(name: str, root: Path) -> utils.Check:
-			def _check() -> utils.CheckResult:
-				if not root.is_dir():
+			def _check(executor: RuntimeCheckExecutor) -> utils.CheckResult:
+				if not executor.path_is_dir(root):
 					return utils.CheckResult.failure(f"{name}: directory not found: {root}")
-				class_dirs, error = _find_class_dirs(root)
+				class_dirs, error = _find_class_dirs(root, executor=executor)
 				if error is not None:
 					return utils.CheckResult.failure(f"{name}: {error}")
 				if not class_dirs:
@@ -128,8 +149,12 @@ def oracle_benchmark_prep(context: OracleInput) -> Sequence[Checkable]:
 					)
 
 				for classes_dir in class_dirs[:200]:
-					for class_file in _iter_class_files(classes_dir, limit=2000):
-						matched, marker = _classfile_has_aspect_markers(class_file)
+					for class_file in _iter_class_files(
+						classes_dir, limit=2000, executor=executor
+					):
+						matched, marker = _classfile_has_aspect_markers(
+							class_file, executor=executor
+						)
 						if matched:
 							return utils.CheckResult.success(
 								f"{name}: found marker {marker!r} in {class_file}"
@@ -146,19 +171,30 @@ def oracle_benchmark_prep(context: OracleInput) -> Sequence[Checkable]:
 			active_pom: str,
 			backup_pom: str,
 		) -> utils.Check:
-			def _check() -> utils.CheckResult:
+			def _check(executor: RuntimeCheckExecutor) -> utils.CheckResult:
 				pom_path = root / active_pom
 				backup_path = root / backup_pom
-				if not pom_path.is_file():
+				if not executor.path_is_file(pom_path):
 					return utils.CheckResult.failure(f"{name}: missing active pom {pom_path}")
-				if not backup_path.is_file():
+				if not executor.path_is_file(backup_path):
 					return utils.CheckResult.failure(f"{name}: missing backup pom {backup_path}")
-				if cmp(pom_path, backup_path, shallow=False):
+				cmp_result = executor.run_process_capture(
+					cmd=(
+						"cmp",
+						"-s",
+						str(executor.resolve_path(pom_path)),
+						str(executor.resolve_path(backup_path)),
+					),
+					cwd=None,
+					env=None,
+					timeout_seconds=10.0,
+				)
+				if cmp_result.returncode == 0:
 					return utils.CheckResult.failure(
 						f"{name}: active pom unexpectedly matches backup pom"
 					)
 				try:
-					pom_text = pom_path.read_text(encoding="utf-8", errors="replace")
+					pom_text = executor.read_file_text(pom_path)
 				except OSError as exc:
 					return utils.CheckResult.failure(f"{name}: failed to read pom: {exc}")
 				if _WEAVING_PLUGIN_SIGNATURE not in pom_text:

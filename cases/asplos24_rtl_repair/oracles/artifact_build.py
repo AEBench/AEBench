@@ -7,6 +7,7 @@ from pathlib import Path
 
 from evaluator.oracles.bases import CaseOracleArtifactBuildBase
 from evaluator.oracles.checks import PathKind
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 _BUILD_MODE_ENV = "AE_RTL_REPAIR_BUILD_MODE"
@@ -24,7 +25,7 @@ _BUILD_ARTIFACTS = (
 class InvalidBuildModeCheck(BaseCheck):
     mode: str
 
-    def check(self) -> CheckResult:
+    def check(self, _executor: RuntimeCheckExecutor) -> CheckResult:
         return CheckResult.failure(
             f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
         )
@@ -36,10 +37,9 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
         raw = os.environ.get(_BUILD_MODE_ENV, "verify").strip().lower()
         return raw or "verify"
 
-    @staticmethod
-    def _python_executable(repo_root: Path) -> str:
+    def _python_executable(self, repo_root: Path) -> str:
         venv_python = repo_root / "venv" / "bin" / "python"
-        if venv_python.is_file():
+        if self.executor.path_is_file(venv_python):
             return str(venv_python)
         return "python3"
 

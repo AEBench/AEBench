@@ -5,8 +5,6 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluator.oracles import utils
-from evaluator.oracles.discovery import experiment_runs
 from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
 from evaluator.oracles.experiment_runs_checks import (
 	ElementwiseSimilarityThresholdCheck,
@@ -14,6 +12,10 @@ from evaluator.oracles.experiment_runs_checks import (
 	SimilarityMetric,
 )
 from evaluator.oracles.utils import Checkable
+
+from evaluator.oracles import utils
+from evaluator.oracles.discovery import experiment_runs
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 from models import OracleInput
 
 from . import custom
@@ -25,9 +27,11 @@ def _controller_id_as_float(controller: str) -> float:
 	return float(raw64 % (2**53))
 
 
-def _load_reference_ratios(path: Path) -> dict[str, tuple[float, float]]:
+def _load_reference_ratios(
+	path: Path, *, executor: RuntimeCheckExecutor
+) -> dict[str, tuple[float, float]]:
 	try:
-		raw = json.loads(path.read_text(encoding="utf-8"))
+		raw = json.loads(executor.read_file_text(path))
 	except OSError as exc:
 		raise ValueError(f"failed to read reference JSON {path}: {exc}") from exc
 	except json.JSONDecodeError as exc:
@@ -58,19 +62,21 @@ def oracle_experiment_runs(context: OracleInput) -> Sequence[Checkable]:
 	reference_path = context.case_dir / "refs" / "anvil-table-3.ref.json"
 	cache: dict[str, tuple[dict[str, tuple[float, float]], dict[str, tuple[float, float]]]] = {}
 
-	def _load_data() -> tuple[dict[str, tuple[float, float]], dict[str, tuple[float, float]]]:
+	def _load_data(
+		executor: RuntimeCheckExecutor,
+	) -> tuple[dict[str, tuple[float, float]], dict[str, tuple[float, float]]]:
 		data = cache.get("table3")
 		if data is not None:
 			return data
-		observed = custom._parse_table3(results_path)
-		reference = _load_reference_ratios(reference_path)
+		observed = custom._parse_table3(results_path, executor=executor)
+		reference = _load_reference_ratios(reference_path, executor=executor)
 		data = (observed, reference)
 		cache["table3"] = data
 		return data
 
-	def _check_controllers() -> utils.CheckResult:
+	def _check_controllers(executor: RuntimeCheckExecutor) -> utils.CheckResult:
 		try:
-			observed, reference = _load_data()
+			observed, reference = _load_data(executor)
 		except ValueError as exc:
 			return utils.CheckResult.failure(str(exc))
 
@@ -82,11 +88,13 @@ def oracle_experiment_runs(context: OracleInput) -> Sequence[Checkable]:
 			reference=reference_ids,
 			metric=SimilarityMetric.JACCARD_SET,
 			min_similarity=1.0,
-		).check()
+		).check(executor)
 
-	def _check_ratio(index: int, label: str) -> utils.CheckResult:
+	def _check_ratio(
+		executor: RuntimeCheckExecutor, index: int, label: str
+	) -> utils.CheckResult:
 		try:
-			observed, reference = _load_data()
+			observed, reference = _load_data(executor)
 		except ValueError as exc:
 			return utils.CheckResult.failure(str(exc))
 
@@ -103,7 +111,7 @@ def oracle_experiment_runs(context: OracleInput) -> Sequence[Checkable]:
 			observed=observed_values,
 			reference=reference_values,
 			threshold=0.75,
-		).check()
+		).check(executor)
 
 	return (
 		FilesystemPathCheck(
@@ -122,10 +130,10 @@ def oracle_experiment_runs(context: OracleInput) -> Sequence[Checkable]:
 		),
 		utils.Check(
 			name="table3_mean_ratio",
-			fn=lambda: _check_ratio(0, "table3_mean_ratio"),
+			fn=lambda executor: _check_ratio(executor, 0, "table3_mean_ratio"),
 		),
 		utils.Check(
 			name="table3_max_ratio",
-			fn=lambda: _check_ratio(1, "table3_max_ratio"),
+			fn=lambda executor: _check_ratio(executor, 1, "table3_max_ratio"),
 		),
 	)

@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 
-from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind
 from evaluator.oracles.utils import BaseCheck
+
+from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind
 
 from .consts import (
 	BENCHMARKS_REF,
@@ -16,7 +17,7 @@ from .consts import (
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 	def requirements(self) -> Sequence[BaseCheck]:
-		ref = json.loads(self.ref_path(BENCHMARKS_REF).read_text(encoding="utf-8"))
+		ref = json.loads(self.read_text(self.ref_path(BENCHMARKS_REF)))
 
 		return (
 			self.path_check(

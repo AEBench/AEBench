@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-import dataclasses
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -93,22 +92,19 @@ class SlocExactMatchCheck(BaseCheck):
 	sloc_csv_path: Path
 	reference_path: Path
 	tolerance: int = _SLOC_TOLERANCE
-	executor: RuntimeCheckExecutor | None = dataclasses.field(
-		default=None, repr=False, compare=False
-	)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		if self.tolerance < 0:
 			return CheckResult.failure(f"invalid tolerance: {self.tolerance}; expected >= 0")
 
-		if not check_path_is_file(self.sloc_csv_path, executor=self.executor):
+		if not check_path_is_file(self.sloc_csv_path, executor=executor):
 			return CheckResult.failure(f"sloc.csv not found: {self.sloc_csv_path}")
 
-		if not check_path_is_file(self.reference_path, executor=self.executor):
+		if not check_path_is_file(self.reference_path, executor=executor):
 			return CheckResult.failure(f"SLOC reference not found: {self.reference_path}")
 
 		try:
-			observed_data = _load_sloc_csv(self.sloc_csv_path, executor=self.executor)
+			observed_data = _load_sloc_csv(self.sloc_csv_path, executor=executor)
 		except (ValueError, KeyError) as exc:
 			return CheckResult.failure(f"failed to parse sloc.csv: {exc}")
 
@@ -116,7 +112,7 @@ class SlocExactMatchCheck(BaseCheck):
 			ref_obj = _load_json_file(
 				self.reference_path,
 				label="sloc reference",
-				executor=self.executor,
+				executor=executor,
 			)
 		except ValueError as exc:
 			return CheckResult.failure(str(exc))
@@ -215,7 +211,6 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 				name="sloc_values_match",
 				sloc_csv_path=sloc_csv,
 				reference_path=sloc_ref,
-				executor=self.executor,
 			),
 		]
 

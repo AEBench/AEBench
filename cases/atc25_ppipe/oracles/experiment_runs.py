@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import io
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -8,12 +9,13 @@ from pathlib import Path
 
 from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
-from evaluator.oracles.checks import PathCheck, PathKind
 from evaluator.oracles.checks import (
 	ListSimilarityCheck,
+	PathCheck,
+	PathKind,
 	SimilarityMetric,
 )
-
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor, RuntimePath
 
 _PLAN_XPUT_SIMILARITY = 0.95
 
@@ -36,18 +38,21 @@ _LOGS_CSV_REQUIRED_COLUMNS = {
 
 
 
-def _extract_plan_xputs(plan_dir: Path) -> list[tuple[str, float]]:
+def _extract_plan_xputs(
+	plan_dir: Path, *, executor: RuntimeCheckExecutor
+) -> list[tuple[str, float]]:
 	"""Extract (filename[index], xput) pairs from plan JSON files in a directory."""
-	if not plan_dir.is_dir():
+	if not executor.path_is_dir(plan_dir):
 		raise OSError(f"plan directory missing: {plan_dir}")
 
 	results: list[tuple[str, float]] = []
 	errors: list[str] = []
 
-	for json_path in sorted(plan_dir.glob("*.json")):
+	for json_path in sorted(executor.glob(plan_dir, "*.json")):
 		try:
-			with json_path.open("r", encoding="utf-8") as handle:
-				plans = json.load(handle)
+			plans = json.loads(
+				executor.read_file_text(RuntimePath.from_parts(json_path.as_posix()))
+			)
 		except (OSError, json.JSONDecodeError) as exc:
 			errors.append(f"{json_path.name}: {exc}")
 			continue
@@ -75,10 +80,10 @@ class PlanThroughputCorrelationCheck(utils.BaseCheck):
 	reference_dir: Path
 	threshold: float
 
-	def check(self) -> utils.CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
 		try:
-			output_xputs = _extract_plan_xputs(self.output_dir)
-			ref_xputs = _extract_plan_xputs(self.reference_dir)
+			output_xputs = _extract_plan_xputs(self.output_dir, executor=executor)
+			ref_xputs = _extract_plan_xputs(self.reference_dir, executor=executor)
 		except (OSError, ValueError) as exc:
 			return utils.CheckResult.failure(f"cannot read plan directories: {exc}")
 
@@ -111,7 +116,7 @@ class PlanThroughputCorrelationCheck(utils.BaseCheck):
 			metric=SimilarityMetric.PEARSON,
 			min_similarity=self.threshold,
 		)
-		return delegated.check()
+		return delegated.check(executor)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -121,15 +126,14 @@ class LogsCSVStructureCheck(utils.BaseCheck):
 	path: Path
 	min_rows: int = 10
 
-	def check(self) -> utils.CheckResult:
-		if not self.path.is_file():
+	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
+		if not executor.path_is_file(self.path):
 			return utils.CheckResult.failure(f"file missing: {self.path}")
 
 		try:
-			with self.path.open("r", encoding="utf-8", newline="") as handle:
-				reader = csv.DictReader(handle)
-				header = reader.fieldnames or []
-				rows = list(reader)
+			reader = csv.DictReader(io.StringIO(executor.read_file_text(self.path)))
+			header = reader.fieldnames or []
+			rows = list(reader)
 		except OSError as exc:
 			return utils.CheckResult.failure(f"cannot read {self.path}: {exc}")
 		except csv.Error as exc:

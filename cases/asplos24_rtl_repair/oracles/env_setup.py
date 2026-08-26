@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -14,19 +13,21 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
         candidates: list[Path] = []
 
         for env_name in ("OSS_CAD_SUITE",):
-            raw = os.environ.get(env_name, "").strip()
+            raw = (self.executor.read_env_var(env_name) or "").strip()
             if not raw:
                 continue
             path = Path(raw).expanduser()
-            candidates.append(path / "bin" if (path / "bin").is_dir() else path)
+            candidates.append(
+                path / "bin" if self.executor.path_is_dir(path / "bin") else path
+            )
 
         bundled = self.case_path(".oss-cad-suite", "bin")
-        if bundled.is_dir():
+        if self.executor.path_is_dir(bundled):
             candidates.append(bundled)
 
         for bin_dir in candidates:
             executable = bin_dir / tool
-            if executable.is_file():
+            if self.executor.path_is_file(executable):
                 return (str(executable), *args)
 
         return (tool, *args)

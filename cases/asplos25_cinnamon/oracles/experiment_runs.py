@@ -4,22 +4,26 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluator.oracles.reporting import BaseCheck
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
 from evaluator.oracles.checks import (
     ListSimilarityCheck,
+    PathCheck,
+    PathKind,
     SimilarityMetric,
 )
-from evaluator.oracles.checks import PathCheck, PathKind
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
+from evaluator.oracles.reporting import BaseCheck
 
 
-def _extract_floats_from_txt(txt_path: Path) -> list[float]:
+def _extract_floats_from_txt(
+    txt_path: Path, *, executor: RuntimeCheckExecutor
+) -> list[float]:
     """Parses the generated markdown-style table and extracts all numeric values."""
-    if not txt_path.exists():
+    if not executor.path_exists(txt_path):
         return []
         
     observed_values = []
-    content = txt_path.read_text(encoding="utf-8")
+    content = executor.read_file_text(txt_path)
     
     for line in content.splitlines():
         line = line.strip()
@@ -36,9 +40,11 @@ def _extract_floats_from_txt(txt_path: Path) -> list[float]:
                     
     return observed_values
 
-def _load_reference_floats(ref_path: Path) -> list[float]:
+def _load_reference_floats(
+    ref_path: Path, *, executor: RuntimeCheckExecutor
+) -> list[float]:
     """Loads the reference JSON and flattens it into a list of floats."""
-    data = json.loads(ref_path.read_text(encoding="utf-8"))
+    data = json.loads(executor.read_file_text(ref_path))
     return [float(v) for benchmark_data in data.values() for v in benchmark_data.values()]
 
 
@@ -68,8 +74,10 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
         )
 
         
-        observed = _extract_floats_from_txt(txt_path)
-        reference = _load_reference_floats(self.ref_path("results.json"))
+        observed = _extract_floats_from_txt(txt_path, executor=self.executor)
+        reference = _load_reference_floats(
+            self.ref_path("results.json"), executor=self.executor
+        )
 
         checks.append(
             ListSimilarityCheck(

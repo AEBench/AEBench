@@ -13,6 +13,7 @@ from evaluator.oracles.checks import (
     PathKind,
     SimilarityMetric,
 )
+from evaluator.oracles.oracle_checks_runtime import OraclePath, RuntimeCheckExecutor
 
 _log = logging.getLogger(__name__)
 
@@ -45,9 +46,11 @@ def _workload2_csvs() -> tuple[str, ...]:
     )
 
 
-def _parse_raw_csv(path: Path) -> dict[str, float]:
+def _parse_raw_csv(
+    path: OraclePath, *, executor: RuntimeCheckExecutor
+) -> dict[str, float]:
     """Parse a simulator CSV and compute JCT and prediction-error metrics."""
-    text = path.read_text(encoding="utf-8")
+    text = executor.read_file_text(path)
     reader = csv.DictReader(text.strip().splitlines())
     rows = list(reader)
 
@@ -102,9 +105,11 @@ def _parse_raw_csv(path: Path) -> dict[str, float]:
     }
 
 
-def _load_reference_csv(path: Path) -> dict[str, dict[str, float]]:
+def _load_reference_csv(
+    path: OraclePath, *, executor: RuntimeCheckExecutor
+) -> dict[str, dict[str, float]]:
     """Load a reference CSV into {workload: {policy: value}}."""
-    text = path.read_text(encoding="utf-8")
+    text = executor.read_file_text(path)
     reader = csv.DictReader(text.strip().splitlines())
 
     result: dict[str, dict[str, float]] = {}
@@ -141,16 +146,21 @@ def _load_reference_csv(path: Path) -> dict[str, dict[str, float]]:
 class NonEmptyFileCheck(utils.BaseCheck):
     path: Path
 
-    def check(self) -> utils.CheckResult:
-        if not self.path.is_file():
+    def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
+        if not executor.path_is_file(self.path):
             return utils.CheckResult.failure(f"file missing: {self.path}")
 
         try:
-            size = self.path.stat().st_size
+            result = executor.run_process_capture(
+                cmd=("test", "-s", str(executor.resolve_path(self.path))),
+                cwd=None,
+                env=None,
+                timeout_seconds=10.0,
+            )
         except OSError as exc:
-            return utils.CheckResult.failure(f"cannot stat {self.path}: {exc}")
+            return utils.CheckResult.failure(f"cannot inspect {self.path}: {exc}")
 
-        if size == 0:
+        if result.returncode != 0:
             return utils.CheckResult.failure(f"file is empty: {self.path}")
 
         return utils.CheckResult.success()
@@ -167,9 +177,9 @@ class SimulationMetricCorrelationCheck(utils.BaseCheck):
     threshold: float
     normalize_jct: bool = False
 
-    def check(self) -> utils.CheckResult:
+    def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
         try:
-            ref_data = _load_reference_csv(self.reference_path)
+            ref_data = _load_reference_csv(self.reference_path, executor=executor)
         except (OSError, ValueError) as exc:
             return utils.CheckResult.failure(f"cannot load reference {self.reference_path}: {exc}")
 
@@ -185,11 +195,11 @@ class SimulationMetricCorrelationCheck(utils.BaseCheck):
             for policy in _POLICIES:
                 csv_path = self.new_data_dir / f"{policy}_{trace}_result.csv"
 
-                if not csv_path.is_file():
+                if not executor.path_is_file(csv_path):
                     continue
 
                 try:
-                    metrics = _parse_raw_csv(csv_path)
+                    metrics = _parse_raw_csv(csv_path, executor=executor)
                     raw_metrics[policy] = metrics[self.metric]
                 except (OSError, ValueError, KeyError) as exc:
                     _log.warning(
@@ -230,7 +240,7 @@ class SimulationMetricCorrelationCheck(utils.BaseCheck):
             metric=SimilarityMetric.PEARSON,
             min_similarity=self.threshold,
         )
-        return delegated.check()
+        return delegated.check(executor)
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
