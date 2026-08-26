@@ -271,18 +271,6 @@ class TaskConfig(_Model):
 	prompt: PromptConfig = Field(default_factory=PromptConfig)
 	case_brief: CasePlan | None = None
 
-	@model_validator(mode="before")
-	@classmethod
-	def _accept_legacy_run_shape(cls, values: object) -> object:
-		if not isinstance(values, dict):
-			return values
-		values = dict(values)
-		if "instructions_path" in values and "instructions" not in values:
-			values["instructions"] = {"path": values.pop("instructions_path")}
-		if "prompt_profile" in values and "prompt" not in values:
-			values["prompt"] = {"profile": values.pop("prompt_profile")}
-		return values
-
 	@model_validator(mode="after")
 	def _validate_fields(self) -> "TaskConfig":
 		self.id = self.id.strip()
