@@ -234,20 +234,18 @@ class CasePlan(_Model):
 
 
 class InstructionsConfig(_Model):
-	# TODO: This is a temporary fix for ignoring the run.instructions.required_evidence field.
-	# Remove this and wire required_evidence back into the agent's prompt.
-	model_config = ConfigDict(extra="ignore")
-
 	path: str = "README.md"
+	required_evidence: list[str] = Field(default_factory=list)
 
 	@model_validator(mode="after")
-	def _validate_path(self) -> "InstructionsConfig":
+	def _validate_fields(self) -> "InstructionsConfig":
 		path = Path(self.path.strip())
 		if not self.path.strip() or path.is_absolute() or ".." in path.parts:
 			raise ValueError(
 				"run.instructions.path must be a non-empty relative path inside the workspace"
 			)
 		self.path = path.as_posix()
+		self.required_evidence = [item.strip() for item in self.required_evidence if item.strip()]
 		return self
 
 
@@ -273,23 +271,8 @@ class TaskConfig(_Model):
 	prompt: PromptConfig = Field(default_factory=PromptConfig)
 	case_brief: CasePlan | None = None
 
-	@model_validator(mode="before")
-	@classmethod
-	def _accept_legacy_run_shape(cls, values: object) -> object:
-		if (
-			isinstance(values, dict)
-			and "instructions_path" in values
-			and "instructions" not in values
-		):
-			values = dict(values)
-			values["instructions"] = {"path": values.pop("instructions_path")}
-		if isinstance(values, dict) and "prompt_profile" in values and "prompt" not in values:
-			values = dict(values)
-			values["prompt"] = {"profile": values.pop("prompt_profile")}
-		return values
-
 	@model_validator(mode="after")
-	def _validate_id(self) -> "TaskConfig":
+	def _validate_fields(self) -> "TaskConfig":
 		self.id = self.id.strip()
 		if not self.id:
 			raise ValueError("run.id must not be empty")
@@ -305,6 +288,7 @@ class PromptArgs(_Model):
 	task_text: str
 	workspace_path: str
 	runtime_mode: RuntimeMode
+	required_evidence: list[str] = Field(default_factory=list)
 	timeout_ms: int | None = None
 	interactive: bool = False
 	prompt_profile: str = "artifact-eval-v1"

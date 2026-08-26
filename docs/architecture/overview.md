@@ -53,7 +53,7 @@ CaseRunner.run()
         └── writes case_result.json
 ```
 
-The agent reads the artifact's README (or whatever `instructions_path` points to), performs the actual work inside the workspace — installing dependencies, building, downloading data, running experiments — and writes a brief summary file. After the agent exits, the oracle inspects the workspace and scores what was accomplished.
+The agent reads the artifact's README (or whatever `run.instructions.path` points to), performs the actual work inside the workspace — installing dependencies, building, downloading data, running experiments — and writes a brief summary file. After the agent exits, the oracle inspects the workspace and scores what was accomplished.
 
 ## 4. Source layout
 

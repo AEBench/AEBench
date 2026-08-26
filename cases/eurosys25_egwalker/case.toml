@@ -14,8 +14,9 @@ venue = "EuroSys 2025"
 
 [run]
 id = "eurosys25_egwalker"
-instructions_path = "README.md"
-prompt_profile = "artifact-eval-v1"
+
+[run.instructions]
+path = "README.md"
 
 [run.runtime]
 mode = "docker"
@@ -26,6 +27,9 @@ interactive = false
 [run.artifact_requirements]
 docker = false
 compose = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
 
 [oracle]
 expected_score = 4
