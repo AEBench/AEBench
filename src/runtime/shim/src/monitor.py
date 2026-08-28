@@ -98,7 +98,7 @@ class StreamSink:
 		self.handle: BinaryIO | None = None
 
 	def write(self, chunk: bytes) -> None:
-		""""Applies chunk to stream file up to ceiling"""
+		"""Applies chunk to stream file up to ceiling"""
 		self.received += len(chunk)
 
 		room = self.ceiling - self.kept
