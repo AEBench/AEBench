@@ -10,7 +10,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
-from typing import BinaryIO, TypeAlias
+from typing import Any, BinaryIO, TypeAlias
 
 Frame: TypeAlias = tuple[int, bytes]
 Record: TypeAlias = dict[str, object]
@@ -145,7 +145,8 @@ class CommandContext:
 		self.record = record
 		self.output_dir = output_dir
 		self.run_id = run_id
-		self.state: dict[str, object] = {}
+		# Each monitor stores a different shape (CommandTiming or FileSnapshot) here and only ever reads back its own entry.
+		self.state: dict[str, Any] = {}
 
 
 class Monitor:
