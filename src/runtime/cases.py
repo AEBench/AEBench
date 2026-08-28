@@ -60,7 +60,9 @@ def _source_from_upstream(case_dir: Path, upstream: UpstreamConfig) -> BenchSour
 			return ArchiveSource(url=upstream.url)
 		if upstream.path:
 			return ArchiveSource(path=str(_resolve(case_dir, upstream.path)))
-	raise RuntimeError(f"no usable upstream source ({upstream.source_type.value})")
+
+	source_type = upstream.source_type.value if upstream.source_type is not None else "none"
+	raise RuntimeError(f"no usable upstream source ({source_type})")
 
 
 def _resolve(case_dir: Path, value: str) -> Path:
