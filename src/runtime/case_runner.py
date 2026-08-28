@@ -7,6 +7,7 @@ import traceback
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import cast
 
 from config import AppState
 from constants import SUMMARY_BASENAME_TEMPLATE
@@ -242,6 +243,9 @@ class _CaseRunner:
 		if self._pipeline_failed:
 			return
 
+		runtime = cast(BenchRuntime, self.runtime)
+		session = cast(RunSession, self.session)
+
 		try:
 			self.agent_started = datetime.now(timezone.utc)
 			try:
@@ -249,19 +253,19 @@ class _CaseRunner:
 					self.agent,
 					model=self.model,
 					prompt=(
-						f"{self.session.prompt.system_prompt}\n\n"
-						f"{self.session.prompt.initial_prompt}"
+						f"{session.prompt.system_prompt}\n\n"
+						f"{session.prompt.initial_prompt}"
 					).strip(),
-					runtime=self.runtime,
-					cwd=self.session.runtime_workspace,
-					runtime_home=self.session.runtime_agent_home,
+					runtime=runtime,
+					cwd=session.runtime_workspace,
+					runtime_home=session.runtime_agent_home,
 					timeout_seconds=self.task.runtime.timeout_ms / 1000,
 					output_path=self.paths.runner_log_path,
 				)
 			finally:
 				clear_agent_home(
-					self.runtime,
-					self.session.runtime_agent_home,
+					runtime,
+					session.runtime_agent_home,
 				)
 
 			self.agent_finished = datetime.now(timezone.utc)
@@ -270,14 +274,14 @@ class _CaseRunner:
 				self.error = f"agent exited with code {self.agent_result.exit_code}"
 
 			# End the agent process namespace before preserving its runtime for scoring.
-			self.runtime.stop(self.session)
+			runtime.stop(session)
 
 			if (
 				self.task.runtime.mode == RuntimeMode.DOCKER
 				and self.task.runtime.commit_before_oracle
 			):
 				try:
-					self.runtime.snapshot(self.session)
+					runtime.snapshot(session)
 				except Exception as exc:
 					self.paths.infra_log_path.write_text(
 						traceback.format_exc(),
@@ -302,15 +306,17 @@ class _CaseRunner:
 		if self._pipeline_failed:
 			return
 
-		try:
-			scored_runtime_info = self.runtime.runtime_result(self.session)
+		runtime = cast(BenchRuntime, self.runtime)
+		session = cast(RunSession, self.session)
 
+		try:
+			scored_runtime_info = runtime.runtime_result(session)
 			interim_result = _run_result(
 				self.case.id,
 				self.output_dir,
 				self.workspace,
-				self.session.summary_path,
-				self.session.prompt.profile,
+				session.summary_path,
+				session.prompt.profile,
 				scored_runtime_info,
 				self.agent,
 				self.agent_result,
@@ -320,7 +326,6 @@ class _CaseRunner:
 				self.agent_finished,
 				self.error,
 			)
-
 			self.oracle_result = DirectOracleRunner().execute(
 				self.case_root,
 				runtime_result=interim_result,
@@ -352,7 +357,6 @@ class _CaseRunner:
 			raise self.interrupted
 
 		finished = datetime.now(timezone.utc)
-
 		runtime_info = (
 			self.runtime.runtime_result(self.session)
 			if self.runtime is not None and self.session is not None
@@ -361,7 +365,6 @@ class _CaseRunner:
 				container_stopped=True,
 			)
 		)
-
 		summary_path = (
 			self.session.summary_path
 			if self.session is not None
@@ -370,7 +373,6 @@ class _CaseRunner:
 				safe_id=safe_name(self.case.id)
 			)
 		)
-
 		run_result = _run_result(
 			self.case.id,
 			self.output_dir,
@@ -386,7 +388,6 @@ class _CaseRunner:
 			self.agent_finished,
 			self.error,
 		)
-
 		case_result = CaseRunResult(
 			status=_case_status(run_result, self.oracle_result),
 			finished_at=finished,
@@ -397,7 +398,6 @@ class _CaseRunner:
 			runtime_result=run_result,
 			oracle_result=self.oracle_result,
 		)
-
 		append_run_result(self.output_dir, run_result)
 		write_case_result(self.output_dir, case_result)
 		write_task_report(
