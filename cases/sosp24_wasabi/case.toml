@@ -44,5 +44,5 @@ url = "https://github.com/bastoica/wasabi.git"
 ref = "57a01444318ed50422182c4732c29c45909f65d3"
 requested_ref = "sosp24-ae"
 resolved_at = "2026-03-10T03:22:43.788766+00:00"
-artifact_mode = "hybrid"
+artifact_mode = "overlay"
 overlay_artifact = true

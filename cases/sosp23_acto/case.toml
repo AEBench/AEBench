@@ -44,5 +44,5 @@ url = "https://github.com/xlab-uiuc/acto.git"
 ref = "ce5b80a87b467dc0689fc75ff0b69d09e1a3c9d2"
 requested_ref = "sosp-ae"
 resolved_at = "2026-05-01T11:06:44+00:00"
-artifact_mode = "hybrid"
+artifact_mode = "overlay"
 overlay_artifact = true

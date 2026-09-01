@@ -43,5 +43,5 @@ source_type = "git"
 url = "https://github.com/JZuming/EET.git"
 ref = "b31d2534bc1079fdeda5333c73bcb99b611efe8e"
 resolved_at = "2026-03-10T03:23:39.155767+00:00"
-artifact_mode = "hybrid"
+artifact_mode = "overlay"
 overlay_artifact = true

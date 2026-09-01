@@ -32,9 +32,9 @@ def _source_from_case(case_dir: Path, case: CaseConfig) -> BenchSource:
 	upstream = case.upstream
 	artifact_dir = artifact_dir_for(case_dir)
 
-	if upstream.artifact_mode == ArtifactMode.UPSTREAM:
+	if upstream.artifact_mode == ArtifactMode.LOCAL:
 		if not has_local_artifact(case_dir):
-			raise RuntimeError(f"case {case.id} has no upstream artifact")
+			raise RuntimeError(f"case {case.id} has no local artifact")
 		return LocalSource(path=str(artifact_dir))
 
 	base = _source_from_upstream(case_dir, upstream)
