@@ -177,6 +177,7 @@ class _CaseRunner:
 					timeout_ms=self.task.runtime.timeout_ms,
 					prompt_profile=self.prompt_profile.value,
 					prompt_append=prompt_append,
+					required_evidence=self.task.instructions.required_evidence,
 					refs_path=runtime_refs,
 					host_workspace_path=str(self.workspace),
 					container_workspace_path=(
