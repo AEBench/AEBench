@@ -123,7 +123,7 @@ uv run aebench case run osdi24_kondo \
   --model claude-opus-4-8
 ```
 
-Replace the example case ID with any case listed by `uv run aebench case list`.
+Replace the example case ID with a case ID from `cases.json`.
 
 The agent CLI can read its credential and can run commands without approval.
 Use a credential that you can revoke and a disposable Chameleon instance.
