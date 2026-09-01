@@ -124,7 +124,7 @@ def test_case_runner_scores_workspace_after_agent_timeout(
 		save_path=tmp_path / "output",
 	)
 
-	assert result.status == CaseStatus.SUCCESS
+	assert result.status == CaseStatus.ERROR
 	assert result.runtime_result.status.value == "error"
 	assert result.runtime_result.agent.exit_code == 124
 	assert result.oracle_result.score == 4
