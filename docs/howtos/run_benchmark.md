@@ -154,8 +154,8 @@ The four built-in harnesses are:
 | `claude_non_api` | Claude subscription OAuth token |
 
 AEBench passes `--model` to the selected CLI. The examples above use the models
-tested with this implementation. Replace the case ID with any case listed by
-`uv run aebench case list`, and use a model available to the selected account.
+tested with this implementation. Use a case ID from `cases.json` and a model
+available to the selected account.
 
 The command prints the run output directory before it starts the agent. It
 prints the case status and oracle score after the run finishes.
