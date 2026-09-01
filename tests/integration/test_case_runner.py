@@ -62,6 +62,7 @@ def test_case_runner_executes_agent_then_oracle(
 	prompt = next(output_dir.glob("aebench_prompt_*.md")).read_text(encoding="utf-8")
 	assert "Acceptable Evidence" in prompt
 	assert "Allowed Tolerance" in prompt
+	assert "Keep the installed zip executable available for inspection." in prompt
 	run_record = json.loads((output_dir / "result.jsonl").read_text(encoding="utf-8"))
 	assert run_record["agent"]["reasoning_effort"] == "high"
 	assert (output_dir / "case_result.json").is_file()
