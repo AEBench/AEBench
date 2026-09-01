@@ -31,3 +31,4 @@ placeholder = false
 
 [upstream]
 source_type = "local"
+path = "artifact"

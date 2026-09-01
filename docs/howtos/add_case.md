@@ -21,7 +21,7 @@ cases/venue24_paperid/
 ```
 
 > [!NOTE]
-> The `artifact/` subdirectory is optional. It holds a vendored copy of the artifact when `artifact_mode = "vendor"`. Most audit work points `aebench case oracle` at a separately prepared workspace with `--workspace-dir`.
+> The `artifact/` subdirectory is optional. It holds a local copy of the artifact when `artifact_mode = "local"`. Most audit work points `aebench case oracle` at a separately prepared workspace with `--workspace-dir`.
 
 ## 2. Scaffold the bundle
 
@@ -96,7 +96,7 @@ experiment_runs = "local"
 source_type = "git"
 url = "https://github.com/josephg/egwalker-paper.git"
 ref = "4d9bef55e4f2e3b3b8b0efe8f91cd35d34ed35a8"
-artifact_mode = "hybrid"
+artifact_mode = "overlay"
 overlay_artifact = true
 
 [paper]

@@ -81,6 +81,29 @@ def test_case_runner_rejects_unisolated_local_agent(tmp_path: Path) -> None:
 		)
 
 
+def test_case_runner_rejects_incomplete_local_source(tmp_path: Path) -> None:
+	project = tmp_path / "project"
+	shutil.copytree(_FIXTURE, project)
+	manifest = project / "bundles" / "mock_apt_case" / "case.toml"
+	manifest.write_text(
+		manifest.read_text(encoding="utf-8").replace('path = "artifact"\n', ""),
+		encoding="utf-8",
+	)
+	state = load_project_config(project)
+	context = AppState(project_state=state, settings=resolve_settings(state))
+
+	with pytest.raises(RuntimeError, match="no usable upstream source \\(local\\)"):
+		run_case(
+			context,
+			project / "bundles" / "mock_apt_case",
+			options=RunOptions(
+				agent_type="codex",
+				model_name="gpt-test",
+				allow_unsafe_local=True,
+			),
+		)
+
+
 def test_case_runner_scores_workspace_after_agent_timeout(
 	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
