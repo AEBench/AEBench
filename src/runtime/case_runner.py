@@ -90,18 +90,12 @@ class _CaseRunner:
 
 		if self.options.interactive:
 			raise ValueError("agent harnesses require non-interactive execution")
-		if (
-			self.task.runtime.mode == RuntimeMode.LOCAL
-			and not self.options.allow_unsafe_local
-		):
+		if self.task.runtime.mode == RuntimeMode.LOCAL and not self.options.allow_unsafe_local:
 			raise ValueError(
 				"local agent execution has no process isolation; run it on a disposable machine "
 				"and pass --allow-unsafe-local"
 			)
-		if (
-			self.task.artifact_requirements.docker
-			and not self.options.allow_host_docker
-		):
+		if self.task.artifact_requirements.docker and not self.options.allow_host_docker:
 			raise ValueError(
 				"this case requires access to the host Docker daemon; run it on a disposable "
 				"machine and pass --allow-host-docker"
@@ -186,9 +180,7 @@ class _CaseRunner:
 					refs_path=runtime_refs,
 					host_workspace_path=str(self.workspace),
 					container_workspace_path=(
-						runtime_workspace
-						if self.task.runtime.mode == RuntimeMode.DOCKER
-						else None
+						runtime_workspace if self.task.runtime.mode == RuntimeMode.DOCKER else None
 					),
 				)
 			)
@@ -196,10 +188,7 @@ class _CaseRunner:
 
 			self.runtime = get_runtime(
 				self.task.runtime.mode,
-				image=(
-					self.task.runtime.image
-					or self.context.settings.default_docker_image
-				),
+				image=(self.task.runtime.image or self.context.settings.default_docker_image),
 				gpu=self.task.runtime.gpu,
 				workspace=str(self.workspace),
 			)
@@ -253,8 +242,7 @@ class _CaseRunner:
 					self.agent,
 					model=self.model,
 					prompt=(
-						f"{session.prompt.system_prompt}\n\n"
-						f"{session.prompt.initial_prompt}"
+						f"{session.prompt.system_prompt}\n\n{session.prompt.initial_prompt}"
 					).strip(),
 					runtime=runtime,
 					cwd=session.runtime_workspace,
@@ -287,9 +275,7 @@ class _CaseRunner:
 						traceback.format_exc(),
 						encoding="utf-8",
 					)
-					raise RuntimeError(
-						f"failed to snapshot agent runtime: {exc}"
-					) from exc
+					raise RuntimeError(f"failed to snapshot agent runtime: {exc}") from exc
 		except (KeyboardInterrupt, SystemExit) as exc:
 			self.interrupted = exc
 			self._pipeline_failed = True
@@ -368,10 +354,7 @@ class _CaseRunner:
 		summary_path = (
 			self.session.summary_path
 			if self.session is not None
-			else self.output_dir
-			/ SUMMARY_BASENAME_TEMPLATE.format(
-				safe_id=safe_name(self.case.id)
-			)
+			else self.output_dir / SUMMARY_BASENAME_TEMPLATE.format(safe_id=safe_name(self.case.id))
 		)
 		run_result = _run_result(
 			self.case.id,
@@ -418,20 +401,12 @@ class _CaseRunner:
 		return case_result
 
 	def _cleanup(self) -> None:
-		if (
-			not self._runtime_cleanup_done
-			and self.runtime is not None
-			and self.session is not None
-		):
+		if not self._runtime_cleanup_done and self.runtime is not None and self.session is not None:
 			try:
 				self.runtime.cleanup(self.session)
 			except Exception as exc:
 				cleanup_error = f"{type(exc).__name__} during cleanup: {exc}"
-				self.error = (
-					f"{self.error}; {cleanup_error}"
-					if self.error
-					else cleanup_error
-				)
+				self.error = f"{self.error}; {cleanup_error}" if self.error else cleanup_error
 				with self.paths.infra_log_path.open(
 					"a",
 					encoding="utf-8",
@@ -446,14 +421,8 @@ class _CaseRunner:
 			except FileNotFoundError:
 				pass
 			except Exception as exc:
-				cleanup_error = (
-					f"{type(exc).__name__} removing agent home: {exc}"
-				)
-				self.error = (
-					f"{self.error}; {cleanup_error}"
-					if self.error
-					else cleanup_error
-				)
+				cleanup_error = f"{type(exc).__name__} removing agent home: {exc}"
+				self.error = f"{self.error}; {cleanup_error}" if self.error else cleanup_error
 				with self.paths.infra_log_path.open(
 					"a",
 					encoding="utf-8",
