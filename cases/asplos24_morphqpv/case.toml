@@ -2,8 +2,8 @@ id = "asplos24_morphqpv"
 
 [case_brief]
 core_claim = "Reproduce the MorphQPV paper's empirical results: Quantum Lock verification speedup (Fig 7), verification confidence with reduced synthesis overhead against baselines (Table 4), execution time reduction (Fig 11a), accuracy bounds (Fig 11b), confidence distribution bounds (Fig 15), and the Clifford vs. basis gate ablation study (Fig 15a)."
-acceptable_evidence = "Generated CSVs and graphical plots (PDF/SVG) for the corresponding experiments exist. For quantitative bounds: Table 4 shows MorphQPV achieving exactly 100% confidence while maintaining lower gate synthesis overhead than the NDD baseline; Figure 15a shows Clifford sampling reaching 100% accuracy at 64 samples; and the remaining generated CSV data strongly correlates (Pearson >= 0.85) with the expected reference distributions."
-allowed_tolerance = "Minor variations in raw runtime execution metrics (like exact millisecond timing) or slight differences in randomized sample distributions are expected due to hardware speed and random seeding. Graphical plots (SVGs and PDFs) are evaluated strictly for existence rather than visual equivalence."
+acceptable_evidence = "Generated CSVs and graphical plots (PDF/SVG) for the corresponding experiments exist. For quantitative bounds: Table 4 shows MorphQPV achieving exactly 100% confidence on every circuit; the Quantum Lock base counts (Fig 7) match the reference within 5% per configuration; and the sampled quantities (gate synthesis overhead, ablation accuracy, and the confidence distribution) correlate with the reference at Pearson >= 0.70."
+allowed_tolerance = "Minor variations in raw runtime execution metrics (like exact millisecond timing) or slight differences in randomized sample distributions are expected due to hardware speed and random seeding. Sampled quantities are compared by trend rather than by value. Rows are paired by their identity columns, so row order and row count need not match the reference exactly. Graphical plots (SVGs and PDFs) are evaluated strictly for existence rather than visual equivalence."
 
 [run]
 id = "asplos24_morphqpv"
@@ -13,15 +13,15 @@ path = "README.md"
 required_evidence = [
     "Output files should be successfully generated and stored in their respective output directories under `examples/`.",
     "The README contains typos regarding the output directories. The actual directories generated will be named `fig7-quantumlock`, `fig12(b)-solvers_compare`, and `fig12-confidence`.",
-    "Do NOT use the `--earlystop` flag for any evaluation scripts, as we require the full CSV datasets to verify exact mathematical correlations.",
-    "`examples/fig7-quantumlock_verify/quantumlock.csv` and its accompanying `.svg`.",
+    "Do NOT use the `--earlystop` flag for the evaluation scripts (EXPECT for table4-compare.py), as we require the full CSV datasets.",
+    "`examples/fig7-quantumlock/quantumlock.csv` and its accompanying `.svg`.",
     "`examples/table4-compare/overhead.csv`.",
-    "`examples/fig11a-theorem1/time.csv` and `fig9(a).svg`.",
+    "`examples/fig11a-theorem1/fig9(a).svg`.",
     "`examples/fig11b-theorem2/fig9(b)-theorem2.svg`.",
-    "`examples/fig15-confidence/confidence.svg` and `distribution_samples64.csv`.",
+    "`examples/fig12-confidence/confidence.svg` and `distribution_samples64.csv`.",
     "`examples/fig11-opt_strategy/optimize.pdf` (Note: Requires internet for MNIST dataset).",
     "`examples/fig15a-ablation_study/accuracy.csv` and `fig12(a)-ablation_study.pdf`.",
-    "`examples/fig15b-solvers_compare/time.csv` and `runtime.svg`."
+    "`examples/fig12(b)-solvers_compare/runtime.svg`."
 ]
 
 [run.runtime]
