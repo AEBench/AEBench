@@ -30,8 +30,10 @@ def _extract_column(
 ) -> dict[tuple[str, ...], float]:
     """Parse one numeric column from a CSV, keyed by the identity of its row. Raise if the file cannot be read or a row is truncated. """
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except OSError as exc:
+        # strict: undecodable bytes mean the file is damaged, not that a value
+        # is odd, so fail rather than substituting replacement characters
+        text = path.read_text(encoding="utf-8", errors="strict")
+    except (OSError, UnicodeDecodeError) as exc:
         raise ValueError(f"{path.name}: cannot read: {exc}") from exc
 
     reader = csv.DictReader(text.strip().splitlines())
