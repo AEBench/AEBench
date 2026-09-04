@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from pathlib import Path
 from typing import TypeAlias
 
 from evaluator.oracles import CaseOracleExperimentRunsBase
@@ -33,7 +34,7 @@ _RESULT_ABS_TOL = 1e-6
 JsonObject: TypeAlias = Mapping[str, object]
 
 
-def _read_json_object(path: OraclePath, executor: RuntimeCheckExecutor | None) -> JsonObject:
+def _read_json_object(path: OraclePath, executor: RuntimeCheckExecutor) -> JsonObject:
 	payload = json.loads(check_read_file_text(path, executor=executor))
 	if not isinstance(payload, dict):
 		raise ValueError("top-level JSON value must be an object")
@@ -87,13 +88,12 @@ def _compare_results(
 class AnalysisResultsCheck(BaseCheck):
 	observed_path: OraclePath
 	reference_path: OraclePath
-	executor: RuntimeCheckExecutor | None = field(default=None)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			observed = _read_json_object(self.observed_path, self.executor)
-			reference = _read_json_object(self.reference_path, None)
-		except (OSError, json.JSONDecodeError, ValueError) as exc:
+			observed = _read_json_object(self.observed_path, executor)
+			reference = _read_json_object(self.reference_path, executor)
+		except (OSError, RuntimeError, json.JSONDecodeError, ValueError) as exc:
 			return CheckResult.failure(f"could not read analysis results: {exc}")
 
 		errors: list[str] = []
@@ -108,12 +108,11 @@ class AnalysisResultsCheck(BaseCheck):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AnalysisLogCheck(BaseCheck):
 	path: OraclePath
-	executor: RuntimeCheckExecutor | None = field(default=None)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			text = check_read_file_text(self.path, executor=self.executor)
-		except OSError as exc:
+			text = check_read_file_text(self.path, executor=executor)
+		except (OSError, RuntimeError, ValueError) as exc:
 			return CheckResult.failure(f"could not read analysis log: {exc}")
 
 		position = 0
@@ -135,34 +134,43 @@ class AnalysisLogCheck(BaseCheck):
 		)
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PdfOutputCheck(BaseCheck):
+	path: OraclePath
+
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
+		try:
+			data = executor.read_file_text(self.path, encoding="latin-1")
+		except (OSError, RuntimeError, ValueError) as exc:
+			return CheckResult.failure(f"could not read PDF output: {exc}")
+		if len(data) < 1024:
+			return CheckResult.failure(f"PDF output is only {len(data)} bytes")
+		if not data.startswith("%PDF-"):
+			return CheckResult.failure("PDF output has no PDF header")
+		if "%%EOF" not in data[-1024:]:
+			return CheckResult.failure("PDF output has no EOF marker")
+		return CheckResult.success(f"valid PDF output ({len(data)} bytes)")
+
+
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	def requirements(self) -> Sequence[BaseCheck]:
 		checks: list[BaseCheck] = [
 			AnalysisLogCheck(
 				name="scoped_analysis_log",
 				path=self.runtime_path(_LOG_PATH),
-				executor=self.executor,
 			),
 			AnalysisResultsCheck(
 				name="fixed_corpus_results",
 				observed_path=self.runtime_path(_RESULTS_PATH),
 				reference_path=self.ref_path("analysis.ref.json"),
-				executor=self.executor,
 			),
 		]
 
-		pdf_check = (
-			"from pathlib import Path; import sys; "
-			"data = Path(sys.argv[1]).read_bytes(); "
-			"raise SystemExit(0 if len(data) >= 1024 and data.startswith(b'%PDF-') "
-			"and b'%%EOF' in data[-1024:] else 1)"
-		)
 		for rel_path in _FIGURE_PATHS:
 			checks.append(
-				self.command_check(
-					name=f"pdf_{rel_path.rsplit('/', 1)[-1].removesuffix('.pdf').replace('-', '_')}",
-					cmd=("python3", "-B", "-c", pdf_check, str(self.runtime_path(rel_path))),
-					timeout_seconds=30.0,
+				PdfOutputCheck(
+					name=f"pdf_{Path(rel_path).stem.replace('-', '_')}",
+					path=self.runtime_path(rel_path),
 				)
 			)
 		return tuple(checks)

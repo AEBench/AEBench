@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import io
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from evaluator.oracles import CaseOracleBenchmarkPrepBase
 from evaluator.oracles.oracle_checks_runtime import (
@@ -33,22 +33,19 @@ _COLD_START_COLUMNS = (*_TIMING_COLUMNS, "is_cold")
 @dataclass(frozen=True, slots=True, kw_only=True)
 class MeasurementCorpusCheck(BaseCheck):
 	files: Sequence[tuple[str, OraclePath, Sequence[str]]]
-	executor: RuntimeCheckExecutor | None = field(default=None)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		errors: list[str] = []
 		for label, path, required_columns in self.files:
 			try:
-				reader = csv.DictReader(
-					io.StringIO(check_read_file_text(path, executor=self.executor))
-				)
+				reader = csv.DictReader(io.StringIO(check_read_file_text(path, executor=executor)))
 				columns = reader.fieldnames or []
 				missing = [column for column in required_columns if column not in columns]
 				if missing:
 					errors.append(f"{label}: missing columns {missing}")
 					continue
 				request_ids = {row["request_id"] for row in reader if row.get("request_id")}
-			except (OSError, csv.Error) as exc:
+			except (OSError, RuntimeError, ValueError, csv.Error) as exc:
 				errors.append(f"{label}: {exc}")
 				continue
 			if len(request_ids) < 30:
@@ -102,6 +99,5 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 			MeasurementCorpusCheck(
 				name="released_measurement_corpus",
 				files=tuple(files),
-				executor=self.executor,
 			),
 		)
