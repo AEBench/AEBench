@@ -51,5 +51,4 @@ experiment_runs = "task"
 source_type = "git"
 url = "https://github.com/wrl297/Calchas.git"
 ref = "9d3955cf0a1687731f35baa8e38aa7bc25108773"
-artifact_mode = "hybrid"
-overlay_artifact = true
+artifact_mode = "upstream"

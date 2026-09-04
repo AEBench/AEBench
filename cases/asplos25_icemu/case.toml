@@ -53,5 +53,4 @@ source_type = "git"
 url = "https://github.com/TUDSSL/intermittent-risc-v.git"
 ref = "9ff2de3438e27235ed8b521a8ce150399b74b2f8"
 requested_ref = "nacho-artifact-release"
-artifact_mode = "hybrid"
-overlay_artifact = true
+artifact_mode = "upstream"
