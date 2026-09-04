@@ -337,6 +337,7 @@ class AgentResult(_Model):
 class RuntimeInfo(_Model):
 	mode: RuntimeMode
 	image: str | None = None
+	workspace_mount: str | None = None
 	container_id: str | None = None
 	saved_image: str | None = None
 	container_stopped: bool = False
@@ -631,6 +632,18 @@ class OracleResult(_Model):
 	phases: list[OraclePhaseResult] = Field(default_factory=list)
 	artifacts: dict[str, str] = Field(default_factory=dict)
 	error: str | None = None
+
+
+class OracleReevaluationResult(_Model):
+	schema_version: Literal[1] = 1
+	case_id: str
+	evaluated_at: datetime
+	source_revision: str | None = None
+	source_dirty: bool | None = None
+	run_dir: str
+	workspace_dir: str
+	runtime_snapshot: str | None = None
+	oracle_result: OracleResult
 
 
 class CaseRunResult(BaseModel):
