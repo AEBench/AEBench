@@ -76,6 +76,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 	audit_p = sub.add_parser("audit-trace", help="Audit an aeshell commands.jsonl trace.")
 	audit_p.add_argument("trace_path")
+	audit_p.add_argument("--instructions", default=None)
 	audit_p.add_argument("--output", default=None)
 	audit_p.add_argument("--model", default=None)
 	audit_p.add_argument("--escalation-model", default=None)
@@ -258,6 +259,7 @@ def _runtime_run(args: argparse.Namespace) -> int:
 
 def _audit_trace(args: argparse.Namespace) -> int:
 	from trajectory_audit.judge import OpenAIResponsesJudge
+	from trajectory_audit.sanitize import MAX_TASK_CONTEXT_CHARS
 	from trajectory_audit.service import (
 		DEFAULT_ESCALATION_MODEL,
 		DEFAULT_PRIMARY_MODEL,
@@ -277,7 +279,12 @@ def _audit_trace(args: argparse.Namespace) -> int:
 		escalation_model=escalation_model,
 	)
 	try:
-		report = service.audit_jsonl(trace_path)
+		task_context = ""
+		if args.instructions:
+			instructions_path = Path(args.instructions).expanduser().resolve()
+			with instructions_path.open(encoding="utf-8") as instructions_file:
+				task_context = instructions_file.read(MAX_TASK_CONTEXT_CHARS + 1)
+		report = service.audit_jsonl(trace_path, task_context=task_context)
 	except (OSError, ValueError, RuntimeError) as exc:
 		print(f"Audit failed: {exc}", file=sys.stderr)
 		return 2
