@@ -323,6 +323,8 @@ class RuntimeInfo(_Model):
 	mode: RuntimeMode
 	image: str | None = None
 	workspace_mount: str | None = None
+	user: str | None = None
+	home: str | None = None
 	container_id: str | None = None
 	saved_image: str | None = None
 	container_stopped: bool = False

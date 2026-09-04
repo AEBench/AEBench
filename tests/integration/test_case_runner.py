@@ -34,9 +34,18 @@ def test_case_runner_executes_agent_then_oracle(
 	context = AppState(project_state=state, settings=resolve_settings(state))
 	output_dir = tmp_path / "output"
 	events: list[str] = []
+	runtime_paths: dict[str, str] = {}
 
-	def fake_agent(*_args: Any, output_path: Path, model: str, **_kwargs: Any) -> AgentResult:
+	def fake_agent(
+		*_args: Any,
+		output_path: Path,
+		model: str,
+		runtime_home: str,
+		runtime_support_dir: str,
+		**_kwargs: Any,
+	) -> AgentResult:
 		events.append("agent")
+		runtime_paths.update(home=runtime_home, support=runtime_support_dir)
 		output_path.write_text('{"type":"result"}\n', encoding="utf-8")
 		return AgentResult(model=model, exit_code=0, reasoning_effort="high")
 
@@ -58,6 +67,9 @@ def test_case_runner_executes_agent_then_oracle(
 	assert result.oracle_result.score == 4
 	assert result.runtime_result.agent_kind == "codex"
 	assert result.runtime_result.agent.reasoning_effort == "high"
+	assert runtime_paths["home"] == str(Path.home())
+	assert runtime_paths["support"].endswith("/agent-support")
+	assert runtime_paths["support"] != runtime_paths["home"]
 	assert (output_dir / "runner_output.log").is_file()
 	prompt = next(output_dir.glob("aebench_prompt_*.md")).read_text(encoding="utf-8")
 	assert "Acceptable Evidence" in prompt

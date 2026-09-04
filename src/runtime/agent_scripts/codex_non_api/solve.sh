@@ -5,11 +5,11 @@ unset GEMINI_API_KEY
 # Clear API keys so the CLI uses ChatGPT subscription authentication.
 export CODEX_API_KEY=""
 export OPENAI_API_KEY=""
-export CODEX_HOME="$HOME/.codex"
+export CODEX_HOME="$AEBENCH_AGENT_SUPPORT_DIR/.codex"
 
 # Select ChatGPT authentication.
-if ! grep -q "forced_login_method" ~/.codex/config.toml 2>/dev/null; then
-    printf '\nforced_login_method = "chatgpt"\n' >> ~/.codex/config.toml
+if ! grep -q "forced_login_method" "$CODEX_HOME/config.toml" 2>/dev/null; then
+	printf '\nforced_login_method = "chatgpt"\n' >> "$CODEX_HOME/config.toml"
 fi
 
 printf '%s' "$PROMPT" | codex --search exec --json \

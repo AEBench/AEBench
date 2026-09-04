@@ -623,6 +623,8 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		path_mounts: Sequence[_PathMount],
 		default_cwd: pathlib.Path,
 		runtime_cwd: pathlib.PurePosixPath | None = None,
+		user: str | None = None,
+		home: str | None = None,
 	) -> None:
 		"""Initializes a Docker-backed executor.
 
@@ -633,6 +635,8 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 			path_mounts: Host directories exposed inside the container.
 			default_cwd: Default host working directory for checks.
 			runtime_cwd: Default working directory inside the container.
+			user: User for oracle commands. Uses the image default when omitted.
+			home: HOME value for oracle commands. Uses the image default when omitted.
 
 		Raises:
 			ValueError: If runtime_cwd is relative.
@@ -640,6 +644,8 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		super().__init__(default_cwd=default_cwd)
 		self._image = image
 		self._path_mounts = tuple(path_mounts)
+		self._user = user
+		self._home = home
 
 		if runtime_cwd is not None and not runtime_cwd.is_absolute():
 			raise ValueError("runtime_cwd must be an absolute POSIX path")
@@ -691,6 +697,10 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 			"--name",
 			self._container_name,
 		]
+		if self._user is not None:
+			docker_cmd.extend(["--user", self._user])
+		if self._home is not None:
+			docker_cmd.extend(["-e", f"HOME={self._home}"])
 
 		for mount in self._path_mounts:
 			if mount.host_root.exists():
@@ -1035,6 +1045,8 @@ def _build_task_runtime_check_executor(
 		),
 		default_cwd=context.workspace_dir,
 		runtime_cwd=pathlib.PurePosixPath(workspace_mount),
+		user=runtime_result.runtime.user,
+		home=runtime_result.runtime.home,
 	)
 
 

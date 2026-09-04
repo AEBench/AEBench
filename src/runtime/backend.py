@@ -131,7 +131,7 @@ class DockerRuntime:
 			"-v",
 			f"{session.host_workspace}:{session.runtime_workspace}",
 			"-v",
-			f"{session.host_agent_home}:{session.runtime_agent_home}",
+			f"{session.host_agent_support_dir}:{session.runtime_agent_support_dir}",
 			"-w",
 			session.runtime_workspace,
 		]
@@ -350,6 +350,8 @@ class DockerRuntime:
 			mode=RuntimeMode.DOCKER,
 			image=self.resolved_image or self.image,
 			workspace_mount=session.runtime_workspace,
+			user=session.runtime_agent_user,
+			home=session.runtime_agent_home,
 			container_id=self.container_id or self.last_container_id,
 			saved_image=self.saved_image,
 			container_stopped=self.container_stopped or self.container_removed,

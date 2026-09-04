@@ -2,7 +2,7 @@
 
 unset ANTHROPIC_API_KEY
 unset GEMINI_API_KEY
-export CODEX_HOME="$HOME/.codex"
+export CODEX_HOME="$AEBENCH_AGENT_SUPPORT_DIR/.codex"
 
 printf '%s' "$PROMPT" | codex --search exec --json \
     -c "model_reasoning_effort=\"$AEBENCH_REASONING_EFFORT\"" \

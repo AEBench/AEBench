@@ -22,7 +22,8 @@ from runtime.agent_runner import (
 	_agent_shell_command,
 	_prompt_for_agent,
 	_solve_script,
-	prepare_agent_home,
+	prepare_agent_runtime,
+	prepare_agent_support_dir,
 	run_agent,
 )
 from runtime.backend import DockerRuntime, LocalRuntime
@@ -115,9 +116,30 @@ def test_codex_prompt_is_unchanged() -> None:
 def test_docker_agent_runs_as_unprivileged_user() -> None:
 	command = _agent_shell_command(DockerRuntime())
 	assert command[:4] == ["bash", "-o", "pipefail", "-c"]
-	assert 'socket="/var/run/docker.sock"' in command[-1]
-	assert 'usermod -aG "$socket_group" agent' in command[-1]
 	assert "runuser --user agent --preserve-environment -- bash -s" in command[-1]
+
+
+def test_docker_agent_runtime_matches_host_socket_group(
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	commands: list[list[str]] = []
+
+	def run_process(
+		_self: DockerRuntime,
+		cmd: list[str],
+		**_kwargs: object,
+	) -> subprocess.CompletedProcess[str]:
+		commands.append(cmd)
+		return subprocess.CompletedProcess(cmd, 0, "", "")
+
+	monkeypatch.setattr(DockerRuntime, "run_process", run_process)
+
+	prepare_agent_runtime(DockerRuntime())
+
+	assert len(commands) == 1
+	assert commands[0][:3] == ["sh", "-e", "-c"]
+	assert 'socket="/var/run/docker.sock"' in commands[0][3]
+	assert 'usermod -aG "$socket_group" agent' in commands[0][3]
 
 
 def test_local_agent_uses_current_user() -> None:
@@ -126,7 +148,7 @@ def test_local_agent_uses_current_user() -> None:
 		"-o",
 		"pipefail",
 		"-c",
-		'bash -s 2>&1 | python3 "$HOME/timestamp_lines.py"',
+		'bash -s 2>&1 | python3 "$AEBENCH_AGENT_SUPPORT_DIR/timestamp_lines.py"',
 	]
 
 
@@ -144,6 +166,7 @@ def test_runner_passes_harness_contract_and_saves_raw_output(
 		runtime=runtime,  # type: ignore[arg-type]
 		cwd="/repo",
 		runtime_home="/home/agent",
+		runtime_support_dir="/run/aebench-agent",
 		timeout_seconds=600,
 		output_path=output_path,
 	)
@@ -157,10 +180,11 @@ def test_runner_passes_harness_contract_and_saves_raw_output(
 		"-o",
 		"pipefail",
 		"-c",
-		'bash -s 2>&1 | python3 "$HOME/timestamp_lines.py"',
+		'bash -s 2>&1 | python3 "$AEBENCH_AGENT_SUPPORT_DIR/timestamp_lines.py"',
 	]
 	assert runtime.cwd == "/repo"
 	assert runtime.env["HOME"] == "/home/agent"
+	assert runtime.env["AEBENCH_AGENT_SUPPORT_DIR"] == "/run/aebench-agent"
 	assert runtime.env["PROMPT"] == "do the task"
 	assert runtime.env["AGENT_CONFIG"] == "gpt-test"
 	assert runtime.env["AEBENCH_REASONING_EFFORT"] == "high"
@@ -181,7 +205,7 @@ def test_local_runner_timestamps_stdout_and_stderr(
 		lambda _agent: "printf 'first\\n'; printf 'second\\n' >&2; exit 7",
 	)
 	monkeypatch.setattr("runtime.agent_runner._timeout_command", lambda *_args: [])
-	home = prepare_agent_home("codex", tmp_path)
+	support_dir = prepare_agent_support_dir("codex", tmp_path)
 	output_path = tmp_path / "runner_output.log"
 
 	result = run_agent(
@@ -190,7 +214,8 @@ def test_local_runner_timestamps_stdout_and_stderr(
 		prompt="do the task",
 		runtime=LocalRuntime(workspace=str(tmp_path)),
 		cwd=str(tmp_path),
-		runtime_home=str(home),
+		runtime_home=str(support_dir),
+		runtime_support_dir=str(support_dir),
 		timeout_seconds=10,
 		output_path=output_path,
 	)
@@ -203,42 +228,42 @@ def test_local_runner_timestamps_stdout_and_stderr(
 	assert lines[1].endswith(" second")
 
 
-def test_subscription_auth_is_copied_to_private_run_home(tmp_path: Path) -> None:
+def test_subscription_auth_is_copied_to_private_support_dir(tmp_path: Path) -> None:
 	auth = tmp_path / "auth.json"
 	auth.write_text('{"tokens":{}}', encoding="utf-8")
-	home = prepare_agent_home(
+	support_dir = prepare_agent_support_dir(
 		"codex_non_api",
 		tmp_path / "run",
 		environ={"AEBENCH_CODEX_AUTH_FILE": str(auth)},
 	)
 
-	target = home / ".codex" / "auth.json"
+	target = support_dir / ".codex" / "auth.json"
 	assert target.read_text(encoding="utf-8") == '{"tokens":{}}'
 	assert target.stat().st_mode & 0o777 == 0o600
-	assert (home / "timestamp_lines.py").is_file()
+	assert (support_dir / "timestamp_lines.py").is_file()
 
 
-def test_claude_subscription_token_is_written_to_private_run_home(tmp_path: Path) -> None:
-	home = prepare_agent_home(
+def test_claude_subscription_token_is_written_to_private_support_dir(tmp_path: Path) -> None:
+	support_dir = prepare_agent_support_dir(
 		"claude_non_api",
 		tmp_path / "run",
 		environ={"CLAUDE_CODE_OAUTH_TOKEN": "oauth-secret"},
 	)
 
-	target = home / "oauth_token"
+	target = support_dir / "oauth_token"
 	assert target.read_text(encoding="utf-8") == "oauth-secret"
 	assert target.stat().st_mode & 0o777 == 0o600
 
 
-def test_missing_subscription_auth_does_not_leave_run_home(tmp_path: Path) -> None:
+def test_missing_subscription_auth_does_not_leave_support_dir(tmp_path: Path) -> None:
 	parent = tmp_path / "run"
 	with pytest.raises(RuntimeError, match="Codex subscription auth not found"):
-		prepare_agent_home(
+		prepare_agent_support_dir(
 			"codex_non_api",
 			parent,
 			environ={"AEBENCH_CODEX_AUTH_FILE": str(tmp_path / "missing.json")},
 		)
-	assert not (parent / "agent-home").exists()
+	assert not (parent / "agent-support").exists()
 
 
 def test_docker_agent_environment_does_not_copy_host_runtime(
@@ -251,9 +276,11 @@ def test_docker_agent_environment_does_not_copy_host_runtime(
 		model="gpt-test",
 		prompt="do work",
 		runtime_home="/home/agent",
+		runtime_support_dir="/run/aebench-agent",
 		include_host_runtime=False,
 	)
 	assert env == {
+		"AEBENCH_AGENT_SUPPORT_DIR": "/run/aebench-agent",
 		"AEBENCH_REASONING_EFFORT": "high",
 		"AGENT_CONFIG": "gpt-test",
 		"CODEX_API_KEY": "openai-secret",
@@ -293,21 +320,24 @@ def test_docker_artifact_workspace_mount_preserves_host_path(tmp_path: Path) -> 
 		runtime=RuntimeConfig(mode=RuntimeMode.DOCKER, image="aebench-agent:latest"),
 		artifact_requirements=ArtifactRequirementsConfig(docker=True),
 	)
-	home = tmp_path / "agent-home"
-	home.mkdir()
+	support_dir = tmp_path / "agent-support"
+	support_dir.mkdir()
 	runtime = DockerRuntime(container_name="test-container", resolved_image="aebench-agent:latest")
 	session = SimpleNamespace(
 		run_spec=task,
 		host_workspace=tmp_path,
 		runtime_workspace=str(tmp_path),
 		host_refs=None,
-		host_agent_home=home,
+		host_agent_support_dir=support_dir,
+		runtime_agent_support_dir="/run/aebench-agent",
+		runtime_agent_user="agent",
 		runtime_agent_home="/home/agent",
 	)
 
 	command = runtime._docker_run_command(session)  # type: ignore[arg-type]
 	assert f"{tmp_path}:{tmp_path}" in command
-	assert f"{home}:/home/agent" in command
+	assert f"{support_dir}:/run/aebench-agent" in command
+	assert f"{support_dir}:/home/agent" not in command
 	assert command[command.index("-w") + 1] == str(tmp_path)
 	assert "/var/run/docker.sock:/var/run/docker.sock" in command
 
