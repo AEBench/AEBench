@@ -1,0 +1,55 @@
+id = "asplos25_einsum_ir"
+
+[case_brief]
+core_claim = "Build the Einsum Tree IR implementation and reproduce its FP32 evaluation on all eight released contraction-tree workloads, showing that globally optimized TPP execution usually outperforms the built-in ATen baseline while preserving numerically equivalent results."
+acceptable_evidence = "The TPP benchmark completes at least three samples for each released workload; every sample reports the expected operation count and finite positive performance; the seven ATen-comparable workloads remain numerically equivalent; and TPP beats ATen on at least six workloads with a geometric-mean speedup of at least 1.5x."
+allowed_tolerance = "Operation counts and workload coverage are exact. For ATen-comparable workloads, the maximum element-wise difference may be at most 1e-4 of the larger reported output magnitude. Hardware-sensitive performance is checked by aggregate relations rather than fixed timings; TNLM is excluded from the ATen comparison because its dimension count exceeds ATen's supported limit."
+
+[paper]
+title = "Einsum Trees: An Abstraction for Optimizing the Execution of Tensor Expressions"
+venue = "ASPLOS 2025"
+url = "https://dl.acm.org/doi/pdf/10.1145/3676641.3716254"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+version = "ACM ASPLOS 2025 proceedings version"
+
+[run]
+id = "asplos25_einsum_ir"
+
+[run.instructions]
+path = "README.rst"
+required_evidence = [
+  "Run the TPP backend with dimension reordering enabled for the released SYN, TT, FCTN, TW, GETD, TRN, MERA, and TNLM contraction-tree workloads, keeping at least three complete samples per workload.",
+  "Preserve complete benchmark stdout and stderr as evaluation/logs/<workload>.log for each of syn, tt, fctn, tw, getd, trn, mera, and tnlm. Each log must retain the benchmark's CSV_DATA rows and numerical-comparison output.",
+]
+
+[run.runtime]
+mode = "docker"
+image = "aebench-agent:latest"
+timeout_ms = 7200000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = false
+compose = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+failure_mode = "fail_fast"
+placeholder = false
+
+[oracle.phase_targets]
+env_setup = "task"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "task"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/scalable-analyses/einsum_ir.git"
+ref = "c600e8a2bcc332ab64cf7794d8b342d6b477959a"
+requested_ref = "2411"
+notes = "The paper data release is scalable-analyses/et_asplos25@53580b2ae194ab92333a435998986165ef54a7ae (tag 2502; Zenodo 10.5281/zenodo.14843576)."
