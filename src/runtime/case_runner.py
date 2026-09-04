@@ -239,7 +239,7 @@ class _CaseRunner:
 				traceback.format_exc(),
 				encoding="utf-8",
 			)
-			self.agent_finished = datetime.now(timezone.utc)
+			self.prepare_finished = datetime.now(timezone.utc)
 			self._pipeline_failed = True
 
 	def execute_agent(self) -> None:
@@ -266,12 +266,11 @@ class _CaseRunner:
 					output_path=self.paths.runner_log_path,
 				)
 			finally:
+				self.agent_finished = datetime.now(timezone.utc)
 				clear_agent_support_dir(
 					runtime,
 					session.runtime_agent_support_dir,
 				)
-
-			self.agent_finished = datetime.now(timezone.utc)
 
 			if self.agent_result.exit_code != 0:
 				self.error = f"agent exited with code {self.agent_result.exit_code}"
@@ -300,7 +299,6 @@ class _CaseRunner:
 				traceback.format_exc(),
 				encoding="utf-8",
 			)
-			self.agent_finished = datetime.now(timezone.utc)
 			self._pipeline_failed = True
 
 	def run_oracle(self) -> None:
@@ -343,7 +341,6 @@ class _CaseRunner:
 				traceback.format_exc(),
 				encoding="utf-8",
 			)
-			self.agent_finished = datetime.now(timezone.utc)
 			self._pipeline_failed = True
 
 	def finalize(self) -> CaseRunResult:
