@@ -1,0 +1,57 @@
+id = "asplos25_icemu"
+
+[case_brief]
+core_claim = "Build the NACHO artifact's patched LLVM toolchain, ICEmu, and plugins, then reproduce its evaluation across all nine benchmarks: NACHO retains the paper's lower average runtime-overhead trend against Clank, PROWL, and ReplayCache while producing the reported cache, checkpoint, non-volatile-memory, optimization, and power-failure results."
+acceptable_evidence = "All 72 benchmark ELF files are present; the complete 729-run matrix has a positive cycle result for every run; the main -Os, 512-byte two-way-cache results and NACHO power-failure re-execution values match the bundled reference; and all three evaluation notebooks execute without errors and produce their plots and tables."
+allowed_tolerance = "The pinned emulator outputs are deterministic. Main run metrics use 1% relative tolerance for build-environment drift, and the derived power-failure re-execution percentages allow 0.25 percentage points. Every expected run must be present with a positive cycle count."
+
+[paper]
+title = "Data Cache for Intermittent Computing Systems with Non-Volatile Main Memory"
+venue = "ASPLOS 2025"
+url = "https://repository.tudelft.nl/file/File_6435d416-3c1d-4406-aa89-6e78f8fcad0a?preview=1"
+sha256 = "c8a1046b2c39629f97462b269f77198143aecbd9f93bbbfde9b33838bd2e7e54"
+version = "Final published version"
+
+[run]
+id = "asplos25_icemu"
+
+[run.instructions]
+path = "README.md"
+required_evidence = [
+  "Keep all benchmark final-result files under benchmarks/logs/.",
+  "Keep the 72 compiled benchmark ELF files under benchmarks/<benchmark>/build-<configuration>-<optimization>/.",
+  "Execute plotting/BenchmarkPlots.ipynb, plotting/CacheVariation.ipynb, and plotting/PowerFailures.ipynb, preserving each executed notebook as plotting/<name>.nbconvert.ipynb and the generated plotting/plots/ and plotting/tables/ outputs.",
+]
+
+[run.runtime]
+mode = "docker"
+image = "aebench-agent:latest"
+timeout_ms = 28800000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = true
+compose = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+failure_mode = "fail_fast"
+placeholder = false
+
+[oracle.phase_targets]
+env_setup = "task"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "task"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/TUDSSL/intermittent-risc-v.git"
+ref = "9ff2de3438e27235ed8b521a8ce150399b74b2f8"
+requested_ref = "nacho-artifact-release"
+artifact_mode = "hybrid"
+overlay_artifact = true

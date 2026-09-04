@@ -1,0 +1,353 @@
+{
+  "power_reexecution_abs_tolerance": 0.25,
+  "power_reexecution_percent": {
+    "adpcm": {
+      "250000": 4.350721967294047,
+      "2500000": 0.9873948050029169,
+      "500000": 4.350721967294047,
+      "5000000": 0.16764930935568856
+    },
+    "aes": {
+      "250000": 16.145684719611197,
+      "2500000": 1.0619184211920096,
+      "500000": 5.536713352700717,
+      "5000000": 0.7422447227550366
+    },
+    "coremark": {
+      "250000": 9.681308669880305,
+      "2500000": 0.14412320963166358,
+      "500000": 2.4736778374887525,
+      "5000000": 0.0
+    },
+    "picojpeg": {
+      "250000": 0.9475945297810151,
+      "2500000": 0.11230877619030633,
+      "500000": 0.42439312628288484,
+      "5000000": 0.0734523166116885
+    },
+    "sha": {
+      "250000": 0.8610351573081543,
+      "2500000": 0.19392158745255017,
+      "500000": 0.731906342598232,
+      "5000000": 0.12525762765593917
+    }
+  },
+  "relative_tolerance": 0.01,
+  "runs": {
+    "adpcm": {
+      "clank": {
+        "checkpoint": 4162,
+        "cycles": 63634184,
+        "nvm_reads": 7769038,
+        "nvm_writes": 1830270
+      },
+      "nacho": {
+        "checkpoint": 2737,
+        "cycles": 54656354,
+        "nvm_reads": 2085940,
+        "nvm_writes": 1940820
+      },
+      "nacho_oracle": {
+        "checkpoint": 2053,
+        "cycles": 53992818,
+        "nvm_reads": 1921764,
+        "nvm_writes": 1686356
+      },
+      "plain_c": {
+        "cycles": 50783272
+      },
+      "prowl": {
+        "checkpoint": 5823,
+        "cycles": 63407598,
+        "nvm_reads": 3430156,
+        "nvm_writes": 2980840
+      },
+      "replay_cache": {
+        "checkpoint": 0,
+        "cycles": 65338292,
+        "nvm_reads": 1223732,
+        "nvm_writes": 1728388
+      }
+    },
+    "aes": {
+      "clank": {
+        "checkpoint": 306949,
+        "cycles": 209703798,
+        "nvm_reads": 43358066,
+        "nvm_writes": 84539614
+      },
+      "nacho": {
+        "checkpoint": 701,
+        "cycles": 12875942,
+        "nvm_reads": 292312,
+        "nvm_writes": 491788
+      },
+      "nacho_oracle": {
+        "checkpoint": 651,
+        "cycles": 12843042,
+        "nvm_reads": 284512,
+        "nvm_writes": 477988
+      },
+      "plain_c": {
+        "cycles": 12234222
+      },
+      "prowl": {
+        "checkpoint": 2251,
+        "cycles": 16579566,
+        "nvm_reads": 1037320,
+        "nvm_writes": 997664
+      },
+      "replay_cache": {
+        "checkpoint": 0,
+        "cycles": 27187758,
+        "nvm_reads": 51228,
+        "nvm_writes": 2482336
+      }
+    },
+    "coremark": {
+      "clank": {
+        "checkpoint": 46569,
+        "cycles": 33433282,
+        "nvm_reads": 7369110,
+        "nvm_writes": 13111871
+      },
+      "nacho": {
+        "checkpoint": 201,
+        "cycles": 3468560,
+        "nvm_reads": 122100,
+        "nvm_writes": 138264
+      },
+      "nacho_oracle": {
+        "checkpoint": 157,
+        "cycles": 3410890,
+        "nvm_reads": 108740,
+        "nvm_writes": 115636
+      },
+      "plain_c": {
+        "cycles": 3091890
+      },
+      "prowl": {
+        "checkpoint": 6679,
+        "cycles": 10716976,
+        "nvm_reads": 1722052,
+        "nvm_writes": 2154728
+      },
+      "replay_cache": {
+        "checkpoint": 0,
+        "cycles": 6231537,
+        "nvm_reads": 55272,
+        "nvm_writes": 485224
+      }
+    },
+    "crc": {
+      "clank": {
+        "checkpoint": 261,
+        "cycles": 200778,
+        "nvm_reads": 37916,
+        "nvm_writes": 73993
+      },
+      "nacho": {
+        "checkpoint": 3,
+        "cycles": 40718,
+        "nvm_reads": 1888,
+        "nvm_writes": 2436
+      },
+      "nacho_oracle": {
+        "checkpoint": 3,
+        "cycles": 40704,
+        "nvm_reads": 1884,
+        "nvm_writes": 2432
+      },
+      "plain_c": {
+        "cycles": 34094
+      },
+      "prowl": {
+        "checkpoint": 16,
+        "cycles": 55466,
+        "nvm_reads": 4564,
+        "nvm_writes": 7000
+      },
+      "replay_cache": {
+        "checkpoint": 0,
+        "cycles": 57702,
+        "nvm_reads": 692,
+        "nvm_writes": 3988
+      }
+    },
+    "dijkstra": {
+      "clank": {
+        "checkpoint": 82149,
+        "cycles": 153383372,
+        "nvm_reads": 38369694,
+        "nvm_writes": 29350956
+      },
+      "nacho": {
+        "checkpoint": 33293,
+        "cycles": 122560684,
+        "nvm_reads": 22949544,
+        "nvm_writes": 11112720
+      },
+      "nacho_oracle": {
+        "checkpoint": 32084,
+        "cycles": 121647284,
+        "nvm_reads": 22741496,
+        "nvm_writes": 10726376
+      },
+      "plain_c": {
+        "cycles": 65283080
+      },
+      "prowl": {
+        "checkpoint": 16380,
+        "cycles": 131886624,
+        "nvm_reads": 21437212,
+        "nvm_writes": 6145784
+      },
+      "replay_cache": {
+        "checkpoint": 0,
+        "cycles": 141364063,
+        "nvm_reads": 17558528,
+        "nvm_writes": 7224208
+      }
+    },
+    "picojpeg": {
+      "clank": {
+        "checkpoint": 330045,
+        "cycles": 251084268,
+        "nvm_reads": 52835174,
+        "nvm_writes": 95240100
+      },
+      "nacho": {
+        "checkpoint": 52863,
+        "cycles": 67901194,
+        "nvm_reads": 9822212,
+        "nvm_writes": 16518820
+      },
+      "nacho_oracle": {
+        "checkpoint": 50492,
+        "cycles": 66196546,
+        "nvm_reads": 9430840,
+        "nvm_writes": 15796732
+      },
+      "plain_c": {
+        "cycles": 27826140
+      },
+      "prowl": {
+        "checkpoint": 65040,
+        "cycles": 97665166,
+        "nvm_reads": 15434292,
+        "nvm_writes": 22274304
+      },
+      "replay_cache": {
+        "checkpoint": 0,
+        "cycles": 78628582,
+        "nvm_reads": 1914292,
+        "nvm_writes": 8511004
+      }
+    },
+    "quicksort": {
+      "clank": {
+        "checkpoint": 11103,
+        "cycles": 9214873,
+        "nvm_reads": 2555504,
+        "nvm_writes": 3205524
+      },
+      "nacho": {
+        "checkpoint": 266,
+        "cycles": 1650529,
+        "nvm_reads": 122580,
+        "nvm_writes": 156416
+      },
+      "nacho_oracle": {
+        "checkpoint": 198,
+        "cycles": 1573769,
+        "nvm_reads": 105564,
+        "nvm_writes": 124848
+      },
+      "plain_c": {
+        "cycles": 1188833
+      },
+      "prowl": {
+        "checkpoint": 1189,
+        "cycles": 3019893,
+        "nvm_reads": 405412,
+        "nvm_writes": 494560
+      },
+      "replay_cache": {
+        "checkpoint": 0,
+        "cycles": 2133291,
+        "nvm_reads": 52412,
+        "nvm_writes": 228296
+      }
+    },
+    "sha": {
+      "clank": {
+        "checkpoint": 9635,
+        "cycles": 43652160,
+        "nvm_reads": 9285160,
+        "nvm_writes": 5293765
+      },
+      "nacho": {
+        "checkpoint": 3617,
+        "cycles": 31747368,
+        "nvm_reads": 2330584,
+        "nvm_writes": 2748816
+      },
+      "nacho_oracle": {
+        "checkpoint": 2437,
+        "cycles": 30616816,
+        "nvm_reads": 2065040,
+        "nvm_writes": 2295680
+      },
+      "plain_c": {
+        "cycles": 23364940
+      },
+      "prowl": {
+        "checkpoint": 21974,
+        "cycles": 62780982,
+        "nvm_reads": 8360416,
+        "nvm_writes": 11049880
+      },
+      "replay_cache": {
+        "checkpoint": 0,
+        "cycles": 47811917,
+        "nvm_reads": 961176,
+        "nvm_writes": 3628412
+      }
+    },
+    "towers": {
+      "clank": {
+        "checkpoint": 0,
+        "cycles": 8079380,
+        "nvm_reads": 2294148,
+        "nvm_writes": 2359852
+      },
+      "nacho": {
+        "checkpoint": 12870,
+        "cycles": 15387170,
+        "nvm_reads": 2666660,
+        "nvm_writes": 5002420
+      },
+      "nacho_oracle": {
+        "checkpoint": 0,
+        "cycles": 4051422,
+        "nvm_reads": 177352,
+        "nvm_writes": 180892
+      },
+      "plain_c": {
+        "cycles": 3425380
+      },
+      "prowl": {
+        "checkpoint": 25581,
+        "cycles": 30273084,
+        "nvm_reads": 5389328,
+        "nvm_writes": 9849344
+      },
+      "replay_cache": {
+        "checkpoint": 0,
+        "cycles": 16174028,
+        "nvm_reads": 20468,
+        "nvm_writes": 2359852
+      }
+    }
+  }
+}
