@@ -13,6 +13,7 @@ from evaluator.oracles.checks import (
     PathKind,
     SimilarityMetric,
 )
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 _NAME_SAFE_TRANSLATION = str.maketrans({"/": "_", ".": "_", "-": "_", "(": "", ")": ""})
@@ -90,7 +91,7 @@ class NonEmptyFileCheck(BaseCheck):
 
     path: Path
 
-    def check(self) -> CheckResult:
+    def check(self, _executor: RuntimeCheckExecutor) -> CheckResult:
         if not self.path.is_file():
             return CheckResult.failure(f"file missing: {self.path}")
 
@@ -115,7 +116,7 @@ class ToleranceCheck(BaseCheck):
     target_column: str
     threshold: float
 
-    def check(self) -> CheckResult:
+    def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
         try:
             observed, reference = _load_pair(
                 self.generated_path,
@@ -132,7 +133,7 @@ class ToleranceCheck(BaseCheck):
             observed=observed,
             reference=reference,
             threshold=self.threshold,
-        ).check()
+        ).check(executor)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -145,7 +146,7 @@ class CorrelationCheck(BaseCheck):
     target_column: str
     threshold: float
 
-    def check(self) -> CheckResult:
+    def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
         try:
             observed, reference = _load_pair(
                 self.generated_path,
@@ -163,7 +164,7 @@ class CorrelationCheck(BaseCheck):
             reference=reference,
             metric=SimilarityMetric.PEARSON,
             min_similarity=self.threshold,
-        ).check()
+        ).check(executor)
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
