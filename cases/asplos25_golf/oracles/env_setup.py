@@ -13,7 +13,7 @@ from .consts import DOCKER_MIN_VERSION, DOCKERFILE_PATH, README_PATH, RUN_SH_PAT
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
 	def requirements(self) -> Sequence[BaseCheck]:
-		repo_root = self.artifact_path()
+		repo_root = self.workspace_path()
 
 		return (
 			self.version_check(

@@ -76,7 +76,7 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
             ),
             self.path_check(
                 name="artifact_root_exists",
-                path=self.artifact_path(),
+                path=self.workspace_path(),
                 kind=PathKind.DIRECTORY,
             ),
         )
