@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleBenchmarkPrepBase
 from evaluator.oracles.checks import PathKind
-
+from evaluator.oracles.reporting import BaseCheck
 
 _REQUIRED_FILES: tuple[str, ...] = (
     "simulation/sim.py",
@@ -24,8 +23,8 @@ _REQUIRED_DIRS: tuple[str, ...] = (
 
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
-    def requirements(self) -> Sequence[utils.BaseCheck]:
-        reqs: list[utils.BaseCheck] = []
+    def requirements(self) -> Sequence[BaseCheck]:
+        reqs: list[BaseCheck] = []
 
         for rel_path in _REQUIRED_DIRS:
             reqs.append(
