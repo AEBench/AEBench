@@ -80,7 +80,7 @@ def test_prompt_append_included_when_provided() -> None:
 
 def test_prompt_append_section_absent_when_none() -> None:
 	bundle = build_prompt_bundle(_docker_ctx(prompt_append=None))
-	assert "ADDITIONAL TASK RULES" not in bundle.system_prompt
+	assert "ADDITIONAL REQUIREMENTS" not in bundle.system_prompt
 
 
 def test_prompt_append_present_when_set() -> None:
