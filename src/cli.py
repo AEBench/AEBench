@@ -8,7 +8,7 @@ from config import AppState, resolve_settings
 from evaluator.loader import load_case_spec
 from evaluator.registry import resolve_case_dir
 from log import configure_logging
-from models import RunOptions
+from models import OracleStatus, RunOptions
 from project_config import load_project_config
 from runtime.oracle_runner import DirectOracleRunner
 
@@ -239,7 +239,7 @@ def _case_oracle(args: argparse.Namespace) -> int:
 		print(f"Evaluation: {evaluation_dir}")
 		if result.error:
 			print(f"Error: {result.error}", file=sys.stderr)
-		return 0 if result.status.value != "error" else 1
+		return 0 if result.status == OracleStatus.SUCCESS else 1
 
 	output_dir = _optional_path(args.output_dir) or (case_dir / "output")
 	output_dir.mkdir(parents=True, exist_ok=True)
@@ -257,7 +257,7 @@ def _case_oracle(args: argparse.Namespace) -> int:
 	print(f"Score: {result.score}/{case.oracle.expected_score}")
 	if result.error:
 		print(f"Error: {result.error}", file=sys.stderr)
-	return 0 if result.status.value != "error" else 1
+	return 0 if result.status == OracleStatus.SUCCESS else 1
 
 
 def _runtime_run(args: argparse.Namespace) -> int:

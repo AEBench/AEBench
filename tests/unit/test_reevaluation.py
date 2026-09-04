@@ -78,7 +78,7 @@ def test_load_completed_run_rejects_missing_docker_image(
 		lambda *_args, **_kwargs: subprocess.CompletedProcess([], 1, "", "not found"),
 	)
 
-	with pytest.raises(ValueError, match="recorded runtime snapshot not found"):
+	with pytest.raises(ValueError, match="not found"):
 		reevaluation.load_completed_run(run_dir, expected_case_id="fixture_case")
 
 

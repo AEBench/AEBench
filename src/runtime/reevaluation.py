@@ -20,6 +20,7 @@ EVALUATIONS_DIRNAME = "oracle-evaluations"
 EVALUATION_RECORD_FILENAME = "evaluation.json"
 RESULT_JSONL_FILENAME = "result.jsonl"
 CASE_RESULT_FILENAME = "case_result.json"
+COMMAND_TIMEOUT_SECONDS = 30
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,13 +74,17 @@ def reevaluate_completed_run(
 		source_revision=revision,
 	)
 
-	oracle_result = DirectOracleRunner().execute(
-		case_dir,
-		runtime_result=completed.runtime_result,
-		output_dir=evaluation_dir,
-		case=case,
-		workspace_dir=completed.workspace_dir,
-	)
+	try:
+		oracle_result = DirectOracleRunner().execute(
+			case_dir,
+			runtime_result=completed.runtime_result,
+			output_dir=evaluation_dir,
+			case=case,
+			workspace_dir=completed.workspace_dir,
+		)
+	except Exception:
+		shutil.rmtree(evaluation_dir, ignore_errors=True)
+		raise
 	record = OracleReevaluationResult(
 		case_id=case.id,
 		evaluated_at=evaluated_at,
@@ -147,11 +152,16 @@ def _validate_runtime_snapshot(runtime_result: RunResult) -> None:
 			capture_output=True,
 			text=True,
 			check=False,
+			timeout=COMMAND_TIMEOUT_SECONDS,
 		)
-	except OSError as exc:
+	except (OSError, subprocess.TimeoutExpired) as exc:
 		raise ValueError(f"failed to inspect runtime snapshot: {exc}") from exc
 	if result.returncode != 0:
-		raise ValueError(f"recorded runtime snapshot not found: {runtime.saved_image}")
+		detail = result.stderr.strip() or result.stdout.strip() or "unknown Docker error"
+		raise ValueError(
+			f"failed to inspect runtime snapshot {runtime.saved_image!r} "
+			f"(exit {result.returncode}): {detail}"
+		)
 
 
 def _source_state(project_root: Path) -> tuple[str | None, bool | None]:
@@ -170,8 +180,9 @@ def _run_git(root: Path, *args: str) -> str | None:
 			capture_output=True,
 			text=True,
 			check=False,
+			timeout=COMMAND_TIMEOUT_SECONDS,
 		)
-	except OSError:
+	except (OSError, subprocess.TimeoutExpired):
 		return None
 	if result.returncode != 0:
 		return None

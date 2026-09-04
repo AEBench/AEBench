@@ -22,6 +22,7 @@ from models import (
 	TaskConfig,
 	TaskStatus,
 )
+from runtime.oracle_runner import DirectOracleRunner
 from runtime.reevaluation import load_completed_run, reevaluate_completed_run
 
 _ORACLES = textwrap.dedent("""\
@@ -154,3 +155,31 @@ def test_reevaluate_completed_run_preserves_original_results(tmp_path: Path) -> 
 	assert (evaluation_dir / "oracle_result.json").is_file()
 	assert (evaluation_dir / "evaluation.json").is_file()
 	assert original_result.read_text(encoding="utf-8") == '{"score": 2}\n'
+
+
+def test_reevaluate_completed_run_removes_directory_after_oracle_error(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	workspace = tmp_path / "workspace"
+	workspace.mkdir()
+	run_dir = tmp_path / "run"
+	_write_completed_run(run_dir, _run_result(workspace))
+
+	def raise_oracle_error(*_args: object, **_kwargs: object) -> None:
+		raise RuntimeError("oracle failed")
+
+	monkeypatch.setattr(
+		DirectOracleRunner,
+		"execute",
+		raise_oracle_error,
+	)
+
+	with pytest.raises(RuntimeError, match="oracle failed"):
+		reevaluate_completed_run(
+			case_dir=tmp_path / "fixture_case",
+			case=_case_spec(),
+			run_dir=run_dir,
+			project_root=tmp_path,
+		)
+
+	assert not any((run_dir / "oracle-evaluations").iterdir())
