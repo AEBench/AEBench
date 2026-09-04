@@ -21,6 +21,5 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 					for workload, _ in WORKLOAD_CONFIGS
 				},
 				reference_path=self.ref_path("workloads.ref.json"),
-				executor=self.executor,
 			),
 		)

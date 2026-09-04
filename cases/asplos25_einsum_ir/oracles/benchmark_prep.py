@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shlex
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from evaluator.oracles import CaseOracleBenchmarkPrepBase
 from evaluator.oracles.oracle_checks_runtime import (
@@ -18,18 +18,17 @@ from .consts import WORKLOAD_CONFIGS
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WorkloadConfigsCheck(BaseCheck):
 	files: Sequence[tuple[str, OraclePath]]
-	executor: RuntimeCheckExecutor | None = field(default=None)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		errors: list[str] = []
 		for workload, path in self.files:
 			try:
 				lines = [
 					line.strip()
-					for line in check_read_file_text(path, executor=self.executor).splitlines()
+					for line in check_read_file_text(path, executor=executor).splitlines()
 					if line.strip()
 				]
-			except OSError as exc:
+			except (OSError, RuntimeError, ValueError) as exc:
 				errors.append(f"{workload}: {exc}")
 				continue
 			if len(lines) != 1:
@@ -64,6 +63,5 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 				files=tuple(
 					(workload, self.runtime_path(path)) for workload, path in WORKLOAD_CONFIGS
 				),
-				executor=self.executor,
 			),
 		)

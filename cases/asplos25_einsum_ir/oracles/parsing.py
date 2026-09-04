@@ -8,7 +8,7 @@ import re
 import statistics
 from collections import Counter
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from evaluator.oracles.oracle_checks_runtime import (
@@ -25,11 +25,15 @@ _MAX_RELATIVE_OUTPUT_ERROR = 1e-4
 _MIN_ATEN_WINS = 6
 _MIN_GEOMEAN_SPEEDUP = 1.5
 
-_COMPARISON_PATTERNS = {
-	"aten_max": re.compile(r"maximum absolute entry in ATen solution:\s+([0-9.eE+-]+)"),
-	"einsum_max": re.compile(r"maximum absolute entry in einsum_ir solution:\s+([0-9.eE+-]+)"),
-	"max_difference": re.compile(r"maximum element-wise difference:\s+([0-9.eE+-]+)"),
-}
+_FLOAT_PATTERN = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
+_COMPARISON_PATTERN = re.compile(
+	r"maximum absolute entry in ATen solution:\s+"
+	+ rf"(?P<aten_max>{_FLOAT_PATTERN})\s+"
+	+ r"maximum absolute entry in einsum_ir solution:\s+"
+	+ rf"(?P<einsum_max>{_FLOAT_PATTERN})\s+"
+	+ r"maximum element-wise difference:\s+"
+	+ rf"(?P<max_difference>{_FLOAT_PATTERN})"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,15 +120,26 @@ def _validate_rows(
 
 	for row in rows:
 		if row.code == "einsum_ir":
-			if row.time_compile <= 0 or row.time_eval <= 0:
-				raise ValueError(f"{workload}: Einsum IR times must be positive")
-			if row.gflops_eval <= 0 or row.gflops_total <= 0:
-				raise ValueError(f"{workload}: Einsum IR performance must be positive")
+			if not all(
+				value > 0
+				for value in (
+					row.time_compile,
+					row.time_eval,
+					row.gflops_eval,
+					row.gflops_total,
+				)
+			):
+				raise ValueError(f"{workload}: Einsum IR metrics must be positive")
 		elif row.code == "at::einsum":
+			if (row.time_compile, row.time_eval, row.gflops_eval) != (0, 0, 0):
+				raise ValueError(f"{workload}: ATen unused metrics must be zero")
 			if row.gflops_total <= 0:
-				raise ValueError(f"{workload}: ATen performance must be positive")
-		elif row.time_eval <= 0 or row.gflops_eval <= 0:
-			raise ValueError(f"{workload}: matmul performance must be positive")
+				raise ValueError(f"{workload}: ATen total performance must be positive")
+		else:
+			if row.time_compile != 0 or row.gflops_total != 0:
+				raise ValueError(f"{workload}: matmul unused metrics must be zero")
+			if row.time_eval <= 0 or row.gflops_eval <= 0:
+				raise ValueError(f"{workload}: matmul evaluation metrics must be positive")
 
 	einsum_gflops = statistics.median(row.gflops_eval for row in rows if row.code == "einsum_ir")
 	if not aten_comparable:
@@ -134,20 +149,17 @@ def _validate_rows(
 
 
 def _validate_comparisons(text: str, *, workload: str, expected_count: int) -> None:
-	values = {
-		name: [float(value) for value in pattern.findall(text)]
-		for name, pattern in _COMPARISON_PATTERNS.items()
-	}
-	counts = {name: len(items) for name, items in values.items()}
-	if set(counts.values()) != {expected_count}:
-		raise ValueError(f"{workload}: incomplete numerical comparisons {counts}")
+	matches = list(_COMPARISON_PATTERN.finditer(text))
+	if len(matches) != expected_count:
+		raise ValueError(
+			f"{workload}: found {len(matches)} complete numerical comparisons, "
+			f"expected {expected_count}"
+		)
 
-	for aten_max, einsum_max, difference in zip(
-		values["aten_max"],
-		values["einsum_max"],
-		values["max_difference"],
-		strict=True,
-	):
+	for match in matches:
+		aten_max = float(match.group("aten_max"))
+		einsum_max = float(match.group("einsum_max"))
+		difference = float(match.group("max_difference"))
 		if not all(
 			math.isfinite(value) and value >= 0 for value in (aten_max, einsum_max, difference)
 		):
@@ -166,9 +178,8 @@ def _validate_comparisons(text: str, *, workload: str, expected_count: int) -> N
 class EinsumEvaluationCheck(BaseCheck):
 	logs: Mapping[str, OraclePath]
 	reference_path: Path
-	executor: RuntimeCheckExecutor | None = field(default=None)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
 			reference = _parse_reference(self.reference_path)
 		except (OSError, json.JSONDecodeError, ValueError) as exc:
@@ -180,20 +191,21 @@ class EinsumEvaluationCheck(BaseCheck):
 		for workload, _ in WORKLOAD_CONFIGS:
 			expected_flops, aten_comparable = reference[workload]
 			try:
-				text = check_read_file_text(self.logs[workload], executor=self.executor)
+				text = check_read_file_text(self.logs[workload], executor=executor)
 				rows = _parse_rows(text, workload=workload, expected_flops=expected_flops)
 				einsum_gflops, aten_gflops = _validate_rows(
 					rows,
 					workload=workload,
 					aten_comparable=aten_comparable,
 				)
-				if text.count("dtype: FP32") != sum(row.code == "einsum_ir" for row in rows):
+				sample_count = sum(row.code == "einsum_ir" for row in rows)
+				if text.count("dtype: FP32") != sample_count:
 					raise ValueError(f"{workload}: FP32 marker count does not match samples")
 				if aten_gflops is not None:
 					_validate_comparisons(
 						text,
 						workload=workload,
-						expected_count=sum(row.code == "einsum_ir" for row in rows),
+						expected_count=sample_count,
 					)
 					speedup = einsum_gflops / aten_gflops
 					speedups.append(speedup)
@@ -207,7 +219,7 @@ class EinsumEvaluationCheck(BaseCheck):
 			return CheckResult.failure(
 				f"TPP beat ATen on {wins}/{len(speedups)} workloads; expected at least {_MIN_ATEN_WINS}"
 			)
-		geomean = math.exp(statistics.fmean(math.log(speedup) for speedup in speedups))
+		geomean = statistics.geometric_mean(speedups)
 		if geomean < _MIN_GEOMEAN_SPEEDUP:
 			return CheckResult.failure(
 				f"TPP/ATen geometric-mean speedup {geomean:.3g} is below {_MIN_GEOMEAN_SPEEDUP:.3g}"
