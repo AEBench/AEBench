@@ -1,0 +1,21 @@
+{
+  "basilisk_sloc_tolerance": 5,
+  "protocols": {
+    "echoServer": {"monotonicity_annotations": 1, "provenance_hints": 0, "basilisk_safety": 8, "basilisk_total": 49, "kondo_safety": 0, "kondo_total": 40},
+    "ringLeaderElection": {"monotonicity_annotations": 0, "provenance_hints": 0, "basilisk_safety": 80, "basilisk_total": 115, "kondo_safety": 30, "kondo_total": 63},
+    "simplifiedLeaderElection": {"monotonicity_annotations": 1, "provenance_hints": 0, "basilisk_safety": 59, "basilisk_total": 101, "kondo_safety": 33, "kondo_total": 94},
+    "paxos": {"monotonicity_annotations": 5, "provenance_hints": 0, "basilisk_safety": 500, "basilisk_total": 542, "kondo_safety": 558, "kondo_total": 777},
+    "paxos-combined": {"monotonicity_annotations": 5, "provenance_hints": 0, "basilisk_safety": 479, "basilisk_total": 521, "kondo_safety": -1, "kondo_total": -1},
+    "paxos-dynamic": {"monotonicity_annotations": 4, "provenance_hints": 2, "basilisk_safety": 503, "basilisk_total": 546, "kondo_safety": -1, "kondo_total": -1},
+    "flexiblePaxos": {"monotonicity_annotations": 5, "provenance_hints": 0, "basilisk_safety": 505, "basilisk_total": 547, "kondo_safety": 559, "kondo_total": 780},
+    "distributedLock": {"monotonicity_annotations": 0, "provenance_hints": 0, "basilisk_safety": 0, "basilisk_total": 39, "kondo_safety": 0, "kondo_total": 31},
+    "shardedKv": {"monotonicity_annotations": 0, "provenance_hints": 0, "basilisk_safety": 0, "basilisk_total": 39, "kondo_safety": 35, "kondo_total": 68},
+    "shardedKvBatched": {"monotonicity_annotations": 0, "provenance_hints": 0, "basilisk_safety": 0, "basilisk_total": 38, "kondo_safety": 0, "kondo_total": 31},
+    "lockServer": {"monotonicity_annotations": 0, "provenance_hints": 0, "basilisk_safety": 0, "basilisk_total": 39, "kondo_safety": 20, "kondo_total": 59},
+    "twoPhaseCommit": {"monotonicity_annotations": 3, "provenance_hints": 0, "basilisk_safety": 94, "basilisk_total": 138, "kondo_safety": 119, "kondo_total": 186},
+    "threePhaseCommit": {"monotonicity_annotations": 5, "provenance_hints": 0, "basilisk_safety": 107, "basilisk_total": 151, "kondo_safety": -1, "kondo_total": -1},
+    "reduce": {"monotonicity_annotations": 0, "provenance_hints": 0, "basilisk_safety": 30, "basilisk_total": 69, "kondo_safety": -1, "kondo_total": -1},
+    "raftLeaderElection": {"monotonicity_annotations": 1, "provenance_hints": 2, "basilisk_safety": 52, "basilisk_total": 93, "kondo_safety": -1, "kondo_total": -1},
+    "multiPaxos": {"monotonicity_annotations": 4, "provenance_hints": 2, "basilisk_safety": 608, "basilisk_total": 651, "kondo_safety": -1, "kondo_total": -1}
+  }
+}

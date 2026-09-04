@@ -18,6 +18,7 @@ id = "osdi24_kondo"
 path = "README.md"
 required_evidence = [
   "Preserve the complete verify-all output as kondoPrototypes/verify-all.log.",
+  "Keep each protocol's generated applicationProofDraftAutogen.dfy, messageInvariantsAutogen.dfy, and monotonicityInvariantsAutogen.dfy under kondoPrototypes/<protocol>/async-kondo/, plus ownershipInvariantsAutogen.dfy where applicable.",
   "Keep the generated kondoPrototypes/evaluation/sloc.csv.",
 ]
 
@@ -32,10 +33,14 @@ profile = "artifact-eval-v1"
 
 [oracle]
 expected_score = 4
-phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
-score_mode = "phase_count"
 failure_mode = "fail_fast"
 placeholder = false
+
+[oracle.phase_targets]
+env_setup = "task"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "task"
 
 [upstream]
 source_type = "git"
