@@ -73,6 +73,14 @@ def _build_parser() -> argparse.ArgumentParser:
 	_add_run_options(runtime_run)
 	runtime_run.add_argument("--input-file", required=True)
 	runtime_run.add_argument("--output-dir", default=None)
+
+	audit_p = sub.add_parser("audit-trace", help="Audit an aeshell commands.jsonl trace.")
+	audit_p.add_argument("trace_path")
+	audit_p.add_argument("--instructions", default=None)
+	audit_p.add_argument("--output", default=None)
+	audit_p.add_argument("--model", default=None)
+	audit_p.add_argument("--escalation-model", default=None)
+	audit_p.add_argument("--no-escalation", action="store_true")
 	return parser
 
 
@@ -96,6 +104,7 @@ def cli_main(argv: list[str] | None = None) -> int:
 			"run": _run_benchmark,
 			"case": _handle_case,
 			"runtime": _handle_runtime,
+			"audit-trace": _audit_trace,
 		}[args.command](args)
 	except KeyboardInterrupt:
 		print("Interrupted", file=sys.stderr)
@@ -246,6 +255,51 @@ def _case_oracle(args: argparse.Namespace) -> int:
 
 def _runtime_run(args: argparse.Namespace) -> int:
 	raise SystemExit("runtime run is unavailable in this checkout")
+
+
+def _audit_trace(args: argparse.Namespace) -> int:
+	from trajectory_audit.judge import OpenAIResponsesJudge
+	from trajectory_audit.sanitize import MAX_TASK_CONTEXT_CHARS
+	from trajectory_audit.service import (
+		DEFAULT_ESCALATION_MODEL,
+		DEFAULT_PRIMARY_MODEL,
+		AuditService,
+	)
+
+	trace_path = Path(args.trace_path).expanduser().resolve()
+	if not trace_path.is_file():
+		print(f"Trace does not exist: {trace_path}", file=sys.stderr)
+		return 2
+	escalation_model = (
+		None if args.no_escalation else (args.escalation_model or DEFAULT_ESCALATION_MODEL)
+	)
+	service = AuditService(
+		OpenAIResponsesJudge(),
+		primary_model=args.model or DEFAULT_PRIMARY_MODEL,
+		escalation_model=escalation_model,
+	)
+	try:
+		task_context = ""
+		if args.instructions:
+			instructions_path = Path(args.instructions).expanduser().resolve()
+			with instructions_path.open(encoding="utf-8") as instructions_file:
+				task_context = instructions_file.read(MAX_TASK_CONTEXT_CHARS + 1)
+		report = service.audit_jsonl(trace_path, task_context=task_context)
+	except (OSError, ValueError, RuntimeError) as exc:
+		print(f"Audit failed: {exc}", file=sys.stderr)
+		return 2
+
+	serialized = report.model_dump_json(indent=2)
+	if args.output:
+		output_path = Path(args.output).expanduser().resolve()
+		output_path.parent.mkdir(parents=True, exist_ok=True)
+		output_path.write_text(serialized + "\n", encoding="utf-8")
+		print(f"Audit report: {output_path}")
+	else:
+		print(serialized)
+	# Review and blocked are triage states, not command failures. Automation can
+	# inspect the rigid JSON status without conflating it with benchmark scoring.
+	return 0
 
 
 def _build_context() -> AppState:
