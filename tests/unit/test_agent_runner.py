@@ -152,7 +152,7 @@ def test_local_agent_uses_current_user() -> None:
 	]
 
 
-def test_runner_passes_harness_contract_and_saves_raw_output(
+def test_runner_passes_harness_contract_and_saves_output(
 	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
 	monkeypatch.setenv("OPENAI_API_KEY", "secret")
@@ -188,6 +188,7 @@ def test_runner_passes_harness_contract_and_saves_raw_output(
 	assert runtime.env["PROMPT"] == "do the task"
 	assert runtime.env["AGENT_CONFIG"] == "gpt-test"
 	assert runtime.env["AEBENCH_REASONING_EFFORT"] == "high"
+	assert runtime.env["OPENAI_API_KEY"] == "secret"
 	assert runtime.env["CODEX_API_KEY"] == "secret"
 	assert "ANTHROPIC_API_KEY" not in runtime.env
 	assert runtime.stdin_text == _solve_script("codex")
@@ -285,6 +286,7 @@ def test_docker_agent_environment_does_not_copy_host_runtime(
 		"AGENT_CONFIG": "gpt-test",
 		"CODEX_API_KEY": "openai-secret",
 		"HOME": "/home/agent",
+		"OPENAI_API_KEY": "openai-secret",
 		"PROMPT": "do work",
 	}
 

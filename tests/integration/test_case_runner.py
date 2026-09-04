@@ -4,6 +4,7 @@ import json
 import shutil
 import subprocess
 from collections.abc import Mapping
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,12 @@ def test_case_runner_executes_agent_then_oracle(
 	output_dir = tmp_path / "output"
 	events: list[str] = []
 	runtime_paths: dict[str, str] = {}
+	clock = {"now": datetime(2026, 1, 1, tzinfo=timezone.utc)}
+
+	class FakeDateTime:
+		@staticmethod
+		def now(_timezone: timezone) -> datetime:
+			return clock["now"]
 
 	def fake_agent(
 		*_args: Any,
@@ -47,13 +54,19 @@ def test_case_runner_executes_agent_then_oracle(
 		events.append("agent")
 		runtime_paths.update(home=runtime_home, support=runtime_support_dir)
 		output_path.write_text('{"type":"result"}\n', encoding="utf-8")
+		clock["now"] += timedelta(seconds=2)
 		return AgentResult(model=model, exit_code=0, reasoning_effort="high")
+
+	def clear_support_dir(*_args: Any, **_kwargs: Any) -> None:
+		clock["now"] += timedelta(seconds=3)
 
 	def record_output_dir(path: Path) -> None:
 		assert path.is_dir()
 		events.append(f"output:{path}")
 
 	monkeypatch.setattr("runtime.case_runner.run_agent", fake_agent)
+	monkeypatch.setattr("runtime.case_runner.clear_agent_support_dir", clear_support_dir)
+	monkeypatch.setattr("runtime.case_runner.datetime", FakeDateTime)
 	result = run_case(
 		context,
 		project / "bundles" / "mock_apt_case",
@@ -67,6 +80,7 @@ def test_case_runner_executes_agent_then_oracle(
 	assert result.oracle_result.score == 4
 	assert result.runtime_result.agent_kind == "codex"
 	assert result.runtime_result.agent.reasoning_effort == "high"
+	assert result.runtime_result.duration_ms == 2_000
 	assert runtime_paths["home"] == str(Path.home())
 	assert runtime_paths["support"].endswith("/agent-support")
 	assert runtime_paths["support"] != runtime_paths["home"]
@@ -205,14 +219,30 @@ def test_docker_case_scores_stopped_snapshot_not_live_session(
 	runtime = FakeDockerRuntime()
 	monkeypatch.setattr("runtime.case_runner.get_runtime", lambda *_args, **_kwargs: runtime)
 	monkeypatch.setattr(
+		"runtime.case_runner.prepare_agent_runtime",
+		lambda _runtime: events.append("prepare_agent_runtime"),
+	)
+
+	def fake_agent(*_args: Any, model: str, **_kwargs: Any) -> AgentResult:
+		events.append("agent")
+		return AgentResult(model=model, exit_code=0)
+
+	monkeypatch.setattr(
 		"runtime.case_runner.run_agent",
-		lambda *_args, model, **_kwargs: AgentResult(model=model, exit_code=0),
+		fake_agent,
 	)
 
 	class CapturingOracleRunner:
 		def execute(self, _case_root: Path, **kwargs: Any) -> OracleResult:
 			events.append("oracle")
-			assert events[:4] == ["prepare", "stop", "snapshot", "oracle"]
+			assert events[:6] == [
+				"prepare",
+				"prepare_agent_runtime",
+				"agent",
+				"stop",
+				"snapshot",
+				"oracle",
+			]
 			assert "runtime_session" not in kwargs
 			assert "runtime_backend" not in kwargs
 			assert kwargs["runtime_result"].runtime.saved_image == "aebench-oracle-snapshots:test"
@@ -228,5 +258,13 @@ def test_docker_case_scores_stopped_snapshot_not_live_session(
 	)
 
 	assert result.status == CaseStatus.SUCCESS
-	assert events == ["prepare", "stop", "snapshot", "oracle", "cleanup"]
+	assert events == [
+		"prepare",
+		"prepare_agent_runtime",
+		"agent",
+		"stop",
+		"snapshot",
+		"oracle",
+		"cleanup",
+	]
 	assert result.runtime_result.runtime.saved_image is None

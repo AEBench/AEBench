@@ -18,7 +18,7 @@ _CLAUDE_NONINTERACTIVE_GUIDANCE = (
 	"You cannot receive interactive input. Wait for every process that you start to "
 	"finish before you write your final response."
 )
-_DOCKER_AGENT_USER_SETUP = (
+_DOCKER_HOST_SOCKET_SETUP = (
 	'socket="/var/run/docker.sock"; '
 	'if [ -S "$socket" ]; then '
 	'socket_gid=$(stat -c %g "$socket"); '
@@ -131,11 +131,12 @@ def run_agent(
 
 
 def prepare_agent_runtime(runtime: BenchRuntime) -> None:
+	"""Grant the Docker agent user access to a mounted host Docker socket."""
 	if not isinstance(runtime, DockerRuntime):
 		return
 
 	result = runtime.run_process(
-		["sh", "-e", "-c", _DOCKER_AGENT_USER_SETUP],
+		["sh", "-e", "-c", _DOCKER_HOST_SOCKET_SETUP],
 		timeout=30,
 	)
 	if result.returncode != 0:
@@ -163,7 +164,7 @@ def clear_agent_support_dir(runtime: BenchRuntime, runtime_support_dir: str) -> 
 			"sh",
 			"-c",
 			'test ! -d "$1" || find "$1" -mindepth 1 -delete',
-			"aebench-clear-home",
+			"aebench-clear-support",
 			runtime_support_dir,
 		],
 		timeout=30,
@@ -198,6 +199,7 @@ def _agent_env(
 		key = os.environ.get("OPENAI_API_KEY") or os.environ.get("CODEX_API_KEY")
 		if not key:
 			raise RuntimeError("Codex API harness requires CODEX_API_KEY or OPENAI_API_KEY")
+		env["OPENAI_API_KEY"] = key
 		env["CODEX_API_KEY"] = key
 	elif agent == "claude":
 		key = os.environ.get("ANTHROPIC_API_KEY")
@@ -242,7 +244,6 @@ def _agent_shell_command(runtime: BenchRuntime) -> list[str]:
 
 
 __all__ = [
-	"AgentName",
 	"clear_agent_support_dir",
 	"prepare_agent_support_dir",
 	"prepare_agent_runtime",
