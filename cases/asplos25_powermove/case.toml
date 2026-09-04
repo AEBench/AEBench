@@ -1,0 +1,59 @@
+id = "asplos25_powermove"
+
+[case_brief]
+core_claim = "Set up PowerMove and reproduce its neutral-atom compilation evaluation on the five workload families used in Figure 6, showing that the continuous router improves QAOA-regular3 fidelity and execution time over Enola while storage-zone compilation eliminates excitation error."
+acceptable_evidence = "Complete results and logs cover fixed released QAOA, QSim, QFT, VQE, and BV inputs in both PowerMove modes, plus the scoped Enola comparison; the compiler metrics match the bundled reference, their fidelity components are internally consistent, and the router and storage-zone relations hold."
+allowed_tolerance = "Workload coverage and log completion are exact. Deterministic compiler metrics allow 1% relative or 1e-8 absolute tolerance for dependency and floating-point drift. Machine-dependent compilation seconds are recorded but not scored."
+
+[paper]
+title = "PowerMove: Optimizing Compilation for Neutral Atom Quantum Computers with Zoned Architecture"
+venue = "ASPLOS 2025"
+url = "https://arxiv.org/pdf/2411.12263v1"
+sha256 = "673a950a4790193c53d63d9278b84a18d821461ff079e7e7597be51f4d367b2c"
+version = "arXiv v1 corresponding to the ASPLOS 2025 paper"
+
+[run]
+id = "asplos25_powermove"
+
+[run.instructions]
+path = "AEBENCH.md"
+required_evidence = [
+  "Run PowerMove with and without the storage zone on the released QAOA-regular3-30 instance i0, QSim-rand-0.3-10 instance i0, QFT-18, VQE-30, and BV-14 inputs. Also run Enola on QAOA-regular3-30.",
+  "Keep one result per workload as evaluation/results/<workload>.json and preserve complete stdout and stderr as evaluation/logs/<workload>.log. Each log must contain exact lines '===== BEGIN <workload> =====' and '===== END <workload> status=0 ====='.",
+]
+
+[run.runtime]
+mode = "docker"
+image = "aebench-agent:latest"
+timeout_ms = 7200000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = false
+compose = false
+
+[run.artifact_requirements.hardware]
+network = true
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+failure_mode = "fail_fast"
+placeholder = false
+
+[oracle.phase_targets]
+env_setup = "task"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "task"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/Scarlett0815/PowerMove.git"
+ref = "5918ada6a19a0824ec8f3dd65344344d8bb3cb21"
+requested_ref = "main"
+artifact_mode = "hybrid"
+overlay_artifact = true

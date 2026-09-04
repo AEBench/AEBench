@@ -1,0 +1,147 @@
+{
+  "absolute_tolerance": 1e-08,
+  "relative_tolerance": 0.01,
+  "workloads": {
+    "bv_14": {
+      "cz_blocks": 2,
+      "non_storage": {
+        "coherence_fidelity": 0.9731630296124208,
+        "excitation_fidelity": 0.6767263388387882,
+        "fidelity": 0.6017774879501985,
+        "move_duration": 2556.419018445723,
+        "movement_stages": 24,
+        "one_qubit_fidelity": 1,
+        "transfer_duration": 384,
+        "transfer_fidelity": 0.9752977125970467,
+        "two_qubit_fidelity": 0.9369146928798039
+      },
+      "qubits": 14,
+      "with_storage": {
+        "coherence_fidelity": 0.9919396553384785,
+        "excitation_fidelity": 1.0,
+        "fidelity": 0.9054990441726698,
+        "move_duration": 4860.003900183863,
+        "movement_stages": 26,
+        "one_qubit_fidelity": 1,
+        "transfer_duration": 416,
+        "transfer_fidelity": 0.9743224148844496,
+        "two_qubit_fidelity": 0.9369146928798039
+      }
+    },
+    "qaoa_regular3_30": {
+      "cz_blocks": 1,
+      "enola": {
+        "coherence_fidelity": 0.7628735541058983,
+        "excitation_fidelity": 0.8605463393821575,
+        "fidelity": 0.43933052832582675,
+        "move_duration": 10650.282920555203,
+        "movement_stages": 274,
+        "one_qubit_fidelity": 1,
+        "transfer_duration": 2910,
+        "transfer_fidelity": 0.8385441389700581,
+        "two_qubit_fidelity": 0.7980656776819048
+      },
+      "non_storage": {
+        "coherence_fidelity": 0.9026949141210316,
+        "excitation_fidelity": 0.8605463393821575,
+        "fidelity": 0.5809123712022486,
+        "move_duration": 4616.47540348326,
+        "movement_stages": 33,
+        "one_qubit_fidelity": 1,
+        "transfer_duration": 528,
+        "transfer_fidelity": 0.9370369888620201,
+        "two_qubit_fidelity": 0.7980656776819048
+      },
+      "qubits": 30,
+      "with_storage": {
+        "coherence_fidelity": 0.864224534429035,
+        "excitation_fidelity": 1.0,
+        "fidelity": 0.6392081888367138,
+        "move_duration": 9593.387223846636,
+        "movement_stages": 47,
+        "one_qubit_fidelity": 1,
+        "transfer_duration": 752,
+        "transfer_fidelity": 0.9267809647166115,
+        "two_qubit_fidelity": 0.798065677681905
+      }
+    },
+    "qft_18": {
+      "cz_blocks": 34,
+      "non_storage": {
+        "coherence_fidelity": 0.64233127430777,
+        "excitation_fidelity": 0.05346851220847845,
+        "fidelity": 0.004871463382741175,
+        "move_duration": 32266.148875082665,
+        "movement_stages": 284,
+        "one_qubit_fidelity": 1,
+        "transfer_duration": 4544,
+        "transfer_fidelity": 0.6575663287622634,
+        "two_qubit_fidelity": 0.21570623976979025
+      },
+      "qubits": 18,
+      "with_storage": {
+        "coherence_fidelity": 0.5588316203829468,
+        "excitation_fidelity": 1.0,
+        "fidelity": 0.05430474717850157,
+        "move_duration": 119021.62149239476,
+        "movement_stages": 433,
+        "one_qubit_fidelity": 1,
+        "transfer_duration": 6928,
+        "transfer_fidelity": 0.45049929544903744,
+        "two_qubit_fidelity": 0.21570623976979045
+      }
+    },
+    "qsim_rand_0.3_10": {
+      "cz_blocks": 16,
+      "non_storage": {
+        "coherence_fidelity": 0.9714681403186372,
+        "excitation_fidelity": 0.8185257542796961,
+        "fidelity": 0.6170992474853209,
+        "move_duration": 3732.5415061139033,
+        "movement_stages": 43,
+        "one_qubit_fidelity": 1,
+        "transfer_duration": 688,
+        "transfer_fidelity": 0.9483548639781194,
+        "two_qubit_fidelity": 0.8183201210226743
+      },
+      "qubits": 10,
+      "with_storage": {
+        "coherence_fidelity": 0.9706119606999365,
+        "excitation_fidelity": 1.0,
+        "fidelity": 0.7450065912084526,
+        "move_duration": 8729.81593050288,
+        "movement_stages": 48,
+        "one_qubit_fidelity": 1,
+        "transfer_duration": 768,
+        "transfer_fidelity": 0.9379749638258459,
+        "two_qubit_fidelity": 0.8183201210226743
+      }
+    },
+    "vqe_30": {
+      "cz_blocks": 2,
+      "non_storage": {
+        "coherence_fidelity": 0.9703641307576,
+        "excitation_fidelity": 0.9950062500000001,
+        "fidelity": 0.8102042774571444,
+        "move_duration": 1343.4403215686427,
+        "movement_stages": 11,
+        "one_qubit_fidelity": 1,
+        "transfer_duration": 176,
+        "transfer_fidelity": 0.9704309672630859,
+        "two_qubit_fidelity": 0.8647077305675338
+      },
+      "qubits": 30,
+      "with_storage": {
+        "coherence_fidelity": 0.9400991600172568,
+        "excitation_fidelity": 1.0,
+        "fidelity": 0.7763462591088487,
+        "move_duration": 3874.712872739362,
+        "movement_stages": 23,
+        "one_qubit_fidelity": 1,
+        "transfer_duration": 368,
+        "transfer_fidelity": 0.9550199818235602,
+        "two_qubit_fidelity": 0.8647077305675338
+      }
+    }
+  }
+}
