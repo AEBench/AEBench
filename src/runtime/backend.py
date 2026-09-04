@@ -11,6 +11,7 @@ import subprocess
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 from constants import DEFAULT_ORACLE_CHECK_TIMEOUT
@@ -47,6 +48,17 @@ class BenchRuntime(Protocol):
 		timeout: float = DEFAULT_ORACLE_CHECK_TIMEOUT,
 	) -> subprocess.CompletedProcess[str]: ...
 
+	def run_process_to_file(
+		self,
+		cmd: list[str],
+		*,
+		output_path: Path,
+		cwd: str | None = None,
+		env: Mapping[str, str] | None = None,
+		stdin_text: str | None = None,
+		timeout: float = DEFAULT_ORACLE_CHECK_TIMEOUT,
+	) -> subprocess.CompletedProcess[str]: ...
+
 	def open_shell(
 		self, *, cwd: str | None = None, env: Mapping[str, str] | None = None
 	) -> int: ...
@@ -68,6 +80,8 @@ class BenchRuntime(Protocol):
 	) -> str | None: ...
 
 	def snapshot(self, session: RunSession) -> str | None: ...
+
+	def stop(self, session: RunSession) -> None: ...
 
 	def cleanup(self, session: RunSession) -> None: ...
 
@@ -100,6 +114,7 @@ class DockerRuntime:
 	resolved_image: str | None = None
 	last_container_id: str | None = None
 	container_removed: bool = False
+	container_stopped: bool = False
 	saved_image: str | None = None
 	path_separator: str = ":"
 
@@ -114,12 +129,16 @@ class DockerRuntime:
 			"--name",
 			self.container_name,
 			"-v",
-			f"{session.host_workspace}:/repo",
+			f"{session.host_workspace}:{session.runtime_workspace}",
+			"-v",
+			f"{session.host_agent_support_dir}:{session.runtime_agent_support_dir}",
 			"-w",
-			"/repo",
+			session.runtime_workspace,
 		]
 		if session.host_refs is not None:
 			cmd.extend(["-v", f"{session.host_refs}:/refs:ro"])
+		if session.run_spec.artifact_requirements.docker:
+			cmd.extend(["-v", "/var/run/docker.sock:/var/run/docker.sock"])
 		if self.gpu or bool(getattr(session.run_spec.runtime, "gpu", False)):
 			cmd.extend(["--gpus", "all"])
 		cmd.extend([self.resolved_image, "sleep", "infinity"])
@@ -137,6 +156,7 @@ class DockerRuntime:
 		self.resolved_image = image
 		self.last_container_id = None
 		self.container_removed = False
+		self.container_stopped = False
 		self.saved_image = None
 		self.container_name = f"aebench-{safe_name(session.task_id)}-{uuid.uuid4().hex[:8]}"
 
@@ -144,6 +164,7 @@ class DockerRuntime:
 
 		result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 		if result.returncode != 0:
+			self.container_name = None
 			raise RuntimeError(f"docker run failed: {(result.stderr or result.stdout).strip()}")
 
 		self.container_id = result.stdout.strip()
@@ -177,6 +198,31 @@ class DockerRuntime:
 			text=True,
 			timeout=timeout,
 			check=False,
+		)
+
+	def run_process_to_file(
+		self,
+		cmd: list[str],
+		*,
+		output_path: Path,
+		cwd: str | None = None,
+		env: Mapping[str, str] | None = None,
+		stdin_text: str | None = None,
+		timeout: float | None = None,
+	) -> subprocess.CompletedProcess[str]:
+		if self.container_id is None:
+			raise RuntimeError("docker runtime is not prepared")
+		docker_cmd = ["docker", "exec", "-i"]
+		if cwd:
+			docker_cmd.extend(["-w", cwd])
+		docker_cmd.extend(_env_flags(env))
+		docker_cmd.append(self.container_id)
+		docker_cmd.extend(cmd)
+		return _run_to_file(
+			docker_cmd,
+			output_path=output_path,
+			stdin_text=stdin_text,
+			timeout=timeout,
 		)
 
 	def open_shell(self, *, cwd: str | None = None, env: Mapping[str, str] | None = None) -> int:
@@ -249,26 +295,41 @@ class DockerRuntime:
 		logger.info("committed docker container %s to %s", self.container_id, tag)
 		return tag
 
+	def stop(self, session: RunSession) -> None:
+		_ = session
+		if self.container_id is None or self.container_stopped:
+			return
+		result = subprocess.run(
+			["docker", "stop", "--time", "30", self.container_id],
+			capture_output=True,
+			text=True,
+			check=False,
+		)
+		if result.returncode != 0:
+			raise RuntimeError(
+				"failed to stop docker container "
+				f"{self.container_id}: {(result.stderr or result.stdout).strip()}"
+			)
+		self.last_container_id = self.container_id
+		self.container_stopped = True
+
 	def cleanup(self, session: RunSession) -> None:
 		target = self.container_id or self.container_name
 		if target:
 			if self.container_id is not None:
 				self.last_container_id = self.container_id
-
 			result = subprocess.run(
 				["docker", "rm", "-f", target], capture_output=True, text=True, check=False
 			)
-			if result.returncode == 0:
-				self.container_id = None
-				self.container_name = None
-				self.container_removed = True
-			else:
-				self.container_removed = False
-				logger.warning(
-					"failed to remove docker container %s: %s",
-					target,
-					(result.stderr or result.stdout).strip(),
+			if result.returncode != 0:
+				raise RuntimeError(
+					"failed to remove docker container "
+					f"{target}: {(result.stderr or result.stdout).strip()}"
 				)
+			self.container_id = None
+			self.container_name = None
+			self.container_removed = True
+			self.container_stopped = True
 
 		if self.saved_image and not session.run_spec.runtime.keep_committed_snapshot:
 			image = self.saved_image
@@ -288,9 +349,12 @@ class DockerRuntime:
 		return RuntimeInfo(
 			mode=RuntimeMode.DOCKER,
 			image=self.resolved_image or self.image,
+			workspace_mount=session.runtime_workspace,
+			user=session.runtime_agent_user,
+			home=session.runtime_agent_home,
 			container_id=self.container_id or self.last_container_id,
 			saved_image=self.saved_image,
-			container_stopped=self.container_removed or self.container_id is None,
+			container_stopped=self.container_stopped or self.container_removed,
 		)
 
 
@@ -320,6 +384,25 @@ class LocalRuntime:
 			env=_merged_env(env),
 			timeout=timeout,
 			check=False,
+		)
+
+	def run_process_to_file(
+		self,
+		cmd: list[str],
+		*,
+		output_path: Path,
+		cwd: str | None = None,
+		env: Mapping[str, str] | None = None,
+		stdin_text: str | None = None,
+		timeout: float | None = None,
+	) -> subprocess.CompletedProcess[str]:
+		return _run_to_file(
+			cmd,
+			output_path=output_path,
+			cwd=cwd or self.workspace,
+			env=dict(env or {}),
+			stdin_text=stdin_text,
+			timeout=timeout,
 		)
 
 	def open_shell(self, *, cwd: str | None = None, env: Mapping[str, str] | None = None) -> int:
@@ -354,6 +437,9 @@ class LocalRuntime:
 		_ = session
 		return None
 
+	def stop(self, session: RunSession) -> None:
+		_ = session
+
 	def cleanup(self, session: RunSession) -> None:
 		_ = session
 
@@ -362,6 +448,7 @@ class LocalRuntime:
 		return RuntimeInfo(
 			mode=RuntimeMode.LOCAL,
 			image=None,
+			workspace_mount=str(session.host_workspace),
 			container_id=None,
 			saved_image=None,
 			container_stopped=True,
@@ -375,3 +462,27 @@ def get_runtime(mode: str | RuntimeMode, **kwargs: Any) -> BenchRuntime:
 	if runtime_mode == RuntimeMode.DOCKER:
 		return DockerRuntime(image=kwargs.get("image"), gpu=bool(kwargs.get("gpu", False)))
 	raise ValueError(f"unsupported runtime mode: {runtime_mode!r}")
+
+
+def _run_to_file(
+	cmd: list[str],
+	*,
+	output_path: Path,
+	cwd: str | None = None,
+	env: Mapping[str, str] | None = None,
+	stdin_text: str | None = None,
+	timeout: float | None = None,
+) -> subprocess.CompletedProcess[str]:
+	output_path.parent.mkdir(parents=True, exist_ok=True)
+	with output_path.open("w", encoding="utf-8") as output:
+		return subprocess.run(
+			cmd,
+			input=stdin_text,
+			stdout=output,
+			stderr=subprocess.STDOUT,
+			text=True,
+			cwd=cwd,
+			env=env,
+			timeout=timeout,
+			check=False,
+		)

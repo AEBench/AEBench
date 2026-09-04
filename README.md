@@ -10,7 +10,7 @@ The current repository is organized around three layers:
 - `cases/<case_id>/`: case content for each official case
 - `src/`: the runtime, CLI, reporting, and Docker execution logic
 
-Each case contains the artifact instructions, oracle entrypoint, and reference data needed to score a case. In this checkout, case authoring, case validation, and standalone oracle execution are the active CLI workflows. The full agent runner, benchmark runner, JSONL export, JSONL runtime, and summary regeneration commands are present in the parser but intentionally unavailable.
+Each case identifies the artifact instructions and contains an oracle entrypoint and reference data. A Codex or Claude Code harness can run one case, after which the AEBench oracle scores the result. Commands that run multiple cases or use the JSONL runtime remain unavailable.
 
 ## Quick Start
 
@@ -18,7 +18,7 @@ Requirements:
 
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) for dependency management
-- Docker only when manually reproducing artifacts or developing future Docker-mode runs
+- Docker for isolated agent runs
 
 Install the project:
 
@@ -27,6 +27,7 @@ git clone https://github.com/AEBench/AEBench.git
 cd AEBench
 
 uv sync --dev
+docker build -t aebench-agent:latest .
 ```
 
 Run the CLI through `uv` with `src` on `PYTHONPATH`:
@@ -67,10 +68,51 @@ PYTHONPATH=src uv run aebench case oracle osdi24_anvil \
 
 Standalone oracle runs are the main way to audit a case after manually building and running the upstream artifact.
 
+For a ChatGPT subscription, run `codex login` on your local computer. Copy
+`~/.codex/auth.json` to the Chameleon instance, restrict access to the copy,
+and run a case:
+
+```bash
+scp ~/.codex/auth.json cc@<floating-ip>:~/codex_auth.json
+
+# On the Chameleon instance
+mkdir -p ~/.config/aebench
+chmod 700 ~/.config/aebench
+install -m 600 ~/codex_auth.json ~/.config/aebench/codex_auth.json
+rm ~/codex_auth.json
+export AEBENCH_CODEX_AUTH_FILE=~/.config/aebench/codex_auth.json
+
+uv run aebench case run osdi24_kondo \
+  --agent codex_non_api \
+  --model gpt-5.5
+```
+
+For a Claude subscription, run `claude setup-token` on your local computer.
+Save the printed token in `~/.config/aebench/claude_oauth_token`, copy the file
+to the Chameleon instance, restrict access to the copy, and run a case:
+
+```bash
+scp ~/.config/aebench/claude_oauth_token cc@<floating-ip>:~/claude_oauth_token
+
+# On the Chameleon instance
+mkdir -p ~/.config/aebench
+chmod 700 ~/.config/aebench
+install -m 600 ~/claude_oauth_token ~/.config/aebench/claude_oauth_token
+rm ~/claude_oauth_token
+export AEBENCH_CLAUDE_OAUTH_TOKEN_FILE=~/.config/aebench/claude_oauth_token
+
+uv run aebench case run osdi24_kondo \
+  --agent claude_non_api \
+  --model claude-opus-4-8
+```
+
+If the case sets `[run.artifact_requirements] docker = true`, add
+`--allow-host-docker`. This option gives the agent control of the Chameleon
+instance's Docker daemon. Use it only on a disposable instance.
+
 The following workflows are not available in this checkout even though their subcommands appear in `--help`:
 
 - `aebench run`
-- `aebench case run`
 - `aebench case export`
 - `aebench case summarize`
 - `aebench runtime run`
@@ -127,7 +169,7 @@ PYTHONPATH=src uv run aebench case oracle cases/my-case \
   --output-dir /tmp/aebench-my-case-oracle
 ```
 
-`aebench case run`, `aebench run`, and `aebench case export` currently raise "unavailable in this checkout".
+`aebench run` and `aebench case export` currently raise "unavailable in this checkout".
 
 ### `case.toml`
 
@@ -168,114 +210,30 @@ url = "https://github.com/org/repo.git"
 ref = "deadbeef..."
 ```
 
-## Agent Drivers
+## Agent Harnesses
 
-The runtime currently supports built-in drivers for Claude SDK, mock, Python,
-CLI, remote, and MCP-capable clients.
+`aebench case run` supports Codex and Claude Code through four shell harnesses:
 
-Adding or modifying an agent driver is a code-level integration inside `src/`.
+- `codex`
+- `codex_non_api`
+- `claude`
+- `claude_non_api`
 
-## Adding Or Modifying An Agent Driver
-
-Agent integrations plug into a single runtime path:
-
-`TaskRunner -> RunSession -> Agent -> RuntimeBackend`
-
-If you only want to add a new benchmark case, you usually do not need to touch the driver layer.
-
-### Current Drivers
-
-The runtime currently exposes these driver kinds:
-
-- `claude_sdk`: the default production driver
-- `mock`: a test-only driver for smoke and offline workflow checks
-- `python`: load a driver factory from Python
-- `cli`: launch an external CLI through the runtime
-- `remote`: call an external HTTP endpoint
-- `mcp_client`: launch an MCP-capable client
-
-Driver selection is resolved from project and user configuration and exposed as `[agent]` configuration. In this repo, `[agent]` means "agent driver configuration".
-
-### Architecture
-
-The runtime is built around four classes:
-
-- `AppState`
-  Top-level context. Holds project config and all runtime settings. Every runner receives one.
-- `TaskRunner`
-  Creates the workspace, builds the prompt, starts the backend and agent, collects results.
-- `RunSession`
-  Frozen dataclass carrying per-run state (workspace paths, prompt, runtime backend handle) shared between backend and agent.
-- `Agent`
-  Implements `prepare()`, `execute()`, and `cleanup()` for a specific driver kind.
-- `RuntimeBackend`
-  Implements `prepare()`, `collect_artifacts()`, `cleanup()`, and `runtime_result()` for `local` and `docker` runtimes.
-
-### How To Add A Driver
-
-1. Add the new type to the `AgentType` enum in `src/settings.py`.
-
-2. Implement the `Agent` protocol in `src/runtime/driver.py`:
-
-```python
-class MyAgent:
-    name: str = "my_agent"
-
-    def prepare(self, session, listener=None) -> None:
-        pass
-
-    def execute(self, request: AgentRequest, session, listener=None) -> AgentResult:
-        # session.host_workspace: workspace path on host
-        # session.runtime_workspace: workspace path inside the container
-        # request.system_prompt, request.initial_prompt: prompts
-        # request.timeout_ms: timeout
-        ...
-        return AgentResult(
-            model=request.model,
-            exit_code=0,
-            output="Agent summary here",
-            message_count=42,
-        )
-
-    def cleanup(self, session, listener=None) -> None:
-        pass
-```
-
-3. Register it in `get_agent()` in `src/runtime/driver.py`:
-
-```python
-if agent_type == AgentType.MY_AGENT:
-    return MyAgent()
-```
-
-4. Update config loading in `src/settings.py` and `src/project_config.py` if the new driver needs config or environment inputs.
-
-### Tests To Add
-
-At minimum, update or add:
-
-- coverage for `get_agent()` with the new driver type
-- smoke coverage if the driver can run offline
-
-### Practical Advice
-
-- Prefer drivers over ad hoc wrappers or one-off scripts.
-- Keep driver-specific config shaping in one place.
-- Do not introduce driver-specific assumptions into case bundles.
-- If a driver is test-only, keep it off the production default path.
-- See [docs/howtos/add_agent.md](docs/howtos/add_agent.md) for the full walkthrough, including the CLI and Python agent options that may save you from writing a custom class at all.
+Select the harness and model for each run with `--agent` and `--model`. See
+[docs/howtos/add_agent.md](docs/howtos/add_agent.md) for authentication and
+instructions for adding another harness.
 
 
 ## Runtime Backends
 
-Most new integrations only need a driver. Add or modify a `RuntimeBackend` only if the runtime itself changes.
+Add or modify a runtime backend only when command execution or isolation requirements change.
 
 - `LocalRuntime`
   Runs commands directly on the host. Used when `runtime.mode = "local"`.
 - `DockerRuntime`
-  Owns container lifecycle, workspace mounting, and artifact collection. Used when `runtime.mode = "docker"`.
+  Manages the container, workspace mounts, and snapshots. Used when `runtime.mode = "docker"`.
 
-If a driver needs different container or host behavior, express it through the runtime backend and keep the driver itself environment-agnostic.
+Shell harnesses use the selected backend to run commands. Keep runtime-specific operations in the backend.
 
 ## Development and Testing
 

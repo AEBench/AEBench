@@ -1,0 +1,380 @@
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+from collections.abc import Mapping
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from models import (
+	AgentName,
+	ArtifactRequirementsConfig,
+	RuntimeConfig,
+	RuntimeMode,
+	TaskConfig,
+)
+from runtime.agent_runner import (
+	_REASONING_EFFORT,
+	_agent_env,
+	_agent_shell_command,
+	_prompt_for_agent,
+	_solve_script,
+	prepare_agent_runtime,
+	prepare_agent_support_dir,
+	run_agent,
+)
+from runtime.backend import DockerRuntime, LocalRuntime
+
+
+class FakeRuntime:
+	path_separator = ":"
+
+	def __init__(self) -> None:
+		self.command: list[str] = []
+		self.cwd: str | None = None
+		self.env: dict[str, str] = {}
+		self.stdin_text: str | None = None
+		self.has_timeout = True
+
+	def resolve_executable(
+		self,
+		executable: str,
+		*,
+		cwd: str | None = None,
+		env: Mapping[str, str] | None = None,
+	) -> str | None:
+		_ = cwd, env
+		return f"/usr/bin/{executable}" if self.has_timeout and executable == "timeout" else None
+
+	def run_process_to_file(
+		self,
+		cmd: list[str],
+		*,
+		output_path: Path,
+		cwd: str | None = None,
+		env: Mapping[str, str] | None = None,
+		stdin_text: str | None = None,
+		timeout: float = 5.0,
+	) -> subprocess.CompletedProcess[str]:
+		_ = timeout
+		self.command = cmd
+		self.cwd = cwd
+		self.env = dict(env or {})
+		self.stdin_text = stdin_text
+		output_path.write_text('{"type":"result"}\n', encoding="utf-8")
+		return subprocess.CompletedProcess(cmd, 0, "", "")
+
+	def run_process(
+		self,
+		cmd: list[str],
+		*,
+		cwd: str | None = None,
+		env: Mapping[str, str] | None = None,
+		stdin_text: str | None = None,
+		timeout: float = 5.0,
+	) -> subprocess.CompletedProcess[str]:
+		_ = cwd, env, stdin_text, timeout
+		return subprocess.CompletedProcess(cmd, 0, "", "")
+
+
+def test_codex_script_streams_json_without_secret_echoes() -> None:
+	script = _solve_script("codex")
+	assert "printf '%s' \"$PROMPT\" | codex --search exec --json" in script
+	assert 'model_reasoning_effort=\\"$AEBENCH_REASONING_EFFORT\\"' in script
+	assert "model_reasoning_summary=detailed" in script
+	assert "--skip-git-repo-check --yolo" in script
+	assert "echo $OPENAI_API_KEY" not in script
+	assert "echo $CODEX_API_KEY" not in script
+	assert _REASONING_EFFORT["codex"] == "high"
+
+
+def test_claude_script_streams_json_without_permission_prompts() -> None:
+	script = _solve_script("claude")
+	assert 'BASH_MAX_TIMEOUT_MS="36000000"' in script
+	assert "claude --print --verbose" in script
+	assert "--output-format stream-json --thinking-display summarized" in script
+	assert "--dangerously-skip-permissions" in script
+	assert "claude" not in _REASONING_EFFORT
+	assert _REASONING_EFFORT["claude_non_api"] == "high"
+	assert '--effort "$AEBENCH_REASONING_EFFORT"' in _solve_script("claude_non_api")
+
+
+@pytest.mark.parametrize("agent", ["claude", "claude_non_api"])
+def test_claude_prompt_includes_noninteractive_guidance(agent: AgentName) -> None:
+	prompt = _prompt_for_agent(agent, "do the task\n")
+	assert prompt.startswith("do the task\n\n")
+	assert "Wait for every process that you start to finish" in prompt
+
+
+def test_codex_prompt_is_unchanged() -> None:
+	assert _prompt_for_agent("codex", "do the task") == "do the task"
+
+
+def test_docker_agent_runs_as_unprivileged_user() -> None:
+	command = _agent_shell_command(DockerRuntime())
+	assert command[:4] == ["bash", "-o", "pipefail", "-c"]
+	assert "runuser --user agent --preserve-environment -- bash -s" in command[-1]
+
+
+def test_docker_agent_runtime_matches_host_socket_group(
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	commands: list[list[str]] = []
+
+	def run_process(
+		_self: DockerRuntime,
+		cmd: list[str],
+		**_kwargs: object,
+	) -> subprocess.CompletedProcess[str]:
+		commands.append(cmd)
+		return subprocess.CompletedProcess(cmd, 0, "", "")
+
+	monkeypatch.setattr(DockerRuntime, "run_process", run_process)
+
+	prepare_agent_runtime(DockerRuntime())
+
+	assert len(commands) == 1
+	assert commands[0][:3] == ["sh", "-e", "-c"]
+	assert 'socket="/var/run/docker.sock"' in commands[0][3]
+	assert 'usermod -aG "$socket_group" agent' in commands[0][3]
+
+
+def test_local_agent_uses_current_user() -> None:
+	assert _agent_shell_command(LocalRuntime()) == [
+		"bash",
+		"-o",
+		"pipefail",
+		"-c",
+		'bash -s 2>&1 | python3 "$AEBENCH_AGENT_SUPPORT_DIR/timestamp_lines.py"',
+	]
+
+
+def test_runner_passes_harness_contract_and_saves_output(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	monkeypatch.setenv("OPENAI_API_KEY", "secret")
+	runtime = FakeRuntime()
+	output_path = tmp_path / "solve_out.txt"
+
+	result = run_agent(
+		"codex",
+		model="gpt-test",
+		prompt="do the task",
+		runtime=runtime,  # type: ignore[arg-type]
+		cwd="/repo",
+		runtime_home="/home/agent",
+		runtime_support_dir="/run/aebench-agent",
+		timeout_seconds=600,
+		output_path=output_path,
+	)
+
+	assert runtime.command == [
+		"timeout",
+		"--signal=TERM",
+		"--kill-after=30s",
+		"600s",
+		"bash",
+		"-o",
+		"pipefail",
+		"-c",
+		'bash -s 2>&1 | python3 "$AEBENCH_AGENT_SUPPORT_DIR/timestamp_lines.py"',
+	]
+	assert runtime.cwd == "/repo"
+	assert runtime.env["HOME"] == "/home/agent"
+	assert runtime.env["AEBENCH_AGENT_SUPPORT_DIR"] == "/run/aebench-agent"
+	assert runtime.env["PROMPT"] == "do the task"
+	assert runtime.env["AGENT_CONFIG"] == "gpt-test"
+	assert runtime.env["AEBENCH_REASONING_EFFORT"] == "high"
+	assert runtime.env["OPENAI_API_KEY"] == "secret"
+	assert runtime.env["CODEX_API_KEY"] == "secret"
+	assert "ANTHROPIC_API_KEY" not in runtime.env
+	assert runtime.stdin_text == _solve_script("codex")
+	assert result.exit_code == 0
+	assert result.reasoning_effort == "high"
+	assert output_path.read_text(encoding="utf-8") == '{"type":"result"}\n'
+
+
+def test_local_runner_timestamps_stdout_and_stderr(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	monkeypatch.setenv("OPENAI_API_KEY", "secret")
+	monkeypatch.setattr(
+		"runtime.agent_runner._solve_script",
+		lambda _agent: "printf 'first\\n'; printf 'second\\n' >&2; exit 7",
+	)
+	monkeypatch.setattr("runtime.agent_runner._timeout_command", lambda *_args: [])
+	support_dir = prepare_agent_support_dir("codex", tmp_path)
+	output_path = tmp_path / "runner_output.log"
+
+	result = run_agent(
+		"codex",
+		model="gpt-test",
+		prompt="do the task",
+		runtime=LocalRuntime(workspace=str(tmp_path)),
+		cwd=str(tmp_path),
+		runtime_home=str(support_dir),
+		runtime_support_dir=str(support_dir),
+		timeout_seconds=10,
+		output_path=output_path,
+	)
+
+	assert result.exit_code == 7
+	lines = output_path.read_text(encoding="utf-8").splitlines()
+	assert len(lines) == 2
+	assert all(re.match(r"^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\] ", line) for line in lines)
+	assert lines[0].endswith(" first")
+	assert lines[1].endswith(" second")
+
+
+def test_subscription_auth_is_copied_to_private_support_dir(tmp_path: Path) -> None:
+	auth = tmp_path / "auth.json"
+	auth.write_text('{"tokens":{}}', encoding="utf-8")
+	support_dir = prepare_agent_support_dir(
+		"codex_non_api",
+		tmp_path / "run",
+		environ={"AEBENCH_CODEX_AUTH_FILE": str(auth)},
+	)
+
+	target = support_dir / ".codex" / "auth.json"
+	assert target.read_text(encoding="utf-8") == '{"tokens":{}}'
+	assert target.stat().st_mode & 0o777 == 0o600
+	assert (support_dir / "timestamp_lines.py").is_file()
+
+
+def test_claude_subscription_token_is_written_to_private_support_dir(tmp_path: Path) -> None:
+	support_dir = prepare_agent_support_dir(
+		"claude_non_api",
+		tmp_path / "run",
+		environ={"CLAUDE_CODE_OAUTH_TOKEN": "oauth-secret"},
+	)
+
+	target = support_dir / "oauth_token"
+	assert target.read_text(encoding="utf-8") == "oauth-secret"
+	assert target.stat().st_mode & 0o777 == 0o600
+
+
+def test_missing_subscription_auth_does_not_leave_support_dir(tmp_path: Path) -> None:
+	parent = tmp_path / "run"
+	with pytest.raises(RuntimeError, match="Codex subscription auth not found"):
+		prepare_agent_support_dir(
+			"codex_non_api",
+			parent,
+			environ={"AEBENCH_CODEX_AUTH_FILE": str(tmp_path / "missing.json")},
+		)
+	assert not (parent / "agent-support").exists()
+
+
+def test_docker_agent_environment_does_not_copy_host_runtime(
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	monkeypatch.setenv("OPENAI_API_KEY", "openai-secret")
+	monkeypatch.setenv("PATH", "/host/bin")
+	env = _agent_env(
+		"codex",
+		model="gpt-test",
+		prompt="do work",
+		runtime_home="/home/agent",
+		runtime_support_dir="/run/aebench-agent",
+		include_host_runtime=False,
+	)
+	assert env == {
+		"AEBENCH_AGENT_SUPPORT_DIR": "/run/aebench-agent",
+		"AEBENCH_REASONING_EFFORT": "high",
+		"AGENT_CONFIG": "gpt-test",
+		"CODEX_API_KEY": "openai-secret",
+		"HOME": "/home/agent",
+		"OPENAI_API_KEY": "openai-secret",
+		"PROMPT": "do work",
+	}
+
+
+def test_local_runtime_streams_combined_output_to_file(tmp_path: Path) -> None:
+	output_path = tmp_path / "runner_output.log"
+	result = LocalRuntime(workspace=str(tmp_path)).run_process_to_file(
+		["bash", "-c", "printf stdout; printf stderr >&2"],
+		output_path=output_path,
+	)
+	assert result.returncode == 0
+	assert output_path.read_text(encoding="utf-8") == "stdoutstderr"
+
+
+def test_local_agent_process_does_not_inherit_unlisted_host_environment(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	monkeypatch.setenv("AEBENCH_HOST_SECRET", "must-not-leak")
+	output_path = tmp_path / "runner_output.log"
+	result = LocalRuntime(workspace=str(tmp_path)).run_process_to_file(
+		["sh", "-c", 'printf %s "${AEBENCH_HOST_SECRET-unset}"'],
+		output_path=output_path,
+		env={"PATH": os.environ["PATH"]},
+	)
+
+	assert result.returncode == 0
+	assert output_path.read_text(encoding="utf-8") == "unset"
+
+
+def test_docker_artifact_workspace_mount_preserves_host_path(tmp_path: Path) -> None:
+	task = TaskConfig(
+		id="docker-artifact",
+		runtime=RuntimeConfig(mode=RuntimeMode.DOCKER, image="aebench-agent:latest"),
+		artifact_requirements=ArtifactRequirementsConfig(docker=True),
+	)
+	support_dir = tmp_path / "agent-support"
+	support_dir.mkdir()
+	runtime = DockerRuntime(container_name="test-container", resolved_image="aebench-agent:latest")
+	session = SimpleNamespace(
+		run_spec=task,
+		host_workspace=tmp_path,
+		runtime_workspace=str(tmp_path),
+		host_refs=None,
+		host_agent_support_dir=support_dir,
+		runtime_agent_support_dir="/run/aebench-agent",
+		runtime_agent_user="agent",
+		runtime_agent_home="/home/agent",
+	)
+
+	command = runtime._docker_run_command(session)  # type: ignore[arg-type]
+	assert f"{tmp_path}:{tmp_path}" in command
+	assert f"{support_dir}:/run/aebench-agent" in command
+	assert f"{support_dir}:/home/agent" not in command
+	assert command[command.index("-w") + 1] == str(tmp_path)
+	assert "/var/run/docker.sock:/var/run/docker.sock" in command
+
+
+def test_docker_stop_preserves_container_until_cleanup(
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	commands: list[list[str]] = []
+
+	def fake_run(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+		commands.append(cmd)
+		return subprocess.CompletedProcess(cmd, 0, "", "")
+
+	monkeypatch.setattr(subprocess, "run", fake_run)
+	runtime = DockerRuntime(
+		container_id="container-id",
+		container_name="container-name",
+		resolved_image="aebench-agent:latest",
+	)
+	session = SimpleNamespace(
+		task_id="test",
+		run_spec=TaskConfig(id="test", runtime=RuntimeConfig(mode="docker")),
+	)
+
+	runtime.stop(session)  # type: ignore[arg-type]
+	assert runtime.container_id == "container-id"
+	assert runtime.container_stopped is True
+	assert commands == [["docker", "stop", "--time", "30", "container-id"]]
+
+	saved_image = runtime.snapshot(session)  # type: ignore[arg-type]
+	assert saved_image is not None
+	assert commands[1] == ["docker", "commit", "container-id", saved_image]
+
+	runtime.cleanup(session)  # type: ignore[arg-type]
+	assert runtime.container_id is None
+	assert runtime.container_removed is True
+	assert commands[2] == ["docker", "rm", "-f", "container-id"]
+	assert commands[3] == ["docker", "rmi", "-f", saved_image]

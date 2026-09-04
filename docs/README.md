@@ -15,5 +15,5 @@ Step-by-step instructions for common tasks.
 
 - [**Run the benchmark**](howtos/run_benchmark.md): environment setup, running individual cases or the full benchmark, understanding scores and output files
 - [**Add a case**](howtos/add_case.md): scaffold a case bundle, write `case.toml`, implement oracle phases, test
-- [**Add an agent**](howtos/add_agent.md): configure CLI, Python, remote, or MCP agents; write a custom agent class; testing with the mock agent
+- [**Add an agent harness**](howtos/add_agent.md): configure Codex or Claude Code authentication and add another CLI harness
 - [**Run the tests**](howtos/testing.md): unit, functional, and integration tests with pytest

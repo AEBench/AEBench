@@ -1,124 +1,62 @@
 # Runtime
 
-How AEBench prepares a workspace, launches an agent, and records the result.
+`aebench case run` performs these steps:
 
-## 1. Main classes
-
-### AppState
-
-`AppState` is the top-level context object. It holds two things:
-- `project_state`: the resolved project configuration (which cases exist, where outputs go, etc.)
-- `settings`: all runtime parameters (model, agent type, timeouts, docker image, etc.)
-
-Every runner (`BenchmarkRunner`, `CaseRunner`) receives an `AppState`. The CLI creates one at the start of each command via `_build_context()`.
-
-### BenchmarkRunner
-
-Runs multiple cases one after another. For each case it delegates to `CaseRunner.run()`, collects results, and writes a benchmark summary (JSON + Markdown) to the output directory.
-
-### CaseRunner
-
-Handles a single case end-to-end. Its `run()` method:
-
-1. Loads `case.toml` into a `CaseConfig`
-2. Resolves the output directory (timestamped under `~/.cache/aebench/case-runs/<case-id>/`)
-3. Calls `TaskRunner.run()` to run the agent
-4. If the task succeeded, calls `OracleRunner.execute()` to score the result
-5. Writes `case_result.json`
-
-### TaskRunner
-
-Handles the lower-level details of running one agent task:
-
-1. Creates a temp workspace directory under `AEBENCH_EPHEMERAL_WORKSPACE_ROOT`
-2. Copies or clones the artifact source into the workspace
-3. Reads the instruction file
-4. Builds the full prompt (system + initial prompt) via Jinja2 templates
-5. Starts the runtime backend (Docker container or local)
-6. Starts the agent
-7. Calls `Agent.execute()`: the agent does its work here
-8. Collects artifacts and cleans up in a `finally` block
-9. Returns a `RunResult`
-
-### RunSession
-
-A frozen dataclass holding all per-task state that gets shared between the runtime backend and the agent. Contains workspace paths, config, prompt, runtime backend handle, etc. Created once by `TaskRunner` and passed around to prepare/execute/cleanup calls.
-
-## 2. Runtime backends
-
-A backend controls where and how commands run. Selected by `runtime.mode` in `case.toml`.
-
-**LocalRuntime**: runs commands directly on the host. The workspace directory is used as-is, no containers. Used when `runtime.mode = "local"`.
-
-**DockerRuntime**: starts a Docker container with the workspace mounted at `/repo` and refs at `/refs:ro`. The agent interacts with the container. Container is force-removed on cleanup.
-
-Key Docker parameters from `case.toml` or settings:
-- `runtime.image`: Docker image. Falls back to `AEBENCH_DEFAULT_DOCKER_IMAGE`
-- `runtime.gpu = true`: passes `--gpus all` to `docker run`
-- `runtime.timeout_ms`: agent timeout in ms
-
-## 3. Agents
-
-An agent implements the `Agent` protocol: `prepare()`, `execute()`, `cleanup()`. Which agent to use is controlled by `settings.agent.agent_type`.
-
-| Type | Description |
-|---|---|
-| `claude_sdk` | calls the Claude API via SDK or delegates to a Python target / CLI |
-| `cli` | runs an arbitrary command, passes prompts via stdin and env vars |
-| `python` | calls a `module:attribute` Python callable in-process |
-| `remote` | HTTP POST to an external agent server |
-| `mcp_client` | MCP client (Claude Code, Codex, or custom) |
-| `mock` | always returns success; for testing without a real model |
-
-All agents return an `AgentResult` with `model`, `exit_code`, `output`, and `message_count`.
-
-## 4. Workspace lifecycle
-
-```plaintext
-AEBENCH_EPHEMERAL_WORKSPACE_ROOT/
-└── ae_workspace_<safe_id>_<random>/   # tempdir
-    └── workspace/                     # actual workspace, populated from source
-        ├── README.md                  # agent reads this
-        ├── <source files>
-        └── <safe_id>_summary.md       # agent writes its summary here
+```text
+clone or copy source
+  -> build prompt
+  -> create a temporary support directory and copy the agent credential
+  -> start local/Docker runtime
+  -> run CLI harness under GNU timeout
+  -> stop and commit the agent container
+  -> run the four-phase oracle
+  -> clean runtime credentials and temporary resources
 ```
 
-A fresh workspace is created for every run. If `--cleanup-workspace` is passed and the task succeeded, the temp directory gets deleted after the oracle finishes. If the task failed and `AEBENCH_PRESERVE_FAILED_WORKSPACE=true`, the directory is kept for inspection.
+## Agent runtime
 
-## 5. Workspace sources
+`LocalRuntime` executes commands directly in the prepared workspace. The agent
+CLIs disable interactive permission checks, so local mode requires
+`--allow-unsafe-local`. Run it only on a disposable Chameleon instance. Local
+mode provides no process isolation and uses the current user's home directory
+and the CLI versions installed on the instance. Docker mode uses the versions
+pinned in the AEBench image.
 
-The artifact source is specified in `case.toml` under `[upstream]`. The `sources.py` module sets up the workspace accordingly:
+`DockerRuntime` mounts the artifact workspace and a temporary credential directory
+in `aebench-agent:latest`. The agent uses `/home/agent` as its home directory so
+dependencies installed during the run remain available to the task oracle. If the artifact uses Docker, AEBench
+also mounts the host Docker socket. It uses the absolute host workspace path so
+Docker can resolve bind mounts created by the artifact. This mode requires
+`--allow-host-docker` and a disposable Chameleon instance.
 
-| `source_type` | What it does |
-|---|---|
-| `git` | clones from `upstream.url` at `upstream.ref`. Uses a local git cache under `~/.cache/aebench/git` |
-| `local` | copies from a local path |
-| `archive` | downloads or reads a `.tar.gz` / `.zip` and extracts it |
-| `overlay` | starts from a base source, then merges a local directory on top |
+`run.runtime.timeout_ms` sets the agent time limit. GNU `timeout` sends `TERM`
+when the limit expires and `KILL` 30 seconds later. AEBench combines stdout and
+stderr, adds a UTC timestamp to each line, and writes the result to
+`runner_output.log`.
 
-The `artifact_mode` setting in `aebench.toml` controls wheter the system prefers a vendored local copy (`vendor`), always fetches from upstream (`pointer`), or overlays local changes on the upstream (`hybrid`).
+## Oracle scoring
 
-## 6. Prompting
+For Docker runs, AEBench stops the agent container and commits its filesystem changes when `commit_before_oracle = true`. It then passes the committed image and host workspace to the oracle runtime registry. The `task` oracle target starts from the committed image. It does not share the agent process tree. Local targets and targets defined in `case.toml` use the evaluator target registry.
 
-The agent receives two prompts:
-- **System prompt**: environment info (local vs Docker), task text, timeout rules, output instructions, and any `prompt_append` additions
-- **Initial prompt**: a short imperative telling the agent to start working
+The oracle still runs after the agent exits with a nonzero status or reaches its time limit. The agent result records that status. The oracle scores the evidence in the final workspace.
 
-The prompt profile (`PromptProfile`) controls which templates get used. `artifact-eval-v1` auto-selects the local or Docker template based on runtime mode.
+## Credentials
 
-Rendered prompts are written to `<output_dir>/<safe_id>_prompt.md` so users can inspect what exactly the agent received.
+AEBench creates a temporary support directory for each run outside the artifact
+workspace. It copies the selected subscription credential into this directory
+with file mode `0600`. Docker runs mount the directory into the agent container.
+AEBench deletes the directory after the agent exits and before it saves the
+container image. The original credential remains unchanged. The agent can read
+the copied credential and can run commands without approval. Use a credential
+that you can revoke and a disposable Chameleon instance.
 
-## 7. Output files
+## Outputs
 
-Every task run writes these files to its output directory:
+The case output directory includes:
 
-- `case_result.json`: full `CaseRunResult` (runtime + oracle results)
-- `<safe_id>_report.md`: human-readable summary with status and timings
-- `<safe_id>_prompt.md`: the exact prompts sent to the agent
-- `<safe_id>.log`: captured stdout/stderr from the agent
-- `transcript.jsonl`: full conversation transcript (if the agent supports it)
-- `runner.log`: infrastructure-level log messages
-- `result.jsonl`: `RunResult` in JSON Lines format
-- `oracle_result.json`: full oracle result
-
-For benchmark runs, the output directory additionally contains `benchmark_results.jsonl`, `benchmark_summary.json`, and `benchmark_summary.md`.
+- `runner_output.log`: timestamped harness stdout and stderr
+- `aebench_prompt_<case>.md`: exact prompt
+- `result.jsonl`: runtime result
+- `oracle_result.json`: four-phase score
+- `case_result.json`: combined case result
+- `<case>_report.md`: run report
