@@ -19,6 +19,5 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 				root=self.runtime_path("benchmarks"),
 				pattern="*/build-*/*.elf",
 				expected_relative_paths=expected_elf_paths(),
-				executor=self.executor,
 			),
 		)

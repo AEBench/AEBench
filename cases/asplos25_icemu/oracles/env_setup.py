@@ -21,7 +21,7 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 			for name, relative in (
 				("readme", README_PATH),
 				("icemu_submodule", ICEMU_SOURCE_PATH),
-				("patched_llvm_source", LLVM_SOURCE_PATH),
+				("patched_llvm_16_0_2_source", LLVM_SOURCE_PATH),
 				("riscv_toolchain", RISCV_TOOLCHAIN_PATH),
 			)
 		)

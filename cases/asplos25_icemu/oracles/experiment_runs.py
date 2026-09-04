@@ -6,7 +6,12 @@ from pathlib import Path
 from evaluator.oracles import CaseOracleExperimentRunsBase, PathKind
 from evaluator.oracles.reporting import BaseCheck
 
-from .checks import EvaluationCheck, ExecutedNotebooksCheck, ResultSetCheck
+from .checks import (
+	EvaluationCheck,
+	ExecutedNotebooksCheck,
+	ResultSetCheck,
+	ResultsParseableCheck,
+)
 from .consts import (
 	LOGS_DIR,
 	NOTEBOOK_OUTPUTS,
@@ -20,33 +25,22 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	"""Validate the full experiment matrix and the paper-facing evaluation outputs."""
 
 	def requirements(self) -> Sequence[BaseCheck]:
+		expected_names = expected_result_names()
 		checks: list[BaseCheck] = [
 			ResultSetCheck(
 				name="complete_result_matrix",
 				logs_dir=self.runtime_path(LOGS_DIR),
-				expected_names=expected_result_names(),
-				executor=self.executor,
+				expected_names=expected_names,
 			),
-			self.command_check(
+			ResultsParseableCheck(
 				name="all_results_parseable",
-				cmd=(
-					"sh",
-					"-c",
-					(
-						"for f in *-final; do "
-						'test -s "$f" && '
-						"grep -Eq '^cycles:[[:space:]]*[0-9]+$' \"$f\" || exit 1; "
-						"done"
-					),
-				),
-				cwd=self.runtime_path(LOGS_DIR),
-				timeout_seconds=120.0,
+				logs_dir=self.runtime_path(LOGS_DIR),
+				expected_names=expected_names,
 			),
 			EvaluationCheck(
 				name="evaluation_metrics",
 				logs_dir=self.runtime_path(LOGS_DIR),
 				reference_path=self.ref_path(RESULTS_REF),
-				executor=self.executor,
 			),
 			ExecutedNotebooksCheck(
 				name="executed_notebooks",
@@ -54,7 +48,6 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 					(Path(relative).name, self.runtime_path(relative))
 					for relative in NOTEBOOK_OUTPUTS
 				),
-				executor=self.executor,
 			),
 		]
 		checks.extend(
