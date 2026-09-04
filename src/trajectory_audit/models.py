@@ -10,7 +10,6 @@ class AuditStatus(str, Enum):
 	CLEAN = "clean"
 	REVIEW = "review"
 	BLOCKED = "blocked"
-	ERROR = "error"
 
 
 class FileEffects(BaseModel):
@@ -38,6 +37,8 @@ class TraceCommand(BaseModel):
 
 	command_id: str
 	argv: list[str]
+	argv_original_count: int
+	argv_truncated: bool = False
 	cwd: str
 	exit_code: int | None = None
 	signal: int | None = None
