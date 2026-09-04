@@ -43,6 +43,9 @@
     "eurosys25_egwalker": {
       "path": "cases/eurosys25_egwalker"
     },
+    "eurosys25_wali": {
+      "path": "cases/eurosys25_wali"
+    },
     "osdi24_anvil": {
       "path": "cases/osdi24_anvil"
     },
