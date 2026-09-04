@@ -17,6 +17,10 @@ from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 _NAME_SAFE_TRANSLATION = str.maketrans({"/": "_", ".": "_", "-": "_", "(": "", ")": ""})
 
+# Minimum Pearson correlation for the sampled quantities. Repeat trials of the
+# same configuration differ so they are compared by trend rather than by value.
+_SAMPLED_CORRELATION = 0.70
+
 
 def _safe_name(rel_path: str) -> str:
     """Build a check-name fragment from a workspace-relative path."""
@@ -217,11 +221,11 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
         csv_validation_targets = [
             # 1.0 is exact equality: the paper claims exactly 100% confidence for morph_confidence
             (overhead, "morph_confidence", ToleranceCheck, 1.00),
-            (overhead, "morph_gates_num", CorrelationCheck, 0.70),
+            (overhead, "morph_gates_num", CorrelationCheck, _SAMPLED_CORRELATION),
             (quantumlock, "bases", ToleranceCheck, 0.95),
-            (ablation, "clliford", CorrelationCheck, 0.70),
-            (ablation, "basis_gate", CorrelationCheck, 0.70),
-            (confidence, "mean", CorrelationCheck, 0.70),
+            (ablation, "clliford", CorrelationCheck, _SAMPLED_CORRELATION),
+            (ablation, "basis_gate", CorrelationCheck, _SAMPLED_CORRELATION),
+            (confidence, "mean", CorrelationCheck, _SAMPLED_CORRELATION),
         ]
 
         for csv_rel_path, target_col, check_cls, threshold in csv_validation_targets:
