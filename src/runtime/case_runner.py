@@ -34,7 +34,12 @@ from sources import prepare_workspace
 from task_loader import compose_task_text, read_instruction_text
 from utils import safe_name
 
-from .agent_runner import clear_agent_home, prepare_agent_home, run_agent
+from .agent_runner import (
+	clear_agent_support_dir,
+	prepare_agent_runtime,
+	prepare_agent_support_dir,
+	run_agent,
+)
 from .backend import BenchRuntime, get_runtime
 from .cases import task_from_case
 from .oracle_runner import DirectOracleRunner
@@ -69,7 +74,7 @@ class _CaseRunner:
 
 		self.workspace_root: Path | None = None
 		self.workspace: Path | None = None
-		self.agent_home: Path | None = None
+		self.agent_support_dir: Path | None = None
 		self.runtime: BenchRuntime | None = None
 		self.session: RunSession | None = None
 
@@ -77,7 +82,7 @@ class _CaseRunner:
 		self.interrupted: KeyboardInterrupt | SystemExit | None = None
 		self._pipeline_failed = False
 		self._runtime_cleanup_done = False
-		self._agent_home_cleanup_done = False
+		self._agent_support_cleanup_done = False
 
 	def prepare_case(self) -> None:
 		self.case_root = self.case_dir.expanduser().resolve()
@@ -132,7 +137,7 @@ class _CaseRunner:
 				self.case_root / "case.toml",
 				self.workspace_root,
 			)
-			self.agent_home = prepare_agent_home(
+			self.agent_support_dir = prepare_agent_support_dir(
 				self.agent,
 				self.workspace_root.parent,
 			)
@@ -151,10 +156,13 @@ class _CaseRunner:
 			if refs is not None and self.task.runtime.mode == RuntimeMode.DOCKER:
 				runtime_refs = "/refs"
 
-			runtime_agent_home = (
-				str(self.agent_home)
+			runtime_agent_support_dir = (
+				str(self.agent_support_dir)
 				if self.task.runtime.mode == RuntimeMode.LOCAL
-				else "/home/agent"
+				else "/run/aebench-agent"
+			)
+			runtime_agent_home = (
+				str(Path.home()) if self.task.runtime.mode == RuntimeMode.LOCAL else "/home/agent"
 			)
 
 			prompt_append = (
@@ -207,7 +215,11 @@ class _CaseRunner:
 				runtime_workspace=runtime_workspace,
 				host_refs=refs,
 				runtime_refs=runtime_refs,
-				host_agent_home=self.agent_home,
+				host_agent_support_dir=self.agent_support_dir,
+				runtime_agent_support_dir=runtime_agent_support_dir,
+				runtime_agent_user=(
+					"agent" if self.task.runtime.mode == RuntimeMode.DOCKER else None
+				),
 				runtime_agent_home=runtime_agent_home,
 				output_dir=self.output_dir,
 				task_paths=self.paths,
@@ -216,6 +228,7 @@ class _CaseRunner:
 			)
 
 			self.runtime.prepare(self.session)
+			prepare_agent_runtime(self.runtime)
 			self.prepare_finished = datetime.now(timezone.utc)
 		except (KeyboardInterrupt, SystemExit) as exc:
 			self.interrupted = exc
@@ -248,13 +261,14 @@ class _CaseRunner:
 					runtime=runtime,
 					cwd=session.runtime_workspace,
 					runtime_home=session.runtime_agent_home,
+					runtime_support_dir=session.runtime_agent_support_dir,
 					timeout_seconds=self.task.runtime.timeout_ms / 1000,
 					output_path=self.paths.runner_log_path,
 				)
 			finally:
-				clear_agent_home(
+				clear_agent_support_dir(
 					runtime,
-					session.runtime_agent_home,
+					session.runtime_agent_support_dir,
 				)
 
 			self.agent_finished = datetime.now(timezone.utc)
@@ -416,13 +430,13 @@ class _CaseRunner:
 			finally:
 				self._runtime_cleanup_done = True
 
-		if not self._agent_home_cleanup_done and self.agent_home is not None:
+		if not self._agent_support_cleanup_done and self.agent_support_dir is not None:
 			try:
-				shutil.rmtree(self.agent_home)
+				shutil.rmtree(self.agent_support_dir)
 			except FileNotFoundError:
 				pass
 			except Exception as exc:
-				cleanup_error = f"{type(exc).__name__} removing agent home: {exc}"
+				cleanup_error = f"{type(exc).__name__} removing agent support directory: {exc}"
 				self.error = f"{self.error}; {cleanup_error}" if self.error else cleanup_error
 				with self.paths.infra_log_path.open(
 					"a",
@@ -430,7 +444,7 @@ class _CaseRunner:
 				) as handle:
 					handle.write("\n" + traceback.format_exc())
 			finally:
-				self._agent_home_cleanup_done = True
+				self._agent_support_cleanup_done = True
 
 
 def run_case(

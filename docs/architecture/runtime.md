@@ -5,7 +5,7 @@
 ```text
 clone or copy source
   -> build prompt
-  -> create a temporary HOME directory and copy the agent credential
+  -> create a temporary support directory and copy the agent credential
   -> start local/Docker runtime
   -> run CLI harness under GNU timeout
   -> stop and commit the agent container
@@ -18,11 +18,13 @@ clone or copy source
 `LocalRuntime` executes commands directly in the prepared workspace. The agent
 CLIs disable interactive permission checks, so local mode requires
 `--allow-unsafe-local`. Run it only on a disposable Chameleon instance. Local
-mode provides no process isolation and uses the CLI versions installed on the
-instance. Docker mode uses the versions pinned in the AEBench image.
+mode provides no process isolation and uses the current user's home directory
+and the CLI versions installed on the instance. Docker mode uses the versions
+pinned in the AEBench image.
 
-`DockerRuntime` mounts the artifact workspace and a temporary `HOME` directory
-in `aebench-agent:latest`. If the artifact uses Docker, AEBench
+`DockerRuntime` mounts the artifact workspace and a temporary credential directory
+in `aebench-agent:latest`. The agent uses `/home/agent` as its home directory so
+dependencies installed during the run remain available to the task oracle. If the artifact uses Docker, AEBench
 also mounts the host Docker socket. It uses the absolute host workspace path so
 Docker can resolve bind mounts created by the artifact. This mode requires
 `--allow-host-docker` and a disposable Chameleon instance.
@@ -37,7 +39,7 @@ The oracle still runs after the agent exits with a nonzero status or reaches its
 
 ## Credentials
 
-AEBench creates a temporary `HOME` directory for each run outside the artifact
+AEBench creates a temporary support directory for each run outside the artifact
 workspace. It copies the selected subscription credential into this directory
 with file mode `0600`. Docker runs mount the directory into the agent container.
 AEBench deletes the directory after the agent exits and before it saves the

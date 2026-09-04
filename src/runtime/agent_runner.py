@@ -37,19 +37,19 @@ _REASONING_EFFORT: dict[AgentName, str] = {
 }
 
 
-def prepare_agent_home(
+def prepare_agent_support_dir(
 	agent: AgentName,
 	parent: Path,
 	*,
 	environ: Mapping[str, str] | None = None,
 ) -> Path:
 	env = os.environ if environ is None else environ
-	home = parent / "agent-home"
-	home.mkdir(mode=0o700, parents=True)
+	support_dir = parent / "agent-support"
+	support_dir.mkdir(mode=0o700, parents=True)
 	try:
 		shutil.copyfile(
 			Path(__file__).with_name("agent_scripts") / _TIMESTAMP_SCRIPT,
-			home / _TIMESTAMP_SCRIPT,
+			support_dir / _TIMESTAMP_SCRIPT,
 		)
 		if agent == "codex_non_api":
 			default_codex_home = Path(env.get("CODEX_HOME", "~/.codex")).expanduser()
@@ -61,7 +61,7 @@ def prepare_agent_home(
 					"Codex subscription auth not found; run `codex login` or set "
 					"AEBENCH_CODEX_AUTH_FILE"
 				)
-			target = home / ".codex" / "auth.json"
+			target = support_dir / ".codex" / "auth.json"
 			target.parent.mkdir(mode=0o700)
 			shutil.copyfile(source, target)
 			target.chmod(0o600)
@@ -77,14 +77,14 @@ def prepare_agent_home(
 					"Claude subscription auth not found; set CLAUDE_CODE_OAUTH_TOKEN or "
 					"AEBENCH_CLAUDE_OAUTH_TOKEN_FILE"
 				)
-			target = home / "oauth_token"
+			target = support_dir / "oauth_token"
 			target.write_text(token, encoding="utf-8")
 			target.chmod(0o600)
 	except Exception:
-		shutil.rmtree(home, ignore_errors=True)
+		shutil.rmtree(support_dir, ignore_errors=True)
 		raise
 
-	return home
+	return support_dir
 
 
 def run_agent(
@@ -95,6 +95,7 @@ def run_agent(
 	runtime: BenchRuntime,
 	cwd: str,
 	runtime_home: str,
+	runtime_support_dir: str,
 	timeout_seconds: float,
 	output_path: Path,
 ) -> AgentResult:
@@ -106,6 +107,7 @@ def run_agent(
 		model=model,
 		prompt=prompt,
 		runtime_home=runtime_home,
+		runtime_support_dir=runtime_support_dir,
 		include_host_runtime=isinstance(runtime, LocalRuntime),
 	)
 	command = _timeout_command(runtime, timeout_seconds) + _agent_shell_command(runtime)
@@ -128,6 +130,21 @@ def run_agent(
 	)
 
 
+def prepare_agent_runtime(runtime: BenchRuntime) -> None:
+	if not isinstance(runtime, DockerRuntime):
+		return
+
+	result = runtime.run_process(
+		["sh", "-e", "-c", _DOCKER_AGENT_USER_SETUP],
+		timeout=30,
+	)
+	if result.returncode != 0:
+		detail = (result.stderr or result.stdout).strip()
+		raise RuntimeError(
+			f"failed to prepare the Docker agent user: {detail or result.returncode}"
+		)
+
+
 def _solve_script(agent: AgentName) -> str:
 	return (Path(__file__).with_name("agent_scripts") / agent / "solve.sh").read_text(
 		encoding="utf-8"
@@ -140,21 +157,21 @@ def _prompt_for_agent(agent: AgentName, prompt: str) -> str:
 	return f"{prompt.rstrip()}\n\n{_CLAUDE_NONINTERACTIVE_GUIDANCE}"
 
 
-def clear_agent_home(runtime: BenchRuntime, runtime_home: str) -> None:
+def clear_agent_support_dir(runtime: BenchRuntime, runtime_support_dir: str) -> None:
 	result = runtime.run_process(
 		[
 			"sh",
 			"-c",
 			'test ! -d "$1" || find "$1" -mindepth 1 -delete',
 			"aebench-clear-home",
-			runtime_home,
+			runtime_support_dir,
 		],
 		timeout=30,
 	)
 	if result.returncode != 0:
 		detail = (result.stderr or result.stdout).strip()
 		raise RuntimeError(
-			f"failed to clear the temporary agent home directory: {detail or result.returncode}"
+			f"failed to clear the temporary agent support directory: {detail or result.returncode}"
 		)
 
 
@@ -164,6 +181,7 @@ def _agent_env(
 	model: str,
 	prompt: str,
 	runtime_home: str,
+	runtime_support_dir: str,
 	include_host_runtime: bool,
 ) -> dict[str, str]:
 	env = (
@@ -172,6 +190,7 @@ def _agent_env(
 		else {}
 	)
 	env["HOME"] = runtime_home
+	env["AEBENCH_AGENT_SUPPORT_DIR"] = runtime_support_dir
 	reasoning_effort = _REASONING_EFFORT.get(agent)
 	if reasoning_effort is not None:
 		env["AEBENCH_REASONING_EFFORT"] = reasoning_effort
@@ -213,12 +232,19 @@ def _agent_shell_command(runtime: BenchRuntime) -> list[str]:
 			"bash",
 			"-s",
 		]
-		user_setup = f"set -e; {_DOCKER_AGENT_USER_SETUP}; "
 	else:
 		agent_command = ["bash", "-s"]
-		user_setup = ""
-	pipeline = f'{user_setup}{shlex.join(agent_command)} 2>&1 | python3 "$HOME/{_TIMESTAMP_SCRIPT}"'
+	pipeline = (
+		f"{shlex.join(agent_command)} 2>&1 | "
+		f'python3 "$AEBENCH_AGENT_SUPPORT_DIR/{_TIMESTAMP_SCRIPT}"'
+	)
 	return ["bash", "-o", "pipefail", "-c", pipeline]
 
 
-__all__ = ["AgentName", "clear_agent_home", "prepare_agent_home", "run_agent"]
+__all__ = [
+	"AgentName",
+	"clear_agent_support_dir",
+	"prepare_agent_support_dir",
+	"prepare_agent_runtime",
+	"run_agent",
+]

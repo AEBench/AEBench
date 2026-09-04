@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
 from typing import Any
 
@@ -74,6 +74,8 @@ def _recorded_runtime(
 	saved_image: str | None = None,
 	image: str | None = None,
 	workspace_mount: str | None = None,
+	user: str | None = None,
+	home: str | None = None,
 ) -> Any:
 	return SimpleNamespace(
 		runtime=SimpleNamespace(
@@ -81,6 +83,8 @@ def _recorded_runtime(
 			saved_image=saved_image,
 			image=image,
 			workspace_mount=workspace_mount,
+			user=user,
+			home=home,
 		)
 	)
 
@@ -244,6 +248,27 @@ def test_recorded_docker_runtime_preserves_agent_workspace_mount(
 
 	assert isinstance(executor, DockerRuntimeCheckExecutor)
 	assert executor.resolve_path(context.workspace_dir / "result.txt") == Path("/repo/result.txt")
+
+
+def test_recorded_docker_runtime_preserves_agent_user_and_home(
+	tmp_path: Path,
+) -> None:
+	context = _oracle_context(
+		tmp_path,
+		runtime_result=_recorded_runtime(
+			RuntimeMode.DOCKER,
+			saved_image="saved-image:latest",
+			workspace_mount="/repo",
+			user="agent",
+			home="/home/agent",
+		),
+	)
+
+	executor = build_oracle_runtime_registry(context).executor_for("task")
+
+	assert isinstance(executor, DockerRuntimeCheckExecutor)
+	assert executor._user == "agent"
+	assert executor._home == "/home/agent"
 
 
 def test_recorded_docker_runtime_without_image_raises(
@@ -470,6 +495,40 @@ def test_docker_executor_starts_container_lazily_and_reuses_it(
 	executor.close()
 	container_removals = [command for command in calls if command[:3] == ["docker", "rm", "-f"]]
 	assert container_removals == [["docker", "rm", "-f", "container-id"]]
+
+
+def test_docker_executor_restores_recorded_user_and_home(
+	tmp_path: Path,
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	calls: list[list[str]] = []
+
+	def fake_run(
+		cmd: Sequence[str],
+		**_kwargs: Any,
+	) -> subprocess.CompletedProcess[str]:
+		command = list(cmd)
+		calls.append(command)
+		stdout = "container-id\n" if command[:3] == ["docker", "run", "-d"] else ""
+		return subprocess.CompletedProcess(command, 0, stdout, "")
+
+	monkeypatch.setattr(subprocess, "run", fake_run)
+	executor = DockerRuntimeCheckExecutor(
+		image="saved-task-image:latest",
+		path_mounts=(),
+		default_cwd=tmp_path,
+		runtime_cwd=PurePosixPath("/home/agent"),
+		user="agent",
+		home="/home/agent",
+	)
+
+	assert executor.path_exists(RuntimePath.from_parts("installed-package")) is True
+
+	start_command = next(command for command in calls if command[:3] == ["docker", "run", "-d"])
+	assert start_command[start_command.index("--user") + 1] == "agent"
+	assert "HOME=/home/agent" in start_command
+
+	executor.close()
 
 
 def test_docker_image_target_uses_configured_image_and_working_dir(
