@@ -34,7 +34,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 		checks.append(
 			Table1CountsCheck(
 				name="table1_counts",
-				path=self.artifact_path(RESULTS_DIR, TABLE1_FILE),
+				path=self.workspace_path(RESULTS_DIR, TABLE1_FILE),
 				rules_total=table1["rules_total"],
 				rules_success_all=table1["rules_success_all"],
 				rules_success_any=table1["rules_success_any"],
@@ -52,7 +52,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 			checks.append(
 				FileContainsCheck(
 					name=f"case_study_{filename.removesuffix('.txt')}",
-					path=self.artifact_path(RESULTS_DIR, filename),
+					path=self.workspace_path(RESULTS_DIR, filename),
 					required=signatures,
 				)
 			)
@@ -62,7 +62,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 		checks.append(
 			self.min_matching_entry_count_check(
 				name="cdf_pdf_exists",
-				directory=self.artifact_path(RESULTS_DIR),
+				directory=self.workspace_path(RESULTS_DIR),
 				pattern=CDF_PDF_GLOB,
 				min_count=1,
 			)
@@ -72,7 +72,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 		checks.append(
 			CoveragePercentCheck(
 				name="coverage_wasmtime",
-				path=self.artifact_path(RESULTS_DIR, COVERAGE_WASMTIME_FILE),
+				path=self.workspace_path(RESULTS_DIR, COVERAGE_WASMTIME_FILE),
 				expected_uses_pct=coverage["wasmtime"]["uses_pct"],
 				expected_covered_pct=coverage["wasmtime"]["covered_pct"],
 				epsilon=COVERAGE_PCT_EPSILON,
@@ -81,7 +81,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 		checks.append(
 			CoveragePercentCheck(
 				name="coverage_rustc",
-				path=self.artifact_path(RESULTS_DIR, COVERAGE_RUSTC_FILE),
+				path=self.workspace_path(RESULTS_DIR, COVERAGE_RUSTC_FILE),
 				expected_uses_pct=coverage["rustc"]["uses_pct"],
 				expected_covered_pct=coverage["rustc"]["covered_pct"],
 				epsilon=COVERAGE_PCT_EPSILON,

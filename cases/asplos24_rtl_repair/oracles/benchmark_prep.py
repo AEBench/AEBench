@@ -34,7 +34,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
             reqs.append(
                 self.path_check(
                     name=f"dir_{safe_name}",
-                    path=self.artifact_path(rel_path),
+                    path=self.workspace_path(rel_path),
                     kind=PathKind.DIRECTORY,
                 )
             )
@@ -44,7 +44,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
             reqs.append(
                 self.path_check(
                     name=f"file_{safe_name}",
-                    path=self.artifact_path(rel_path),
+                    path=self.workspace_path(rel_path),
                     kind=PathKind.FILE,
                 )
             )

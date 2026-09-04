@@ -217,17 +217,17 @@ class PerfCSVStructureCheck(BaseCheck):
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	def requirements(self) -> Sequence[BaseCheck]:
-		results_path = _find_result_file(self.artifact_path(), "results", executor=self.executor)
+		results_path = _find_result_file(self.workspace_path(), "results", executor=self.executor)
 		perf_csv_path = _find_result_file(
-			self.artifact_path(), "results-perf.csv", executor=self.executor
+			self.workspace_path(), "results-perf.csv", executor=self.executor
 		)
-		tex_path = _find_result_file(self.artifact_path(), "results.tex", executor=self.executor)
-		tex_fallback = self.artifact_path("results.tex")
+		tex_path = _find_result_file(self.workspace_path(), "results.tex", executor=self.executor)
+		tex_fallback = self.workspace_path("results.tex")
 
 		return (
 			self.path_check(
 				name="results_file_exists",
-				path=self.artifact_path("results"),
+				path=self.workspace_path("results"),
 				kind=PathKind.FILE,
 			),
 			AggregatedDetectionRateCheck(
@@ -246,7 +246,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 			),
 			self.path_check(
 				name="results_perf_csv_exists",
-				path=self.artifact_path("results-perf.csv"),
+				path=self.workspace_path("results-perf.csv"),
 				kind=PathKind.FILE,
 			),
 			PerfCSVStructureCheck(
