@@ -10,7 +10,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 	def requirements(self) -> Sequence[BaseCheck]:
 		return (
 			self.command_check(
-				name="wali_runtime_executes_wasm",
+				name="built_wali_runtime_smoke_test",
 				cmd=(
 					"./iwasm",
 					"-v=0",

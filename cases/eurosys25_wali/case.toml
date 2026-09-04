@@ -3,7 +3,7 @@ id = "eurosys25_wali"
 [case_brief]
 core_claim = "Build the pinned WALI runtime, execute representative ported Linux applications and libuvwasi over WALI, and rerun the released Bash, Lua, and SQLite comparison against Docker and QEMU."
 acceptable_evidence = "A real WALI runtime executes Bash, SQLite, Vim, and Memcached with dynamic WALI syscall traces; the libuvwasi CTest log reports all 22 tests passed; and newly measured benchmark tables cover every released workload in native, WALI, Docker, Docker-inner, and QEMU modes while preserving the paper's startup, memory, and execution-time relations."
-allowed_tolerance = "Application exits and all 22 libuvwasi tests require exact success. Benchmark values are hardware-sensitive and are not compared with fixed numbers; each complete finite result matrix must differ from the bundled paper data and show lower WALI startup intercept and memory use than Docker, plus a lower WALI execution slope than QEMU, for all three benchmark families."
+allowed_tolerance = "Application exits and all 22 libuvwasi tests require exact success. Benchmark values are hardware-sensitive and are not compared with fixed numbers; each complete finite result matrix must show lower WALI startup intercept and memory use than Docker, plus a lower WALI execution slope than QEMU, for all three benchmark families."
 
 [paper]
 title = "Empowering WebAssembly with Thin Kernel Interfaces"

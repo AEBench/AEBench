@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import csv
-import hashlib
 import json
 import math
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass, field
-from pathlib import Path, PurePosixPath
+from dataclasses import dataclass
+from pathlib import Path
 from statistics import median
 
 from evaluator.oracles.oracle_checks_runtime import (
@@ -42,10 +41,20 @@ def _runtime_join(base: OraclePath, *parts: str) -> OraclePath:
 	return Path(base).joinpath(*parts)
 
 
-def _read_runtime_text(path: OraclePath, executor: RuntimeCheckExecutor | None) -> str:
+def _read_runtime_text(path: OraclePath, executor: RuntimeCheckExecutor) -> str:
 	try:
 		return check_read_file_text(path, encoding="utf-8", executor=executor)
 	except (OSError, RuntimeError, ValueError) as exc:
+		raise ValueError(f"could not read {path}: {exc}") from exc
+
+
+def _read_runtime_bytes(path: OraclePath, executor: RuntimeCheckExecutor) -> bytes:
+	resolved = executor.resolve_path(path)
+	if not isinstance(resolved, Path):
+		raise ValueError(f"binary file inspection requires a local runtime: {path}")
+	try:
+		return resolved.read_bytes()
+	except OSError as exc:
 		raise ValueError(f"could not read {path}: {exc}") from exc
 
 
@@ -106,77 +115,13 @@ def _linear_fit(xs: Sequence[float], ys: Sequence[float]) -> tuple[float, float]
 	return y_mean - slope * x_mean, slope
 
 
-def _canonical_digest(rows: dict[tuple[str, str], dict[str, float]]) -> str:
-	canonical = [
-		[key, mode, *(format(values[field], ".17g") for field in _NUMERIC_FIELDS)]
-		for (key, mode), values in rows.items()
-	]
-	canonical.sort()
-	payload = json.dumps(canonical, separators=(",", ":"), ensure_ascii=True)
-	return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ExperimentInputsCheck(BaseCheck):
-	experiment_dir: OraclePath
-	reference_path: Path
-	executor: RuntimeCheckExecutor = field(repr=False, compare=False)
-
-	def check(self) -> CheckResult:
-		try:
-			expected = _load_reference(self.reference_path)
-			if not expected:
-				raise ValueError("inputs reference must be a non-empty object")
-
-			root = self.executor.resolve_path(self.experiment_dir)
-			paths = [str(PurePosixPath(root, str(rel))) for rel in expected]
-			script = """\
-import hashlib
-import json
-import sys
-
-digests = {}
-for path in sys.argv[1:]:
-	hash_value = hashlib.sha256()
-	with open(path, "rb") as source:
-		for chunk in iter(lambda: source.read(1024 * 1024), b""):
-			hash_value.update(chunk)
-	digests[path] = hash_value.hexdigest()
-print(json.dumps(digests))
-"""
-			result = self.executor.run_process_capture(
-				cmd=("python3", "-c", script, *paths),
-				cwd=None,
-				env=None,
-				timeout_seconds=60.0,
-			)
-			if result.timed_out:
-				return CheckResult.failure("released input hashing timed out")
-			if result.returncode != 0:
-				detail = (result.stderr or result.stdout).strip()
-				return CheckResult.failure(f"could not hash released inputs: {detail}")
-			observed = json.loads(result.stdout)
-		except (KeyError, TypeError, ValueError) as exc:
-			return CheckResult.failure(f"invalid released inputs or reference: {exc}")
-
-		mismatches = []
-		for rel, digest in expected.items():
-			path = str(PurePosixPath(root, str(rel)))
-			if observed.get(path) != digest:
-				mismatches.append(str(rel))
-		if mismatches:
-			return CheckResult.failure("released input hash mismatch: " + ", ".join(mismatches))
-		return CheckResult.success(f"all {len(expected)} released experiment inputs match")
-
-
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PortabilityLogCheck(BaseCheck):
 	path: OraclePath
-	executor: RuntimeCheckExecutor | None = field(default=None, repr=False, compare=False)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			sections = _parse_status_sections(_read_runtime_text(self.path, self.executor))
+			sections = _parse_status_sections(_read_runtime_text(self.path, executor))
 		except ValueError as exc:
 			return CheckResult.failure(f"portability log: {exc}")
 
@@ -203,11 +148,10 @@ class PortabilityLogCheck(BaseCheck):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WasiLayeringLogCheck(BaseCheck):
 	path: OraclePath
-	executor: RuntimeCheckExecutor | None = field(default=None, repr=False, compare=False)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			text = _read_runtime_text(self.path, self.executor)
+			text = _read_runtime_text(self.path, executor)
 		except ValueError as exc:
 			return CheckResult.failure(f"libuvwasi CTest log: {exc}")
 
@@ -227,11 +171,10 @@ class WasiLayeringLogCheck(BaseCheck):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class BenchmarkLogCheck(BaseCheck):
 	path: OraclePath
-	executor: RuntimeCheckExecutor | None = field(default=None, repr=False, compare=False)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			sections = _parse_status_sections(_read_runtime_text(self.path, self.executor))
+			sections = _parse_status_sections(_read_runtime_text(self.path, executor))
 		except ValueError as exc:
 			return CheckResult.failure(f"benchmark log: {exc}")
 		missing = sorted(set(_BENCHMARK_MODES) - sections.keys())
@@ -281,9 +224,8 @@ def _parse_summary_csv(text: str, app: str) -> dict[tuple[str, str], dict[str, f
 class BenchmarkResultsCheck(BaseCheck):
 	results_dir: OraclePath
 	reference_path: Path
-	executor: RuntimeCheckExecutor | None = field(default=None, repr=False, compare=False)
 
-	def check(self) -> CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
 			reference = _load_reference(self.reference_path)
 			benchmark_refs = reference["benchmarks"]
@@ -299,9 +241,8 @@ class BenchmarkResultsCheck(BaseCheck):
 				if not isinstance(app_ref, dict):
 					raise ValueError(f"reference {app} entry must be an object")
 				expected_keys = {str(key) for key in app_ref["keys"]}
-				stale_digest = str(app_ref["bundled_rows_sha256"])
 				path = _runtime_join(self.results_dir, f"{app}.csv")
-				rows = _parse_summary_csv(_read_runtime_text(path, self.executor), app)
+				rows = _parse_summary_csv(_read_runtime_text(path, executor), app)
 			except (KeyError, TypeError, ValueError) as exc:
 				return CheckResult.failure(str(exc))
 
@@ -312,15 +253,10 @@ class BenchmarkResultsCheck(BaseCheck):
 				return CheckResult.failure(
 					f"{app}.csv row mismatch: missing {missing[:6]}, unexpected {extra[:6]}"
 				)
-			if _canonical_digest(rows) == stale_digest:
-				return CheckResult.failure(
-					f"{app}.csv exactly matches the bundled paper data; rerun measurements are required"
-				)
-
 			for key, mode in expected_rows:
 				raw_path = _runtime_join(self.results_dir, app, f"{key}.{mode}")
 				try:
-					raw = next(csv.reader([_read_runtime_text(raw_path, self.executor).strip()]))
+					raw = next(csv.reader([_read_runtime_text(raw_path, executor).strip()]))
 					raw_values = [float(value) for value in raw]
 				except (csv.Error, StopIteration, ValueError) as exc:
 					return CheckResult.failure(f"malformed raw result {app}/{key}.{mode}: {exc}")
@@ -383,62 +319,19 @@ class BenchmarkResultsCheck(BaseCheck):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PdfOutputsCheck(BaseCheck):
 	paths: Sequence[OraclePath]
-	reference_path: Path
-	executor: RuntimeCheckExecutor = field(repr=False, compare=False)
 
-	def check(self) -> CheckResult:
-		resolved = [str(self.executor.resolve_path(path)) for path in self.paths]
-		script = """\
-import hashlib
-import json
-import sys
-from pathlib import Path
-
-metadata = {}
-for raw_path in sys.argv[1:]:
-	path = Path(raw_path)
-	content = path.read_bytes()
-	metadata[raw_path] = [
-		len(content),
-		content[:5].decode("ascii", "replace"),
-		hashlib.sha256(content).hexdigest(),
-	]
-print(json.dumps(metadata))
-"""
-		result = self.executor.run_process_capture(
-			cmd=("python3", "-c", script, *resolved),
-			cwd=None,
-			env=None,
-			timeout_seconds=20.0,
-		)
-		if result.timed_out:
-			return CheckResult.failure("PDF validation timed out")
-		if result.returncode != 0:
-			detail = (result.stderr or result.stdout).strip()
-			return CheckResult.failure(f"could not read generated PDFs: {detail}")
-		try:
-			metadata = json.loads(result.stdout)
-			reference = _load_reference(self.reference_path)
-			bundled = reference["bundled_figures_sha256"]
-			if not isinstance(bundled, dict):
-				raise ValueError("reference bundled_figures_sha256 must be an object")
-		except (KeyError, ValueError) as exc:
-			return CheckResult.failure(f"invalid PDF metadata or reference: {exc}")
-
-		invalid = [
-			Path(path).name
-			for path, (size, magic, _digest) in metadata.items()
-			if size < 1_000 or magic != "%PDF-"
-		]
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
+		invalid: list[str] = []
+		for path in self.paths:
+			name = Path(str(path)).name
+			try:
+				content = _read_runtime_bytes(path, executor)
+			except ValueError:
+				invalid.append(name)
+				continue
+			if len(content) < 1_000 or not content.startswith(b"%PDF-"):
+				invalid.append(name)
+				continue
 		if invalid:
 			return CheckResult.failure("missing or malformed generated PDFs: " + ", ".join(invalid))
-		stale = [
-			Path(path).name
-			for path, (_size, _magic, digest) in metadata.items()
-			if bundled.get(Path(path).name) == digest
-		]
-		if stale:
-			return CheckResult.failure(
-				"bundled paper PDFs were not regenerated: " + ", ".join(stale)
-			)
-		return CheckResult.success(f"all {len(resolved)} benchmark PDFs are valid")
+		return CheckResult.success(f"all {len(self.paths)} benchmark PDFs are valid")

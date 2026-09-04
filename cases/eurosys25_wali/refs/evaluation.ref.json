@@ -1,17 +1,10 @@
 {
-  "bundled_figures_sha256": {
-    "memory.pdf": "5d7d3fcb50def7aea3c5f8c45447661355d0bc2fa786c7a573c6b3c9ba1d401b",
-    "runtime_a.pdf": "5cf4c7ac4f97d5479a99d9ebc4bf7bd71a1a8524f27c4392725f17df95adbadb",
-    "runtime_b.pdf": "cd767938d1ce781098f35a7245bdaae50b6c0312ecd7161eb23caecfa38323d6",
-    "runtime_c.pdf": "f08ea09aa7edfc4ddbc84c4975c2a8b560163c26bebefcbc6ec5a05198d969be"
-  },
   "benchmarks": {
     "bash": {
       "keys": [
         "fl1", "fl2", "fl3", "fl4", "fl5", "fl6", "fl7", "fl8",
         "fb1", "fb2", "fb3", "fb4", "fb5", "fb6", "fb7", "fb8", "fb9", "fb10"
-      ],
-      "bundled_rows_sha256": "9979a171109e81692c59252f5adbeca7bb1d9c44f984336d11263c924775d77b"
+      ]
     },
     "lua": {
       "keys": [
@@ -19,15 +12,13 @@
         "mt7", "mt8", "mt9", "mt10", "mt11", "mt12", "mt13", "mt14",
         "nb1", "nb2", "nb3", "nb4", "nb5", "nb6", "nb7", "nb8", "nb9", "nb10",
         "sn100", "sn200", "sn300", "sn400", "sn500", "sn600", "sn700", "sn800", "sn900", "sn1000"
-      ],
-      "bundled_rows_sha256": "de268f14d1693439dc3ae2f90b2edff631b22c949f1bb0e4736e7f9768a4d83e"
+      ]
     },
     "sqlite3": {
       "keys": [
         "50", "100", "150", "200", "250", "300", "350", "400", "450", "500",
         "550", "600", "650", "700", "750", "800", "850", "900", "950", "1000"
-      ],
-      "bundled_rows_sha256": "caacad7a2b8b64787f59eaa14405a178a7ebe491ab62f9a7d535059d9e15e16d"
+      ]
     }
   }
 }

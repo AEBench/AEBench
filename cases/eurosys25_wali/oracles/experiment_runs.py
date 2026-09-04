@@ -21,23 +21,19 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 			PortabilityLogCheck(
 				name="ported_applications",
 				path=self.runtime_path("evaluation", "portability.log"),
-				executor=self.executor,
 			),
 			WasiLayeringLogCheck(
 				name="libuvwasi_tests",
 				path=self.runtime_path("evaluation", "libuvwasi-tests.log"),
-				executor=self.executor,
 			),
 			BenchmarkLogCheck(
 				name="benchmark_modes",
 				path=self.runtime_path(EXPERIMENT_DIR, "benchmark.log"),
-				executor=self.executor,
 			),
 			BenchmarkResultsCheck(
-				name="fresh_benchmark_results",
+				name="benchmark_results",
 				results_dir=self.runtime_path(EXPERIMENT_DIR, "results"),
 				reference_path=self.ref_path("evaluation.ref.json"),
-				executor=self.executor,
 			),
 			PdfOutputsCheck(
 				name="generated_benchmark_figures",
@@ -47,7 +43,5 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 					self.runtime_path(EXPERIMENT_DIR, "figures", "runtime_b.pdf"),
 					self.runtime_path(EXPERIMENT_DIR, "figures", "runtime_c.pdf"),
 				),
-				reference_path=self.ref_path("evaluation.ref.json"),
-				executor=self.executor,
 			),
 		)

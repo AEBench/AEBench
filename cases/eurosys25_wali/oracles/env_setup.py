@@ -25,33 +25,29 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 				min_version=(3, 14, 0),
 			),
 			self.version_check(
-				name="bash",
-				cmd=("bash", "--version"),
+				name="make",
+				cmd=("make", "--version"),
 				min_version=(4, 0, 0),
 			),
-			self.command_check(
-				name="make_available",
-				cmd="command -v make",
-				use_shell=True,
-				timeout_seconds=10.0,
+			self.version_check(
+				name="ninja",
+				cmd=("ninja", "--version"),
+				min_version=(1, 10, 0),
 			),
-			self.command_check(
-				name="ninja_available",
-				cmd="command -v ninja",
-				use_shell=True,
-				timeout_seconds=10.0,
+			self.version_check(
+				name="gcc",
+				cmd=("gcc", "--version"),
+				min_version=(9, 0, 0),
 			),
-			self.command_check(
-				name="c_compiler_available",
-				cmd="command -v cc",
-				use_shell=True,
-				timeout_seconds=10.0,
+			self.version_check(
+				name="g++",
+				cmd=("g++", "--version"),
+				min_version=(9, 0, 0),
 			),
-			self.command_check(
-				name="cxx_compiler_available",
-				cmd="command -v c++",
-				use_shell=True,
-				timeout_seconds=10.0,
+			self.version_check(
+				name="lld",
+				cmd=("ld.lld", "--version"),
+				min_version=(9, 0, 0),
 			),
 			self.command_check(
 				name="python_analysis_stack",

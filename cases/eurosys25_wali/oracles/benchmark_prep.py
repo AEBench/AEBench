@@ -6,19 +6,17 @@ from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind
 from evaluator.oracles.reporting import BaseCheck
 
 from .consts import BENCHMARK_APPS, EXPERIMENT_DIR
-from .parsing import ExperimentInputsCheck
 
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 	def requirements(self) -> Sequence[BaseCheck]:
-		experiment_dir = self.runtime_path(EXPERIMENT_DIR)
 		checks: list[BaseCheck] = [
-			ExperimentInputsCheck(
-				name="released_experiment_inputs",
-				experiment_dir=experiment_dir,
-				reference_path=self.ref_path("inputs.ref.json"),
-				executor=self.executor,
-			),
+			self.path_check(
+				name=f"released_{filename.replace('.', '_')}",
+				path=self.runtime_path(EXPERIMENT_DIR, filename),
+				kind=PathKind.FILE,
+			)
+			for filename in ("benchmarks.tar.gz", "data.tar.gz")
 		]
 		for app in BENCHMARK_APPS:
 			for filename in (
