@@ -5,16 +5,12 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluator.oracles.case_base import CaseOracleExperimentRunsBase
-from evaluator.oracles.experiment_runs_checks import ElementwiseSimilarityThresholdCheck
-
-from evaluator.oracles import utils
+from evaluator.oracles import CaseOracleExperimentRunsBase, ElementwiseSimilarityThresholdCheck
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor, RuntimePath
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 
-def _load_expected_counts(
-	path: Path, *, executor: RuntimeCheckExecutor
-) -> dict[str, int]:
+def _load_expected_counts(path: Path, *, executor: RuntimeCheckExecutor) -> dict[str, int]:
 	try:
 		raw = json.loads(executor.read_file_text(path))
 	except OSError as exc:
@@ -51,21 +47,16 @@ def _count_bug_dirs(path: Path, *, executor: RuntimeCheckExecutor) -> int:
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
-class BugTotalsCheck(utils.BaseCheck):
+class BugTotalsCheck(BaseCheck):
 	expected_path: Path
 	workspace_dir: Path
 	observed_path: Path
 
-	def __post_init__(self) -> None:
-		object.__setattr__(self, "expected_path", Path(self.expected_path))
-		object.__setattr__(self, "workspace_dir", Path(self.workspace_dir))
-		object.__setattr__(self, "observed_path", Path(self.observed_path))
-
-	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
 			expected = _load_expected_counts(self.expected_path, executor=executor)
 		except ValueError as exc:
-			return utils.CheckResult.failure(str(exc))
+			return CheckResult.failure(str(exc))
 
 		benchmarks = list(expected.keys())
 		observed = {
@@ -92,7 +83,7 @@ class BugTotalsCheck(utils.BaseCheck):
 			if result.returncode != 0:
 				raise OSError(result.stderr or f"exit code {result.returncode}")
 		except (OSError, ValueError) as exc:
-			return utils.CheckResult.failure(f"failed to write observed bug totals: {exc}")
+			return CheckResult.failure(f"failed to write observed bug totals: {exc}")
 
 		result = ElementwiseSimilarityThresholdCheck(
 			name="bugs_totals_match",
@@ -102,20 +93,20 @@ class BugTotalsCheck(utils.BaseCheck):
 		).check(executor)
 
 		if result.ok:
-			return utils.CheckResult.success()
+			return CheckResult.success()
 
-		return utils.CheckResult.failure(
+		return CheckResult.failure(
 			f"{result.message}\nobserved totals written to {self.observed_path}"
 		)
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
-	def requirements(self) -> Sequence[utils.BaseCheck]:
+	def requirements(self) -> Sequence[BaseCheck]:
 		return (
 			BugTotalsCheck(
 				name="bugs_totals_match",
 				expected_path=self.ref_path("bugs_expected.json"),
-				workspace_dir=self.paths.workspace_dir,
+				workspace_dir=self.workspace_path(),
 				observed_path=self.output_path("bugs_observed.json"),
 			),
 		)

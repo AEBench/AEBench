@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleEnvSetupBase
 from evaluator.oracles.checks import (
-	VersionCheck,
 	PathCheck,
 	PathKind,
+	VersionCheck,
 )
+from evaluator.oracles.reporting import BaseCheck
 
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
-	def requirements(self) -> Sequence[utils.BaseCheck]:
+	def requirements(self) -> Sequence[BaseCheck]:
 		repo_root = self.workspace_path()
 
 		return (
@@ -43,10 +43,10 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 				optional=True,
 			),
 			VersionCheck(
-                name="conda",
-                cmd=("conda", "--version"),
-                min_version=(4, 9, 0),
-            ),
+				name="conda",
+				cmd=("conda", "--version"),
+				min_version=(4, 9, 0),
+			),
 			PathCheck(
 				name="repo_root_exists",
 				path=repo_root,
