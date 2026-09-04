@@ -344,13 +344,16 @@ This runs all four phases against the prepared artifact workspace. If `--workspa
 
 ## 8. Run the full case
 
-The full agent pipeline is currently unavailable in this checkout:
+After the standalone oracle passes, run the complete agent and oracle pipeline:
 
 ```bash
-PYTHONPATH=src uv run aebench case run venue24_paperid
+uv run aebench case run venue24_paperid \
+  --agent codex_non_api \
+  --model gpt-5.5
 ```
 
-That command exits with `case runner is unavailable in this checkout`. Audit cases by manually preparing the artifact workspace and then running `aebench case oracle`.
+See [Agent Harnesses](add_agent.md) for authentication and the other supported
+harnesses.
 
 ## 9. Best practices
 

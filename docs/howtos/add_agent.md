@@ -6,8 +6,8 @@ receives two environment variables:
 - `PROMPT`: the complete AEBench prompt
 - `AGENT_CONFIG`: the selected model name
 
-AEBench starts each agent CLI without prompts for user input and writes its JSON
-output to `runner_output.log`. GNU `timeout` terminates the CLI when the
+AEBench starts each agent CLI without prompts for user input and writes its
+timestamped output to `runner_output.log`. GNU `timeout` terminates the CLI when the
 `run.runtime.timeout_ms` limit expires.
 
 The AEBench runtime image includes the Codex and Claude Code CLIs. Install
@@ -63,10 +63,10 @@ uv run aebench case run asplos24_gaia \
 If Codex is installed on the Chameleon instance, you can run `codex login`
 there. AEBench reads `~/.codex/auth.json` by default.
 
-For each case run, AEBench creates a temporary `HOME` directory and copies the
-selected auth file into it. Codex may update this copy when it refreshes a
-token. AEBench deletes the directory after the agent exits. The original auth
-file remains unchanged.
+For each case run, AEBench copies the selected auth file into a temporary
+support directory outside the artifact workspace. Codex may update this copy
+when it refreshes a token. AEBench deletes the directory after the agent exits.
+The original auth file remains unchanged.
 
 ## Claude subscription
 
@@ -102,9 +102,9 @@ uv run aebench case run osdi24_kondo \
 
 You can also set `CLAUDE_CODE_OAUTH_TOKEN` directly on the Chameleon instance.
 
-For each case run, AEBench creates a temporary `HOME` directory and copies the
-token into it. AEBench deletes the directory after the agent exits. The
-original token file remains unchanged.
+For each case run, AEBench copies the token into a temporary support directory
+outside the artifact workspace. AEBench deletes the directory after the agent
+exits. The original token file remains unchanged.
 
 ## API authentication
 

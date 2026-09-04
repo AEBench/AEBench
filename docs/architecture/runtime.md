@@ -29,7 +29,10 @@ also mounts the host Docker socket. It uses the absolute host workspace path so
 Docker can resolve bind mounts created by the artifact. This mode requires
 `--allow-host-docker` and a disposable Chameleon instance.
 
-`run.runtime.timeout_ms` sets the agent time limit. GNU `timeout` sends `TERM` when the limit expires and `KILL` 30 seconds later. AEBench writes raw stdout and stderr to `runner_output.log`.
+`run.runtime.timeout_ms` sets the agent time limit. GNU `timeout` sends `TERM`
+when the limit expires and `KILL` 30 seconds later. AEBench combines stdout and
+stderr, adds a UTC timestamp to each line, and writes the result to
+`runner_output.log`.
 
 ## Oracle scoring
 
@@ -51,7 +54,7 @@ that you can revoke and a disposable Chameleon instance.
 
 The case output directory includes:
 
-- `runner_output.log`: raw harness output
+- `runner_output.log`: timestamped harness stdout and stderr
 - `aebench_prompt_<case>.md`: exact prompt
 - `result.jsonl`: runtime result
 - `oracle_result.json`: four-phase score
