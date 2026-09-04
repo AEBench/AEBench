@@ -6,9 +6,7 @@ import sys
 import threading
 import time
 import uuid
-from collections.abc import Callable
 from datetime import datetime, timezone
-from functools import partial
 from pathlib import Path
 from typing import Any, BinaryIO, TypeAlias
 
@@ -25,6 +23,10 @@ MAX_STREAM_BYTES = 16 * 1024 * 1024
 
 MAX_LISTED_PATHS = 100
 MAX_SNAPSHOT_FILES = 20000
+
+# How long snapshot is before timeout. Nothing is failed when this expires. Result is abandoned, the
+# file_snapshot entry is logged. The command's record is still written in full.
+SNAPSHOT_BUDGET_SECONDS = 2.0
 
 COMMAND_INFO = 0
 STDOUT = 1
@@ -98,7 +100,9 @@ class StreamSink:
 		self.handle: BinaryIO | None = None
 
 	def write(self, chunk: bytes) -> None:
-		"""Applies chunk to stream file up to ceiling"""
+		"""Appends the bytes in `chunk` to this stream's file.
+		Bytes past the ceiling are counted and then dropped.
+		"""
 		self.received += len(chunk)
 
 		room = self.ceiling - self.kept
@@ -165,42 +169,15 @@ class Monitor:
 
 MONITORS: list[Monitor] = []
 
-# before_command holds up the agent's shell, so it gets a tight budget
-# after_command runs once the command is already
-BEFORE_BUDGET_SECONDS = 2.0
-AFTER_BUDGET_SECONDS = 30.0
-
 
 def register(monitor: Monitor) -> None:
 	MONITORS.append(monitor)
 
 
-def call_with_budget(work: Callable[[], object], budget: float) -> object:
-	"""Runs <work>, giving up on it after <budget> seconds. A hung monitor cannot be cancelled."""
-	result: list[object] = []
-	failure: list[BaseException] = []
-
-	def target() -> None:
-		try:
-			result.append(work())
-		except BaseException as exc:
-			failure.append(exc)
-
-	worker = threading.Thread(target=target, daemon=True)
-	worker.start()
-	worker.join(budget)
-
-	if worker.is_alive():
-		raise TimeoutError(f"monitor exceeded its {budget:g}s budget")
-
-	if failure:
-		raise failure[0]
-
-	return result[0] if result else None
-
-
 def note_monitor_error(record: Record, name: str, phase: str, exc: BaseException) -> None:
-	"""A broken monitor is recorded, never raised."""
+	"""A broken monitor is recorded, never raised. The command's record is still written in full.
+	A broken monitor can never cost a record.
+	"""
 	errors = record.setdefault("monitor_errors", [])
 	assert isinstance(errors, list)
 
@@ -208,9 +185,10 @@ def note_monitor_error(record: Record, name: str, phase: str, exc: BaseException
 
 
 def run_before_command(ctx: CommandContext) -> None:
+	"""Runs every monitor's pre-command phase, in registration order."""
 	for monitor in MONITORS:
 		try:
-			call_with_budget(partial(monitor.before_command, ctx), BEFORE_BUDGET_SECONDS)
+			monitor.before_command(ctx)
 		except BaseException as exc:
 			note_monitor_error(ctx.record, monitor.name, "before_command", exc)
 
@@ -218,10 +196,7 @@ def run_before_command(ctx: CommandContext) -> None:
 def run_after_command(ctx: CommandContext) -> None:
 	for monitor in MONITORS:
 		try:
-			output = call_with_budget(
-				partial(monitor.after_command, ctx),
-				AFTER_BUDGET_SECONDS,
-			)
+			output = monitor.after_command(ctx)
 		except BaseException as exc:
 			note_monitor_error(ctx.record, monitor.name, "after_command", exc)
 			continue
@@ -264,12 +239,16 @@ class FileSnapshot:
 	def __init__(self, workspace: str | Path) -> None:
 		self.workspace = Path(workspace)
 
-	def _snapshot(self) -> dict[str, tuple[int, int]] | None:
-		"""Maps each file to (size, mtime_ns), or None if the tree is too large."""
+	def _snapshot(self) -> tuple[dict[str, tuple[int, int]] | None, str | None]:
+		"""Maps each file to (size, mtime_ns), or (None, reason) if it gave up."""
 		found: dict[str, tuple[int, int]] = {}
+		deadline = time.monotonic() + SNAPSHOT_BUDGET_SECONDS
 
 		for directory, _subdirectories, filenames in os.walk(self.workspace):
 			for filename in filenames:
+				if time.monotonic() >= deadline:
+					return None, f"snapshot exceeded {SNAPSHOT_BUDGET_SECONDS:g}s"
+
 				path = os.path.join(directory, filename)
 
 				try:
@@ -281,9 +260,9 @@ class FileSnapshot:
 				found[os.path.relpath(path, self.workspace)] = (stat.st_size, stat.st_mtime_ns)
 
 				if len(found) > MAX_SNAPSHOT_FILES:
-					return None
+					return None, f"workspace exceeds {MAX_SNAPSHOT_FILES} files"
 
-		return found
+		return found, None
 
 	def before_command(self, ctx: CommandContext) -> None:
 		ctx.state[self.name] = self._snapshot()
@@ -292,11 +271,12 @@ class FileSnapshot:
 		if self.name not in ctx.state:
 			return None
 
-		before = ctx.state[self.name]
-		after = self._snapshot()
+		before, before_reason = ctx.state[self.name]
+		after, after_reason = self._snapshot()
 
 		if before is None or after is None:
-			return {"skipped": f"workspace exceeds {MAX_SNAPSHOT_FILES} files"}
+			# Explains reason for skipped
+			return {"skipped": before_reason or after_reason}
 
 		created = sorted(set(after) - set(before))
 		deleted = sorted(set(before) - set(after))
