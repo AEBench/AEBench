@@ -1,0 +1,55 @@
+id = "atc24_calchas"
+
+[case_brief]
+core_claim = "Run Calchas's released hierarchical prediction evaluation on its anonymized HBM dataset and reproduce the four-level Random Forest performance and SVM/GBDT comparison, showing useful failure prediction across device levels and substantially stronger micro-level F1 scores for tree-based models than for SVM."
+acceptable_evidence = "The four released prediction datasets match the pinned manifest; complete Figure 12 and Figure 13 logs cover every expected predictor/model run without execution errors; all 12 metric files contain finite accuracy, precision, recall, and F1 values; and the aggregate RF and cross-model results satisfy the paper-backed performance bounds."
+allowed_tolerance = "The artifact does not seed its random downsampling or model initialization, so the oracle checks broad ranges established by the paper and repeated pinned-artifact runs rather than exact metrics. Figure 14/15 are excluded because their window-specific input datasets are not released; descriptive analysis plots are also outside this prediction-evaluation scope."
+
+[paper]
+title = "Removing Obstacles before Breaking Through the Memory Wall: A Close Look at HBM Errors in the Field"
+venue = "USENIX ATC 2024"
+url = "https://www.usenix.org/system/files/atc24-wu-ronglong.pdf"
+sha256 = "cdc5d7673adda78dbc0dfe045d242c50fe052b4486d57b23ebea80b906baa443"
+version = "USENIX open-access version"
+
+[run]
+id = "atc24_calchas"
+
+[run.instructions]
+path = "README.md"
+required_evidence = [
+  "Preserve complete stdout and stderr for the released Figure 12 and Figure 13 prediction experiments in evaluation/figure12.log and evaluation/figure13.log. Delimit each log with exact lines '===== BEGIN <figure> =====' and '===== END <figure> status=0 ====='.",
+  "Keep one-run metric files under evaluation/figure12/RF_<predictor>.csv and evaluation/figure13/<model>_<predictor>.csv for row, col, bank, and server predictors. Each file must retain the thresholded and default result rows written by the artifact.",
+]
+
+[run.runtime]
+mode = "docker"
+image = "aebench-agent:latest"
+timeout_ms = 3600000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = true
+compose = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+failure_mode = "fail_fast"
+placeholder = false
+
+[oracle.phase_targets]
+env_setup = "task"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "task"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/wrl297/Calchas.git"
+ref = "9d3955cf0a1687731f35baa8e38aa7bc25108773"
+artifact_mode = "hybrid"
+overlay_artifact = true
