@@ -1,0 +1,58 @@
+id = "eurosys25_sebs_flow"
+
+[case_brief]
+core_claim = "Run the released SeBS-Flow analysis over its published AWS, Google Cloud, and Azure measurements and reproduce the paper's cold-start, orchestration-overhead, storage-overhead, and function-invocation-latency results."
+acceptable_evidence = "Complete successful logs cover the four scoped analysis programs; results.json contains every expected workload and matches the deterministic reference metrics; and the trip-booking overhead, storage-overhead, and invocation-latency programs each produce a valid PDF."
+allowed_tolerance = "Metrics derived from the fixed released corpus must match within 1e-5 relative or 1e-6 absolute tolerance. All four analysis runs must exit successfully, and each regenerated figure must be a valid non-empty PDF. Live cloud remeasurement is outside this case's scope."
+
+[paper]
+title = "SeBS-Flow: Benchmarking Serverless Cloud Function Workflows"
+venue = "EuroSys 2025"
+url = "https://publikationen.bibliothek.kit.edu/1000181707/167722961"
+sha256 = "6c0ba4a80e2163340cf6960cf57dae4f6626a9e42710a8a6c062ea795d759b10"
+version = "EuroSys 2025 author version with artifact appendix"
+
+[run]
+id = "eurosys25_sebs_flow"
+
+[run.instructions]
+path = "README.md"
+required_evidence = [
+  "Preserve complete stdout and stderr for cold_starts.py, overhead.py, overhead_storage.py, and invo_lat.py in evaluation/analysis.log. Delimit each run with exact lines '===== BEGIN <analysis> =====' and '===== END <analysis> status=0 =====', using analysis names cold_starts, trip_booking_overhead, storage_overhead, and invocation_latency.",
+  "Write evaluation/results.json with cold-start percentages, trip-booking total/critical-path/orchestration times, storage overheads, and function-chain invocation latencies for every workload represented in the released data.",
+  "Keep regenerated trip-booking overhead, storage-overhead, and invocation-latency PDFs under evaluation/figures/ as overhead-trip-booking.pdf, overhead-storage.pdf, and invocation-latency.pdf.",
+]
+
+[run.runtime]
+mode = "local"
+timeout_ms = 3600000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = false
+compose = false
+
+[run.artifact_requirements.hardware]
+network = true
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+failure_mode = "fail_fast"
+placeholder = false
+
+[oracle.phase_targets]
+env_setup = "task"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "task"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/spcl/sebs-flow-artifact.git"
+ref = "b3f0be1d29532ef7942562f5f3f198cddc5cfd6a"
+artifact_mode = "hybrid"
+overlay_artifact = true
