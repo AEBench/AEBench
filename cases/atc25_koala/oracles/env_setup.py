@@ -29,27 +29,27 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 			),
 			self.path_check(
 				name="repo_root_exists",
-				path=self.artifact_path(),
+				path=self.workspace_path(),
 				kind=PathKind.DIRECTORY,
 			),
 			self.path_check(
 				name="dockerfile_exists",
-				path=self.artifact_path(DOCKERFILE_PATH),
+				path=self.workspace_path(DOCKERFILE_PATH),
 				kind=PathKind.FILE,
 			),
 			self.path_check(
 				name="readme_exists",
-				path=self.artifact_path(README_PATH),
+				path=self.workspace_path(README_PATH),
 				kind=PathKind.FILE,
 			),
 			self.path_check(
 				name="main_sh_exists",
-				path=self.artifact_path(MAIN_SH_PATH),
+				path=self.workspace_path(MAIN_SH_PATH),
 				kind=PathKind.FILE,
 			),
 			self.path_check(
 				name="setup_sh_exists",
-				path=self.artifact_path(SETUP_SH_PATH),
+				path=self.workspace_path(SETUP_SH_PATH),
 				kind=PathKind.FILE,
 			),
 		)

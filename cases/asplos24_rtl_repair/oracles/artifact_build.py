@@ -44,7 +44,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
         return "python3"
 
     def requirements(self) -> Sequence[BaseCheck]:
-        repo_root = self.artifact_path()
+        repo_root = self.workspace_path()
         python = self._python_executable(repo_root)
         mode = self._build_mode()
 

@@ -35,7 +35,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 		checks.append(
 			self.path_check(
 				name="results_dir_exists",
-				path=self.artifact_path(RESULTS_DIR),
+				path=self.workspace_path(RESULTS_DIR),
 				kind=PathKind.DIRECTORY,
 			)
 		)
@@ -47,7 +47,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 			checks.append(
 				KoalaPassLogCheck(
 					name=f"{bench}_pass_log",
-					path=self.artifact_path(RESULTS_DIR, log_filename(bench)),
+					path=self.workspace_path(RESULTS_DIR, log_filename(bench)),
 					bench=bench,
 					optional=optional,
 				)
@@ -55,7 +55,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 			checks.append(
 				KoalaCorrectnessCheck(
 					name=f"{bench}_correctness",
-					path=self.artifact_path(RESULTS_DIR, hash_filename(bench)),
+					path=self.workspace_path(RESULTS_DIR, hash_filename(bench)),
 					expected_lines=int(expected[bench]),
 					optional=optional,
 				)

@@ -44,8 +44,8 @@ type = "docker_image"
 image = "crocus"
 working_dir = "/root/wasmtime/cranelift/isle/veri/veri_engine"
 
-# env_setup inspects the host (docker + cloned repo); experiment_runs reads the
-# agent-saved outputs from the host artifact dir. Both use the built-in "local" target.
+# env_setup inspects the host and workspace; experiment_runs reads the
+# agent-saved outputs from the workspace. Both use the built-in "local" target.
 [oracle.phase_targets]
 env_setup = "local"
 artifact_build = "crocus"

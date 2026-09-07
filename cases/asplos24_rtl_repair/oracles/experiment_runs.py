@@ -70,7 +70,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
         if not isinstance(min_result_tomls, int) or min_result_tomls <= 0:
             raise ValueError("default experiment reference missing min_result_tomls")
 
-        experiment_root = self.artifact_path(experiment_dir)
+        experiment_root = self.workspace_path(experiment_dir)
 
         return (
             self.path_check(
