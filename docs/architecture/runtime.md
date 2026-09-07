@@ -85,6 +85,38 @@ AEBENCH_EPHEMERAL_WORKSPACE_ROOT/
 
 A fresh workspace is created for every run. If `--cleanup-workspace` is passed and the task succeeded, the temp directory gets deleted after the oracle finishes. If the task failed and `AEBENCH_PRESERVE_FAILED_WORKSPACE=true`, the directory is kept for inspection.
 
+### Re-evaluating a completed run
+
+Oracle code can change after an agent run. To preserve the Docker environment for
+later evaluation, set this in the case manifest before running the agent:
+
+```toml
+[run.runtime]
+mode = "docker"
+keep_committed_snapshot = true
+```
+
+Re-run the current oracle against the recorded workspace and Docker snapshot:
+
+```bash
+aebench case oracle <case-id> --run-dir <completed-run-directory>
+```
+
+AEBench writes each result under
+`<completed-run-directory>/oracle-evaluations/`. It does not replace the original
+`case_result.json` or `oracle_result.json`. Each evaluation records the source
+revision, workspace path, and runtime snapshot.
+
+The completed run directory must contain `result.jsonl` or `case_result.json`.
+Re-evaluation uses the workspace currently present at the recorded path, so
+changes made after the run affect the new result. For Docker runs, the saved
+image must be available to the current Docker daemon. Remove a saved image when
+it is no longer needed:
+
+```bash
+docker image rm <saved-image>
+```
+
 ## 5. Workspace sources
 
 The artifact source is specified in `case.toml` under `[upstream]`. The `sources.py` module sets up the workspace accordingly:
