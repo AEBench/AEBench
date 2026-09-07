@@ -3,14 +3,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluator.oracles.benchmark_prep_checks import BenchmarkCommandCheck
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
-from evaluator.oracles.utils import Checkable
-
-from evaluator.oracles import utils
-from evaluator.oracles.discovery import benchmark_prep
+from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor, RuntimePath
-from models import OracleInput
+from evaluator.oracles.reporting import BaseCheck, Check, CheckResult
 
 _BENCHMARK_SPECS: dict[str, dict[str, str]] = {
 	"hadoop": {
@@ -67,9 +62,7 @@ def _iter_class_files(
 	classes_dir: Path, *, limit: int, executor: RuntimeCheckExecutor
 ) -> list[Path]:
 	try:
-		files = sorted(
-			executor.glob(RuntimePath.from_parts(classes_dir.as_posix()), "**/*.class")
-		)
+		files = sorted(executor.glob(RuntimePath.from_parts(classes_dir.as_posix()), "**/*.class"))
 	except OSError:
 		return []
 	if limit and len(files) > limit:
@@ -103,110 +96,110 @@ def _classfile_has_aspect_markers(
 	return bool(marker), marker
 
 
-@benchmark_prep
-def oracle_benchmark_prep(context: OracleInput) -> Sequence[Checkable]:
-	benchmarks_root = context.workspace_dir / "benchmarks"
-	reqs: list[Checkable] = [
-		FilesystemPathCheck(
-			name="benchmarks_root_exists",
-			path=benchmarks_root,
-			path_type=PathType.DIRECTORY,
-		),
-	]
+class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
+	def requirements(self) -> Sequence[BaseCheck]:
+		benchmarks_root = self.workspace_path("benchmarks")
+		reqs: list[BaseCheck] = [
+			self.path_check(
+				name="benchmarks_root_exists",
+				path=benchmarks_root,
+				kind=PathKind.DIRECTORY,
+			),
+		]
 
-	for app, spec in sorted(_BENCHMARK_SPECS.items()):
-		app_root = benchmarks_root / app
-		pom_file = spec["pom_file"]
-		pom_backup = spec["pom_backup"]
-		expected_commit = spec["commit"]
-		reqs.append(
-			FilesystemPathCheck(
-				name=f"{app}_directory_exists",
-				path=app_root,
-				path_type=PathType.DIRECTORY,
-			)
-		)
-		reqs.append(
-			BenchmarkCommandCheck(
-				name=f"{app}_clone",
-				cwd=app_root,
-				cmd=("git", "rev-parse", "HEAD"),
-				signature=expected_commit,
-				timeout_seconds=10.0,
-			)
-		)
-
-		def _make_weaving_check(name: str, root: Path) -> utils.Check:
-			def _check(executor: RuntimeCheckExecutor) -> utils.CheckResult:
-				if not executor.path_is_dir(root):
-					return utils.CheckResult.failure(f"{name}: directory not found: {root}")
-				class_dirs, error = _find_class_dirs(root, executor=executor)
-				if error is not None:
-					return utils.CheckResult.failure(f"{name}: {error}")
-				if not class_dirs:
-					return utils.CheckResult.failure(
-						f"{name}: no compiled .class files found under {root}"
-					)
-
-				for classes_dir in class_dirs[:200]:
-					for class_file in _iter_class_files(
-						classes_dir, limit=2000, executor=executor
-					):
-						matched, marker = _classfile_has_aspect_markers(
-							class_file, executor=executor
-						)
-						if matched:
-							return utils.CheckResult.success(
-								f"{name}: found marker {marker!r} in {class_file}"
-							)
-				return utils.CheckResult.failure(
-					f"{name}: scanned .class files but found no AspectJ markers"
+		for app, spec in sorted(_BENCHMARK_SPECS.items()):
+			app_root = benchmarks_root / app
+			pom_file = spec["pom_file"]
+			pom_backup = spec["pom_backup"]
+			expected_commit = spec["commit"]
+			reqs.append(
+				self.path_check(
+					name=f"{app}_directory_exists",
+					path=app_root,
+					kind=PathKind.DIRECTORY,
 				)
-
-			return utils.Check(name=f"{name}_weaving", fn=_check)
-
-		def _make_pom_swap_check(
-			name: str,
-			root: Path,
-			active_pom: str,
-			backup_pom: str,
-		) -> utils.Check:
-			def _check(executor: RuntimeCheckExecutor) -> utils.CheckResult:
-				pom_path = root / active_pom
-				backup_path = root / backup_pom
-				if not executor.path_is_file(pom_path):
-					return utils.CheckResult.failure(f"{name}: missing active pom {pom_path}")
-				if not executor.path_is_file(backup_path):
-					return utils.CheckResult.failure(f"{name}: missing backup pom {backup_path}")
-				cmp_result = executor.run_process_capture(
-					cmd=(
-						"cmp",
-						"-s",
-						str(executor.resolve_path(pom_path)),
-						str(executor.resolve_path(backup_path)),
-					),
-					cwd=None,
-					env=None,
+			)
+			reqs.append(
+				self.command_check(
+					name=f"{app}_clone",
+					cwd=app_root,
+					cmd=("git", "rev-parse", "HEAD"),
+					signature=expected_commit,
 					timeout_seconds=10.0,
 				)
-				if cmp_result.returncode == 0:
-					return utils.CheckResult.failure(
-						f"{name}: active pom unexpectedly matches backup pom"
-					)
-				try:
-					pom_text = executor.read_file_text(pom_path)
-				except OSError as exc:
-					return utils.CheckResult.failure(f"{name}: failed to read pom: {exc}")
-				if _WEAVING_PLUGIN_SIGNATURE not in pom_text:
-					return utils.CheckResult.failure(
-						f"{name}: weaving plugin signature missing from {pom_path}"
-					)
-				return utils.CheckResult.success(
-					f"{name}: active pom differs from backup and contains weaving plugin"
-				)
+			)
 
-			return utils.Check(name=f"{name}_pom_swap", fn=_check)
+			def _make_weaving_check(name: str, root: Path) -> Check:
+				def _check(executor: RuntimeCheckExecutor) -> CheckResult:
+					if not executor.path_is_dir(root):
+						return CheckResult.failure(f"{name}: directory not found: {root}")
+					class_dirs, error = _find_class_dirs(root, executor=executor)
+					if error is not None:
+						return CheckResult.failure(f"{name}: {error}")
+					if not class_dirs:
+						return CheckResult.failure(
+							f"{name}: no compiled .class files found under {root}"
+						)
 
-		reqs.append(_make_pom_swap_check(app, app_root, pom_file, pom_backup))
-		reqs.append(_make_weaving_check(app, app_root))
-	return tuple(reqs)
+					for classes_dir in class_dirs[:200]:
+						for class_file in _iter_class_files(
+							classes_dir, limit=2000, executor=executor
+						):
+							matched, marker = _classfile_has_aspect_markers(
+								class_file, executor=executor
+							)
+							if matched:
+								return CheckResult.success(
+									f"{name}: found marker {marker!r} in {class_file}"
+								)
+					return CheckResult.failure(
+						f"{name}: scanned .class files but found no AspectJ markers"
+					)
+
+				return Check(name=f"{name}_weaving", fn=_check)
+
+			def _make_pom_swap_check(
+				name: str,
+				root: Path,
+				active_pom: str,
+				backup_pom: str,
+			) -> Check:
+				def _check(executor: RuntimeCheckExecutor) -> CheckResult:
+					pom_path = root / active_pom
+					backup_path = root / backup_pom
+					if not executor.path_is_file(pom_path):
+						return CheckResult.failure(f"{name}: missing active pom {pom_path}")
+					if not executor.path_is_file(backup_path):
+						return CheckResult.failure(f"{name}: missing backup pom {backup_path}")
+					cmp_result = executor.run_process_capture(
+						cmd=(
+							"cmp",
+							"-s",
+							str(executor.resolve_path(pom_path)),
+							str(executor.resolve_path(backup_path)),
+						),
+						cwd=None,
+						env=None,
+						timeout_seconds=10.0,
+					)
+					if cmp_result.returncode == 0:
+						return CheckResult.failure(
+							f"{name}: active pom unexpectedly matches backup pom"
+						)
+					try:
+						pom_text = executor.read_file_text(pom_path)
+					except OSError as exc:
+						return CheckResult.failure(f"{name}: failed to read pom: {exc}")
+					if _WEAVING_PLUGIN_SIGNATURE not in pom_text:
+						return CheckResult.failure(
+							f"{name}: weaving plugin signature missing from {pom_path}"
+						)
+					return CheckResult.success(
+						f"{name}: active pom differs from backup and contains weaving plugin"
+					)
+
+				return Check(name=f"{name}_pom_swap", fn=_check)
+
+			reqs.append(_make_pom_swap_check(app, app_root, pom_file, pom_backup))
+			reqs.append(_make_weaving_check(app, app_root))
+		return tuple(reqs)

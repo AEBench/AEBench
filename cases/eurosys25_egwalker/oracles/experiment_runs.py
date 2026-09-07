@@ -5,13 +5,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles import CaseOracleExperimentRunsBase, utils  # type: ignore[import-untyped]
-from evaluator.oracles.checks import (  # type: ignore[import-untyped]
-    BaseCheck,
-    ListSimilarityCheck,
-    SimilarityMetric,
-)
+from evaluator.oracles import CaseOracleExperimentRunsBase, ListSimilarityCheck, SimilarityMetric
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 _SIMILARITY_RATIO = 0.75
 
@@ -69,16 +65,16 @@ def _values(obj: object, *, field: str | None, label: str) -> dict[str, float]:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class TimingsJSONSimilarityCheck(utils.BaseCheck):  # type: ignore[misc]
+class TimingsJSONSimilarityCheck(BaseCheck):
     results_path: Path
     reference_path: Path
     threshold: float
     field: str | None = None
 
-    def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
+    def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
         try:
-            results = json.loads(utils.check_read_file_text(self.results_path, executor=executor))
-            reference = json.loads(utils.check_read_file_text(self.reference_path, executor=executor))
+            results = json.loads(executor.read_file_text(self.results_path))
+            reference = json.loads(executor.read_file_text(self.reference_path))
 
             ref_values = _values(reference, field=self.field, label="timings reference")
             got_values = _values(results, field=self.field, label="timings results")
@@ -87,14 +83,14 @@ class TimingsJSONSimilarityCheck(utils.BaseCheck):  # type: ignore[misc]
             missing = [label for label in labels if label not in got_values]
             if missing:
                 shown = "\n".join(f"- {label}" for label in missing[:10])
-                return utils.CheckResult.failure(
+                return CheckResult.failure(
                     f"{self.name}: results missing required timing entries\n{shown}"
                 )
 
             observed = [got_values[label] for label in labels]
             expected = [ref_values[label] for label in labels]
         except Exception as exc:
-            return utils.CheckResult.failure(f"{self.name}: {exc}")
+            return CheckResult.failure(f"{self.name}: {exc}")
 
         return ListSimilarityCheck(
             name=self.name,
@@ -106,13 +102,13 @@ class TimingsJSONSimilarityCheck(utils.BaseCheck):  # type: ignore[misc]
         ).check(executor)
 
 
-class OracleExperimentRuns(CaseOracleExperimentRunsBase):  # type: ignore[misc]
+class OracleExperimentRuns(CaseOracleExperimentRunsBase):
     def requirements(self) -> Sequence[BaseCheck]:
         reference_path = self.ref_path("timings.ref.json")
         results_path = self.workspace_path("results", "timings.json")
 
         try:
-            reference = json.loads(utils.check_read_file_text(reference_path, executor=self.executor))
+            reference = json.loads(self.read_text(reference_path))
             fields = _fields(reference)
         except Exception:
             fields = ()
