@@ -161,7 +161,7 @@ class RuntimeConfig(_Model):
 	interactive: bool = False
 	commit_before_oracle: bool = True
 	keep_committed_snapshot: bool = False
-	snapshot_timeout_seconds: float = 60.0
+	snapshot_timeout_seconds: float = 1200.0
 
 	@model_validator(mode="after")
 	def _normalize(self) -> "RuntimeConfig":
