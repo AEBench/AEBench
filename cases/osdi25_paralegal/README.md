@@ -43,9 +43,15 @@ sudo apt-get update
 sudo apt-get install -y \
   build-essential bzip2 clang cmake curl git libclang-dev liblz4-dev \
   libssl-dev pkg-config python3 python3-pip python3-venv tmux unzip wget
+python3 -m pip install --user uv
+export PATH="$HOME/.local/bin:$PATH"
 
-export AEBENCH_ROOT="$HOME/AEBench"
-export PARALEGAL_ROOT="$HOME/paralegal-osdi-2025-artifact"
+sudo /usr/local/etc/emulab/mkextrafs.pl /mydata
+sudo chown "$USER" /mydata
+df -h /mydata
+
+export AEBENCH_ROOT="/mydata/AEBench"
+export PARALEGAL_ROOT="/mydata/paralegal-osdi-2025-artifact"
 
 git clone https://github.com/AEBench/AEBench.git "$AEBENCH_ROOT"
 git -C "$AEBENCH_ROOT" checkout muneeb/osdi25-paralegal
