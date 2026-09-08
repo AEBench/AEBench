@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import platform
 from collections.abc import Sequence
 from pathlib import Path
 
 from evaluator.oracles import CaseOracleEnvSetupBase
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 from evaluator.oracles.reporting import BaseCheck, Check, CheckResult
 
 from .common import (
@@ -21,7 +21,7 @@ from .common import (
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
 	def requirements(self) -> Sequence[BaseCheck]:
-		artifact_root = find_artifact_root(self.workspace_path())
+		workspace = self.workspace_path()
 		return (
 			Check(name="linux_x86_64_host", fn=self._check_platform),
 			self.version_check(
@@ -38,17 +38,24 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 			),
 			Check(
 				name="wrapper_and_submodule_revisions",
-				fn=lambda: self._check_revisions(artifact_root),
+				fn=lambda executor: self._check_revisions(workspace, executor),
 			),
 			Check(
 				name="source_or_docker_prerequisites",
-				fn=lambda: self._check_execution_prerequisites(artifact_root),
+				fn=lambda executor: self._check_execution_prerequisites(workspace, executor),
 			),
 		)
 
-	def _check_platform(self) -> CheckResult:
-		system = platform.system().lower()
-		machine = platform.machine().lower()
+	def _check_platform(self, executor: RuntimeCheckExecutor) -> CheckResult:
+		system_result = run_process(("uname", "-s"), executor=executor, timeout_seconds=10.0)
+		machine_result = run_process(("uname", "-m"), executor=executor, timeout_seconds=10.0)
+		if not system_result.ok or not machine_result.ok:
+			return CheckResult.failure(
+				"could not determine host platform: "
+				+ (system_result.combined or machine_result.combined or "uname failed")
+			)
+		system = system_result.stdout.strip().lower()
+		machine = machine_result.stdout.strip().lower()
 		if system != "linux":
 			return CheckResult.failure(f"Paralegal reproduction requires Linux, found {system}")
 		if machine not in {"x86_64", "amd64"}:
@@ -57,12 +64,17 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 			)
 		return CheckResult.success(f"Linux {machine}")
 
-	def _check_revisions(self, artifact_root: Path | None) -> CheckResult:
+	def _check_revisions(
+		self,
+		workspace: Path,
+		executor: RuntimeCheckExecutor,
+	) -> CheckResult:
+		artifact_root = find_artifact_root(workspace, executor=executor)
 		if artifact_root is None:
 			return CheckResult.failure("Paralegal wrapper checkout was not found in the workspace")
 		try:
-			reference = load_json_object(self.ref_path("submodules.ref.json"))
-		except (OSError, ValueError) as exc:
+			reference = load_json_object(self.ref_path("submodules.ref.json"), executor=executor)
+		except (OSError, RuntimeError, ValueError) as exc:
 			return CheckResult.failure(f"cannot load submodule reference: {exc}")
 
 		expected_wrapper = reference.get("wrapper_commit")
@@ -73,6 +85,7 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 		mismatches: list[str] = []
 		wrapper_result = run_process(
 			("git", "-C", str(artifact_root), "rev-parse", "HEAD"),
+			executor=executor,
 			timeout_seconds=10.0,
 		)
 		if not wrapper_result.ok:
@@ -89,6 +102,7 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 			submodule_root = artifact_root / rel_path
 			result = run_process(
 				("git", "-C", str(submodule_root), "rev-parse", "HEAD"),
+				executor=executor,
 				timeout_seconds=10.0,
 			)
 			if not result.ok:
@@ -104,12 +118,18 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 			f"wrapper and {len(raw_submodules)} recursive submodule revisions match"
 		)
 
-	def _check_execution_prerequisites(self, artifact_root: Path | None) -> CheckResult:
+	def _check_execution_prerequisites(
+		self,
+		workspace: Path,
+		executor: RuntimeCheckExecutor,
+	) -> CheckResult:
+		artifact_root = find_artifact_root(workspace, executor=executor)
 		if artifact_root is None:
 			return CheckResult.failure("cannot check prerequisites without the wrapper checkout")
 
 		docker_result = run_process(
 			("docker", "image", "inspect", DOCKER_IMAGE),
+			executor=executor,
 			timeout_seconds=20.0,
 		)
 		if docker_result.ok:
@@ -126,6 +146,7 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 					"codeql version --format=terse && "
 					"python3 -c 'import matplotlib, pandas, six'",
 				),
+				executor=executor,
 				timeout_seconds=120.0,
 			)
 			if probe.ok and CODEQL_VERSION in probe.combined:
@@ -161,7 +182,12 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 		)
 		failures: list[str] = []
 		for label, cmd, signature in source_commands:
-			result = run_process(cmd, cwd=artifact_root, timeout_seconds=30.0)
+			result = run_process(
+				cmd,
+				executor=executor,
+				cwd=artifact_root,
+				timeout_seconds=30.0,
+			)
 			if not result.ok or (signature and signature not in result.combined):
 				failures.append(f"{label}: {result.combined or 'check failed'}")
 

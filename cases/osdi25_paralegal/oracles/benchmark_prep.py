@@ -2,48 +2,58 @@
 
 from __future__ import annotations
 
-import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
 from evaluator.oracles import CaseOracleBenchmarkPrepBase
+from evaluator.oracles.oracle_checks_runtime import (
+	RuntimeCheckExecutor,
+	check_path_exists,
+	check_path_is_dir,
+)
 from evaluator.oracles.reporting import BaseCheck, Check, CheckResult
 
 from .common import (
 	find_artifact_root,
 	load_expected_manifest,
 	load_toml,
+	run_process,
 	validate_expected_files,
 )
 
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 	def requirements(self) -> Sequence[BaseCheck]:
-		artifact_root = find_artifact_root(self.workspace_path())
+		workspace = self.workspace_path()
 		return (
 			Check(
 				name="atomic_data_smoke_configuration",
-				fn=lambda: self._check_smoke_config(artifact_root),
+				fn=lambda executor: self._check_smoke_config(workspace, executor),
 			),
 			Check(
 				name="codeql_expected_output_manifest",
-				fn=lambda: self._check_codeql_manifest(artifact_root),
+				fn=lambda executor: self._check_codeql_manifest(workspace, executor),
 			),
 			Check(
 				name="writable_experiment_output_directories",
-				fn=lambda: self._check_output_directories(artifact_root),
+				fn=lambda executor: self._check_output_directories(workspace, executor),
 			),
 		)
 
-	def _check_smoke_config(self, artifact_root: Path | None) -> CheckResult:
+	def _check_smoke_config(
+		self,
+		workspace: Path,
+		executor: RuntimeCheckExecutor,
+	) -> CheckResult:
+		artifact_root = find_artifact_root(workspace, executor=executor)
 		if artifact_root is None:
 			return CheckResult.failure("Paralegal wrapper checkout was not found")
 		reference_path = self.ref_path("smoke_bench_config.toml")
 		observed_path = artifact_root / "paralegal-bench" / "bconf" / "aebench-smoke-config.toml"
 		try:
-			reference = load_toml(reference_path)
-			observed = load_toml(observed_path)
-		except (OSError, ValueError) as exc:
+			reference = load_toml(reference_path, executor=executor)
+			observed = load_toml(observed_path, executor=executor)
+		except (OSError, RuntimeError, ValueError) as exc:
 			return CheckResult.failure(f"cannot load smoke configuration: {exc}")
 		if observed != reference:
 			return CheckResult.failure(
@@ -80,21 +90,31 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 			/ "atomic-server"
 			/ "external-annotations.toml",
 		)
-		missing = [str(path) for path in required_inputs if not path.exists()]
+		missing = [
+			str(path) for path in required_inputs if not check_path_exists(path, executor=executor)
+		]
 		if missing:
 			return CheckResult.failure("smoke inputs are missing: " + ", ".join(missing))
 		return CheckResult.success("bounded atomic-data smoke configuration is ready")
 
-	def _check_codeql_manifest(self, artifact_root: Path | None) -> CheckResult:
+	def _check_codeql_manifest(
+		self,
+		workspace: Path,
+		executor: RuntimeCheckExecutor,
+	) -> CheckResult:
+		artifact_root = find_artifact_root(workspace, executor=executor)
 		if artifact_root is None:
 			return CheckResult.failure("Paralegal wrapper checkout was not found")
 		try:
-			entries = load_expected_manifest(self.ref_path("codeql_expected_manifest.ref.json"))
-		except (OSError, ValueError) as exc:
+			entries = load_expected_manifest(
+				self.ref_path("codeql_expected_manifest.ref.json"), executor=executor
+			)
+		except (OSError, RuntimeError, ValueError) as exc:
 			return CheckResult.failure(f"cannot load CodeQL manifest: {exc}")
 		errors = validate_expected_files(
 			artifact_root / "codeql-experimentation",
 			entries,
+			executor=executor,
 		)
 		if errors:
 			return CheckResult.failure("; ".join(errors))
@@ -103,7 +123,12 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 			"CodeQL expected tables"
 		)
 
-	def _check_output_directories(self, artifact_root: Path | None) -> CheckResult:
+	def _check_output_directories(
+		self,
+		workspace: Path,
+		executor: RuntimeCheckExecutor,
+	) -> CheckResult:
+		artifact_root = find_artifact_root(workspace, executor=executor)
 		if artifact_root is None:
 			return CheckResult.failure("Paralegal wrapper checkout was not found")
 		directories = (
@@ -112,14 +137,16 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 		)
 		errors: list[str] = []
 		for directory in directories:
-			if not directory.is_dir():
+			if not check_path_is_dir(directory, executor=executor):
 				errors.append(f"missing {directory}")
 				continue
-			try:
-				with tempfile.NamedTemporaryFile(dir=directory, prefix=".aebench-write-"):
-					pass
-			except OSError as exc:
-				errors.append(f"{directory} is not writable: {exc}")
+			writable = run_process(
+				("test", "-w", str(directory)),
+				executor=executor,
+				timeout_seconds=10.0,
+			)
+			if not writable.ok:
+				errors.append(f"{directory} is not writable")
 		if errors:
 			return CheckResult.failure("; ".join(errors))
 		return CheckResult.success("CodeQL and Paralegal result directories are writable")

@@ -8,10 +8,18 @@ import io
 import json
 import math
 import re
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from evaluator.oracles.oracle_checks_runtime import (
+	RuntimeCheckExecutor,
+	check_path_is_dir,
+	check_path_is_file,
+	check_read_file_text,
+	glob,
+	run_check_process_capture,
+)
 
 try:
 	import tomllib
@@ -116,66 +124,69 @@ class SmokeResults:
 def run_process(
 	cmd: tuple[str, ...],
 	*,
+	executor: RuntimeCheckExecutor,
 	cwd: Path | None = None,
 	timeout_seconds: float = 60.0,
 ) -> ProcessOutput:
 	"""Run a bounded diagnostic command without raising for normal failures."""
 	try:
-		result = subprocess.run(
-			cmd,
+		result = run_check_process_capture(
+			cmd=cmd,
 			cwd=cwd,
-			capture_output=True,
-			text=True,
-			timeout=timeout_seconds,
-			check=False,
+			env=None,
+			timeout_seconds=timeout_seconds,
+			executor=executor,
 		)
-	except (OSError, subprocess.SubprocessError) as exc:
+	except (OSError, RuntimeError, ValueError) as exc:
 		return ProcessOutput(returncode=-1, stdout="", stderr=f"{type(exc).__name__}: {exc}")
 	return ProcessOutput(
-		returncode=result.returncode,
+		returncode=-1 if result.returncode is None else result.returncode,
 		stdout=result.stdout,
-		stderr=result.stderr,
+		stderr=(
+			result.stderr
+			if not result.timed_out
+			else result.stderr or f"timed out after {timeout_seconds:g}s"
+		),
 	)
 
 
-def find_artifact_root(workspace: Path) -> Path | None:
+def find_artifact_root(
+	workspace: Path,
+	*,
+	executor: RuntimeCheckExecutor,
+) -> Path | None:
 	"""Find the wrapper root in the layouts used by direct and managed runs."""
 	for candidate in (workspace, workspace / "artifact"):
 		if (
-			(candidate / ".gitmodules").is_file()
-			and (candidate / "paralegal").is_dir()
-			and (candidate / "paralegal-bench").is_dir()
-			and (candidate / "codeql-experimentation").is_dir()
+			check_path_is_file(candidate / ".gitmodules", executor=executor)
+			and check_path_is_dir(candidate / "paralegal", executor=executor)
+			and check_path_is_dir(candidate / "paralegal-bench", executor=executor)
+			and check_path_is_dir(candidate / "codeql-experimentation", executor=executor)
 		):
 			return candidate
 	return None
 
 
-def load_json_object(path: Path) -> dict[str, Any]:
-	data = json.loads(path.read_text(encoding="utf-8"))
+def load_json_object(path: Path, *, executor: RuntimeCheckExecutor) -> dict[str, Any]:
+	data = json.loads(check_read_file_text(path, encoding="utf-8", executor=executor))
 	if not isinstance(data, dict):
 		raise ValueError(f"expected a JSON object in {path}")
 	return data
 
 
-def load_toml(path: Path) -> dict[str, Any]:
-	with path.open("rb") as handle:
-		data = tomllib.load(handle)
+def load_toml(path: Path, *, executor: RuntimeCheckExecutor) -> dict[str, Any]:
+	data = tomllib.loads(check_read_file_text(path, encoding="utf-8", executor=executor))
 	if not isinstance(data, dict):
 		raise ValueError(f"expected a TOML table in {path}")
 	return data
 
 
-def sha256_file(path: Path) -> str:
-	digest = hashlib.sha256()
-	with path.open("rb") as handle:
-		for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-			digest.update(chunk)
-	return digest.hexdigest()
-
-
-def load_expected_manifest(path: Path) -> tuple[ExpectedOutputEntry, ...]:
-	data = load_json_object(path)
+def load_expected_manifest(
+	path: Path,
+	*,
+	executor: RuntimeCheckExecutor,
+) -> tuple[ExpectedOutputEntry, ...]:
+	data = load_json_object(path, executor=executor)
 	if data.get("schema_version") != 1:
 		raise ValueError("CodeQL expected-output manifest has an unsupported schema")
 	if data.get("codeql_version") != CODEQL_VERSION:
@@ -223,17 +234,20 @@ def load_expected_manifest(path: Path) -> tuple[ExpectedOutputEntry, ...]:
 def validate_expected_files(
 	codeql_root: Path,
 	entries: tuple[ExpectedOutputEntry, ...],
+	*,
+	executor: RuntimeCheckExecutor,
 ) -> tuple[str, ...]:
 	"""Return provenance errors for the checked-out CodeQL expected tables."""
 	errors: list[str] = []
 	for entry in entries:
 		path = codeql_root / entry.expected_path
-		if not path.is_file():
+		if not check_path_is_file(path, executor=executor):
 			errors.append(f"missing {entry.expected_path}")
 			continue
 		try:
-			raw = path.read_bytes()
-			table = parse_codeql_table(raw.decode("utf-8"))
+			text = check_read_file_text(path, encoding="utf-8", executor=executor)
+			raw = text.encode("utf-8")
+			table = parse_codeql_table(text)
 		except (OSError, UnicodeError, ValueError) as exc:
 			errors.append(f"{entry.expected_path}: {exc}")
 			continue
@@ -374,11 +388,18 @@ def validate_controller_results(text: str, *, expected_run_ids: frozenset[int]) 
 	return len(rows)
 
 
-def latest_result_directory(parent: Path, *, suffix: str = "") -> Path:
-	if not parent.is_dir():
+def latest_result_directory(
+	parent: Path,
+	*,
+	executor: RuntimeCheckExecutor,
+	suffix: str = "",
+) -> Path:
+	if not check_path_is_dir(parent, executor=executor):
 		raise ValueError(f"result directory is missing: {parent}")
 	candidates = sorted(
-		path for path in parent.iterdir() if path.is_dir() and path.name.endswith(suffix)
+		path
+		for path in glob(parent, "*", executor=executor)
+		if check_path_is_dir(path, executor=executor) and path.name.endswith(suffix)
 	)
 	if not candidates:
 		label = f"*{suffix}" if suffix else "timestamped"

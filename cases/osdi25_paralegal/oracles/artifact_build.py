@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from evaluator.oracles import CaseOracleArtifactBuildBase
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 from evaluator.oracles.reporting import BaseCheck, Check, CheckResult
 
 from .common import CODEQL_VERSION, DOCKER_IMAGE, find_artifact_root, run_process
@@ -13,23 +14,28 @@ from .common import CODEQL_VERSION, DOCKER_IMAGE, find_artifact_root, run_proces
 
 class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 	def requirements(self) -> Sequence[BaseCheck]:
-		artifact_root = find_artifact_root(self.workspace_path())
+		workspace = self.workspace_path()
 		return (
 			Check(
 				name="working_source_or_docker_build",
-				fn=lambda: self._check_build(artifact_root),
+				fn=lambda executor: self._check_build(workspace, executor),
 			),
 		)
 
-	def _check_build(self, artifact_root: Path | None) -> CheckResult:
+	def _check_build(
+		self,
+		workspace: Path,
+		executor: RuntimeCheckExecutor,
+	) -> CheckResult:
+		artifact_root = find_artifact_root(workspace, executor=executor)
 		if artifact_root is None:
 			return CheckResult.failure("Paralegal wrapper checkout was not found")
 
-		docker_result = self._check_docker_build()
+		docker_result = self._check_docker_build(executor)
 		if docker_result.ok:
 			return docker_result
 
-		source_result = self._check_source_build(artifact_root)
+		source_result = self._check_source_build(artifact_root, executor)
 		if source_result.ok:
 			return source_result
 		return CheckResult.failure(
@@ -37,9 +43,10 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 			f"source: {source_result.message}"
 		)
 
-	def _check_docker_build(self) -> CheckResult:
+	def _check_docker_build(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		inspect = run_process(
 			("docker", "image", "inspect", DOCKER_IMAGE),
+			executor=executor,
 			timeout_seconds=20.0,
 		)
 		if not inspect.ok:
@@ -60,6 +67,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 				"codeql version --format=terse && "
 				"python3 -c 'import matplotlib, pandas, six'",
 			),
+			executor=executor,
 			timeout_seconds=120.0,
 		)
 		if not probe.ok:
@@ -68,7 +76,11 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 			return CheckResult.failure(f"Docker image does not report CodeQL {CODEQL_VERSION}")
 		return CheckResult.success(f"validated dependency-complete image {DOCKER_IMAGE}")
 
-	def _check_source_build(self, artifact_root: Path) -> CheckResult:
+	def _check_source_build(
+		self,
+		artifact_root: Path,
+		executor: RuntimeCheckExecutor,
+	) -> CheckResult:
 		commands = (
 			(
 				"cargo-paralegal-flow",
@@ -106,7 +118,12 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 		)
 		failures: list[str] = []
 		for label, cmd, cwd in commands:
-			result = run_process(cmd, cwd=cwd, timeout_seconds=30.0)
+			result = run_process(
+				cmd,
+				executor=executor,
+				cwd=cwd,
+				timeout_seconds=30.0,
+			)
 			if not result.ok:
 				failures.append(f"{label}: {result.combined or 'not runnable'}")
 		if failures:

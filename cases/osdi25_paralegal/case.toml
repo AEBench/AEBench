@@ -18,6 +18,10 @@ id = "osdi25_paralegal"
 
 [run.instructions]
 path = "AEBENCH.md"
+required_evidence = [
+  "Keep the complete CodeQL comparison output under codeql-experimentation/results/<timestamp>/, including stdout.log, stderr.log, and all ten tmp result tables.",
+  "Keep the atomic-data smoke output under paralegal-bench/results/ as matching <timestamp>-run, <timestamp>-logs, and <timestamp>-pp directories. The run directory must include results.csv, controllers.csv, bench-config.toml, and sys.toml; the logs directory must include compile.stdout.txt, compile.stderr.txt, and policy.out.txt.",
+]
 
 [run.runtime]
 mode = "local"

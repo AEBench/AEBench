@@ -48,7 +48,7 @@ export AEBENCH_ROOT="$HOME/AEBench"
 export PARALEGAL_ROOT="$HOME/paralegal-osdi-2025-artifact"
 
 git clone https://github.com/AEBench/AEBench.git "$AEBENCH_ROOT"
-git -C "$AEBENCH_ROOT" checkout muneeb/issue-13-osdi25-paralegal
+git -C "$AEBENCH_ROOT" checkout muneeb/osdi25-paralegal
 git clone --no-recurse-submodules \
   https://github.com/brownsys/paralegal-osdi-2025-artifact.git \
   "$PARALEGAL_ROOT"

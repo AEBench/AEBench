@@ -11,6 +11,7 @@ from cases.osdi25_paralegal.oracles.common import (
 	parse_smoke_results,
 	validate_controller_results,
 )
+from evaluator.oracles import run_oracle
 
 _SMOKE_COLUMNS = (
 	"id",
@@ -175,3 +176,22 @@ def test_agent_smoke_config_matches_oracle_reference() -> None:
 	assert (case_root / "artifact" / "aebench-smoke-config.toml").read_bytes() == (
 		case_root / "refs" / "smoke_bench_config.toml"
 	).read_bytes()
+
+
+def test_empty_workspace_fails_without_callback_errors(
+	tmp_path: Path,
+	caplog: pytest.LogCaptureFixture,
+) -> None:
+	case_root = Path(__file__).parents[2] / "cases" / "osdi25_paralegal"
+	workspace = tmp_path / "workspace"
+	workspace.mkdir()
+
+	result = run_oracle(
+		case_root,
+		runtime_result=None,
+		output_dir=tmp_path / "oracle-output",
+		workspace_dir=workspace,
+	)
+
+	assert result.score == 0
+	assert "raised an unexpected exception" not in caplog.text
