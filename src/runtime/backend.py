@@ -116,6 +116,7 @@ class DockerRuntime:
 	container_removed: bool = False
 	container_stopped: bool = False
 	saved_image: str | None = None
+	snapshot_failed: bool = False
 	path_separator: str = ":"
 
 	def _docker_run_command(self, session: RunSession) -> list[str]:
@@ -279,6 +280,7 @@ class DockerRuntime:
 			return self.saved_image
 
 		tag = f"aebench-oracle-snapshots:{safe_name(session.task_id)}-{uuid.uuid4().hex[:8]}"
+		self.snapshot_failed = True
 		result = subprocess.run(
 			["docker", "commit", self.container_id, tag],
 			capture_output=True,
@@ -292,6 +294,7 @@ class DockerRuntime:
 			)
 
 		self.saved_image = tag
+		self.snapshot_failed = False
 		logger.info("committed docker container %s to %s", self.container_id, tag)
 		return tag
 
@@ -315,6 +318,16 @@ class DockerRuntime:
 
 	def cleanup(self, session: RunSession) -> None:
 		target = self.container_id or self.container_name
+		if self.snapshot_failed and target:
+			logger.warning(
+				"Snapshot failed; retaining container %s. "
+				"Retry with: docker commit %s <image-tag>. "
+				"Remove it when no longer needed: docker rm %s",
+				target,
+				target,
+				target,
+			)
+			return
 		if target:
 			if self.container_id is not None:
 				self.last_container_id = self.container_id
