@@ -412,7 +412,7 @@ def process_connection(connection: socket.socket, output_dir: str, run_id: str) 
 		connection.close()
 
 
-def main(output_dir: str) -> None:
+def main(output_dir: str, workspace_dir: str) -> None:
 	os.makedirs(output_dir, exist_ok=True)
 	log_path = os.path.join(output_dir, LOG_BASENAME)
 	run_id = os.path.basename(os.path.normpath(output_dir))
@@ -421,6 +421,8 @@ def main(output_dir: str) -> None:
 		os.unlink(SOCKET_PATH)
 	except FileNotFoundError:
 		pass
+	register(CommandTiming())
+	register(FileSnapshot(workspace_dir))
 
 	server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 	server.bind(SOCKET_PATH)
@@ -440,7 +442,7 @@ def main(output_dir: str) -> None:
 
 
 if __name__ == "__main__":
-	if len(sys.argv) != 2:
-		raise SystemExit("usage: monitor.py <run-output-dir>")
+	if len(sys.argv) != 3:
+		raise SystemExit("usage: monitor.py <run-output-dir> <workspace-dir>")
 
-	main(sys.argv[1])
+	main(sys.argv[1], sys.argv[2])
