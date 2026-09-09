@@ -207,7 +207,7 @@ def run_after_command(ctx: CommandContext) -> None:
 			observations[monitor.name] = output
 
 
-class CommandTiming:
+class CommandTiming(Monitor):
 	"""How long each command took. Duration comes from a monotonic clock."""
 
 	name = "timing"
@@ -231,7 +231,7 @@ class CommandTiming:
 		}
 
 
-class FileSnapshot:
+class FileSnapshot(Monitor):
 	"""What a command changed in the workspace. Walks the whole workspace, so nothing is silently ignored"""
 
 	name = "file_snapshot"
