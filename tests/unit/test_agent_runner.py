@@ -22,6 +22,7 @@ from runtime.agent_runner import (
 	_agent_shell_command,
 	_prompt_for_agent,
 	_solve_script,
+	_timeout_command,
 	prepare_agent_runtime,
 	prepare_agent_support_dir,
 	run_agent,
@@ -78,6 +79,23 @@ class FakeRuntime:
 	) -> subprocess.CompletedProcess[str]:
 		_ = cwd, env, stdin_text, timeout
 		return subprocess.CompletedProcess(cmd, 0, "", "")
+
+
+@pytest.mark.parametrize(
+	"error", [OSError("docker unavailable"), subprocess.TimeoutExpired("docker", 5)]
+)
+def test_timeout_lookup_reports_runtime_failure(
+	monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+	runtime = FakeRuntime()
+
+	def fail_lookup(*args: object, **kwargs: object) -> None:
+		raise error
+
+	monkeypatch.setattr(runtime, "resolve_executable", fail_lookup)
+	with pytest.raises(RuntimeError, match="failed to locate timeout") as caught:
+		_timeout_command(runtime, 600)  # type: ignore[arg-type]
+	assert caught.value.__cause__ is error
 
 
 def test_codex_script_streams_json_without_secret_echoes() -> None:

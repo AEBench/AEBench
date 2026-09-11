@@ -14,6 +14,10 @@ from models import AgentName, AgentResult
 from .backend import BenchRuntime, DockerRuntime, LocalRuntime
 
 _RUNTIME_ENV_KEYS = ("PATH", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TERM")
+_PRIVATE_DIRECTORY_MODE = 0o700
+_RUNTIME_SETUP_TIMEOUT_SECONDS = 30
+_AGENT_TERMINATION_GRACE_SECONDS = 30
+_HOST_PROCESS_GRACE_SECONDS = 5
 _CLAUDE_NONINTERACTIVE_GUIDANCE = (
 	"You cannot receive interactive input. Wait for every process that you start to "
 	"finish before you write your final response."
@@ -45,7 +49,7 @@ def prepare_agent_support_dir(
 ) -> Path:
 	env = os.environ if environ is None else environ
 	support_dir = parent / "agent-support"
-	support_dir.mkdir(mode=0o700, parents=True)
+	support_dir.mkdir(mode=_PRIVATE_DIRECTORY_MODE, parents=True)
 	try:
 		shutil.copyfile(
 			Path(__file__).with_name("agent_scripts") / _TIMESTAMP_SCRIPT,
@@ -62,7 +66,7 @@ def prepare_agent_support_dir(
 					"AEBENCH_CODEX_AUTH_FILE"
 				)
 			target = support_dir / ".codex" / "auth.json"
-			target.parent.mkdir(mode=0o700)
+			target.parent.mkdir(mode=_PRIVATE_DIRECTORY_MODE)
 			shutil.copyfile(source, target)
 			target.chmod(0o600)
 
@@ -119,7 +123,9 @@ def run_agent(
 			cwd=cwd,
 			env=env,
 			stdin_text=script,
-			timeout=timeout_seconds + 35,
+			timeout=(
+				timeout_seconds + _AGENT_TERMINATION_GRACE_SECONDS + _HOST_PROCESS_GRACE_SECONDS
+			),
 		)
 	except subprocess.TimeoutExpired:
 		return AgentResult(model=model, exit_code=124, reasoning_effort=reasoning_effort)
@@ -137,7 +143,7 @@ def prepare_agent_runtime(runtime: BenchRuntime) -> None:
 
 	result = runtime.run_process(
 		["sh", "-e", "-c", _DOCKER_HOST_SOCKET_SETUP],
-		timeout=30,
+		timeout=_RUNTIME_SETUP_TIMEOUT_SECONDS,
 	)
 	if result.returncode != 0:
 		detail = (result.stderr or result.stdout).strip()
@@ -167,7 +173,7 @@ def clear_agent_support_dir(runtime: BenchRuntime, runtime_support_dir: str) -> 
 			"aebench-clear-support",
 			runtime_support_dir,
 		],
-		timeout=30,
+		timeout=_RUNTIME_SETUP_TIMEOUT_SECONDS,
 	)
 	if result.returncode != 0:
 		detail = (result.stderr or result.stdout).strip()
@@ -213,11 +219,17 @@ def _agent_env(
 
 def _timeout_command(runtime: BenchRuntime, timeout_seconds: float) -> list[str]:
 	for executable in ("timeout", "gtimeout"):
-		if runtime.resolve_executable(executable) is not None:
+		try:
+			resolved = runtime.resolve_executable(executable)
+		except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+			raise RuntimeError(
+				f"failed to locate {executable} in the agent runtime: {exc}"
+			) from exc
+		if resolved is not None:
 			return [
 				executable,
 				"--signal=TERM",
-				"--kill-after=30s",
+				f"--kill-after={_AGENT_TERMINATION_GRACE_SECONDS}s",
 				f"{timeout_seconds:g}s",
 			]
 	raise RuntimeError("agent runtime requires GNU timeout (timeout or gtimeout)")
