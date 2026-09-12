@@ -54,5 +54,4 @@ experiment_runs = "task"
 source_type = "git"
 url = "https://github.com/spcl/sebs-flow-artifact.git"
 ref = "b3f0be1d29532ef7942562f5f3f198cddc5cfd6a"
-artifact_mode = "hybrid"
-overlay_artifact = true
+artifact_mode = "upstream"

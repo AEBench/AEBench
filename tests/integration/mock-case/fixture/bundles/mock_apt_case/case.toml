@@ -10,6 +10,7 @@ id = "mock_apt_case"
 
 [run.instructions]
 path = "README.md"
+required_evidence = ["Keep the installed zip executable available for inspection."]
 
 [run.runtime]
 mode = "local"
@@ -31,3 +32,4 @@ placeholder = false
 
 [upstream]
 source_type = "local"
+path = "artifact"

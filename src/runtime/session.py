@@ -22,6 +22,10 @@ class RunSession:
 	runtime_workspace: str
 	host_refs: Path | None
 	runtime_refs: str | None
+	host_agent_support_dir: Path
+	runtime_agent_support_dir: str
+	runtime_agent_user: str | None
+	runtime_agent_home: str
 
 	output_dir: Path
 	task_paths: TaskPaths

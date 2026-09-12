@@ -44,5 +44,5 @@ url = "https://github.com/ShawnZhong/DepSurf.git"
 ref = "e877bd88d6b27fcf51fa0f5de921b5c13de1dc3d"
 requested_ref = "eurosys25"
 resolved_at = "2026-05-01T11:06:44+00:00"
-artifact_mode = "hybrid"
+artifact_mode = "overlay"
 overlay_artifact = true
