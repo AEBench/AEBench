@@ -61,6 +61,6 @@ url = "https://github.com/brownsys/paralegal-osdi-2025-artifact.git"
 ref = "d26799fb0f4b0d2bc2cf7b6ad0e1b6afc732b9b4"
 requested_ref = "final"
 resolved_at = "2026-07-28T00:00:00+00:00"
-artifact_mode = "hybrid"
+artifact_mode = "overlay"
 overlay_artifact = true
 notes = "Initialize recursive submodules after applying a repository-local SSH-to-HTTPS URL rewrite. Exact submodule commits are recorded in refs/submodules.ref.json."
