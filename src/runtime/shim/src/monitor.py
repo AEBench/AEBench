@@ -1,9 +1,8 @@
+import asyncio
 import json
 import os
-import socket
 import struct
 import sys
-import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -34,30 +33,21 @@ STDERR = 2
 END = 3
 DECISION = 4
 
-log_lock = threading.Lock()
 
-
-def read_buffer(sock: socket.socket, size: int) -> bytes | None:
+async def read_buffer(reader: asyncio.StreamReader, size: int) -> bytes | None:
 	"""Reads exactly <size> bytes from a shell shim stream socket."""
-	data = bytearray()
+	try:
+		return await reader.readexactly(size)
+	except asyncio.IncompleteReadError as exc:
+		if not exc.partial:
+			return None
 
-	while len(data) < size:
-		chunk = sock.recv(size - len(data))
-
-		if not chunk:
-			if not data:
-				return None
-
-			raise EOFError("connection ended mid-frame")
-
-		data.extend(chunk)
-
-	return bytes(data)
+		raise EOFError("connection ended mid-frame") from exc
 
 
-def read_frame(sock: socket.socket) -> Frame | None:
+async def read_frame(reader: asyncio.StreamReader) -> Frame | None:
 	"""Read one complete message from a shell shim socket."""
-	header = read_buffer(sock, 5)
+	header = await read_buffer(reader, 5)
 
 	if header is None:
 		return None
@@ -68,7 +58,7 @@ def read_frame(sock: socket.socket) -> Frame | None:
 	if length > MAX_FRAME_BYTES:
 		raise ValueError("frame too large")
 
-	payload = read_buffer(sock, length)
+	payload = await read_buffer(reader, length)
 
 	if payload is None and length:
 		raise EOFError("connection ended mid-frame")
@@ -76,14 +66,14 @@ def read_frame(sock: socket.socket) -> Frame | None:
 	return message_type, payload or b""
 
 
-def send_frame(
-	sock: socket.socket,
+async def send_frame(
+	writer: asyncio.StreamWriter,
 	message_type: int,
 	payload: bytes,
 ) -> None:
 	header = struct.pack(">I", len(payload)) + bytes([message_type])
-
-	sock.sendall(header + payload)
+	writer.write(header + payload)
+	await writer.drain()
 
 
 class StreamSink:
@@ -296,12 +286,18 @@ class FileSnapshot(Monitor):
 
 
 def write_record(record: Record, log_path: str) -> None:
-	with log_lock:
-		with open(log_path, "a", encoding="utf-8") as file:
-			file.write(json.dumps(record) + "\n")
+	# This function contains no await, so one event-loop task completes the
+	# append before another task can enter it.
+	with open(log_path, "a", encoding="utf-8") as file:
+		file.write(json.dumps(record) + "\n")
 
 
-def process_connection(connection: socket.socket, output_dir: str, run_id: str) -> None:
+async def process_connection(
+	reader: asyncio.StreamReader,
+	writer: asyncio.StreamWriter,
+	output_dir: str,
+	run_id: str,
+) -> None:
 	"""Process and monitor the session for one shell invocation."""
 	command_id = uuid.uuid4().hex
 
@@ -324,7 +320,7 @@ def process_connection(connection: socket.socket, output_dir: str, run_id: str) 
 	context = CommandContext(record, output_dir, run_id)
 
 	try:
-		first = read_frame(connection)
+		first = await read_frame(reader)
 
 		if first is None:
 			return
@@ -351,15 +347,15 @@ def process_connection(connection: socket.socket, output_dir: str, run_id: str) 
 			"exit_code": 126,
 		}
 
-		send_frame(
-			connection,
+		await send_frame(
+			writer,
 			DECISION,
 			json.dumps(decision).encode("utf-8"),
 		)
 
 		# Read command output until the shell shim reports completion or disconnects
 		while True:
-			frame = read_frame(connection)
+			frame = await read_frame(reader)
 
 			if frame is None:
 				# Shim process disappeared before END marker
@@ -409,10 +405,14 @@ def process_connection(connection: socket.socket, output_dir: str, run_id: str) 
 		run_after_command(context)
 
 		write_record(record, log_path)
-		connection.close()
+		writer.close()
+		try:
+			await writer.wait_closed()
+		except OSError:
+			pass
 
 
-def main(output_dir: str, workspace_dir: str) -> None:
+async def serve(output_dir: str, workspace_dir: str) -> None:
 	os.makedirs(output_dir, exist_ok=True)
 	log_path = os.path.join(output_dir, LOG_BASENAME)
 	run_id = os.path.basename(os.path.normpath(output_dir))
@@ -424,21 +424,23 @@ def main(output_dir: str, workspace_dir: str) -> None:
 	register(CommandTiming())
 	register(FileSnapshot(workspace_dir))
 
-	server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-	server.bind(SOCKET_PATH)
-	server.listen()
+	async def handle_connection(
+		reader: asyncio.StreamReader,
+		writer: asyncio.StreamWriter,
+	) -> None:
+		await process_connection(reader, writer, output_dir, run_id)
+
+	server = await asyncio.start_unix_server(handle_connection, path=SOCKET_PATH)
 
 	print(f"listening on {SOCKET_PATH}")
 	print(f"journal at {log_path}")
 
-	while True:
-		connection, _ = server.accept()
+	async with server:
+		await server.serve_forever()
 
-		threading.Thread(
-			target=process_connection,
-			args=(connection, output_dir, run_id),
-			daemon=True,
-		).start()
+
+def main(output_dir: str, workspace_dir: str) -> None:
+	asyncio.run(serve(output_dir, workspace_dir))
 
 
 if __name__ == "__main__":
