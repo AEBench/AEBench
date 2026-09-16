@@ -259,6 +259,13 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
                 "aeshell: cannot spawn {}: {err}",
                 real_shell.to_string_lossy()
             );
+
+            if let Ok(body) = serde_json::to_vec(&End {
+                exit_code: Some(127),
+                signal: None,
+            }) {
+                let _ = stream.write_all(&encode_frame(FrameKind::End, &body));
+            }
             return 127;
         }
     };
