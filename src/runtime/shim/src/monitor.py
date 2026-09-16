@@ -286,8 +286,6 @@ class FileSnapshot(Monitor):
 
 
 def write_record(record: Record, log_path: str) -> None:
-	# This function contains no await, so one event-loop task completes the
-	# append before another task can enter it.
 	with open(log_path, "a", encoding="utf-8") as file:
 		file.write(json.dumps(record) + "\n")
 
@@ -424,6 +422,7 @@ async def serve(output_dir: str, workspace_dir: str) -> None:
 	register(CommandTiming())
 	register(FileSnapshot(workspace_dir))
 
+	# asyncio schedules one handler task per connection
 	async def handle_connection(
 		reader: asyncio.StreamReader,
 		writer: asyncio.StreamWriter,
@@ -435,6 +434,7 @@ async def serve(output_dir: str, workspace_dir: str) -> None:
 	print(f"listening on {SOCKET_PATH}")
 	print(f"journal at {log_path}")
 
+	# One broker remains available for the duration of the agent invocation.
 	async with server:
 		await server.serve_forever()
 
