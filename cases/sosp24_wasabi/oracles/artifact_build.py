@@ -6,12 +6,9 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from evaluator.oracles.utils import Checkable
-
-from evaluator.oracles import utils
-from evaluator.oracles.discovery import artifact_build
+from evaluator.oracles import CaseOracleArtifactBuildBase
 from evaluator.oracles.oracle_checks_runtime import OraclePath, RuntimeCheckExecutor, RuntimePath
-from models import OracleInput
+from evaluator.oracles.reporting import BaseCheck, Check, CheckResult
 
 _PRIMARY_ARTIFACT = "edu.uchicago.cs.systems:wasabi"
 
@@ -129,8 +126,7 @@ def _parse_pom(
 def _find_poms(base: Path, *, executor: RuntimeCheckExecutor) -> list[Path]:
 	runtime_base = Path(executor.resolve_path(base))
 	return sorted(
-		base / path.relative_to(runtime_base)
-		for path in executor.glob(base, "**/pom.xml")
+		base / path.relative_to(runtime_base) for path in executor.glob(base, "**/pom.xml")
 	)
 
 
@@ -143,133 +139,133 @@ def _repo_path(
 	)
 
 
-@artifact_build
-def oracle_artifact_build(context: OracleInput) -> Sequence[Checkable]:
-	repo_root = context.workspace_dir
-	cache: dict[str, list[dict[str, Any]]] = {}
+class OracleArtifactBuild(CaseOracleArtifactBuildBase):
+	def requirements(self) -> Sequence[BaseCheck]:
+		repo_root = self.workspace_path()
+		cache: dict[str, list[dict[str, Any]]] = {}
 
-	def _load_modules(executor: RuntimeCheckExecutor) -> list[dict[str, Any]]:
-		modules = cache.get("modules")
-		if modules is not None:
-			return modules
+		def _load_modules(executor: RuntimeCheckExecutor) -> list[dict[str, Any]]:
+			modules = cache.get("modules")
+			if modules is not None:
+				return modules
 
-		if not executor.path_is_dir(repo_root):
-			raise ValueError(f"base project directory not found: {repo_root}")
+			if not executor.path_is_dir(repo_root):
+				raise ValueError(f"base project directory not found: {repo_root}")
 
-		poms = _find_poms(repo_root, executor=executor)
-		if not poms:
-			raise ValueError(f"no pom.xml files found under {repo_root}")
+			poms = _find_poms(repo_root, executor=executor)
+			if not poms:
+				raise ValueError(f"no pom.xml files found under {repo_root}")
 
-		root_pom = repo_root / "pom.xml"
-		top_defaults: dict[str, str] = {}
-		if executor.path_exists(root_pom):
-			root_module = _parse_pom(root_pom, top_defaults=None, executor=executor)
-			if "error" not in root_module:
-				group_id = root_module.get("groupId")
-				version = root_module.get("version")
-				if isinstance(group_id, str) and group_id:
-					top_defaults["groupId"] = group_id
-				if isinstance(version, str) and version:
-					top_defaults["version"] = version
+			root_pom = repo_root / "pom.xml"
+			top_defaults: dict[str, str] = {}
+			if executor.path_exists(root_pom):
+				root_module = _parse_pom(root_pom, top_defaults=None, executor=executor)
+				if "error" not in root_module:
+					group_id = root_module.get("groupId")
+					version = root_module.get("version")
+					if isinstance(group_id, str) and group_id:
+						top_defaults["groupId"] = group_id
+					if isinstance(version, str) and version:
+						top_defaults["version"] = version
 
-		errors: list[str] = []
-		parsed_modules: list[dict[str, Any]] = []
-		for pom in poms:
-			module = _parse_pom(pom, top_defaults=top_defaults, executor=executor)
-			error = module.get("error")
-			if isinstance(error, str):
-				errors.append(f"{pom}: {error}")
-				continue
-			group_id = module.get("groupId")
-			artifact_id = module.get("artifactId")
-			version = module.get("version")
-			if not (
-				isinstance(group_id, str)
-				and group_id
-				and isinstance(artifact_id, str)
-				and artifact_id
-				and isinstance(version, str)
-				and version
-			):
-				errors.append(f"{pom}: missing groupId/artifactId/version after inheritance")
-				continue
-			parsed_modules.append(module)
+			errors: list[str] = []
+			parsed_modules: list[dict[str, Any]] = []
+			for pom in poms:
+				module = _parse_pom(pom, top_defaults=top_defaults, executor=executor)
+				error = module.get("error")
+				if isinstance(error, str):
+					errors.append(f"{pom}: {error}")
+					continue
+				group_id = module.get("groupId")
+				artifact_id = module.get("artifactId")
+				version = module.get("version")
+				if not (
+					isinstance(group_id, str)
+					and group_id
+					and isinstance(artifact_id, str)
+					and artifact_id
+					and isinstance(version, str)
+					and version
+				):
+					errors.append(f"{pom}: missing groupId/artifactId/version after inheritance")
+					continue
+				parsed_modules.append(module)
 
-		if errors:
-			head = "\n".join(errors[:5])
-			if len(errors) > 5:
-				head = f"{head}\n... ({len(errors) - 5} more)"
-			raise ValueError(f"POM parsing errors present:\n{head}")
+			if errors:
+				head = "\n".join(errors[:5])
+				if len(errors) > 5:
+					head = f"{head}\n... ({len(errors) - 5} more)"
+				raise ValueError(f"POM parsing errors present:\n{head}")
 
-		cache["modules"] = parsed_modules
-		return parsed_modules
+			cache["modules"] = parsed_modules
+			return parsed_modules
 
-	def _check_build_inputs(executor: RuntimeCheckExecutor) -> utils.CheckResult:
-		try:
-			_load_modules(executor)
-		except ValueError as exc:
-			return utils.CheckResult.failure(str(exc))
-		return utils.CheckResult.success(f"loaded Maven module metadata under {repo_root}")
+		def _check_build_inputs(executor: RuntimeCheckExecutor) -> CheckResult:
+			try:
+				_load_modules(executor)
+			except ValueError as exc:
+				return CheckResult.failure(str(exc))
+			return CheckResult.success(f"loaded Maven module metadata under {repo_root}")
 
-	def _check_primary_module_artifact(executor: RuntimeCheckExecutor) -> utils.CheckResult:
-		try:
-			modules = _load_modules(executor)
-		except ValueError as exc:
-			return utils.CheckResult.failure(str(exc))
+		def _check_primary_module_artifact(executor: RuntimeCheckExecutor) -> CheckResult:
+			try:
+				modules = _load_modules(executor)
+			except ValueError as exc:
+				return CheckResult.failure(str(exc))
 
-		want_group_id, want_artifact_id = _PRIMARY_ARTIFACT.split(":", 1)
-		chosen: dict[str, Any] | None = None
-		for module in modules:
-			group_id = module.get("groupId")
-			artifact_id = module.get("artifactId")
-			if group_id == want_group_id and artifact_id == want_artifact_id:
-				chosen = module
-				break
+			want_group_id, want_artifact_id = _PRIMARY_ARTIFACT.split(":", 1)
+			chosen: dict[str, Any] | None = None
+			for module in modules:
+				group_id = module.get("groupId")
+				artifact_id = module.get("artifactId")
+				if group_id == want_group_id and artifact_id == want_artifact_id:
+					chosen = module
+					break
 
-		if chosen is None:
-			return utils.CheckResult.failure(
-				f"primary module not found for selector {_PRIMARY_ARTIFACT!r}"
+			if chosen is None:
+				return CheckResult.failure(
+					f"primary module not found for selector {_PRIMARY_ARTIFACT!r}"
+				)
+
+			packaging = str(chosen.get("packaging") or "jar").strip()
+			if packaging == "pom":
+				return CheckResult.failure("primary module resolved to packaging=pom")
+
+			group_id = str(chosen["groupId"]).strip()
+			artifact_id = str(chosen["artifactId"]).strip()
+			version = str(chosen["version"]).strip()
+			module_dir = Path(chosen["dir"])
+
+			built = _pick_primary_jar(
+				module_dir / "target", artifact_id, version, executor=executor
+			)
+			installed = _pick_primary_jar(
+				_repo_path(group_id, artifact_id, version, executor=executor),
+				artifact_id,
+				version,
+				executor=executor,
+			)
+			if built is None or installed is None:
+				return CheckResult.failure("missing built jar and/or installed artifact")
+
+			built_sha = _sha256(built, executor=executor)
+			installed_sha = _sha256(installed, executor=executor)
+			if built_sha != installed_sha:
+				return CheckResult.failure(
+					"primary artifact mismatch: target jar does not match local Maven repo jar"
+				)
+
+			return CheckResult.success(
+				f"primary module artifact matches local Maven repository: {artifact_id}-{version}"
 			)
 
-		packaging = str(chosen.get("packaging") or "jar").strip()
-		if packaging == "pom":
-			return utils.CheckResult.failure("primary module resolved to packaging=pom")
-
-		group_id = str(chosen["groupId"]).strip()
-		artifact_id = str(chosen["artifactId"]).strip()
-		version = str(chosen["version"]).strip()
-		module_dir = Path(chosen["dir"])
-
-		built = _pick_primary_jar(
-			module_dir / "target", artifact_id, version, executor=executor
+		return (
+			Check(
+				name="build_inputs",
+				fn=_check_build_inputs,
+			),
+			Check(
+				name="primary_module_artifact",
+				fn=_check_primary_module_artifact,
+			),
 		)
-		installed = _pick_primary_jar(
-			_repo_path(group_id, artifact_id, version, executor=executor),
-			artifact_id,
-			version,
-			executor=executor,
-		)
-		if built is None or installed is None:
-			return utils.CheckResult.failure("missing built jar and/or installed artifact")
-
-		built_sha = _sha256(built, executor=executor)
-		installed_sha = _sha256(installed, executor=executor)
-		if built_sha != installed_sha:
-			return utils.CheckResult.failure(
-				"primary artifact mismatch: target jar does not match local Maven repo jar"
-			)
-
-		return utils.CheckResult.success(
-			f"primary module artifact matches local Maven repository: {artifact_id}-{version}"
-		)
-
-	return (
-		utils.Check(
-			name="build_inputs",
-			fn=_check_build_inputs,
-		),
-		utils.Check(
-			name="primary_module_artifact",
-			fn=_check_primary_module_artifact,
-		),
-	)

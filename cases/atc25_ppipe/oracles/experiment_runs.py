@@ -7,7 +7,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
 from evaluator.oracles.checks import (
 	ListSimilarityCheck,
@@ -16,6 +15,7 @@ from evaluator.oracles.checks import (
 	SimilarityMetric,
 )
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor, RuntimePath
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 _PLAN_XPUT_SIMILARITY = 0.95
 
@@ -35,7 +35,6 @@ _LOGS_CSV_REQUIRED_COLUMNS = {
 	"perc_dropped",
 	"perc_violate_sla",
 }
-
 
 
 def _extract_plan_xputs(
@@ -71,26 +70,25 @@ def _extract_plan_xputs(
 	return results
 
 
-
 @dataclass(frozen=True, slots=True, kw_only=True)
-class PlanThroughputCorrelationCheck(utils.BaseCheck):
+class PlanThroughputCorrelationCheck(BaseCheck):
 	"""Pearson similarity of MILP plan throughputs against reference."""
 
 	output_dir: Path
 	reference_dir: Path
 	threshold: float
 
-	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
 			output_xputs = _extract_plan_xputs(self.output_dir, executor=executor)
 			ref_xputs = _extract_plan_xputs(self.reference_dir, executor=executor)
 		except (OSError, ValueError) as exc:
-			return utils.CheckResult.failure(f"cannot read plan directories: {exc}")
+			return CheckResult.failure(f"cannot read plan directories: {exc}")
 
 		if not ref_xputs:
-			return utils.CheckResult.failure(f"no reference plans found in {self.reference_dir}")
+			return CheckResult.failure(f"no reference plans found in {self.reference_dir}")
 		if not output_xputs:
-			return utils.CheckResult.failure(f"no output plans found in {self.output_dir}")
+			return CheckResult.failure(f"no output plans found in {self.output_dir}")
 
 		ref_by_key = dict(ref_xputs)
 
@@ -103,7 +101,7 @@ class PlanThroughputCorrelationCheck(utils.BaseCheck):
 				reference.append(ref_by_key[key])
 
 		if len(observed) < 2:
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"only {len(observed)} matching plan(s) between output and reference "
 				f"(output: {len(output_xputs)}, reference: {len(ref_xputs)})"
 			)
@@ -120,52 +118,48 @@ class PlanThroughputCorrelationCheck(utils.BaseCheck):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class LogsCSVStructureCheck(utils.BaseCheck):
+class LogsCSVStructureCheck(BaseCheck):
 	"""Fail if logs.csv is missing required columns or has too few rows."""
 
 	path: Path
 	min_rows: int = 10
 
-	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		if not executor.path_is_file(self.path):
-			return utils.CheckResult.failure(f"file missing: {self.path}")
+			return CheckResult.failure(f"file missing: {self.path}")
 
 		try:
 			reader = csv.DictReader(io.StringIO(executor.read_file_text(self.path)))
 			header = reader.fieldnames or []
 			rows = list(reader)
 		except OSError as exc:
-			return utils.CheckResult.failure(f"cannot read {self.path}: {exc}")
+			return CheckResult.failure(f"cannot read {self.path}: {exc}")
 		except csv.Error as exc:
-			return utils.CheckResult.failure(f"cannot parse {self.path}: {exc}")
+			return CheckResult.failure(f"cannot parse {self.path}: {exc}")
 
 		if not header:
-			return utils.CheckResult.failure(f"{self.path.name} is missing a CSV header")
+			return CheckResult.failure(f"{self.path.name} is missing a CSV header")
 
 		missing = _LOGS_CSV_REQUIRED_COLUMNS - set(header)
 		if missing:
-			return utils.CheckResult.failure(
-				f"{self.path.name} missing columns: {sorted(missing)}"
-			)
+			return CheckResult.failure(f"{self.path.name} missing columns: {sorted(missing)}")
 
 		data_rows = len(rows)
 		if data_rows < self.min_rows:
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"{self.path.name} has {data_rows} data row(s), expected at least {self.min_rows}"
 			)
 
-		return utils.CheckResult.success(
-			message=f"{self.path.name}: {data_rows} rows, columns OK"
-		)
+		return CheckResult.success(message=f"{self.path.name}: {data_rows} rows, columns OK")
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
-	def requirements(self) -> Sequence[utils.BaseCheck]:
+	def requirements(self) -> Sequence[BaseCheck]:
 		repo_root = self.workspace_path()
 		outputs = repo_root / "outputs"
 		refs_plans = self.ref_path("plans")
 
-		reqs: list[utils.BaseCheck] = [
+		reqs: list[BaseCheck] = [
 			PathCheck(
 				name="outputs_dir_exists",
 				path=outputs,
@@ -188,7 +182,6 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 				pattern="*/*.csv",
 				min_count=1,
 			),
-
 		]
 
 		for workload in _REQUIRED_WORKLOADS:

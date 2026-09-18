@@ -33,8 +33,11 @@ score_mode = "phase_count"
 failure_mode = "fail_fast"
 placeholder = false
 
-[oracle.runtime]
-mode = "inherit"
+[oracle.phase_targets]
+env_setup = "task"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "task"
 
 [upstream]
 source_type = "git"
