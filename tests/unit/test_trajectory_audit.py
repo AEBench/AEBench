@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import json
+from io import BytesIO
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
+
+import tiktoken
 
 from cli import _build_parser
-from trajectory_audit.judge import SYSTEM_PROMPT
+from trajectory_audit.judge import SYSTEM_PROMPT, OpenAIResponsesJudge
 from trajectory_audit.models import AuditStatus, JudgeVerdict
 from trajectory_audit.sanitize import MAX_TASK_CONTEXT_CHARS, batch_trace, normalize_trace
-from trajectory_audit.service import AuditService
+from trajectory_audit.service import AuditService, _combine_verdicts
 
 
 class FakeJudge:
@@ -28,6 +32,41 @@ class FakeJudge:
 			}
 		)
 		return self.verdicts.pop(0)
+
+
+def test_openai_request_uses_structured_output_without_reasoning_options() -> None:
+	verdict = JudgeVerdict(
+		suspicious=False,
+		confidence=0.99,
+		flagged_commands=[],
+		reasoning="clean",
+	)
+	response = BytesIO(
+		json.dumps(
+			{
+				"output": [
+					{
+						"type": "message",
+						"content": [{"type": "output_text", "text": verdict.model_dump_json()}],
+					}
+				]
+			}
+		).encode()
+	)
+
+	with patch("trajectory_audit.judge.urllib.request.urlopen", return_value=response) as urlopen:
+		actual = OpenAIResponsesJudge(api_key="test-key").evaluate(
+			model="gpt-4o-mini",
+			system_prompt=SYSTEM_PROMPT,
+			task_context="build the artifact",
+			trace_json='{"commands":[]}',
+		)
+
+	request = urlopen.call_args.args[0]
+	body = json.loads(request.data)
+	assert actual == verdict
+	assert "reasoning" not in body
+	assert body["text"]["format"]["type"] == "json_schema"
 
 
 def _record(index: int, **overrides: Any) -> dict[str, Any]:
@@ -135,6 +174,22 @@ def test_batching_preserves_every_command_and_bounds_serialized_size() -> None:
 	assert all(batch["batch_count"] == len(batches) for batch in batches)
 
 
+def test_batching_respects_token_limit() -> None:
+	commands = normalize_trace([_record(index) for index in range(10)])
+
+	batches = batch_trace(commands, max_tokens=300, max_bytes=100_000)
+	encoding = tiktoken.get_encoding("o200k_base")
+
+	assert len(batches) > 1
+	assert all(
+		len(encoding.encode(json.dumps(batch, sort_keys=True, separators=(",", ":")))) <= 300
+		for batch in batches
+	)
+	assert {command["command_id"] for batch in batches for command in batch["commands"]} == {
+		f"cmd-{index}" for index in range(10)
+	}
+
+
 def test_normal_command_keeps_more_than_128_arguments() -> None:
 	argv = ["tool", *[f"arg-{index}" for index in range(200)]]
 
@@ -210,6 +265,98 @@ def test_multi_batch_verdicts_are_combined_deterministically() -> None:
 	assert report.metadata["batch_count"] == expected_batch_count
 
 
+def test_combination_uses_only_suspicious_verdict_evidence() -> None:
+	verdict = _combine_verdicts(
+		[
+			JudgeVerdict(
+				suspicious=False,
+				confidence=0.99,
+				flagged_commands=["inconsistent-clean-flag"],
+				reasoning="clean batch",
+			),
+			JudgeVerdict(
+				suspicious=True,
+				confidence=0.85,
+				flagged_commands=["cmd-2"],
+				reasoning="suspicious batch",
+			),
+		]
+	)
+
+	assert verdict.flagged_commands == ["cmd-2"]
+	assert verdict.reasoning == "Batch 2: suspicious batch"
+
+
+def test_clean_combination_drops_inconsistent_flagged_commands() -> None:
+	verdict = _combine_verdicts(
+		[
+			JudgeVerdict(
+				suspicious=False,
+				confidence=0.99,
+				flagged_commands=["inconsistent-clean-flag"],
+				reasoning="clean",
+			),
+			JudgeVerdict(
+				suspicious=False,
+				confidence=0.95,
+				flagged_commands=[],
+				reasoning="also clean",
+			),
+		]
+	)
+
+	assert not verdict.suspicious
+	assert verdict.flagged_commands == []
+
+
+def test_single_clean_verdict_drops_inconsistent_flagged_commands() -> None:
+	verdict = _combine_verdicts(
+		[
+			JudgeVerdict(
+				suspicious=False,
+				confidence=0.99,
+				flagged_commands=["inconsistent-clean-flag"],
+				reasoning="clean",
+			)
+		]
+	)
+
+	assert not verdict.suspicious
+	assert verdict.flagged_commands == []
+
+
+def test_report_identifies_escalation_model_across_later_primary_only_batches() -> None:
+	records = [_record(index) for index in range(8)]
+	batch_count = len(batch_trace(normalize_trace(records), max_bytes=1800))
+	judge = FakeJudge(
+		[
+			JudgeVerdict(
+				suspicious=False, confidence=0.5, flagged_commands=[], reasoning="unclear"
+			),
+			JudgeVerdict(suspicious=False, confidence=0.9, flagged_commands=[], reasoning="clean"),
+			*[
+				JudgeVerdict(
+					suspicious=False,
+					confidence=0.9,
+					flagged_commands=[],
+					reasoning="clean",
+				)
+				for _ in range(batch_count - 1)
+			],
+		]
+	)
+
+	report = AuditService(
+		judge,
+		primary_model="primary",
+		escalation_model="escalation",
+		trace_batch_bytes=1800,
+	).audit_records(records)
+
+	assert report.judge_model == "escalation"
+	assert report.metadata["models_used"] == ["primary", "escalation"]
+
+
 def test_integrity_mismatch_is_a_hard_blocker() -> None:
 	judge = FakeJudge([])
 	record = _record(
@@ -251,6 +398,22 @@ def test_malformed_jsonl_reports_the_line_number(tmp_path: Path) -> None:
 		assert "trace line 2" in str(exc)
 	else:
 		raise AssertionError("malformed trace should be rejected")
+
+
+def test_jsonl_streaming_assigns_stable_fallback_command_ids(tmp_path: Path) -> None:
+	trace = tmp_path / "missing-ids.jsonl"
+	records = [_record(1), _record(2)]
+	for record in records:
+		record.pop("command_id")
+	trace.write_text("\n".join(json.dumps(record) for record in records), encoding="utf-8")
+	judge = FakeJudge(
+		[JudgeVerdict(suspicious=False, confidence=0.99, flagged_commands=[], reasoning="clean")]
+	)
+
+	AuditService(judge, escalation_model=None).audit_jsonl(trace)
+	commands = json.loads(judge.calls[0]["trace_json"])["commands"]
+
+	assert [command["command_id"] for command in commands] == ["command-0", "command-1"]
 
 
 def test_partial_trajectory_is_preserved_for_judge_review() -> None:

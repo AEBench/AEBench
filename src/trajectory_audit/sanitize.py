@@ -3,10 +3,15 @@ from __future__ import annotations
 import json
 import math
 import re
+from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, Iterable
+
+import tiktoken
 
 from trajectory_audit.models import FileEffects, TraceCommand
 
+MAX_TRACE_BATCH_TOKENS = 50_000
 MAX_TRACE_BATCH_BYTES = 200_000
 TRACE_BATCH_OVERLAP = 0.10
 MAX_ARGV_BYTES = 100_000
@@ -21,6 +26,19 @@ _SECRET_ASSIGNMENT = re.compile(
 _BEARER = re.compile(r"(?i)^bearer\s+\S+$")
 _HIGH_ENTROPY = re.compile(r"^[A-Za-z0-9_+/=-]{32,}$")
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+@dataclass(frozen=True)
+class _SerializedCommand:
+	payload: dict[str, Any]
+	tokens: int
+	bytes: int
+
+
+@lru_cache(maxsize=1)
+def _token_encoding() -> tiktoken.Encoding:
+	"""Load the tokenizer only when an audit actually needs batching."""
+	return tiktoken.get_encoding("o200k_base")
 
 
 def _clean_text(value: object, limit: int) -> tuple[str, bool]:
@@ -151,53 +169,88 @@ def _serialized_size(payload: dict[str, Any]) -> int:
 	return len(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8"))
 
 
+def _serialize_command(command: TraceCommand) -> _SerializedCommand:
+	payload = command.model_dump(mode="json")
+	serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+	return _SerializedCommand(
+		payload=payload,
+		tokens=len(_token_encoding().encode(serialized)),
+		bytes=len(serialized.encode("utf-8")),
+	)
+
+
 def batch_trace(
 	commands: list[TraceCommand],
 	*,
+	max_tokens: int = MAX_TRACE_BATCH_TOKENS,
 	max_bytes: int = MAX_TRACE_BATCH_BYTES,
 	overlap_fraction: float = TRACE_BATCH_OVERLAP,
 ) -> list[dict[str, Any]]:
-	"""Split a trace into deterministic byte-bounded batches without omitting commands."""
+	"""Split a trace into deterministic token-bounded batches without omitting commands."""
+	if max_tokens <= 0:
+		raise ValueError("max_tokens must be positive")
 	if max_bytes <= 0:
 		raise ValueError("max_bytes must be positive")
 	if not 0.0 <= overlap_fraction < 1.0:
 		raise ValueError("overlap_fraction must be between 0 and 1")
-	base_batch_limit = max(1, int(max_bytes * (1.0 - overlap_fraction)))
-	serialized_commands = [command.model_dump(mode="json") for command in commands]
-	base_batches: list[list[dict[str, Any]]] = []
-	current: list[dict[str, Any]] = []
+	envelope = _batch_payload([], total_commands=len(commands), overlap_commands=len(commands))
+	envelope_json = json.dumps(envelope, sort_keys=True, separators=(",", ":"))
+	envelope_tokens = len(_token_encoding().encode(envelope_json))
+	envelope_bytes = len(envelope_json.encode("utf-8"))
+	base_token_limit = max(1, int(max_tokens * (1.0 - overlap_fraction)))
+	base_byte_limit = max(1, int(max_bytes * (1.0 - overlap_fraction)))
+	serialized_commands = [_serialize_command(command) for command in commands]
+	base_batches: list[list[_SerializedCommand]] = []
+	current: list[_SerializedCommand] = []
+	current_tokens = envelope_tokens
+	current_bytes = envelope_bytes
 	for command in serialized_commands:
-		single = _batch_payload([command], total_commands=len(commands), overlap_commands=0)
-		if _serialized_size(single) > max_bytes:
-			raise ValueError("one normalized command exceeds the trace batch byte limit")
-		candidate = [*current, command]
-		payload = _batch_payload(candidate, total_commands=len(commands), overlap_commands=0)
-		if current and _serialized_size(payload) > base_batch_limit:
+		separator_bytes = 1 if current else 0
+		candidate_tokens = current_tokens + command.tokens + 1
+		candidate_bytes = current_bytes + command.bytes + separator_bytes
+		if (
+			envelope_tokens + command.tokens + 1 > max_tokens
+			or envelope_bytes + command.bytes > max_bytes
+		):
+			raise ValueError("one normalized command exceeds the trace batch limit")
+		if current and (candidate_tokens > base_token_limit or candidate_bytes > base_byte_limit):
 			base_batches.append(current)
 			current = [command]
+			current_tokens = envelope_tokens + command.tokens + 1
+			current_bytes = envelope_bytes + command.bytes
 		else:
-			current = candidate
+			current.append(command)
+			current_tokens = candidate_tokens
+			current_bytes = candidate_bytes
 	if current:
 		base_batches.append(current)
 
 	batches: list[dict[str, Any]] = []
 	for index, batch in enumerate(base_batches):
-		overlap: list[dict[str, Any]] = []
+		overlap: list[_SerializedCommand] = []
+		batch_tokens = envelope_tokens + sum(command.tokens + 1 for command in batch)
+		batch_bytes = (
+			envelope_bytes + sum(command.bytes for command in batch) + max(0, len(batch) - 1)
+		)
 		if index and overlap_fraction:
 			previous = base_batches[index - 1]
 			requested = max(1, math.ceil(len(previous) * overlap_fraction))
 			for command in previous[-requested:]:
-				candidate = [*overlap, command, *batch]
-				payload = _batch_payload(
-					candidate, total_commands=len(commands), overlap_commands=len(overlap) + 1
-				)
-				if _serialized_size(payload) > max_bytes:
+				if batch_tokens + command.tokens + 1 > max_tokens:
+					break
+				if batch_bytes + command.bytes + 1 > max_bytes:
 					break
 				overlap.append(command)
+				batch_tokens += command.tokens + 1
+				batch_bytes += command.bytes + 1
 		payload = _batch_payload(
-			[*overlap, *batch], total_commands=len(commands), overlap_commands=len(overlap)
+			[command.payload for command in [*overlap, *batch]],
+			total_commands=len(commands),
+			overlap_commands=len(overlap),
 		)
 		payload["batch_index"] = index + 1
 		payload["batch_count"] = len(base_batches)
+		if _serialized_size(payload) > max_bytes:
+			raise ValueError("trace batch exceeds the byte limit")
 		batches.append(payload)
 	return batches
