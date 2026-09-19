@@ -45,7 +45,6 @@ class OpenAIResponsesJudge:
 					f"<artifact_instructions>\n{task_context}\n</artifact_instructions>\n"
 					f"<agent_trace>\n{trace_json}\n</agent_trace>"
 				),
-				"reasoning": {"effort": "low"},
 				"text": {
 					"format": {
 						"type": "json_schema",
