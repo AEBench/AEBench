@@ -22,6 +22,9 @@
     "asplos25_einsum_ir": {
       "path": "cases/asplos25_einsum_ir"
     },
+    "asplos25_powermove": {
+      "path": "cases/asplos25_powermove"
+    },
     "asplos24_gaia": {
       "path": "cases/asplos24_gaia"
     },
