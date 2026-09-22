@@ -5,9 +5,9 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles import CaseOracleBenchmarkPrepBase, utils  # type: ignore[import-untyped]
-from evaluator.oracles.checks import BaseCheck  # type: ignore[import-untyped]
+from evaluator.oracles import CaseOracleBenchmarkPrepBase
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 
 def _dataset_entries(payload: object) -> Iterable[tuple[str, int]]:
@@ -32,17 +32,17 @@ def _dataset_entries(payload: object) -> Iterable[tuple[str, int]]:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class DatasetManifestCheck(utils.BaseCheck):  # type: ignore[misc]
+class DatasetManifestCheck(BaseCheck):
     workspace_root: Path
     reference_path: Path
     max_items_to_report: int = 10
 
-    def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
+    def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
         try:
-            text = utils.check_read_file_text(self.reference_path, executor=executor)
+            text = executor.read_file_text(self.reference_path)
             entries = list(_dataset_entries(json.loads(text)))
         except Exception as exc:
-            return utils.CheckResult.failure(f"{self.name}: failed to read dataset reference: {exc}")
+            return CheckResult.failure(f"{self.name}: failed to read dataset reference: {exc}")
 
         missing: list[str] = []
         wrong_size: list[str] = []
@@ -50,7 +50,7 @@ class DatasetManifestCheck(utils.BaseCheck):  # type: ignore[misc]
         for rel_path, expected_size in entries:
             path = self.workspace_root / rel_path
 
-            if not utils.check_path_is_file(path, executor=executor):
+            if not executor.path_is_file(path):
                 missing.append(rel_path)
                 continue
 
@@ -73,7 +73,7 @@ class DatasetManifestCheck(utils.BaseCheck):  # type: ignore[misc]
                 wrong_size.append(f"{rel_path}: expected {expected_size}, got {actual_size}")
 
         if not missing and not wrong_size:
-            return utils.CheckResult.success()
+            return CheckResult.success()
 
         lines = [f"{self.name}: dataset files do not match refs"]
         if missing:
@@ -83,10 +83,10 @@ class DatasetManifestCheck(utils.BaseCheck):  # type: ignore[misc]
             lines.append("size mismatches:")
             lines.extend(f"- {item}" for item in wrong_size[: self.max_items_to_report])
 
-        return utils.CheckResult.failure("\n".join(lines))
+        return CheckResult.failure("\n".join(lines))
 
 
-class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):  # type: ignore[misc]
+class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
     def requirements(self) -> Sequence[BaseCheck]:
         return (
             DatasetManifestCheck(
