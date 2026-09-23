@@ -352,6 +352,8 @@ def test_docker_artifact_workspace_mount_preserves_host_path(tmp_path: Path) -> 
 		runtime_agent_support_dir="/run/aebench-agent",
 		runtime_agent_user="agent",
 		runtime_agent_home="/home/agent",
+		host_command_socket_dir=None,
+		runtime_command_socket_dir=None,
 	)
 
 	command = runtime._docker_run_command(session)  # type: ignore[arg-type]
