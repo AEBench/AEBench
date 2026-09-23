@@ -1,3 +1,13 @@
+################# shim build stage #################
+ARG RUST_VERSION=1.83
+FROM rust:${RUST_VERSION}-slim-bookworm AS shim-builder
+
+WORKDIR /build/shim
+COPY src/runtime/shim ./
+RUN cargo build --release --locked
+
+
+################# everything else! #################
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -54,5 +64,9 @@ RUN groupadd --gid 1000 agent \
  && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash agent \
  && printf 'agent ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/aebench-agent \
  && chmod 0440 /etc/sudoers.d/aebench-agent
+
+################# shim copy #################
+COPY --from=shim-builder /build/shim/target/release/aeshell /usr/lib/aebench/aeshell
+RUN chmod 0755 /usr/lib/aebench/aeshell
 
 CMD ["bash"]
