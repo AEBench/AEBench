@@ -137,6 +137,18 @@ class DockerRuntime:
 		]
 		if session.host_refs is not None:
 			cmd.extend(["-v", f"{session.host_refs}:/refs:ro"])
+		if (
+			session.host_command_socket_dir is not None
+			and session.runtime_command_socket_dir is not None
+		):
+			# Read-only: connect(2) is unaffected by a read-only bind, but unlinking
+			# the socket is, and the agent runs with sudo.
+			cmd.extend(
+				[
+					"-v",
+					f"{session.host_command_socket_dir}:{session.runtime_command_socket_dir}:ro",
+				]
+			)
 		if session.run_spec.artifact_requirements.docker:
 			cmd.extend(["-v", "/var/run/docker.sock:/var/run/docker.sock"])
 		if self.gpu or bool(getattr(session.run_spec.runtime, "gpu", False)):

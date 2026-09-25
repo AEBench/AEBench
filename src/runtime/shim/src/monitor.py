@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import socket as socketlib
 import struct
 import sys
 import time
@@ -410,15 +411,24 @@ async def process_connection(
 			pass
 
 
-async def serve(output_dir: str, workspace_dir: str) -> None:
+async def serve(
+	output_dir: str,
+	workspace_dir: str,
+	socket_path: str = SOCKET_PATH,
+	sock: socketlib.socket | None = None,
+) -> None:
+	"""Serves the broker, on <sock> when an embedder already bound one."""
 	os.makedirs(output_dir, exist_ok=True)
 	log_path = os.path.join(output_dir, LOG_BASENAME)
 	run_id = os.path.basename(os.path.normpath(output_dir))
 
-	try:
-		os.unlink(SOCKET_PATH)
-	except FileNotFoundError:
-		pass
+	if sock is None:
+		# Only when this process owns the path. Unlinking a socket an embedder
+		# bound would leave its clients connecting to nothing.
+		try:
+			os.unlink(socket_path)
+		except FileNotFoundError:
+			pass
 	register(CommandTiming())
 	register(FileSnapshot(workspace_dir))
 
@@ -429,9 +439,12 @@ async def serve(output_dir: str, workspace_dir: str) -> None:
 	) -> None:
 		await process_connection(reader, writer, output_dir, run_id)
 
-	server = await asyncio.start_unix_server(handle_connection, path=SOCKET_PATH)
+	if sock is None:
+		server = await asyncio.start_unix_server(handle_connection, path=socket_path)
+	else:
+		server = await asyncio.start_unix_server(handle_connection, sock=sock)
 
-	print(f"listening on {SOCKET_PATH}")
+	print(f"listening on {socket_path}")
 	print(f"journal at {log_path}")
 
 	# One broker remains available for the duration of the agent invocation.
@@ -439,12 +452,22 @@ async def serve(output_dir: str, workspace_dir: str) -> None:
 		await server.serve_forever()
 
 
-def main(output_dir: str, workspace_dir: str) -> None:
-	asyncio.run(serve(output_dir, workspace_dir))
+def main(
+	output_dir: str,
+	workspace_dir: str,
+	socket_path: str = SOCKET_PATH,
+	socket_fd: str | None = None,
+) -> None:
+	# An embedder passes an already-listening descriptor, so the socket is
+	# accepting before this process starts.
+	sock = None if socket_fd is None else socketlib.socket(fileno=int(socket_fd))
+	asyncio.run(serve(output_dir, workspace_dir, socket_path, sock))
 
 
 if __name__ == "__main__":
-	if len(sys.argv) != 3:
-		raise SystemExit("usage: monitor.py <run-output-dir> <workspace-dir>")
+	if not 3 <= len(sys.argv) <= 5:
+		raise SystemExit(
+			"usage: monitor.py <run-output-dir> <workspace-dir> [socket-path] [socket-fd]"
+		)
 
-	main(sys.argv[1], sys.argv[2])
+	main(*sys.argv[1:])

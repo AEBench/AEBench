@@ -77,15 +77,36 @@ seccomp-unotify, or ptrace) in the broker. That is deliberately out of scope.
 
 ## Installation
 
-The shim has to sit where the agent will find it. Replacing `/bin/bash`
-system-wide is not acceptable on a developer host, so for `runtime.mode =
-"local"` prefer a mount namespace:
+`aebench case monitor` installs the shim; nothing here needs doing by hand. The agent image carries the binary dormant at
+`/usr/lib/aebench/aeshell`, and the run swaps it over `/bin/bash` inside the
+container once the container is up, keeping the real shell at
+`/usr/lib/aebench/bash.real`. `aebench case run` leaves the image untouched.
+
+The shim is not swapped back. With no socket mounted -- the situation in the
+container the oracle starts from the committed snapshot -- it execs the
+preserved shell and is indistinguishable from it.
+
+The swap is deliberately not done at image build time: the same image serves
+both commands, so a monitored run stays comparable with an unmonitored one.
+
+Building the binary on the host and mounting it *into the container* does not
+work. It links against the host's glibc, the runtime image is Debian bookworm,
+and a shell that cannot exec takes the whole container with it -- so the binary
+is built in a stage of the agent image instead. A host build is still the right
+thing for the local recipe below, which never leaves the host.
+
+Monitoring is Docker-only. Replacing `/bin/bash` on a developer host is not
+acceptable, and `runtime.mode = "local"` is rejected rather than silently run
+unmonitored. Monitoring a local run would need a mount namespace:
 
 ```bash
 unshare --mount --map-root-user \
   sh -c 'mount --bind target/release/aeshell /bin/bash && exec "$@"' -- <agent cmd>
 ```
 
-A `PATH`-prepended private `bin/bash` also works, but only if the harness
-resolves `bash` through `PATH` rather than by absolute path. Run
-`tools/probe_shell_invocations.py` to find out which applies to a given agent.
+## Broker
+
+The server side is `src/runtime/shim/src/monitor.py`, supervised by
+`src/runtime/monitoring.py`, which runs it as a child process on a per-run
+socket and writes the trace outside the agent's reach. See
+`docs/architecture/runtime.md`.

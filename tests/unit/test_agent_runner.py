@@ -352,6 +352,8 @@ def test_docker_artifact_workspace_mount_preserves_host_path(tmp_path: Path) -> 
 		runtime_agent_support_dir="/run/aebench-agent",
 		runtime_agent_user="agent",
 		runtime_agent_home="/home/agent",
+		host_command_socket_dir=None,
+		runtime_command_socket_dir=None,
 	)
 
 	command = runtime._docker_run_command(session)  # type: ignore[arg-type]
@@ -360,6 +362,89 @@ def test_docker_artifact_workspace_mount_preserves_host_path(tmp_path: Path) -> 
 	assert f"{support_dir}:/home/agent" not in command
 	assert command[command.index("-w") + 1] == str(tmp_path)
 	assert "/var/run/docker.sock:/var/run/docker.sock" in command
+
+
+def test_docker_run_mounts_the_command_socket_read_only(tmp_path: Path) -> None:
+	task = TaskConfig(
+		id="monitored",
+		runtime=RuntimeConfig(mode=RuntimeMode.DOCKER, image="aebench-agent:latest"),
+	)
+	support_dir = tmp_path / "agent-support"
+	support_dir.mkdir()
+	socket_dir = tmp_path / "sockets" / "mon-abcd1234"
+	socket_dir.mkdir(parents=True)
+	runtime = DockerRuntime(container_name="test-container", resolved_image="aebench-agent:latest")
+	session = SimpleNamespace(
+		run_spec=task,
+		host_workspace=tmp_path,
+		runtime_workspace="/repo",
+		host_refs=None,
+		host_agent_support_dir=support_dir,
+		runtime_agent_support_dir="/run/aebench-agent",
+		runtime_agent_user="agent",
+		runtime_agent_home="/home/agent",
+		host_command_socket_dir=socket_dir,
+		runtime_command_socket_dir="/run/aebench",
+	)
+
+	command = runtime._docker_run_command(session)  # type: ignore[arg-type]
+
+	# Read-only: connect(2) still works, but the agent -- which has sudo -- cannot
+	# unlink the socket and quietly end its own monitoring.
+	assert f"{socket_dir}:/run/aebench:ro" in command
+	# The socket directory is the only monitoring path the container can see; the
+	# trace itself is never mounted.
+	assert not any("commands.jsonl" in argument for argument in command)
+
+
+def test_docker_run_has_no_socket_mount_without_monitoring(tmp_path: Path) -> None:
+	task = TaskConfig(
+		id="unmonitored",
+		runtime=RuntimeConfig(mode=RuntimeMode.DOCKER, image="aebench-agent:latest"),
+	)
+	support_dir = tmp_path / "agent-support"
+	support_dir.mkdir()
+	runtime = DockerRuntime(container_name="test-container", resolved_image="aebench-agent:latest")
+	session = SimpleNamespace(
+		run_spec=task,
+		host_workspace=tmp_path,
+		runtime_workspace="/repo",
+		host_refs=None,
+		host_agent_support_dir=support_dir,
+		runtime_agent_support_dir="/run/aebench-agent",
+		runtime_agent_user="agent",
+		runtime_agent_home="/home/agent",
+		host_command_socket_dir=None,
+		runtime_command_socket_dir=None,
+	)
+
+	assert not any("/run/aebench:" in argument for argument in runtime._docker_run_command(session))  # type: ignore[arg-type]
+
+
+def test_agent_shell_command_can_bypass_the_shim() -> None:
+	"""Under monitoring the harness runs on the preserved real bash.
+
+	Its outer shell carries the agent's whole transcript through a pipe, and the
+	shim buffers a command's output until the command ends, so routing it through
+	the shim would hold the entire run's output in container RAM -- besides
+	recording AEBench's own two shells as if the agent had run them.
+	"""
+	real_shell = "/usr/lib/aebench/bash.real"
+
+	command = _agent_shell_command(DockerRuntime(), shell_path=real_shell)
+
+	assert command[0] == real_shell
+	# Both the outer pipeline shell and the inner one the agent script runs on.
+	assert f"-- {real_shell} -s" in command[-1]
+	assert "bash -s" not in command[-1]
+
+
+def test_agent_shell_command_defaults_to_plain_bash() -> None:
+	# An unmonitored run must be byte-identical to before.
+	command = _agent_shell_command(DockerRuntime())
+
+	assert command[0] == "bash"
+	assert "-- bash -s" in command[-1]
 
 
 def test_docker_stop_preserves_container_until_cleanup(

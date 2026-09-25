@@ -102,6 +102,7 @@ def run_agent(
 	runtime_support_dir: str,
 	timeout_seconds: float,
 	output_path: Path,
+	shell_path: str = "bash",
 ) -> AgentResult:
 	script = _solve_script(agent)
 	prompt = _prompt_for_agent(agent, prompt)
@@ -114,7 +115,9 @@ def run_agent(
 		runtime_support_dir=runtime_support_dir,
 		include_host_runtime=isinstance(runtime, LocalRuntime),
 	)
-	command = _timeout_command(runtime, timeout_seconds) + _agent_shell_command(runtime)
+	command = _timeout_command(runtime, timeout_seconds) + _agent_shell_command(
+		runtime, shell_path=shell_path
+	)
 
 	try:
 		process = runtime.run_process_to_file(
@@ -235,7 +238,7 @@ def _timeout_command(runtime: BenchRuntime, timeout_seconds: float) -> list[str]
 	raise RuntimeError("agent runtime requires GNU timeout (timeout or gtimeout)")
 
 
-def _agent_shell_command(runtime: BenchRuntime) -> list[str]:
+def _agent_shell_command(runtime: BenchRuntime, *, shell_path: str = "bash") -> list[str]:
 	if isinstance(runtime, DockerRuntime):
 		agent_command = [
 			"runuser",
@@ -243,16 +246,16 @@ def _agent_shell_command(runtime: BenchRuntime) -> list[str]:
 			"agent",
 			"--preserve-environment",
 			"--",
-			"bash",
+			shell_path,
 			"-s",
 		]
 	else:
-		agent_command = ["bash", "-s"]
+		agent_command = [shell_path, "-s"]
 	pipeline = (
 		f"{shlex.join(agent_command)} 2>&1 | "
 		f'python3 "$AEBENCH_AGENT_SUPPORT_DIR/{_TIMESTAMP_SCRIPT}"'
 	)
-	return ["bash", "-o", "pipefail", "-c", pipeline]
+	return [shell_path, "-o", "pipefail", "-c", pipeline]
 
 
 __all__ = [
