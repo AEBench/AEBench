@@ -382,6 +382,7 @@ class RunOptions(_Model):
 	prompt_append: str | None = None
 	cleanup_workspace: bool = False
 	skip_incompatible: bool = False
+	trajectory_audit: bool = False
 
 
 class UpstreamSourceType(str, Enum):

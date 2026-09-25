@@ -32,6 +32,8 @@ class RunSession:
 	summary_path: Path
 
 	runtime_backend: BenchRuntime
+	host_command_socket_dir: Path | None = None
+	runtime_command_socket_dir: str | None = None
 
 	@property
 	def task_id(self) -> str:

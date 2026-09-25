@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
+import sys
+import tempfile
+import time
 import traceback
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -32,6 +36,8 @@ from models import (
 from prompting import build_prompt_bundle
 from sources import prepare_workspace
 from task_loader import compose_task_text, read_instruction_text
+from trajectory_audit.judge import OpenAIResponsesJudge
+from trajectory_audit.service import AuditService
 from utils import safe_name
 
 from .agent_runner import (
@@ -77,6 +83,9 @@ class _CaseRunner:
 		self.agent_support_dir: Path | None = None
 		self.runtime: BenchRuntime | None = None
 		self.session: RunSession | None = None
+		self.command_monitor: subprocess.Popen[str] | None = None
+		self.command_socket_dir: Path | None = None
+		self.task_context = ""
 
 		self.error: str | None = None
 		self.interrupted: KeyboardInterrupt | SystemExit | None = None
@@ -171,15 +180,13 @@ class _CaseRunner:
 				else self.task.prompt.append
 			)
 
+			self.task_context = compose_task_text(
+				read_instruction_text(self.workspace, self.task.instructions.path),
+				self.case.case_brief,
+			)
 			prompt = build_prompt_bundle(
 				PromptArgs(
-					task_text=compose_task_text(
-						read_instruction_text(
-							self.workspace,
-							self.task.instructions.path,
-						),
-						self.case.case_brief,
-					),
+					task_text=self.task_context,
 					workspace_path=runtime_workspace,
 					runtime_mode=self.task.runtime.mode,
 					timeout_ms=self.task.runtime.timeout_ms,
@@ -205,6 +212,9 @@ class _CaseRunner:
 			summary_path = self.workspace / SUMMARY_BASENAME_TEMPLATE.format(
 				safe_id=safe_name(self.case.id)
 			)
+			if self.options.trajectory_audit:
+				self.command_socket_dir = Path(tempfile.mkdtemp(prefix="aebench-command-monitor-"))
+				self.command_socket_dir.chmod(0o755)
 
 			self.session = RunSession(
 				run_spec=self.task,
@@ -225,10 +235,16 @@ class _CaseRunner:
 				task_paths=self.paths,
 				summary_path=summary_path,
 				runtime_backend=self.runtime,
+				host_command_socket_dir=self.command_socket_dir,
+				runtime_command_socket_dir=(
+					"/run/aebench" if self.command_socket_dir is not None else None
+				),
 			)
 
 			self.runtime.prepare(self.session)
 			prepare_agent_runtime(self.runtime)
+			if self.options.trajectory_audit:
+				self._start_command_monitor()
 			self.prepare_finished = datetime.now(timezone.utc)
 		except (KeyboardInterrupt, SystemExit) as exc:
 			self.interrupted = exc
@@ -267,6 +283,7 @@ class _CaseRunner:
 				)
 			finally:
 				self.agent_finished = datetime.now(timezone.utc)
+				self._stop_command_monitor()
 				clear_agent_support_dir(
 					runtime,
 					session.runtime_agent_support_dir,
@@ -343,6 +360,58 @@ class _CaseRunner:
 			)
 			self._pipeline_failed = True
 
+	def run_trajectory_audit(self) -> None:
+		if not self.options.trajectory_audit:
+			return
+		try:
+			trace_path = self.output_dir / "commands.jsonl"
+			report = AuditService(OpenAIResponsesJudge()).audit_jsonl(
+				trace_path,
+				task_context=self.task_context,
+			)
+			(self.output_dir / "audit_report.json").write_text(
+				report.model_dump_json(indent=2) + "\n", encoding="utf-8"
+			)
+		except Exception as exc:
+			with self.paths.infra_log_path.open("a", encoding="utf-8") as handle:
+				handle.write(f"\ntrajectory audit failed: {type(exc).__name__}: {exc}\n")
+
+	def _start_command_monitor(self) -> None:
+		if self.task.runtime.mode != RuntimeMode.DOCKER:
+			raise RuntimeError("trajectory auditing requires docker runtime")
+		assert self.command_socket_dir is not None
+		monitor = Path(__file__).parent / "shim" / "src" / "monitor.py"
+		self.command_monitor = subprocess.Popen(
+			[
+				sys.executable,
+				str(monitor),
+				str(self.output_dir),
+				str(self.workspace),
+				str(self.command_socket_dir / "command.sock"),
+			],
+			stdout=subprocess.DEVNULL,
+			stderr=subprocess.DEVNULL,
+			text=True,
+		)
+		socket_path = self.command_socket_dir / "command.sock"
+		deadline = time.monotonic() + 5
+		while not socket_path.exists() and time.monotonic() < deadline:
+			if self.command_monitor.poll() is not None:
+				break
+			time.sleep(0.05)
+		if not socket_path.exists():
+			raise RuntimeError("trajectory command monitor failed to start")
+
+	def _stop_command_monitor(self) -> None:
+		if self.command_monitor is not None:
+			self.command_monitor.terminate()
+			try:
+				self.command_monitor.wait(timeout=5)
+			except subprocess.TimeoutExpired:
+				self.command_monitor.kill()
+				self.command_monitor.wait(timeout=5)
+			self.command_monitor = None
+
 	def finalize(self) -> CaseRunResult:
 		self._cleanup()
 
@@ -413,6 +482,7 @@ class _CaseRunner:
 		return case_result
 
 	def _cleanup(self) -> None:
+		self._stop_command_monitor()
 		if not self._runtime_cleanup_done and self.runtime is not None and self.session is not None:
 			try:
 				self.runtime.cleanup(self.session)
@@ -442,6 +512,8 @@ class _CaseRunner:
 					handle.write("\n" + traceback.format_exc())
 			finally:
 				self._agent_support_cleanup_done = True
+		if self.command_socket_dir is not None:
+			shutil.rmtree(self.command_socket_dir, ignore_errors=True)
 
 
 def run_case(
@@ -463,6 +535,7 @@ def run_case(
 		runner.prepare_case()
 		runner.execute_agent()
 		runner.run_oracle()
+		runner.run_trajectory_audit()
 		return runner.finalize()
 	finally:
 		runner._cleanup()

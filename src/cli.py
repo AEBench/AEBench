@@ -104,6 +104,7 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
 		help="Allow the agent to control the host Docker daemon.",
 	)
 	parser.add_argument("--cleanup-workspace", action="store_true")
+	parser.add_argument("--trajectory-audit", action="store_true")
 	parser.add_argument("--prompt-profile", default=None)
 	parser.add_argument("--prompt-append", default=None)
 
@@ -349,6 +350,7 @@ def _run_options(args: argparse.Namespace) -> RunOptions:
 		prompt_append=getattr(args, "prompt_append", None),
 		cleanup_workspace=bool(getattr(args, "cleanup_workspace", False)),
 		skip_incompatible=bool(getattr(args, "skip_incompatible", False)),
+		trajectory_audit=bool(getattr(args, "trajectory_audit", False)),
 	)
 
 
