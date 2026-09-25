@@ -362,6 +362,23 @@ def test_docker_artifact_workspace_mount_preserves_host_path(tmp_path: Path) -> 
 	assert "/var/run/docker.sock:/var/run/docker.sock" in command
 
 
+def test_docker_runtime_mounts_trajectory_socket(tmp_path: Path) -> None:
+	runtime = DockerRuntime(container_name="test-container", resolved_image="aebench-agent:latest")
+	session = SimpleNamespace(
+		run_spec=TaskConfig(id="test", runtime=RuntimeConfig(mode="docker")),
+		host_workspace=tmp_path,
+		runtime_workspace="/repo",
+		host_refs=None,
+		host_agent_support_dir=tmp_path,
+		runtime_agent_support_dir="/run/aebench-agent",
+		host_command_socket_dir=tmp_path / "socket",
+		runtime_command_socket_dir="/run/aebench",
+	)
+
+	command = runtime._docker_run_command(session)  # type: ignore[arg-type]
+	assert f"{tmp_path / 'socket'}:/run/aebench" in command
+
+
 def test_docker_stop_preserves_container_until_cleanup(
 	monkeypatch: pytest.MonkeyPatch,
 ) -> None:

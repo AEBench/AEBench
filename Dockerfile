@@ -1,3 +1,10 @@
+FROM rust:1.90-bookworm AS aeshell-builder
+
+WORKDIR /build/aeshell
+COPY src/runtime/shim/Cargo.toml src/runtime/shim/Cargo.lock ./
+COPY src/runtime/shim/src/main.rs src/main.rs
+RUN cargo build --release --locked
+
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -54,5 +61,8 @@ RUN groupadd --gid 1000 agent \
  && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash agent \
  && printf 'agent ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/aebench-agent \
  && chmod 0440 /etc/sudoers.d/aebench-agent
+
+RUN mkdir -p /usr/lib/aebench && mv /bin/bash /usr/lib/aebench/bash.real
+COPY --from=aeshell-builder /build/aeshell/target/release/aeshell /bin/bash
 
 CMD ["bash"]

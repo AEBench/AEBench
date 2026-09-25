@@ -410,13 +410,13 @@ async def process_connection(
 			pass
 
 
-async def serve(output_dir: str, workspace_dir: str) -> None:
+async def serve(output_dir: str, workspace_dir: str, socket_path: str = SOCKET_PATH) -> None:
 	os.makedirs(output_dir, exist_ok=True)
 	log_path = os.path.join(output_dir, LOG_BASENAME)
 	run_id = os.path.basename(os.path.normpath(output_dir))
 
 	try:
-		os.unlink(SOCKET_PATH)
+		os.unlink(socket_path)
 	except FileNotFoundError:
 		pass
 	register(CommandTiming())
@@ -429,9 +429,9 @@ async def serve(output_dir: str, workspace_dir: str) -> None:
 	) -> None:
 		await process_connection(reader, writer, output_dir, run_id)
 
-	server = await asyncio.start_unix_server(handle_connection, path=SOCKET_PATH)
+	server = await asyncio.start_unix_server(handle_connection, path=socket_path)
 
-	print(f"listening on {SOCKET_PATH}")
+	print(f"listening on {socket_path}")
 	print(f"journal at {log_path}")
 
 	# One broker remains available for the duration of the agent invocation.
@@ -439,12 +439,12 @@ async def serve(output_dir: str, workspace_dir: str) -> None:
 		await server.serve_forever()
 
 
-def main(output_dir: str, workspace_dir: str) -> None:
-	asyncio.run(serve(output_dir, workspace_dir))
+def main(output_dir: str, workspace_dir: str, socket_path: str = SOCKET_PATH) -> None:
+	asyncio.run(serve(output_dir, workspace_dir, socket_path))
 
 
 if __name__ == "__main__":
-	if len(sys.argv) != 3:
-		raise SystemExit("usage: monitor.py <run-output-dir> <workspace-dir>")
+	if len(sys.argv) not in {3, 4}:
+		raise SystemExit("usage: monitor.py <run-output-dir> <workspace-dir> [socket-path]")
 
-	main(sys.argv[1], sys.argv[2])
+	main(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) == 4 else SOCKET_PATH)

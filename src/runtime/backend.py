@@ -137,6 +137,10 @@ class DockerRuntime:
 		]
 		if session.host_refs is not None:
 			cmd.extend(["-v", f"{session.host_refs}:/refs:ro"])
+		host_socket_dir = getattr(session, "host_command_socket_dir", None)
+		runtime_socket_dir = getattr(session, "runtime_command_socket_dir", None)
+		if host_socket_dir and runtime_socket_dir:
+			cmd.extend(["-v", f"{host_socket_dir}:{runtime_socket_dir}"])
 		if session.run_spec.artifact_requirements.docker:
 			cmd.extend(["-v", "/var/run/docker.sock:/var/run/docker.sock"])
 		if self.gpu or bool(getattr(session.run_spec.runtime, "gpu", False)):
