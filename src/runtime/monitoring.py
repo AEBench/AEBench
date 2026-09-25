@@ -156,6 +156,7 @@ class BrokerProcess:
 		process, self._process = self._process, None
 		if process is not None:
 			process.kill()
+			process.wait()
 
 		socket_dir, self.socket_dir = self.socket_dir, None
 		if socket_dir is not None:

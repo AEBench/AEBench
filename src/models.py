@@ -399,6 +399,7 @@ class RunOptions(_Model):
 	skip_incompatible: bool = False
 	monitor_commands: bool = False
 	monitor_socket_root: str | None = None
+	trajectory_audit: bool = False
 	oracle_fail_fast: bool = False
 
 

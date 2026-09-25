@@ -231,6 +231,13 @@ def test_audit_trace_parser_accepts_explicit_instructions_file() -> None:
 	assert args.instructions == "README.md"
 
 
+def test_case_run_parser_accepts_trajectory_audit() -> None:
+	args = _build_parser().parse_args(
+		["case", "run", "example", "--agent", "codex", "--model", "test", "--trajectory-audit"]
+	)
+	assert args.trajectory_audit is True
+
+
 def test_multi_batch_verdicts_are_combined_deterministically() -> None:
 	records = [_record(index) for index in range(8)]
 	expected_batch_count = len(batch_trace(normalize_trace(records), max_bytes=1800))

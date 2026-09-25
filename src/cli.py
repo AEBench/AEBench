@@ -125,6 +125,11 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
 	)
 	parser.add_argument("--cleanup-workspace", action="store_true")
 	parser.add_argument(
+		"--trajectory-audit",
+		action="store_true",
+		help="Record and audit the agent's shell-command trajectory after the run.",
+	)
+	parser.add_argument(
 		"--preserve-runtime",
 		action="store_true",
 		help="Preserve the post-agent Docker snapshot after the run.",
@@ -415,6 +420,7 @@ def _build_context() -> AppState:
 
 
 def _run_options(args: argparse.Namespace) -> RunOptions:
+	trajectory_audit = bool(getattr(args, "trajectory_audit", False))
 	return RunOptions(
 		agent_type=getattr(args, "agent", None),
 		interactive=bool(getattr(args, "interactive", False)),
@@ -426,8 +432,9 @@ def _run_options(args: argparse.Namespace) -> RunOptions:
 		cleanup_workspace=bool(getattr(args, "cleanup_workspace", False)),
 		preserve_runtime=bool(getattr(args, "preserve_runtime", False)),
 		skip_incompatible=bool(getattr(args, "skip_incompatible", False)),
-		monitor_commands=bool(getattr(args, "monitor_commands", False)),
+		monitor_commands=bool(getattr(args, "monitor_commands", False)) or trajectory_audit,
 		monitor_socket_root=getattr(args, "socket_dir", None),
+		trajectory_audit=trajectory_audit,
 		oracle_fail_fast=bool(getattr(args, "oracle_fail_fast", False)),
 	)
 
