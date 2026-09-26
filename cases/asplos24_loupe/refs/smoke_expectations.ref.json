@@ -3,6 +3,7 @@
   "loupedb_commit": "a076cf972d7d7bacc73693455d979a9522ed2c5a",
   "dockerfile_md5": "126e629dc544b4695f12ed602f6902aa",
   "input_sha256": {
+    "Dockerfile.aebench-compat": "cfa1eb51035d6bf3dc6a04a7244137f043ec072bb9d4df75544072d4eae293db",
     "docker/Dockerfile.loupe-base": "3e245fb35c42aa150e3ebda8be6af46c05cf07f72fea9f473fbd35347c52cd9a",
     "examples/E1/Dockerfile.nginx": "be42c20ee2a1efc2cd01e63eb65a66c564d3255a93b18794f98076c5e4fb438c",
     "examples/E1/dockerfile_data/nginx-test.sh": "9a4713468bd9f20de85ba2374e248e23335040cebe42fbfb11d770fea5996237"

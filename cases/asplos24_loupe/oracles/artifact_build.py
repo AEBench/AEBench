@@ -25,4 +25,17 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 				cmd=("docker", "image", "inspect", "loupe-base:latest"),
 				timeout_seconds=60.0,
 			),
+			self.command_check(
+				name="compatible_static_analysis_packages",
+				cmd=(
+					"docker",
+					"run",
+					"--rm",
+					"loupe-base:latest",
+					"python3",
+					"-c",
+					"import capstone, lief; assert hasattr(lief, 'EXE_FORMATS'); assert capstone.__version__ == '4.0.2'",
+				),
+				timeout_seconds=60.0,
+			),
 		)

@@ -16,7 +16,7 @@ venue = "ASPLOS 2024"
 id = "asplos24_loupe"
 
 [run.instructions]
-path = "README.md"
+path = "AEBENCH.md"
 required_evidence = [
   "Keep the generated database under loupedb/aebench-nginx/benchmark-wrk/<dockerfile-hash>/, including data/dyn.csv, data/static_binary.csv, cmd.txt, and explore.logs.",
   "Save the full generate command output to aebench-results/experiment.log.",
@@ -63,4 +63,6 @@ source_type = "git"
 url = "https://github.com/unikraft/loupe.git"
 ref = "07ca3d25e32ebb2205c38735255084bfb8dab798"
 requested_ref = "asplos24-ae-v1"
-resolved_at = "2023-09-27T20:21:37+00:00"
+resolved_at = "2023-09-28T10:13:44+00:00"
+artifact_mode = "overlay"
+overlay_artifact = true

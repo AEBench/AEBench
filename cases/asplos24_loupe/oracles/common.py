@@ -92,7 +92,7 @@ class PinnedInputsCheck(BaseCheck):
 					return CheckResult.failure(f"pinned input was modified: {relative}")
 		except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
 			return CheckResult.failure(f"failed to verify pinned inputs: {exc}")
-		return CheckResult.success("Loupe commit and three experiment inputs match the reference")
+		return CheckResult.success("Loupe commit and four experiment inputs match the reference")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

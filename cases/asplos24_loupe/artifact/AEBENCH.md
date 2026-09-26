@@ -31,7 +31,15 @@ python3 -m venv .venv
 .venv/bin/python -m pip install 'GitPython==3.1.40' 'setuptools==75.8.2'
 make src/seccomp-run
 make docker 2>&1 | tee build.log
+docker build --tag loupe-base:latest -f Dockerfile.aebench-compat . \
+  2>&1 | tee -a build.log
 ```
+
+The final build adds only an AEBench compatibility layer. The 2023 base
+Dockerfile leaves its Python packages unpinned, and current package indexes
+install LIEF and Capstone releases with incompatible APIs. The supplied
+`Dockerfile.aebench-compat` restores the contemporary `0.13.2` and `4.0.2`
+versions without changing upstream source.
 
 Clone the artifact-evaluation database at its matching pinned tag. Loupe only
 uses it as a Git-backed results store; the new `aebench-nginx` entry is not
