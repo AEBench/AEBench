@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "wrapper_commit": "d26799fb0f4b0d2bc2cf7b6ad0e1b6afc732b9b4",
+  "submodules": {
+    "codeql-experimentation": "6a0341d3c50cf3caf90c2fc8dde3b364e2422954",
+    "codeql-experimentation/cpp/websubmit": "09a45f7cdab4b6a481947867c8fd820a68bafcb0",
+    "paralegal": "5e6e565d566eddccae61c4a81f396f3c8e261b77",
+    "paralegal-bench": "ff1c2a6ae4e54a78d21a7cd6a6be1f35e119cbe1",
+    "paralegal-bench/paralegal-compiler": "cf99eddde94d85c39837f34c7732b8138eb7c524"
+  }
+}
