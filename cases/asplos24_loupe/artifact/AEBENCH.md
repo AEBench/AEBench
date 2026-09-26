@@ -77,7 +77,7 @@ the dynamic analysis is quiet; its two replicas may take a long time.
 Query the newly generated database entry:
 
 ```bash
-.venv/bin/python ./loupe search \
+.venv/bin/python ./loupe --allow-dirty-db search \
   --show-usage \
   -db ./loupedb \
   -a aebench-nginx \
