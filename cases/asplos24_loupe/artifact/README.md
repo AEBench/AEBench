@@ -28,7 +28,7 @@ base image:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install 'GitPython==3.1.40'
+.venv/bin/python -m pip install 'GitPython==3.1.40' 'setuptools==75.8.2'
 make src/seccomp-run
 make docker 2>&1 | tee build.log
 ```

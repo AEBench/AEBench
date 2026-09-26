@@ -21,8 +21,12 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 				min_version=(3, 10, 0),
 			),
 			self.command_check(
-				name="gitpython_importable",
-				cmd=(str(python), "-c", "import git; print(git.__version__)"),
+				name="python_dependencies_importable",
+				cmd=(
+					str(python),
+					"-c",
+					"import distutils, git, setuptools; print(git.__version__, setuptools.__version__)",
+				),
 				timeout_seconds=30.0,
 			),
 			self.path_check(
