@@ -1,0 +1,66 @@
+id = "asplos24_loupe"
+
+[case_brief]
+core_claim = "Build the pinned Loupe artifact and reproduce its supplied Nginx/wrk example, using dynamic syscall analysis to distinguish required syscalls from calls that tolerate stubbing or faking."
+acceptable_evidence = "A fresh Loupe run produces complete 0-334 dynamic and static syscall tables for the pinned Nginx/wrk example, with valid non-trivial classifications, two replica logs, and a successful database query."
+allowed_tolerance = "The exact syscall categories may vary with the host kernel and container runtime. The oracle requires complete tables, essential Nginx process syscalls, both required and replaceable calls, pinned inputs, and complete execution evidence; it does not compare exact category sets or performance."
+
+[paper]
+url = "https://arxiv.org/pdf/2309.15996v1"
+sha256 = "8127e1faf1b970964a5bd74af5709710fba19224eaa41dc86a05735f923842e6"
+title = "Loupe: Driving the Development of OS Compatibility Layers"
+version = "arXiv:2309.15996v1"
+venue = "ASPLOS 2024"
+
+[run]
+id = "asplos24_loupe"
+
+[run.instructions]
+path = "README.md"
+required_evidence = [
+  "Keep the generated database under loupedb/aebench-nginx/benchmark-wrk/<dockerfile-hash>/, including data/dyn.csv, data/static_binary.csv, cmd.txt, and explore.logs.",
+  "Save the full generate command output to aebench-results/experiment.log.",
+  "Save the post-run loupe search --show-usage output to aebench-results/search.log.",
+]
+
+[run.runtime]
+mode = "docker"
+image = "aebench-agent:latest"
+timeout_ms = 14400000
+gpu = false
+interactive = false
+
+[run.artifact_requirements]
+docker = true
+compose = false
+
+[run.artifact_requirements.hardware]
+memory_gb = 16
+cpu_count = 4
+disk_gb = 30
+network = true
+notes = "Linux x86_64 with a Docker daemon capable of privileged containers is required. More than 8 CPUs is recommended by upstream for stable performance, but this bounded case does not score performance."
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "continue"
+placeholder = false
+notes = "Bounded first slice: the supplied Nginx/wrk example only. This does not reproduce the 100+ application corpus, paper plots, support-plan tables, or performance experiments."
+
+[oracle.phase_targets]
+env_setup = "local"
+artifact_build = "local"
+benchmark_prep = "local"
+experiment_runs = "local"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/unikraft/loupe.git"
+ref = "07ca3d25e32ebb2205c38735255084bfb8dab798"
+requested_ref = "asplos24-ae-v1"
+resolved_at = "2023-09-27T20:21:37+00:00"
