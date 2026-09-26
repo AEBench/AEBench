@@ -85,7 +85,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 			(
 				"cargo-paralegal-flow",
 				("cargo-paralegal-flow", "--help"),
-				artifact_root,
+				artifact_root / "paralegal",
 			),
 			(
 				"griswold",

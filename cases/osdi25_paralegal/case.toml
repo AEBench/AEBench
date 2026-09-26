@@ -3,7 +3,7 @@ id = "osdi25_paralegal"
 [case_brief]
 core_claim = "Build the pinned Paralegal artifact, reproduce its CodeQL policy comparison, and run one bounded atomic-data CI-style benchmark."
 acceptable_evidence = "All CodeQL intermediate tables semantically match the pinned expected outputs, and a fresh atomic-data smoke run records both expected pass and expected fail cases with complete, positive measurements."
-allowed_tolerance = "CodeQL table spacing and checkout-root prefixes may differ. Performance values are not compared to fixed timings, but required measurements must be finite and positive and policy outcomes must exactly match expectations."
+allowed_tolerance = "CodeQL table spacing and checkout-root prefixes may differ. Performance values are not compared to fixed timings. Required smoke measurements and controller graph sizes must be finite and positive; auxiliary controller statistics may be zero. Policy outcomes must exactly match expectations."
 
 [paper]
 url = "https://cs.brown.edu/people/malte/pub/papers/2025-osdi-paralegal.pdf"

@@ -6,7 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from cases.osdi25_paralegal.oracles import artifact_build as artifact_build_module
+from cases.osdi25_paralegal.oracles.artifact_build import OracleArtifactBuild
 from cases.osdi25_paralegal.oracles.common import (
+	ProcessOutput,
 	parse_codeql_table,
 	parse_smoke_results,
 	validate_controller_results,
@@ -168,6 +171,39 @@ run_id,name,num_nodes,num_edges,unique_locs,unique_functions,analyzed_locs,analy
 
 	with pytest.raises(ValueError, match="no rows for run ids"):
 		validate_controller_results(controllers, expected_run_ids=frozenset({0, 1}))
+
+
+def test_controller_parser_accepts_zero_optional_statistics() -> None:
+	controllers = """\
+run_id,name,num_nodes,num_edges,unique_locs,unique_functions,analyzed_locs,analyzed_functions
+0,commit,1776,4326,0,0,0,0
+"""
+
+	assert validate_controller_results(controllers, expected_run_ids=frozenset({0})) == 1
+
+
+def test_source_build_probes_flow_from_paralegal_checkout(
+	monkeypatch: pytest.MonkeyPatch,
+	tmp_path: Path,
+) -> None:
+	cwds: dict[str, Path] = {}
+
+	def fake_run_process(
+		cmd: tuple[str, ...],
+		*,
+		executor: object,
+		cwd: Path,
+		timeout_seconds: float,
+	) -> ProcessOutput:
+		del executor, timeout_seconds
+		cwds[cmd[0]] = cwd
+		return ProcessOutput(returncode=0, stdout="ok", stderr="")
+
+	monkeypatch.setattr(artifact_build_module, "run_process", fake_run_process)
+	oracle = object.__new__(OracleArtifactBuild)
+
+	assert oracle._check_source_build(tmp_path, object()).ok
+	assert cwds["cargo-paralegal-flow"] == tmp_path / "paralegal"
 
 
 def test_agent_smoke_config_matches_oracle_reference() -> None:

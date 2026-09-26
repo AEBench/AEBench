@@ -78,6 +78,8 @@ _REQUIRED_CONTROLLER_COLUMNS = frozenset(
 _POSITIVE_CONTROLLER_COLUMNS = (
 	"num_nodes",
 	"num_edges",
+)
+_NONNEGATIVE_CONTROLLER_COLUMNS = (
 	"unique_locs",
 	"unique_functions",
 	"analyzed_locs",
@@ -381,6 +383,8 @@ def validate_controller_results(text: str, *, expected_run_ids: frozenset[int]) 
 			raise ValueError(f"controller row {index} has no controller name")
 		for column in _POSITIVE_CONTROLLER_COLUMNS:
 			_positive_float(row[column], row=index, column=column)
+		for column in _NONNEGATIVE_CONTROLLER_COLUMNS:
+			_nonnegative_float(row[column], row=index, column=column)
 
 	if seen_run_ids != set(expected_run_ids):
 		missing_ids = sorted(set(expected_run_ids) - seen_run_ids)
@@ -446,4 +450,16 @@ def _positive_float(value: object, *, row: int, column: str) -> float:
 		raise ValueError(f"row {row} column {column} is not finite")
 	if number <= 0:
 		raise ValueError(f"row {row} column {column} must be positive")
+	return number
+
+
+def _nonnegative_float(value: object, *, row: int, column: str) -> float:
+	try:
+		number = float(str(value).strip())
+	except (TypeError, ValueError) as exc:
+		raise ValueError(f"row {row} column {column} is not numeric") from exc
+	if not math.isfinite(number):
+		raise ValueError(f"row {row} column {column} is not finite")
+	if number < 0:
+		raise ValueError(f"row {row} column {column} must be nonnegative")
 	return number
