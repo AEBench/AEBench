@@ -89,7 +89,30 @@ def test_socket_path_beyond_sun_path_is_rejected_before_binding(tmp_path: Path) 
 		broker.start()
 
 	assert f"AF_UNIX allows {MAX_SOCKET_PATH_BYTES}" in str(excinfo.value)
-	broker.stop()
+	# A failed start cleans up after itself; the caller need not call stop().
+	assert list((tmp_path / ("d" * 120)).iterdir()) == []
+	assert broker.socket_dir is None
+
+
+def test_a_start_that_fails_to_spawn_leaves_nothing_behind(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	# Fails late: the socket is already bound and chmodded when the spawn fails.
+	def refuse(*_args: object, **_kwargs: object) -> None:
+		raise OSError("fork failed")
+
+	monkeypatch.setattr(monitoring.subprocess, "Popen", refuse)
+	broker = BrokerProcess(
+		trace_dir=tmp_path / "trace",
+		workspace_dir=tmp_path,
+		socket_root=tmp_path / "sockets",
+	)
+
+	with pytest.raises(OSError, match="fork failed"):
+		broker.start()
+
+	assert list((tmp_path / "sockets").iterdir()) == []
+	assert broker.socket_dir is None
 
 
 def test_verify_probes_as_the_agent_user(tmp_path: Path) -> None:

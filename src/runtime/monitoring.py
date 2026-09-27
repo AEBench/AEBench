@@ -101,42 +101,46 @@ class BrokerProcess:
 		# Traversable so the container's agent can reach the socket, but not
 		# listable, and the generated name is unguessable.
 		self.socket_dir = Path(tempfile.mkdtemp(prefix="mon-", dir=str(self._socket_root)))
-		self.socket_dir.chmod(0o711)
+		try:
+			self.socket_dir.chmod(0o711)
 
-		socket_path = self.socket_dir / COMMAND_SOCKET_BASENAME
-		length = len(os.fsencode(str(socket_path)))
-		if length > MAX_SOCKET_PATH_BYTES:
-			raise RuntimeError(
-				f"the command socket path is {length} bytes and AF_UNIX allows "
-				f"{MAX_SOCKET_PATH_BYTES}; set AEBENCH_COMMAND_SOCKET_ROOT to a shorter path"
-			)
-
-		with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
-			listener.bind(str(socket_path))
-			listener.listen(_SOCKET_BACKLOG)
-			# bind() applies the umask, so the socket lands at 0755 and connect(2)
-			# needs write permission. The container's agent is uid 1000 and the
-			# host invoker generally is not.
-			os.chmod(socket_path, 0o666)
-
-			# The child keeps its own dup of the log, so the parent's copy closes
-			# with the block.
-			with (self.trace_dir / BROKER_LOG_BASENAME).open("wb") as log:
-				self._process = subprocess.Popen(
-					[
-						sys.executable,
-						str(BROKER_SCRIPT),
-						str(self.trace_dir),
-						str(self.workspace_dir),
-						str(socket_path),
-						str(listener.fileno()),
-					],
-					stdin=subprocess.DEVNULL,
-					stdout=log,
-					stderr=subprocess.STDOUT,
-					# Keeps the descriptor open across the fork, at the same number.
-					pass_fds=(listener.fileno(),),
+			socket_path = self.socket_dir / COMMAND_SOCKET_BASENAME
+			length = len(os.fsencode(str(socket_path)))
+			if length > MAX_SOCKET_PATH_BYTES:
+				raise RuntimeError(
+					f"the command socket path is {length} bytes and AF_UNIX allows "
+					f"{MAX_SOCKET_PATH_BYTES}; set AEBENCH_COMMAND_SOCKET_ROOT to a shorter path"
 				)
+
+			with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+				listener.bind(str(socket_path))
+				listener.listen(_SOCKET_BACKLOG)
+				# bind() applies the umask, so the socket lands at 0755 and connect(2)
+				# needs write permission. The container's agent is uid 1000 and the
+				# host invoker generally is not.
+				os.chmod(socket_path, 0o666)
+
+				# The child keeps its own dup of the log, so the parent's copy closes
+				# with the block.
+				with (self.trace_dir / BROKER_LOG_BASENAME).open("wb") as log:
+					self._process = subprocess.Popen(
+						[
+							sys.executable,
+							str(BROKER_SCRIPT),
+							str(self.trace_dir),
+							str(self.workspace_dir),
+							str(socket_path),
+							str(listener.fileno()),
+						],
+						stdin=subprocess.DEVNULL,
+						stdout=log,
+						stderr=subprocess.STDOUT,
+						# Keeps the descriptor open across the fork, at the same number.
+						pass_fds=(listener.fileno(),),
+					)
+		except BaseException:
+			self.stop()
+			raise
 
 		logger.info("command broker listening on %s", socket_path)
 
