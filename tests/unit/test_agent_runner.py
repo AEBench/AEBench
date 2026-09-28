@@ -156,6 +156,7 @@ def test_docker_agent_runtime_matches_host_socket_group(
 
 	assert len(commands) == 1
 	assert commands[0][:3] == ["sh", "-e", "-c"]
+	assert f"usermod --non-unique --uid {os.getuid()} agent;" in commands[0][3]
 	assert 'socket="/var/run/docker.sock"' in commands[0][3]
 	assert 'usermod -aG "$socket_group" agent' in commands[0][3]
 
