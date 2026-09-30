@@ -156,10 +156,6 @@ class BrokerProcess:
 		process, self._process = self._process, None
 		if process is not None:
 			process.kill()
-			try:
-				process.wait(timeout=_BROKER_STOP_TIMEOUT_SECONDS)
-			except subprocess.TimeoutExpired:
-				logger.warning("the command broker did not exit after SIGKILL")
 
 		socket_dir, self.socket_dir = self.socket_dir, None
 		if socket_dir is not None:
