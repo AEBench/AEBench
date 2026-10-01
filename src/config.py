@@ -7,6 +7,7 @@ from typing import Mapping
 
 from constants import (
 	DEFAULT_DOCKER_IMAGE,
+	DEFAULT_MONITOR_SOCKET_ROOT_DIR,
 	DEFAULT_OUTPUTS_DIR,
 	DEFAULT_PROMPT_PROFILE,
 	DEFAULT_TIMEOUT_MS,
@@ -22,6 +23,7 @@ class Config:
 	default_prompt_profile: str
 	default_outputs_dir: str
 	tmp_workspace_root: Path
+	command_socket_root: Path
 	preserve_failed_workspace: bool
 	log_level: LogLevel
 	log_renderer: LogRenderer
@@ -47,6 +49,10 @@ def resolve_settings(
 		env.get("AEBENCH_DEFAULT_OUTPUTS_DIR", DEFAULT_OUTPUTS_DIR),
 		base=project_state.root,
 	)
+	command_socket_root = _resolve_path(
+		env.get("AEBENCH_COMMAND_SOCKET_ROOT", DEFAULT_MONITOR_SOCKET_ROOT_DIR),
+		base=project_state.root,
+	)
 
 	return Config(
 		default_timeout_ms=int(env.get("AEBENCH_DEFAULT_TIMEOUT_MS", DEFAULT_TIMEOUT_MS)),
@@ -54,6 +60,7 @@ def resolve_settings(
 		default_prompt_profile=env.get("AEBENCH_DEFAULT_PROMPT_PROFILE", DEFAULT_PROMPT_PROFILE),
 		default_outputs_dir=str(default_outputs_dir),
 		tmp_workspace_root=tmp_workspace_root,
+		command_socket_root=command_socket_root,
 		preserve_failed_workspace=_bool_env(env, "AEBENCH_PRESERVE_FAILED_WORKSPACE", False),
 		log_level=LogLevel(
 			env.get("AEBENCH_LOG_LEVEL", (config.logging.level or LogLevel.INFO).value)

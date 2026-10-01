@@ -268,3 +268,150 @@ def test_docker_case_scores_stopped_snapshot_not_live_session(
 		"cleanup",
 	]
 	assert result.runtime_result.runtime.saved_image is None
+
+
+def test_monitored_case_orders_the_broker_and_shim(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""Pins the ordering the monitoring layer depends on.
+
+	The broker must bind before the container exists, or a shell can reach a
+	socket that is not listening. The shim must be installed and proved before
+	the agent runs, or a broken mount yields an empty trace and no error. The
+	broker must stop before the container does, so no command is left in
+	flight against a socket that is going away.
+	"""
+	project = tmp_path / "project"
+	shutil.copytree(_FIXTURE, project)
+	manifest = project / "bundles" / "mock_apt_case" / "case.toml"
+	manifest.write_text(
+		manifest.read_text(encoding="utf-8").replace(
+			'mode = "local"\ntimeout_ms',
+			'mode = "docker"\nimage = "aebench-agent:latest"\ntimeout_ms',
+		),
+		encoding="utf-8",
+	)
+	state = load_project_config(project)
+	context = AppState(project_state=state, settings=resolve_settings(state))
+	events: list[str] = []
+
+	class FakeDockerRuntime:
+		path_separator = ":"
+		saved_image: str | None = None
+
+		def prepare(self, _session: Any) -> None:
+			events.append("container-start")
+
+		def snapshot(self, _session: Any) -> str:
+			self.saved_image = "aebench-oracle-snapshots:test"
+			events.append("snapshot")
+			return self.saved_image
+
+		def stop(self, _session: Any) -> None:
+			events.append("container-stop")
+
+		def cleanup(self, _session: Any) -> None:
+			events.append("cleanup")
+
+		def runtime_result(self, _session: Any) -> RuntimeInfo:
+			return RuntimeInfo(mode=RuntimeMode.DOCKER, saved_image=self.saved_image)
+
+		def run_process(self, cmd: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
+			return subprocess.CompletedProcess(cmd, 0, "", "")
+
+	class FakeBroker:
+		def __init__(self, *, trace_dir: Path, workspace_dir: Path, socket_root: Path) -> None:
+			self.trace_dir = trace_dir
+			self.trace_path = trace_dir / "commands.jsonl"
+			self.socket_dir = socket_root / "mon-test"
+			self.workspace_dir = workspace_dir
+
+		def start(self) -> None:
+			events.append("broker-start")
+
+		def stop(self) -> None:
+			events.append("broker-stop")
+
+		def command_count(self) -> int:
+			return 7
+
+	runtime = FakeDockerRuntime()
+	monkeypatch.setattr("runtime.case_runner.get_runtime", lambda *_a, **_k: runtime)
+	monkeypatch.setattr("runtime.case_runner.prepare_agent_runtime", lambda _r: None)
+	monkeypatch.setattr("runtime.case_runner.BrokerProcess", FakeBroker)
+	monkeypatch.setattr(
+		"runtime.case_runner.install_shim", lambda _r: events.append("shim-install")
+	)
+	monkeypatch.setattr(
+		"runtime.case_runner.verify_monitoring",
+		lambda _runtime, _broker: events.append("shim-probe"),
+	)
+
+	captured: dict[str, Any] = {}
+
+	def fake_agent(*_args: Any, model: str, shell_path: str, **_kwargs: Any) -> AgentResult:
+		events.append("agent")
+		captured["shell_path"] = shell_path
+		return AgentResult(model=model, exit_code=0)
+
+	monkeypatch.setattr("runtime.case_runner.run_agent", fake_agent)
+
+	class StubOracleRunner:
+		def execute(self, _case_root: Path, **_kwargs: Any) -> OracleResult:
+			events.append("oracle")
+			return OracleResult(status=OracleStatus.SUCCESS, score=4)
+
+	monkeypatch.setattr("runtime.case_runner.DirectOracleRunner", StubOracleRunner)
+
+	result = run_case(
+		context,
+		project / "bundles" / "mock_apt_case",
+		options=RunOptions(agent_type="codex", model_name="gpt-test", monitor_commands=True),
+		save_path=tmp_path / "output",
+	)
+
+	assert events == [
+		"broker-start",
+		"container-start",
+		"shim-install",
+		"shim-probe",
+		"agent",
+		"broker-stop",
+		"container-stop",
+		"snapshot",
+		"oracle",
+		"cleanup",
+	]
+	# AEBench's own shells bypass the shim; the agent's do not.
+	assert captured["shell_path"] == "/usr/lib/aebench/bash.real"
+
+	monitor = result.runtime_result.command_monitor
+	assert monitor is not None
+	assert monitor.command_count == 7
+	# The trace lives in a per-case store keyed by a token, not in the run dir.
+	trace_dir = Path(monitor.trace_path).parent
+	assert trace_dir.parent.name == "monitor"
+	assert trace_dir.name == monitor.run_token
+	assert trace_dir != Path(result.runtime_result.output_dir)
+
+
+def test_monitoring_requires_docker(tmp_path: Path) -> None:
+	# The fixture case runs locally; monitoring it would mean replacing the
+	# shell on the developer's own machine.
+	project = tmp_path / "project"
+	shutil.copytree(_FIXTURE, project)
+	state = load_project_config(project)
+	context = AppState(project_state=state, settings=resolve_settings(state))
+
+	with pytest.raises(ValueError, match="requires runtime.mode = docker"):
+		run_case(
+			context,
+			project / "bundles" / "mock_apt_case",
+			options=RunOptions(
+				agent_type="codex",
+				model_name="gpt-test",
+				monitor_commands=True,
+				allow_unsafe_local=True,
+			),
+			save_path=tmp_path / "output",
+		)

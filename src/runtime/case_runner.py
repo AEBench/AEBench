@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import secrets
 import shutil
 import traceback
 from collections.abc import Callable
@@ -19,6 +21,7 @@ from models import (
 	AgentResult,
 	CaseRunResult,
 	CaseStatus,
+	CommandMonitorInfo,
 	OracleResult,
 	OracleStatus,
 	PromptArgs,
@@ -42,10 +45,18 @@ from .agent_runner import (
 )
 from .backend import BenchRuntime, get_runtime
 from .cases import task_from_case
+from .monitoring import (
+	REAL_SHELL_PATH,
+	RUNTIME_SOCKET_DIR,
+	BrokerProcess,
+	install_shim,
+	verify_monitoring,
+)
 from .oracle_runner import DirectOracleRunner
 from .reporting import (
 	append_run_result,
 	case_output_dir,
+	monitor_trace_dir,
 	read_agent_summary,
 	task_paths_for,
 	write_case_result,
@@ -54,6 +65,8 @@ from .reporting import (
 )
 from .session import RunSession
 from .workspace import cleanup_workspace, create_workspace, refs_dir_for_case_manifest
+
+logger = logging.getLogger(__name__)
 
 
 class _CaseRunner:
@@ -77,12 +90,15 @@ class _CaseRunner:
 		self.agent_support_dir: Path | None = None
 		self.runtime: BenchRuntime | None = None
 		self.session: RunSession | None = None
+		self.monitor: BrokerProcess | None = None
+		self.monitor_info: CommandMonitorInfo | None = None
 
 		self.error: str | None = None
 		self.interrupted: KeyboardInterrupt | SystemExit | None = None
 		self._pipeline_failed = False
 		self._runtime_cleanup_done = False
 		self._agent_support_cleanup_done = False
+		self._monitor_cleanup_done = False
 
 	def prepare_case(self) -> None:
 		self.case_root = self.case_dir.expanduser().resolve()
@@ -107,12 +123,18 @@ class _CaseRunner:
 			)
 		if self.task.runtime.mode == RuntimeMode.INHERIT:
 			raise ValueError("case execution requires runtime.mode to be local or docker")
+		if self.options.monitor_commands and self.task.runtime.mode != RuntimeMode.DOCKER:
+			raise ValueError(
+				"command monitoring requires runtime.mode = docker; monitoring a local "
+				"run would mean replacing the shell on this machine"
+			)
 
+		self.case_runs_root = self.context.project_state.config.resolve_case_runs_dir(
+			self.context.project_state.root
+		)
 		self.output_dir = case_output_dir(
 			self.case.id,
-			root=self.context.project_state.config.resolve_case_runs_dir(
-				self.context.project_state.root
-			),
+			root=self.case_runs_root,
 			explicit=self.save_path,
 		)
 		if self.on_output_dir is not None:
@@ -202,6 +224,21 @@ class _CaseRunner:
 				workspace=str(self.workspace),
 			)
 
+			# Bound before the container starts, so no shell can ever reach a
+			# socket that is not yet listening.
+			if self.options.monitor_commands:
+				run_token = secrets.token_hex(4)
+				self.monitor = BrokerProcess(
+					trace_dir=monitor_trace_dir(
+						self.case.id,
+						root=self.case_runs_root,
+						run_token=run_token,
+					),
+					workspace_dir=self.workspace,
+					socket_root=self._monitor_socket_root(),
+				)
+				self.monitor.start()
+
 			summary_path = self.workspace / SUMMARY_BASENAME_TEMPLATE.format(
 				safe_id=safe_name(self.case.id)
 			)
@@ -225,10 +262,18 @@ class _CaseRunner:
 				task_paths=self.paths,
 				summary_path=summary_path,
 				runtime_backend=self.runtime,
+				host_command_socket_dir=(None if self.monitor is None else self.monitor.socket_dir),
+				runtime_command_socket_dir=(None if self.monitor is None else RUNTIME_SOCKET_DIR),
 			)
 
 			self.runtime.prepare(self.session)
 			prepare_agent_runtime(self.runtime)
+			if self.monitor is not None:
+				install_shim(self.runtime)
+				# Proves the whole path -- swapped shell, socket mount, permissions --
+				# before the agent starts. Without it a broken mount is invisible: the
+				# shim fails open and the run completes with an empty trace.
+				verify_monitoring(self.runtime, self.monitor)
 			self.prepare_finished = datetime.now(timezone.utc)
 		except (KeyboardInterrupt, SystemExit) as exc:
 			self.interrupted = exc
@@ -264,9 +309,11 @@ class _CaseRunner:
 					runtime_support_dir=session.runtime_agent_support_dir,
 					timeout_seconds=self.task.runtime.timeout_ms / 1000,
 					output_path=self.paths.runner_log_path,
+					shell_path=(REAL_SHELL_PATH if self.monitor is not None else "bash"),
 				)
 			finally:
 				self.agent_finished = datetime.now(timezone.utc)
+				self._finish_monitoring()
 				clear_agent_support_dir(
 					runtime,
 					session.runtime_agent_support_dir,
@@ -324,6 +371,7 @@ class _CaseRunner:
 				self.agent_started,
 				self.agent_finished,
 				self.error,
+				self.monitor_info,
 			)
 			self.oracle_result = DirectOracleRunner().execute(
 				self.case_root,
@@ -382,6 +430,7 @@ class _CaseRunner:
 			self.agent_started,
 			self.agent_finished,
 			self.error,
+			self.monitor_info,
 		)
 		case_result = CaseRunResult(
 			status=_case_status(run_result, self.oracle_result),
@@ -412,6 +461,36 @@ class _CaseRunner:
 
 		return case_result
 
+	def _monitor_socket_root(self) -> Path:
+		"""Returns where the per-run command socket directory is allocated."""
+		if self.options.monitor_socket_root:
+			return Path(self.options.monitor_socket_root).expanduser().resolve()
+		return self.context.settings.command_socket_root
+
+	def _finish_monitoring(self) -> None:
+		"""Stops the broker. Runs from a finally block, so it never raises."""
+		monitor = self.monitor
+		if monitor is None or self._monitor_cleanup_done:
+			return
+		try:
+			try:
+				monitor.stop()
+			except Exception:
+				logger.warning("failed to stop the command broker", exc_info=True)
+			self.monitor_info = CommandMonitorInfo(
+				# The trace directory is keyed by the token.
+				run_token=monitor.trace_dir.name,
+				trace_path=str(monitor.trace_path),
+				command_count=monitor.command_count(),
+			)
+		except BaseException as exc:
+			self._record_error(f"{type(exc).__name__} tearing down command monitoring: {exc}")
+		finally:
+			self._monitor_cleanup_done = True
+
+	def _record_error(self, message: str) -> None:
+		self.error = f"{self.error}; {message}" if self.error else message
+
 	def _cleanup(self) -> None:
 		if not self._runtime_cleanup_done and self.runtime is not None and self.session is not None:
 			try:
@@ -426,6 +505,23 @@ class _CaseRunner:
 					handle.write("\n" + traceback.format_exc())
 			finally:
 				self._runtime_cleanup_done = True
+
+		if not self._monitor_cleanup_done and self.monitor is not None:
+			# Reached when the run failed or was interrupted before the agent
+			# finished. The container may already be gone, so the shell is not
+			# restored here; only the broker and its socket are released.
+			try:
+				self.monitor.stop()
+			except Exception as exc:
+				cleanup_error = f"{type(exc).__name__} stopping the command broker: {exc}"
+				self.error = f"{self.error}; {cleanup_error}" if self.error else cleanup_error
+				with self.paths.infra_log_path.open(
+					"a",
+					encoding="utf-8",
+				) as handle:
+					handle.write("\n" + traceback.format_exc())
+			finally:
+				self._monitor_cleanup_done = True
 
 		if not self._agent_support_cleanup_done and self.agent_support_dir is not None:
 			try:
@@ -494,6 +590,7 @@ def _run_result(
 	agent_started: datetime,
 	agent_finished: datetime,
 	error: str | None,
+	monitor: CommandMonitorInfo | None = None,
 ) -> RunResult:
 	return RunResult(
 		id=case_id,
@@ -513,6 +610,7 @@ def _run_result(
 		runtime=runtime_info,
 		agent_kind=agent,
 		agent=agent_result,
+		command_monitor=monitor,
 		error=error,
 	)
 

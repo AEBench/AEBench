@@ -11,6 +11,7 @@ from constants import (
 	AGENT_SUMMARY_FALLBACK_MAX,
 	INFRA_LOG_BASENAME,
 	LOG_BASENAME_TEMPLATE,
+	MONITOR_DIRNAME,
 	PROGRESS_LOG_BASENAME,
 	PROMPT_BASENAME_TEMPLATE,
 	RENDERED_LOG_BASENAME,
@@ -57,6 +58,16 @@ def case_output_dir(case_id: str, *, root: Path, explicit: Path | None = None) -
 		out = (root / safe_name(case_id) / stamp).resolve()
 	out.mkdir(parents=True, exist_ok=True)
 	return out
+
+
+def monitor_trace_dir(case_id: str, *, root: Path, run_token: str) -> Path:
+	"""Returns the command-trace directory for one monitored run.
+
+	The trace sits beside the run output directories rather than inside one, so it
+	survives an explicit --save-path and stays in a per-case store. Nothing links a
+	run to its trace implicitly: the run result carries the token.
+	"""
+	return (root / safe_name(case_id) / MONITOR_DIRNAME / run_token).resolve()
 
 
 def write_prompt_file(prompt_path: Path, prompt_bundle: PromptBundle) -> None:

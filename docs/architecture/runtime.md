@@ -34,6 +34,72 @@ when the limit expires and `KILL` 30 seconds later. AEBench combines stdout and
 stderr, adds a UTC timestamp to each line, and writes the result to
 `runner_output.log`.
 
+## Command monitoring
+
+`aebench case monitor` runs the same pipeline and additionally records every
+shell the agent starts. It adds these steps:
+
+```text
+start the broker on a per-run unix socket   (before the container exists)
+  -> mount the socket directory read-only at /run/aebench
+  -> swap aeshell over /bin/bash, real bash kept at /usr/lib/aebench/bash.real
+  -> probe the swapped shell as the agent user
+  -> ... agent runs ...
+  -> stop the broker   (before the container stops)
+```
+
+The shim ships in the image but dormant, so `aebench case run` is unaffected
+and both commands use the same image. The broker runs on the host: only the
+socket directory is exposed to the container, and the trace is never mounted.
+
+Ordering is deliberate. The broker binds before the container starts, so no
+shell can reach a socket that is not yet listening. The probe runs as the
+unprivileged `agent` user before the agent does, because the shim fails open by
+design: without it, a wrong socket mode or a missing mount produces a run that
+looks completely normal with an empty trace. The broker is stopped before the
+container is, so no command is left in flight against a socket that is going
+away.
+
+The shim is not removed before the snapshot is committed. It does not need to
+be: with no socket mounted -- which is the situation in the container the
+oracle starts from that snapshot -- the shim execs the preserved real shell
+and passes output and exit status through untouched.
+
+Monitoring requires `runtime.mode = "docker"`. If the shim cannot be installed
+or the probe fails, the run errors out rather than continuing unmonitored.
+
+### What the trace contains
+
+`<case-runs-dir>/<case>/monitor/<run-token>/`:
+
+- `commands.jsonl`: one record per shell invocation, with argv, cwd, exit
+  status, duration, and the names (never the values) of environment variables
+- `stream/<command-id>/{stdout,stderr}.log`: what each command wrote
+- `broker.log`: the broker's own output
+
+The trace sits beside the run output directories rather than inside one, so
+`RunResult.command_monitor` carries the token that links a run to its trace.
+
+### Coverage limits
+
+Read the trace as a record of shell invocations, not of every command:
+
+- **One record per shell, not per command.** `bash -c 'a & b'` is parsed by
+  bash itself and appears as a single record. An agent CLI that reuses one
+  long-lived shell for a whole session produces correspondingly few records.
+- **`/bin/sh` is dash and is not shimmed**, so `sh -c` and most `make` recipe
+  lines are invisible.
+- **Nested containers are invisible.** A case with
+  `artifact_requirements.docker = true` can start its own containers, which
+  have neither the shim nor the socket.
+- **The agent can defeat it.** It runs with passwordless sudo and could put
+  the original bash back itself, or delete the preserved copy -- which would
+  leave the snapshot without a working shell. Nothing currently checks for
+  this.
+- **The file-effects monitor walks the workspace** before and after every
+  command. On a large artifact tree it reports `skipped` after spending its
+  budget, so treat its absence as normal.
+
 ## Oracle scoring
 
 For Docker runs, AEBench stops the agent container and commits its filesystem changes when `commit_before_oracle = true`. It then passes the committed image and host workspace to the oracle runtime registry. The `task` oracle target starts from the committed image. It does not share the agent process tree. Local targets and targets defined in `case.toml` use the evaluator target registry.
@@ -60,3 +126,8 @@ The case output directory includes:
 - `oracle_result.json`: four-phase score
 - `case_result.json`: combined case result
 - `<case>_report.md`: run report
+
+For `aebench case monitor`, the command trace is written to
+`<case-runs-dir>/<case>/monitor/<run-token>/` instead, outside the run output
+directory. `RunResult.command_monitor` records the token and the resolved
+path.

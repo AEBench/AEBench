@@ -330,6 +330,19 @@ class RuntimeInfo(_Model):
 	container_stopped: bool = False
 
 
+class CommandMonitorInfo(_Model):
+	"""Where a monitored run's command trace landed, and what reached it.
+
+	The trace is stored per case under a run token rather than inside the run
+	output directory, so this block is the only link between a run and its
+	trace.
+	"""
+
+	run_token: str
+	trace_path: str
+	command_count: int = 0
+
+
 class RunResult(_Model):
 	id: str
 	status: TaskStatus
@@ -345,6 +358,7 @@ class RunResult(_Model):
 	runtime: RuntimeInfo
 	agent_kind: str = "unknown"
 	agent: AgentResult
+	command_monitor: CommandMonitorInfo | None = None
 	error: str | None = None
 
 	@property
@@ -382,6 +396,8 @@ class RunOptions(_Model):
 	prompt_append: str | None = None
 	cleanup_workspace: bool = False
 	skip_incompatible: bool = False
+	monitor_commands: bool = False
+	monitor_socket_root: str | None = None
 
 
 class UpstreamSourceType(str, Enum):

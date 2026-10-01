@@ -169,7 +169,38 @@ If a case sets `[run.runtime] mode = "local"`, add `--allow-unsafe-local`.
 This runs agent commands directly on the Chameleon instance. Use either option
 only on a disposable instance.
 
-## 6. Unavailable Runner Commands
+## 6. Record the Agent's Commands
+
+`aebench case monitor` takes the same options as `case run` and additionally
+records every shell the agent starts:
+
+```bash
+uv run aebench case monitor osdi24_kondo \
+  --agent codex_non_api \
+  --model gpt-5.5
+```
+
+It prints where the trace landed and how many commands reached the broker:
+
+```text
+Command trace: /home/cc/.cache/aebench/case-runs/osdi24_kondo/monitor/9f2c1ab4/commands.jsonl
+Commands recorded: 148
+```
+
+Requirements and caveats:
+
+- Rebuild the agent image first (`docker build -t aebench-agent:latest .`).
+  The image carries the shim; an older image fails the run with a message
+  saying so rather than running unmonitored.
+- The case must use `runtime.mode = "docker"`.
+- A low command count is meaningful: the trace holds one record per shell
+  invocation, so an agent CLI that reuses a single shell produces few records.
+  See `docs/architecture/runtime.md` for the full coverage limits.
+- Pass `--socket-dir` if the default socket location is unusable. The path must
+  be short, since a unix socket path cannot exceed 107 bytes.
+
+
+## 7. Unavailable Runner Commands
 
 The CLI accepts these commands but reports that they are unavailable:
 
@@ -189,7 +220,7 @@ case summarize is unavailable in this checkout
 runtime run is unavailable in this checkout
 ```
 
-## 7. How Scoring Works
+## 8. How Scoring Works
 
 Each case declares an `expected_score` in `case.toml`, usually `4`, one point per phase:
 
@@ -206,7 +237,7 @@ The four standard phases are:
 - `benchmark_prep`
 - `experiment_runs`
 
-## 8. Configuration
+## 9. Configuration
 
 ### Environment variables
 
@@ -214,7 +245,13 @@ The four standard phases are:
 export AEBENCH_DEFAULT_DOCKER_IMAGE=my-registry/my-image:latest
 export AEBENCH_PRESERVE_FAILED_WORKSPACE=true
 export AEBENCH_EPHEMERAL_WORKSPACE_ROOT=/fast-ssd/workspaces
+export AEBENCH_COMMAND_SOCKET_ROOT=/tmp/aebench-sockets
 ```
+
+`AEBENCH_COMMAND_SOCKET_ROOT` is where `aebench case monitor` allocates its
+per-run command socket. Keep it short: a unix socket path cannot exceed 107
+bytes, and the run fails with that message rather than binding a truncated
+path.
 
 Select the harness and model explicitly with `--agent` and `--model` for every run.
 
@@ -237,7 +274,7 @@ root = "~/.cache/aebench/git"
 max_size_bytes = 10_737_418_240  # 10 GB
 ```
 
-## 9. Debugging
+## 10. Debugging
 
 **Validate the case bundle first:**
 

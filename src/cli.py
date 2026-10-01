@@ -36,6 +36,15 @@ def _build_parser() -> argparse.ArgumentParser:
 	case_run.add_argument("case_ref")
 	case_run.add_argument("--save-path", default=None)
 
+	case_monitor = case_sub.add_parser(
+		"monitor", help="Run one case and record every shell command the agent runs."
+	)
+	_add_run_options(case_monitor)
+	_add_monitor_options(case_monitor)
+	case_monitor.add_argument("case_ref")
+	case_monitor.add_argument("--save-path", default=None)
+	case_monitor.set_defaults(monitor_commands=True)
+
 	case_init = case_sub.add_parser("init", help="Create a new case bundle.")
 	case_init.add_argument("source", nargs="?", default=None)
 	case_init.add_argument("--blank", action="store_true")
@@ -100,6 +109,22 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
 	parser.add_argument("--prompt-append", default=None)
 
 
+def _add_monitor_options(parser: argparse.ArgumentParser) -> None:
+	"""Adds flags that only apply to a monitored run.
+
+	Kept out of _add_run_options, which is shared with the subcommands that do
+	not support monitoring.
+	"""
+	parser.add_argument(
+		"--socket-dir",
+		default=None,
+		help=(
+			"Directory to allocate the command socket under. Must be short: a unix "
+			"socket path cannot exceed 107 bytes."
+		),
+	)
+
+
 def cli_main(argv: list[str] | None = None) -> int:
 	parser = _build_parser()
 	args = parser.parse_args(argv)
@@ -125,6 +150,7 @@ def _handle_case(args: argparse.Namespace) -> int:
 	else:
 		handler = {
 			"run": _case_run,
+			"monitor": _case_run,
 			"init": _case_init,
 			"template": _case_template,
 			"validate": _case_validate,
@@ -134,7 +160,7 @@ def _handle_case(args: argparse.Namespace) -> int:
 		}.get(case_command)
 	if handler is None:
 		print(
-			"usage: aebench case {run,init,template,validate,export,summarize,oracle}",
+			"usage: aebench case {run,monitor,init,template,validate,export,summarize,oracle}",
 			file=sys.stderr,
 		)
 		return 1
@@ -176,6 +202,10 @@ def _case_run(args: argparse.Namespace) -> int:
 		save_path=_optional_path(args.save_path),
 		on_output_dir=lambda path: print(f"Output: {path}", flush=True),
 	)
+	monitor = result.runtime_result.command_monitor
+	if monitor is not None:
+		print(f"Command trace: {monitor.trace_path}")
+		print(f"Commands recorded: {monitor.command_count}")
 	print(f"Case status: {result.status.value}")
 	print(f"Oracle score: {result.oracle_result.score}")
 	return 0 if result.status.value == "success" else 1
@@ -295,6 +325,8 @@ def _run_options(args: argparse.Namespace) -> RunOptions:
 		prompt_append=getattr(args, "prompt_append", None),
 		cleanup_workspace=bool(getattr(args, "cleanup_workspace", False)),
 		skip_incompatible=bool(getattr(args, "skip_incompatible", False)),
+		monitor_commands=bool(getattr(args, "monitor_commands", False)),
+		monitor_socket_root=getattr(args, "socket_dir", None),
 	)
 
 

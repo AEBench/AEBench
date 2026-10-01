@@ -52,6 +52,8 @@ def test_stopped_container_can_be_committed_for_detached_scoring(tmp_path: Path)
 		runtime_agent_support_dir="/run/aebench-agent",
 		runtime_agent_user="agent",
 		runtime_agent_home="/home/agent",
+		host_command_socket_dir=None,
+		runtime_command_socket_dir=None,
 	)
 	runtime = DockerRuntime(image=_IMAGE)
 	saved_image: str | None = None
@@ -112,6 +114,8 @@ def test_task_oracle_uses_agent_home_from_saved_runtime(tmp_path: Path) -> None:
 		runtime_agent_support_dir="/run/aebench-agent",
 		runtime_agent_user="agent",
 		runtime_agent_home="/home/agent",
+		host_command_socket_dir=None,
+		runtime_command_socket_dir=None,
 	)
 	runtime = DockerRuntime(image=_IMAGE)
 	executor: DockerRuntimeCheckExecutor | None = None

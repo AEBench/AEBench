@@ -33,6 +33,11 @@ class RunSession:
 
 	runtime_backend: BenchRuntime
 
+	# Set only for a monitored run. The directory holds nothing but the command
+	# socket, and is the only part of the monitoring layer the agent can see.
+	host_command_socket_dir: Path | None = None
+	runtime_command_socket_dir: str | None = None
+
 	@property
 	def task_id(self) -> str:
 		return self.run_spec.id
