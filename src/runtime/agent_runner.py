@@ -140,12 +140,16 @@ def run_agent(
 
 
 def prepare_agent_runtime(runtime: BenchRuntime) -> None:
-	"""Grant the Docker agent user access to a mounted host Docker socket."""
 	if not isinstance(runtime, DockerRuntime):
 		return
 
 	result = runtime.run_process(
-		["sh", "-e", "-c", _DOCKER_HOST_SOCKET_SETUP],
+		[
+			"sh",
+			"-e",
+			"-c",
+			f"usermod --non-unique --uid {os.getuid()} agent; {_DOCKER_HOST_SOCKET_SETUP}",
+		],
 		timeout=_RUNTIME_SETUP_TIMEOUT_SECONDS,
 	)
 	if result.returncode != 0:
