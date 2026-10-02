@@ -1,0 +1,81 @@
+{
+  "notes": [
+    "Expected values are the artifact README's (ssrg-vt/mbcheck c957bbe) for the current tool on Linux v6.19, not the paper's printed tables.",
+    "The README documents why they differ: the corpus is built at -g0 (fewer IR lines), counts move with how many modules finish inside the 120 s per-module timeout, and Table 9 is being revised.",
+    "The paper's values are kept under 'paper' for context only; no check reads them."
+  ],
+  "count_tolerance": 0.10,
+  "corpus": {
+    "modules": 3160,
+    "ir_lines": 6856865,
+    "ir_lines_tolerance": 0.0001
+  },
+  "table4": {
+    "anchors": 169500,
+    "causal": 37750,
+    "pairs_total": 857400,
+    "pairs_surviving": 120400,
+    "litmus": 25700,
+    "herd7_no": 31
+  },
+  "table5": {
+    "stages": [
+      "summarize_extfn",
+      "anchor_db",
+      "bracket_extraction",
+      "function_pairing",
+      "mutex_filtering",
+      "transpiler",
+      "herd7"
+    ],
+    "dominant_stages": ["transpiler", "herd7"]
+  },
+  "table6": {
+    "anchors": {
+      "dmb oshld": 4054,
+      "dmb oshst": 3943,
+      "stlxr": 3197,
+      "dmb ish": 2866
+    },
+    "external_functions": {
+      "_raw_spin_lock (ext)": 5690,
+      "__kmalloc_cache_noprof (ext)": 1736,
+      "__kmalloc_noprof (ext)": 902,
+      "flush_work (ext)": 61
+    }
+  },
+  "table7": {
+    "CallGraph": 42574,
+    "Lifecycle": 26504,
+    "LockAlias": 19755,
+    "SafeAllocation": 10502
+  },
+  "table8": {
+    "total": 23,
+    "tn": 23,
+    "fp": 0
+  },
+  "table9": {
+    "mm/swapfile": 13,
+    "drivers/tty/vt/keyboard": 6,
+    "drivers/firmware/arm_scmi/transports/scmi_transport_optee": 3,
+    "kernel/events/callchain": 3,
+    "kernel/rcu/tree": 3,
+    "drivers/soc/fsl/qbman/qman_ccsr": 2,
+    "kernel/audit": 1
+  },
+  "paper": {
+    "table4": {
+      "ir_modules": 3160,
+      "anchors": 170454,
+      "causal": 38117,
+      "pairs_total": 854759,
+      "pairs_surviving": 128591,
+      "litmus": 30555,
+      "herd7_no": 57
+    },
+    "table5_largest_stages": {"herd7": 34.58, "transpiler": 23.25},
+    "table7": {"CallGraph": 13705, "Lifecycle": 10633, "LockAlias": 6285, "SafeAllocation": 732},
+    "table8": {"tn": 23, "fp": 0}
+  }
+}
