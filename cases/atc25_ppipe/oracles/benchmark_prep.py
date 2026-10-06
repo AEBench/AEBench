@@ -4,10 +4,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleBenchmarkPrepBase
 from evaluator.oracles.checks import PathCheck, PathKind
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 _LFS_POINTER_MAX_BYTES = 200
 
@@ -27,15 +27,15 @@ _MIN_PLAN_JSONS_PER_WORKLOAD = 20
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class LFSFileResolvedCheck(utils.BaseCheck):
+class LFSFileResolvedCheck(BaseCheck):
 	"""Fail if the file is a Git LFS pointer instead of real data."""
 
 	path: Path
 	min_size: int = _LFS_POINTER_MAX_BYTES
 
-	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		if not executor.path_is_file(self.path):
-			return utils.CheckResult.failure(f"file missing: {self.path}")
+			return CheckResult.failure(f"file missing: {self.path}")
 
 		try:
 			result = executor.run_process_capture(
@@ -46,43 +46,41 @@ class LFSFileResolvedCheck(utils.BaseCheck):
 			)
 			size = int(result.stdout.split()[0]) if result.returncode == 0 else -1
 		except (OSError, ValueError, IndexError) as exc:
-			return utils.CheckResult.failure(f"cannot determine size of {self.path}: {exc}")
+			return CheckResult.failure(f"cannot determine size of {self.path}: {exc}")
 
 		if size < 0:
-			return utils.CheckResult.failure(f"cannot determine size of {self.path}")
+			return CheckResult.failure(f"cannot determine size of {self.path}")
 
 		if size <= self.min_size:
 			try:
 				head = executor.read_file_text(self.path)[:64].encode()
 			except OSError as exc:
-				return utils.CheckResult.failure(
+				return CheckResult.failure(
 					f"{self.path.name} is unexpectedly small ({size} bytes) "
 					f"and could not be read to check for a Git LFS pointer: {exc}"
 				)
 
 			if head.startswith(b"version https://git-lfs.github.com"):
-				return utils.CheckResult.failure(
+				return CheckResult.failure(
 					f"{self.path.name} is a Git LFS pointer ({size} bytes). "
 					f"Run 'git lfs pull' to download the actual data."
 				)
 
-			return utils.CheckResult.failure(
-				f"{self.path.name} is unexpectedly small ({size} bytes)"
-			)
+			return CheckResult.failure(f"{self.path.name} is unexpectedly small ({size} bytes)")
 
-		return utils.CheckResult.success(message=f"{self.path.name}: {size} bytes")
+		return CheckResult.success(message=f"{self.path.name}: {size} bytes")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ModelListCountCheck(utils.BaseCheck):
+class ModelListCountCheck(BaseCheck):
 	"""Fail if model_list.txt has fewer than expected entries."""
 
 	path: Path
 	expected_count: int
 
-	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		if not executor.path_is_file(self.path):
-			return utils.CheckResult.failure(f"file missing: {self.path}")
+			return CheckResult.failure(f"file missing: {self.path}")
 
 		try:
 			lines = [
@@ -91,24 +89,22 @@ class ModelListCountCheck(utils.BaseCheck):
 				if line.strip()
 			]
 		except OSError as exc:
-			return utils.CheckResult.failure(f"cannot read {self.path}: {exc}")
+			return CheckResult.failure(f"cannot read {self.path}: {exc}")
 
 		if len(lines) < self.expected_count:
-			return utils.CheckResult.failure(
+			return CheckResult.failure(
 				f"model_list.txt has {len(lines)} entries, expected at least {self.expected_count}"
 			)
 
-		return utils.CheckResult.success(message=f"model_list.txt has {len(lines)} model(s)")
-
-
+		return CheckResult.success(message=f"model_list.txt has {len(lines)} model(s)")
 
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
-	def requirements(self) -> Sequence[utils.BaseCheck]:
+	def requirements(self) -> Sequence[BaseCheck]:
 		repo_root = self.workspace_path()
 		data_dir = repo_root / "data"
 
-		checks: list[utils.BaseCheck] = [
+		checks: list[BaseCheck] = [
 			PathCheck(
 				name="data_dir_exists",
 				path=data_dir,

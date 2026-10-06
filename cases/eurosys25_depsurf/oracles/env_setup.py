@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleEnvSetupBase
 from evaluator.oracles.checks import PathKind
+from evaluator.oracles.reporting import BaseCheck
 
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
-    def requirements(self) -> Sequence[utils.BaseCheck]:
+    def requirements(self) -> Sequence[BaseCheck]:
         repo_root = self.workspace_path()
         bpftool_src_dir = repo_root / "depsurf" / "btf" / "bpftool" / "src"
 

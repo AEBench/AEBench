@@ -4,10 +4,14 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleArtifactBuildBase
-from evaluator.oracles.checks import CommandCheck
-from evaluator.oracles.oracle_checks_runtime import OraclePath, RuntimeCheckExecutor, RuntimePath
+from evaluator.oracles.oracle_checks_runtime import (
+	OraclePath,
+	RuntimeCheckExecutor,
+	RuntimePath,
+	resolve_check_executable,
+)
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 _BUILD_COMMAND: tuple[str, ...] = ("make", "install")
 _BUILD_TIMEOUT_SECONDS = 3600.0
@@ -15,17 +19,17 @@ _BUILD_MODE_ENV = "AE_HERBIE_BUILD_MODE"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class HerbieBinaryLocatedCheck(utils.BaseCheck):
+class HerbieBinaryLocatedCheck(BaseCheck):
 	"""Fail if herbie binary or Racket entry point is unavailable."""
 
 	repo_root: OraclePath
 
-	def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
+	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		from pathlib import Path
 
-		resolved = utils.resolve_check_executable("herbie", executor=executor)
+		resolved = resolve_check_executable("herbie", executor=executor)
 		if resolved is not None:
-			return utils.CheckResult.success()
+			return CheckResult.success()
 
 		rkt_paths = (
 			Path(self.repo_root) / "src" / "herbie.rkt",
@@ -33,24 +37,24 @@ class HerbieBinaryLocatedCheck(utils.BaseCheck):
 			Path(self.repo_root) / "src" / "main.rkt",
 		)
 		if any(executor.path_is_file(rkt_path) for rkt_path in rkt_paths):
-			return utils.CheckResult.success()
+			return CheckResult.success()
 
 		home = executor.read_env_var("HOME")
 		if home and executor.glob(RuntimePath.from_parts(home), ".racket/*/bin/herbie"):
-			return utils.CheckResult.success()
+			return CheckResult.success()
 
-		return utils.CheckResult.failure(
+		return CheckResult.failure(
 			"herbie binary not found on PATH, in ~/.racket/*/bin/, "
 			"and neither src/herbie.rkt nor src/main.rkt found in repo"
 		)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class InvalidBuildModeCheck(utils.BaseCheck):
+class InvalidBuildModeCheck(BaseCheck):
 	mode: str
 
-	def check(self, _executor: RuntimeCheckExecutor) -> utils.CheckResult:
-		return utils.CheckResult.failure(
+	def check(self, _executor: RuntimeCheckExecutor) -> CheckResult:
+		return CheckResult.failure(
 			f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
 		)
 
@@ -61,14 +65,14 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 		raw = os.environ.get(_BUILD_MODE_ENV, "verify").strip().lower()
 		return raw or "verify"
 
-	def requirements(self) -> Sequence[utils.BaseCheck]:
-		repo_root = self._workspace_dir
+	def requirements(self) -> Sequence[BaseCheck]:
+		repo_root = self.workspace_path()
 
 		mode = self._build_mode()
 
 		if mode == "command":
 			return (
-				CommandCheck(
+				self.command_check(
 					name="herbie_make_install",
 					cwd=repo_root,
 					cmd=_BUILD_COMMAND,
