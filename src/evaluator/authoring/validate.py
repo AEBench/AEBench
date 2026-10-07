@@ -60,7 +60,7 @@ def validate_case_bundle(case_dir: Path) -> ValidationResult:
 
 	if oracle_dir.is_dir():
 		try:
-			discovered = discover_oracle_classes(root)
+			discover_oracle_classes(root)
 		except OracleLoadError as exc:
 			issues.append(
 				ValidationIssue(
