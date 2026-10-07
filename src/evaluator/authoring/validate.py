@@ -8,13 +8,7 @@ from pathlib import Path
 from constants import ARTIFACT_DIRNAME, CASE_MANIFEST_FILENAME, ORACLE_DIRNAME, REFS_DIRNAME
 from evaluator.loader import CaseBundleError, load_case_spec
 from evaluator.oracles.discovery import OracleLoadError, discover_oracle_classes
-
-_PHASE_CLASS_NAMES = {
-	"OracleEnvSetup",
-	"OracleArtifactBuild",
-	"OracleBenchmarkPrep",
-	"OracleExperimentRuns",
-}
+from project_config import ArtifactMode
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,13 +37,12 @@ def validate_case_bundle(case_dir: Path) -> ValidationResult:
 	issues: list[ValidationIssue] = []
 
 	_require_file(manifest_path, "missing_case_toml", issues)
-	_require_dir(artifact_dir, "missing_artifact_dir", issues)
 	_require_dir(refs_dir, "missing_refs_dir", issues)
 	_require_dir(oracle_dir, "missing_oracles_dir", issues)
 
 	if manifest_path.is_file():
 		try:
-			load_case_spec(root)
+			case = load_case_spec(root)
 		except CaseBundleError as exc:
 			issues.append(
 				ValidationIssue(
@@ -58,10 +51,16 @@ def validate_case_bundle(case_dir: Path) -> ValidationResult:
 					message=str(exc),
 				)
 			)
+		else:
+			if case.upstream.artifact_mode not in (ArtifactMode.UPSTREAM, ArtifactMode.OVERLAY) or (
+				case.upstream.artifact_mode == ArtifactMode.OVERLAY
+				and case.upstream.overlay_artifact
+			):
+				_require_dir(artifact_dir, "missing_artifact_dir", issues)
 
 	if oracle_dir.is_dir():
 		try:
-			discovered = discover_oracle_classes(root)
+			discover_oracle_classes(root)
 		except OracleLoadError as exc:
 			issues.append(
 				ValidationIssue(
@@ -70,18 +69,6 @@ def validate_case_bundle(case_dir: Path) -> ValidationResult:
 					message=str(exc),
 				)
 			)
-		else:
-			names = {phase.cls.__name__ for phase in discovered}
-			missing = sorted(_PHASE_CLASS_NAMES - names)
-			if missing:
-				issues.append(
-					ValidationIssue(
-						code="missing_oracle_phase_classes",
-						path=str(oracle_dir),
-						message="missing classes: " + ", ".join(missing),
-					)
-				)
-			_warn_on_old_decorator_style(root, issues)
 
 	return ValidationResult(issues=tuple(issues))
 
@@ -98,21 +85,3 @@ def _require_dir(path: Path, code: str, issues: list[ValidationIssue]) -> None:
 		issues.append(
 			ValidationIssue(code=code, path=str(path), message="required directory is missing")
 		)
-
-
-_OLD_DECORATORS = ("@env_setup", "@artifact_build", "@benchmark_prep", "@experiment_runs")
-
-
-def _warn_on_old_decorator_style(case_dir: Path, issues: list[ValidationIssue]) -> None:
-	for py_file in (case_dir / ORACLE_DIRNAME).glob("*.py"):
-		if py_file.name == "__init__.py":
-			continue
-		if any(marker in py_file.read_text(encoding="utf-8") for marker in _OLD_DECORATORS):
-			issues.append(
-				ValidationIssue(
-					code="old_decorator_oracle_style",
-					path=str(py_file),
-					message="decorator-style oracle phases are no longer supported",
-					severity="warning",
-				)
-			)
