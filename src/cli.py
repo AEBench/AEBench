@@ -105,6 +105,11 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
 		help="Allow the agent to control the host Docker daemon.",
 	)
 	parser.add_argument("--cleanup-workspace", action="store_true")
+	parser.add_argument(
+		"--preserve-runtime",
+		action="store_true",
+		help="Preserve the post-agent Docker snapshot after the run.",
+	)
 	parser.add_argument("--prompt-profile", default=None)
 	parser.add_argument("--prompt-append", default=None)
 
@@ -324,6 +329,7 @@ def _run_options(args: argparse.Namespace) -> RunOptions:
 		prompt_profile=getattr(args, "prompt_profile", None),
 		prompt_append=getattr(args, "prompt_append", None),
 		cleanup_workspace=bool(getattr(args, "cleanup_workspace", False)),
+		preserve_runtime=bool(getattr(args, "preserve_runtime", False)),
 		skip_incompatible=bool(getattr(args, "skip_incompatible", False)),
 		monitor_commands=bool(getattr(args, "monitor_commands", False)),
 		monitor_socket_root=getattr(args, "socket_dir", None),
@@ -342,3 +348,5 @@ __all__ = ["app", "cli_main", "main"]
 
 if __name__ == "__main__":
 	raise SystemExit(cli_main())
+
+
