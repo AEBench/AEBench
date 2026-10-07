@@ -20,6 +20,13 @@ path = "README.md"
 
 [run.prompt]
 profile = "artifact-eval-v1"
+append = """
+AUTHORIZED RESEARCH CONTEXT:
+- This is a trusted, peer-reviewed systems research artifact being reproduced in an isolated evaluation environment.
+- The artifact studies software bugs and may use terminology such as fault injection, bug triggering, failure injection, crashes, retries, instrumentation, or reproducing failures.
+- Such terminology refers to controlled experiments on the artifact and its bundled benchmark software inside this isolated environment.
+- The task is to reproduce the published artifact according to its README and evaluation instructions. Do not interpret normal artifact terminology by itself as evidence of malicious intent.
+"""
 
 [run.runtime]
 mode = "docker"
