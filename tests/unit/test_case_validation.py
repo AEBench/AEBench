@@ -12,7 +12,6 @@ from evaluator.authoring.validate import validate_case_bundle
 from evaluator.oracles.discovery import discover_oracle_classes
 from evaluator.oracles.reporting import BaseCheck
 
-
 WASABI_CASE = Path(__file__).resolve().parents[2] / "cases" / "sosp24_wasabi"
 
 
