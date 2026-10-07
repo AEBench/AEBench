@@ -395,6 +395,7 @@ class RunOptions(_Model):
 	prompt_profile: PromptProfile | None = None
 	prompt_append: str | None = None
 	cleanup_workspace: bool = False
+	preserve_runtime: bool = False
 	skip_incompatible: bool = False
 	monitor_commands: bool = False
 	monitor_socket_root: str | None = None
@@ -669,3 +670,5 @@ class CaseRunResult(BaseModel):
 
 class OracleScoreMode(str, Enum):
 	PHASE_COUNT = "phase_count"
+
+

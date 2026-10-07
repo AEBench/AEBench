@@ -106,6 +106,16 @@ class _CaseRunner:
 		discover_oracle_classes(self.case_root)
 
 		self.task = task_from_case(self.case_root, self.case)
+
+		if self.options.preserve_runtime:
+			if self.task.runtime.mode != RuntimeMode.DOCKER:
+				raise ValueError("--preserve-runtime requires runtime.mode = 'docker'")
+			if not self.task.runtime.commit_before_oracle:
+				raise ValueError(
+					"--preserve-runtime requires runtime.commit_before_oracle = true"
+				)
+			self.task.runtime.keep_committed_snapshot = True
+
 		self.agent = _agent_name(self.options)
 		self.model = _model_name(self.options)
 
@@ -633,3 +643,5 @@ def _duration_ms(start: datetime, end: datetime) -> int:
 
 
 __all__ = ["run_case"]
+
+
