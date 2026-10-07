@@ -17,9 +17,7 @@ WASABI_CASE = Path(__file__).resolve().parents[2] / "cases" / "sosp24_wasabi"
 
 def test_git_upstream_case_does_not_need_materialized_artifact(tmp_path: Path) -> None:
 	case_dir = tmp_path / "case"
-	shutil.copytree(
-		WASABI_CASE, case_dir, ignore=shutil.ignore_patterns("artifact", "__pycache__")
-	)
+	shutil.copytree(WASABI_CASE, case_dir, ignore=shutil.ignore_patterns("artifact", "__pycache__"))
 	assert not (case_dir / "artifact").exists()
 	assert validate_case_bundle(case_dir).ok
 
@@ -44,9 +42,7 @@ def test_artifact_directory_required_only_when_used(
 	tmp_path: Path, mode: str, overlay_artifact: bool, required: bool
 ) -> None:
 	case_dir = tmp_path / "case"
-	shutil.copytree(
-		WASABI_CASE, case_dir, ignore=shutil.ignore_patterns("artifact", "__pycache__")
-	)
+	shutil.copytree(WASABI_CASE, case_dir, ignore=shutil.ignore_patterns("artifact", "__pycache__"))
 	manifest = case_dir / "case.toml"
 	content = manifest.read_text(encoding="utf-8")
 	content = content.replace('artifact_mode = "upstream"', f'artifact_mode = "{mode}"')
