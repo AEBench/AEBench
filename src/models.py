@@ -670,5 +670,3 @@ class CaseRunResult(BaseModel):
 
 class OracleScoreMode(str, Enum):
 	PHASE_COUNT = "phase_count"
-
-

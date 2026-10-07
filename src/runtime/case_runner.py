@@ -111,9 +111,7 @@ class _CaseRunner:
 			if self.task.runtime.mode != RuntimeMode.DOCKER:
 				raise ValueError("--preserve-runtime requires runtime.mode = 'docker'")
 			if not self.task.runtime.commit_before_oracle:
-				raise ValueError(
-					"--preserve-runtime requires runtime.commit_before_oracle = true"
-				)
+				raise ValueError("--preserve-runtime requires runtime.commit_before_oracle = true")
 			self.task.runtime.keep_committed_snapshot = True
 
 		self.agent = _agent_name(self.options)
@@ -643,5 +641,3 @@ def _duration_ms(start: datetime, end: datetime) -> int:
 
 
 __all__ = ["run_case"]
-
-
