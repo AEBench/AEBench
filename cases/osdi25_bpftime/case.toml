@@ -35,7 +35,6 @@ compose = false
 expected_score = 4
 phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
 score_mode = "phase_count"
-failure_mode = "continue"
 notes = "Micro-benchmark focused (Table 3). Paper reference ratios are loaded from a case-private oracle data file, while tolerance remains in this manifest. hash_map_lookup is retained as an optional tradeoff check. Application benchmarks (nginx, redis, deepflow, fuse, sslsniff, syscount) are not covered."
 
 [[oracle.env_setup.checks]]
