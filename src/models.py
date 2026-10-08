@@ -399,6 +399,7 @@ class RunOptions(_Model):
 	skip_incompatible: bool = False
 	monitor_commands: bool = False
 	monitor_socket_root: str | None = None
+	oracle_fail_fast: bool = False
 
 
 class UpstreamSourceType(str, Enum):
@@ -463,7 +464,6 @@ class OraclePhaseTargetsConfig(_Model):
 
 class OracleConfig(_Model):
 	expected_score: int = 4
-	failure_mode: OracleFailureMode = OracleFailureMode.FAIL_FAST
 	placeholder: bool = False
 	notes: str | None = None
 	targets: dict[str, OracleTargetConfig] = Field(default_factory=dict)
@@ -482,6 +482,7 @@ class OracleConfig(_Model):
 		for key in (
 			"phases",
 			"score_mode",
+			"failure_mode",
 			OraclePhaseName.ENV_SETUP,
 			OraclePhaseName.ARTIFACT_BUILD,
 			OraclePhaseName.BENCHMARK_PREP,

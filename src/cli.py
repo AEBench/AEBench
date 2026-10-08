@@ -8,7 +8,7 @@ from config import AppState, resolve_settings
 from evaluator.loader import load_case_spec
 from evaluator.registry import resolve_case_dir
 from log import configure_logging
-from models import AGENT_NAMES, RunOptions
+from models import AGENT_NAMES, OracleFailureMode, RunOptions
 from project_config import load_project_config
 from runtime.oracle_runner import DirectOracleRunner
 
@@ -75,6 +75,7 @@ def _build_parser() -> argparse.ArgumentParser:
 	case_oracle.add_argument("case_ref")
 	case_oracle.add_argument("--output-dir", default=None)
 	case_oracle.add_argument("--workspace-dir", default=None)
+	_add_oracle_options(case_oracle)
 
 	runtime_p = sub.add_parser("runtime", help="Low-level runtime workflows.")
 	runtime_sub = runtime_p.add_subparsers(dest="runtime_command")
@@ -112,6 +113,15 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
 	)
 	parser.add_argument("--prompt-profile", default=None)
 	parser.add_argument("--prompt-append", default=None)
+	_add_oracle_options(parser)
+
+
+def _add_oracle_options(parser: argparse.ArgumentParser) -> None:
+	parser.add_argument(
+		"--oracle-fail-fast",
+		action="store_true",
+		help="Stop oracle evaluation at the first failed phase.",
+	)
 
 
 def _add_monitor_options(parser: argparse.ArgumentParser) -> None:
@@ -300,6 +310,9 @@ def _case_oracle(args: argparse.Namespace) -> int:
 		output_dir=output_dir,
 		case=case,
 		workspace_dir=_optional_path(args.workspace_dir),
+		failure_mode=(
+			OracleFailureMode.FAIL_FAST if args.oracle_fail_fast else OracleFailureMode.CONTINUE
+		),
 	)
 	print(f"Oracle status: {result.status.value}")
 	print(f"Score: {result.score}/{case.oracle.expected_score}")
@@ -333,6 +346,7 @@ def _run_options(args: argparse.Namespace) -> RunOptions:
 		skip_incompatible=bool(getattr(args, "skip_incompatible", False)),
 		monitor_commands=bool(getattr(args, "monitor_commands", False)),
 		monitor_socket_root=getattr(args, "socket_dir", None),
+		oracle_fail_fast=bool(getattr(args, "oracle_fail_fast", False)),
 	)
 
 
