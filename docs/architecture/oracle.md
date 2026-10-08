@@ -88,7 +88,7 @@ For each discovered phase, the execution engine (`oracles/execution.py`):
 3. `build_oracle_report()` calls `requirements()` to get the check objects, then runs `check.check(executor)` on each one using the phase's configured executor
 4. Result is an `OracleReport` containing one `CheckEntry` per check
 
-If `report().ok` is True, the phase passes. If not, it fails. With `failure_mode = "fail_fast"` the remaining phases are marked PENDING and evaluation stops.
+If `report().ok` is True, the phase passes. If not, it fails. By default every phase runs. With `--oracle-fail-fast` the remaining phases are marked PENDING and evaluation stops.
 
 ## 6. Check classes
 
