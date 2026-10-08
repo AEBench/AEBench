@@ -34,7 +34,6 @@ profile = "artifact-eval-v1"
 
 [oracle]
 expected_score = 4
-failure_mode = "fail_fast"
 placeholder = false
 
 # The agent-built image; benchmark_prep/artifact_build checks run inside it, with

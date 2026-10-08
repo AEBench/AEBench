@@ -22,6 +22,7 @@ from models import (
 	CaseRunResult,
 	CaseStatus,
 	CommandMonitorInfo,
+	OracleFailureMode,
 	OracleResult,
 	OracleStatus,
 	PromptArgs,
@@ -387,6 +388,11 @@ class _CaseRunner:
 				output_dir=self.output_dir,
 				case=self.case,
 				workspace_dir=self.workspace,
+				failure_mode=(
+					OracleFailureMode.FAIL_FAST
+					if self.options.oracle_fail_fast
+					else OracleFailureMode.CONTINUE
+				),
 			)
 		except (KeyboardInterrupt, SystemExit) as exc:
 			self.interrupted = exc

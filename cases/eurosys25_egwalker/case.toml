@@ -33,7 +33,6 @@ profile = "artifact-eval-v1"
 
 [oracle]
 expected_score = 4
-failure_mode = "fail_fast"
 notes = "Class-based oracle checks build outputs, dataset files, and timing similarity."
 
 [upstream]
