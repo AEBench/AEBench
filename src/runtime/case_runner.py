@@ -22,6 +22,7 @@ from models import (
 	CaseRunResult,
 	CaseStatus,
 	CommandMonitorInfo,
+	OracleFailureMode,
 	OracleResult,
 	OracleStatus,
 	PromptArgs,
@@ -106,6 +107,14 @@ class _CaseRunner:
 		discover_oracle_classes(self.case_root)
 
 		self.task = task_from_case(self.case_root, self.case)
+
+		if self.options.preserve_runtime:
+			if self.task.runtime.mode != RuntimeMode.DOCKER:
+				raise ValueError("--preserve-runtime requires runtime.mode = 'docker'")
+			if not self.task.runtime.commit_before_oracle:
+				raise ValueError("--preserve-runtime requires runtime.commit_before_oracle = true")
+			self.task.runtime.keep_committed_snapshot = True
+
 		self.agent = _agent_name(self.options)
 		self.model = _model_name(self.options)
 
@@ -379,6 +388,11 @@ class _CaseRunner:
 				output_dir=self.output_dir,
 				case=self.case,
 				workspace_dir=self.workspace,
+				failure_mode=(
+					OracleFailureMode.FAIL_FAST
+					if self.options.oracle_fail_fast
+					else OracleFailureMode.CONTINUE
+				),
 			)
 		except (KeyboardInterrupt, SystemExit) as exc:
 			self.interrupted = exc

@@ -80,7 +80,15 @@ def test_oracle_phases_field_parsed(tmp_path: Path) -> None:
 	_setup_valid_case(case_dir)
 	spec = load_case_spec(case_dir)
 	assert spec.oracle.expected_score == 4
-	assert spec.oracle.failure_mode.value == "fail_fast"
+	assert not hasattr(spec.oracle, "failure_mode")
+
+
+def test_legacy_oracle_failure_mode_ignored(tmp_path: Path) -> None:
+	case_dir = tmp_path / "test_case"
+	case_dir.mkdir()
+	_setup_valid_case(case_dir, _MINIMAL_TOML + '\tfailure_mode = "fail_fast"\n')
+	spec = load_case_spec(case_dir)
+	assert not hasattr(spec.oracle, "failure_mode")
 
 
 def test_runtime_mode_parsed(tmp_path: Path) -> None:

@@ -67,7 +67,7 @@ Oracle status: success
 Score: 4/4
 ```
 
-If a phase fails, the score includes each phase that passed before it. With `failure_mode = "fail_fast"`, later phases remain pending after the first failed phase.
+If a phase fails, the remaining phases still run and the score counts every phase that passed. With `--oracle-fail-fast`, later phases remain pending after the first failed phase.
 
 ## 5. Run an Agent
 
