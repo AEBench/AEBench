@@ -2,14 +2,24 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from pathlib import Path
+from unittest.mock import Mock
 
 from cases.asplos24_loupe.oracles.common import (
 	LoupeRunEvidenceCheck,
 	LoupeTablesCheck,
 	_read_syscall_table,
 )
-from evaluator.oracles.oracle_checks_runtime import LocalRuntimeCheckExecutor
+from cases.asplos24_loupe.oracles.env_setup import OracleEnvSetup
+from evaluator.loader import load_case_spec
+from evaluator.oracles.oracle_checks_runtime import (
+	LocalRuntimeCheckExecutor,
+	OracleRuntimeRegistry,
+	RuntimeCheckExecutor,
+)
+from evaluator.oracles.process import ProcResult
+from models import OracleInput
 
 
 def _write_table(path: Path, columns: str, width: int, used: set[int]) -> None:
@@ -19,6 +29,34 @@ def _write_table(path: Path, columns: str, width: int, used: set[int]) -> None:
 		flags = ["Y" if syscall in used else "N"] + ["N"] * (width - 2)
 		lines.append(",".join((str(syscall), *flags)))
 	path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_env_setup_checks_python_installed_only_in_task_runtime(tmp_path: Path) -> None:
+	case_dir = Path(__file__).resolve().parents[2] / "cases/asplos24_loupe"
+	case = load_case_spec(case_dir)
+	python = str(tmp_path / ".venv/bin/python")
+	task_executor = Mock(spec=RuntimeCheckExecutor)
+	task_executor.resolve_executable.return_value = python
+	task_executor.run_process_capture.return_value = ProcResult(
+		returncode=0, stdout="Python 3.12.3\n", stderr="", timed_out=False
+	)
+	registry = Mock(spec=OracleRuntimeRegistry)
+	registry.executor_for.side_effect = lambda target: (
+		task_executor if target == "task" else LocalRuntimeCheckExecutor(default_cwd=tmp_path)
+	)
+	context = OracleInput(
+		case_dir=case_dir,
+		artifact_dir=case_dir / "artifact",
+		workspace_dir=tmp_path,
+		output_dir=tmp_path / "output",
+		oracle_targets=case.oracle.targets,
+		oracle_phase_targets=case.oracle.phase_targets,
+		runtime_registry=registry,
+	)
+	phase = OracleEnvSetup(context=context, logger=logging.getLogger(__name__))
+	python_check = next(check for check in phase.requirements() if check.name == "python_version")
+	assert python_check.check(phase.executor).ok
+	task_executor.run_process_capture.assert_called_once()
 
 
 def test_read_syscall_table_rejects_duplicate(tmp_path: Path) -> None:

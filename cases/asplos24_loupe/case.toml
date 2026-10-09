@@ -53,7 +53,7 @@ placeholder = false
 notes = "Bounded first slice: the supplied Nginx/wrk example only. This does not reproduce the 100+ application corpus, paper plots, support-plan tables, or performance experiments."
 
 [oracle.phase_targets]
-env_setup = "local"
+env_setup = "task"
 artifact_build = "local"
 benchmark_prep = "local"
 experiment_runs = "local"

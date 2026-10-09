@@ -23,7 +23,7 @@ The artifact is pinned to commit
 
 ## Build
 
-Create the small host-side Python environment and build Loupe's helper and
+Create Loupe's Python environment and build its helper and
 base image:
 
 ```bash
