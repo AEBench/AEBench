@@ -473,17 +473,20 @@ fn exec_real(real_shell: &OsStr, argv: &[OsString]) -> ! {
 /// `kill(shim_pid, SIGTERM)` and leaves the real work running.
 extern "C" fn forward_signal(
     signal: libc::c_int,
-    _info: *mut libc::siginfo_t,
+    info: *mut libc::siginfo_t,
     _context: *mut libc::c_void,
 ) {
     // SI_KERNEL is Linux-specific. Other Unix targets conservatively forward;
     // that preserves timeout(1) semantics even though group delivery may double.
     #[cfg(target_os = "linux")]
-    // SAFETY: SA_SIGINFO means the kernel always supplies `_info`. The null
+    // SAFETY: SA_SIGINFO means the kernel always supplies `info`. The null
     // check only ensures an unexpected null forwards rather than faults.
-    if !_info.is_null() && unsafe { (*_info).si_code } == libc::SI_KERNEL {
+    if !info.is_null() && unsafe { (*info).si_code } == libc::SI_KERNEL {
         return;
     }
+
+    #[cfg(not(target_os = "linux"))]
+    let _ = info;
 
     let pid = CHILD_PID.load(Ordering::SeqCst);
     if pid > 0 {
