@@ -25,6 +25,9 @@
     "asplos24_gaia": {
       "path": "cases/asplos24_gaia"
     },
+    "asplos24_loupe": {
+      "path": "cases/asplos24_loupe"
+    },
     "asplos25_herbie": {
       "path": "cases/asplos25_herbie"
     },
