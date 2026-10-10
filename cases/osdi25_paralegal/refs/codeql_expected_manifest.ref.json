@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "codeql_version": "2.19.3",
+  "source_commit": "6a0341d3c50cf3caf90c2fc8dde3b364e2422954",
+  "entries": [
+    {
+      "expected_path": "expected/freedit/expire.txt",
+      "result_path": "tmp/0-freedit",
+      "sha256": "f988a4f75f8a527b6f3057400406b726de26399bcb941cf1d315a73335946bdb",
+      "bytes": 66,
+      "rows": 0
+    },
+    {
+      "expected_path": "expected/freedit/store.txt",
+      "result_path": "tmp/1-freedit",
+      "sha256": "5d9404515153abbc18580a09a96b29327ee0cdc91d85ce617fdc66751e8d4409",
+      "bytes": 42,
+      "rows": 0
+    },
+    {
+      "expected_path": "expected/mcaptcha/deletion.txt",
+      "result_path": "tmp/2-mcaptcha",
+      "sha256": "10db4f4a050600ebdb511264b2f807df13e06ab07630499b7d754ce72b012b45",
+      "bytes": 150,
+      "rows": 1
+    },
+    {
+      "expected_path": "expected/mcaptcha/limited-collection.txt",
+      "result_path": "tmp/3-mcaptcha",
+      "sha256": "e1695fd8bcd21b0701e364fe7da5d190e98a46b0fc8bfbb09c582097d41519ae",
+      "bytes": 249,
+      "rows": 1
+    },
+    {
+      "expected_path": "expected/websubmit/deletion.txt",
+      "result_path": "tmp/4-websubmit",
+      "sha256": "9c89b0af9e0d1e0b487397c634d33b6cae001722b86defec4c09577791e4645c",
+      "bytes": 82,
+      "rows": 0
+    },
+    {
+      "expected_path": "expected/websubmit/disclosure.txt",
+      "result_path": "tmp/5-websubmit",
+      "sha256": "6bd343f8e97c38043e08b604b60c823d959d86ce35814ed36e09309001fbfacc",
+      "bytes": 44,
+      "rows": 0
+    },
+    {
+      "expected_path": "expected/websubmit/scoped-storage.txt",
+      "result_path": "tmp/6-websubmit",
+      "sha256": "dcb3b4885c68685d90a1cfae870d2210dd89d9e18c2a86dc9a7083297fd6bea9",
+      "bytes": 56,
+      "rows": 0
+    },
+    {
+      "expected_path": "expected/atomic.txt",
+      "result_path": "tmp/7-atomic",
+      "sha256": "c8feef98c00ad68ac4046eae5cc2c44f3ce6d651f8aca5ea58177407218eabe8",
+      "bytes": 58,
+      "rows": 0
+    },
+    {
+      "expected_path": "expected/lemmy-instance.txt",
+      "result_path": "tmp/8-lemmy",
+      "sha256": "077d3435075e5df7dd415acb9fb20fc52af26af9736b5f1dbfb41e5d1d9a7890",
+      "bytes": 568,
+      "rows": 2
+    },
+    {
+      "expected_path": "expected/plume-data-deletion.txt",
+      "result_path": "tmp/9-plume",
+      "sha256": "ae3347e5092a7bed9beef5238df5aff06bba9daecdfc7e3c546adee36cbc1162",
+      "bytes": 325,
+      "rows": 3
+    }
+  ]
+}
