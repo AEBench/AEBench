@@ -476,11 +476,17 @@ extern "C" fn forward_signal(
     info: *mut libc::siginfo_t,
     _context: *mut libc::c_void,
 ) {
+    // SI_KERNEL is Linux-specific. Other Unix targets conservatively forward;
+    // that preserves timeout(1) semantics even though group delivery may double.
+    #[cfg(target_os = "linux")]
     // SAFETY: SA_SIGINFO means the kernel always supplies `info`. The null
     // check only ensures an unexpected null forwards rather than faults.
     if !info.is_null() && unsafe { (*info).si_code } == libc::SI_KERNEL {
         return;
     }
+
+    #[cfg(not(target_os = "linux"))]
+    let _ = info;
 
     let pid = CHILD_PID.load(Ordering::SeqCst);
     if pid > 0 {
