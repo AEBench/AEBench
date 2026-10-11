@@ -82,9 +82,51 @@ def test_the_check_reports_modified_and_deleted_tracked_files(tmp_path: Path) ->
 	assert check is not None
 	assert check.tracked == 3
 	assert (check.modified_count, check.deleted_count) == (1, 1)
-	assert check.created_count is None
+	assert check.created_count == 0
 	diff = json.loads((trace / TRACKED_FILES_DIFF_BASENAME).read_text(encoding="utf-8"))
-	assert diff == {"tracked": 3, "modified": ["scripts/aggregate.py"], "deleted": ["src.c"]}
+	assert diff == {
+		"tracked": 3,
+		"modified": ["scripts/aggregate.py"],
+		"deleted": ["src.c"],
+		"mode_changed": [],
+	}
+
+
+def test_a_chmod_is_reported_as_a_mode_change_not_a_modification(tmp_path: Path) -> None:
+	repo = _artifact_checkout(tmp_path)
+	script = repo / "scripts" / "aggregate.py"
+	script.chmod(0o755)
+	trace = tmp_path / "trace"
+	trace.mkdir()
+	write_tracked_files(repo, trace)
+	assert _recorded(trace)["files"]["scripts/aggregate.py"]["mode"] == 0o755  # type: ignore[index]
+
+	script.chmod(0o644)
+
+	check = check_tracked_files(repo, trace)
+
+	assert check is not None
+	assert (check.modified_count, check.deleted_count, check.mode_changed_count) == (0, 0, 1)
+	diff = json.loads((trace / TRACKED_FILES_DIFF_BASENAME).read_text(encoding="utf-8"))
+	assert diff["mode_changed"] == ["scripts/aggregate.py"]
+	assert diff["modified"] == []
+
+
+def test_a_list_recorded_without_modes_reports_no_mode_changes(tmp_path: Path) -> None:
+	repo = _artifact_checkout(tmp_path)
+	trace = tmp_path / "trace"
+	trace.mkdir()
+	write_tracked_files(repo, trace)
+	recorded = _recorded(trace)
+	for state in recorded["files"].values():  # type: ignore[attr-defined]
+		del state["mode"]
+	(trace / TRACKED_FILES_BASENAME).write_text(json.dumps(recorded), encoding="utf-8")
+	(repo / "src.c").chmod(0o600)
+
+	check = check_tracked_files(repo, trace)
+
+	assert check is not None
+	assert check.mode_changed_count == 0
 
 
 def test_an_untouched_artifact_reports_no_changes(tmp_path: Path) -> None:
@@ -98,7 +140,7 @@ def test_an_untouched_artifact_reports_no_changes(tmp_path: Path) -> None:
 	check = check_tracked_files(repo, trace)
 
 	assert check is not None
-	assert (check.modified_count, check.deleted_count) == (0, 0)
+	assert (check.modified_count, check.deleted_count, check.mode_changed_count) == (0, 0, 0)
 
 
 def test_a_directory_that_is_not_a_checkout_records_every_file(tmp_path: Path) -> None:
