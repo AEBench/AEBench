@@ -147,6 +147,7 @@ def write_task_report(report_path: Path, result: RunResult, agent_summary: str) 
 				f"- Tracked: `{tracked.tracked}`",
 				f"- Modified: `{tracked.modified_count}`",
 				f"- Deleted: `{tracked.deleted_count}`",
+				f"- Mode changed: `{tracked.mode_changed_count}`",
 				f"- Diff: `{tracked.diff_path}`",
 			]
 		)

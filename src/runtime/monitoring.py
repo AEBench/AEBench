@@ -227,7 +227,10 @@ def write_tracked_files(workspace: Path, trace_dir: Path) -> Path:
 
 
 def check_tracked_files(workspace: Path, trace_dir: Path) -> TrackedFilesCheck | None:
-	"""Compare every tracked file against its recorded checksum."""
+	"""Compare every tracked file against its recorded checksum and permission bits.
+
+	A file whose content and mode both changed appears in both lists.
+	"""
 	try:
 		recorded = json.loads((trace_dir / TRACKED_FILES_BASENAME).read_text(encoding="utf-8"))
 	except FileNotFoundError:
@@ -235,17 +238,27 @@ def check_tracked_files(workspace: Path, trace_dir: Path) -> TrackedFilesCheck |
 
 	modified: list[str] = []
 	deleted: list[str] = []
+	mode_changed: list[str] = []
 	for rel, before in sorted(recorded["files"].items()):
 		after = _file_state(workspace / rel)
 		if after is None:
 			deleted.append(rel)
-		elif after["sha256"] != before["sha256"] or after["symlink"] != before["symlink"]:
+			continue
+		if after["sha256"] != before["sha256"] or after["symlink"] != before["symlink"]:
 			modified.append(rel)
+		# A list written before modes were recorded has none to compare.
+		if "mode" in before and after["mode"] != before["mode"]:
+			mode_changed.append(rel)
 
 	diff_path = trace_dir / TRACKED_FILES_DIFF_BASENAME
 	diff_path.write_text(
 		json.dumps(
-			{"tracked": len(recorded["files"]), "modified": modified, "deleted": deleted},
+			{
+				"tracked": len(recorded["files"]),
+				"modified": modified,
+				"deleted": deleted,
+				"mode_changed": mode_changed,
+			},
 			indent=1,
 		),
 		encoding="utf-8",
@@ -255,6 +268,7 @@ def check_tracked_files(workspace: Path, trace_dir: Path) -> TrackedFilesCheck |
 		tracked=len(recorded["files"]),
 		modified_count=len(modified),
 		deleted_count=len(deleted),
+		mode_changed_count=len(mode_changed),
 	)
 
 
@@ -294,7 +308,7 @@ def _list_artifact_files(workspace: Path) -> tuple[str, str | None, list[str]]:
 
 
 def _file_state(path: Path) -> dict[str, object] | None:
-	"""Return size, modification time and checksum SHA-256 of the file."""
+	"""Return size, modification time, permission bits and checksum SHA-256 of the file."""
 	try:
 		info = os.lstat(path)
 	except OSError:
@@ -310,6 +324,8 @@ def _file_state(path: Path) -> dict[str, object] | None:
 	return {
 		"size": info.st_size,
 		"mtime_ns": info.st_mtime_ns,
+		# Permission bits only (e.g. 0o755); the checksum does not see a chmod.
+		"mode": stat.S_IMODE(info.st_mode),
 		"sha256": digest,
 		"symlink": symlink,
 	}

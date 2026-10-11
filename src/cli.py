@@ -225,7 +225,8 @@ def _case_run(args: argparse.Namespace) -> int:
 			tracked = monitor.tracked_files
 			print(
 				f"Artifact files changed: {tracked.modified_count} modified, "
-				f"{tracked.deleted_count} deleted of {tracked.tracked} ({tracked.diff_path})"
+				f"{tracked.deleted_count} deleted, {tracked.mode_changed_count} mode changed "
+				f"of {tracked.tracked} ({tracked.diff_path})"
 			)
 	print(f"Case status: {result.status.value}")
 	print(f"Oracle score: {result.oracle_result.score}")
