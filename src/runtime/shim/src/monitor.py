@@ -12,6 +12,7 @@ from typing import Any, BinaryIO, TypeAlias
 
 Frame: TypeAlias = tuple[int, bytes]
 Record: TypeAlias = dict[str, object]
+FileStat: TypeAlias = tuple[int, int, int, int] # (size, mtime_ns, ctime_ns, inode)
 
 SOCKET_PATH = "/run/aebench/command.sock"
 LOG_BASENAME = "commands.jsonl"
@@ -22,16 +23,9 @@ MAX_FRAME_BYTES = 16 * 1024 * 1024
 MAX_STREAM_BYTES = 16 * 1024 * 1024
 
 MAX_LISTED_PATHS = 100
-# Applies only to the whole-workspace walk; a tracked-files list is never capped.
-MAX_SNAPSHOT_FILES = 20000
-
-# Written by the host before the agent starts (runtime/monitoring.py). When
-# present, only these files are compared before and after each command.
-TRACKED_FILES_BASENAME = "tracked_files.json"
-
-# How long snapshot is before timeout. Nothing is failed when this expires. Result is abandoned, the
-# file_snapshot entry is logged. The command's record is still written in full.
-SNAPSHOT_BUDGET_SECONDS = 2.0
+MAX_SNAPSHOT_FILES = 20000  # Limit for full-workspace snapshots only
+TRACKED_FILES_BASENAME = "tracked_files.json"  # Host-provided list of files to track
+SNAPSHOT_BUDGET_SECONDS = 2.0  # Timeout for snapshots; does not fail the command
 
 COMMAND_INFO = 0
 STDOUT = 1
@@ -89,7 +83,7 @@ class StreamSink:
 		self.path = path
 		self.ceiling = MAX_STREAM_BYTES
 
-		# Keep track of how much will be truncated.
+		# Keep track of how much will be truncated
 		self.received = 0
 		self.kept = 0
 
@@ -222,7 +216,7 @@ class CommandTiming(Monitor):
 		return {
 			"started_at": wall_start.isoformat(),
 			"duration_ms": int((time.monotonic() - monotonic_start) * 1000),
-			# Wall clock covers everything the command spawned.
+			# Wall clock covers everything the command spawned
 			"includes_children": True,
 		}
 
@@ -240,15 +234,15 @@ class FileSnapshot(Monitor):
 			with open(tracked_files, encoding="utf-8") as handle:
 				self.tracked = list(json.load(handle)["files"])
 
-	def _snapshot(self) -> tuple[dict[str, tuple[int, int]] | None, str | None]:
+	def _snapshot(self) -> tuple[dict[str, FileStat] | None, str | None]:
 		if self.tracked is not None:
 			return self._snapshot_tracked()
 		return self._snapshot_walk()
 
-	def _snapshot_tracked(self) -> tuple[dict[str, tuple[int, int]] | None, str | None]:
-		"""Maps each tracked file still present to (size, mtime_ns)."""
+	def _snapshot_tracked(self) -> tuple[dict[str, FileStat] | None, str | None]:
+		"""Maps each tracked file still present to its FileStat."""
 		assert self.tracked is not None
-		found: dict[str, tuple[int, int]] = {}
+		found: dict[str, FileStat] = {}
 		deadline = time.monotonic() + SNAPSHOT_BUDGET_SECONDS
 
 		for rel in self.tracked:
@@ -262,13 +256,13 @@ class FileSnapshot(Monitor):
 				# The tracked file not found, so reported as deleted.
 				continue
 
-			found[rel] = (stat.st_size, stat.st_mtime_ns)
+			found[rel] = (stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_ino)
 
 		return found, None
 
-	def _snapshot_walk(self) -> tuple[dict[str, tuple[int, int]] | None, str | None]:
-		"""Maps each file to (size, mtime_ns), or (None, reason) if it gave up."""
-		found: dict[str, tuple[int, int]] = {}
+	def _snapshot_walk(self) -> tuple[dict[str, FileStat] | None, str | None]:
+		"""Maps each file to its FileStat, or (None, reason) on error/exception."""
+		found: dict[str, FileStat] = {}
 		deadline = time.monotonic() + SNAPSHOT_BUDGET_SECONDS
 
 		for directory, _subdirectories, filenames in os.walk(self.workspace):
@@ -284,7 +278,12 @@ class FileSnapshot(Monitor):
 					# Deleted mid traversal, or an error raised.
 					continue
 
-				found[os.path.relpath(path, self.workspace)] = (stat.st_size, stat.st_mtime_ns)
+				found[os.path.relpath(path, self.workspace)] = (
+					stat.st_size,
+					stat.st_mtime_ns,
+					stat.st_ctime_ns,
+					stat.st_ino,
+				)
 
 				if len(found) > MAX_SNAPSHOT_FILES:
 					return None, f"workspace exceeds {MAX_SNAPSHOT_FILES} files"
