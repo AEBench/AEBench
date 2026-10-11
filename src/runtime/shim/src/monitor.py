@@ -12,7 +12,7 @@ from typing import Any, BinaryIO, TypeAlias
 
 Frame: TypeAlias = tuple[int, bytes]
 Record: TypeAlias = dict[str, object]
-FileStat: TypeAlias = tuple[int, int, int, int] # (size, mtime_ns, ctime_ns, inode)
+FileStat: TypeAlias = tuple[int, int, int, int]  # (size, mtime_ns, ctime_ns, inode)
 
 SOCKET_PATH = "/run/aebench/command.sock"
 LOG_BASENAME = "commands.jsonl"

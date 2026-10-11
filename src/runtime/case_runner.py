@@ -412,7 +412,7 @@ class _CaseRunner:
 
 	def finalize(self) -> CaseRunResult:
 		self._cleanup()
-		# The container is removed after a failed, timed out or interrupted agent 
+		# The container is removed after a failed, timed out or interrupted agent
 		# run, but the workspace remains on the host until cleanup_workspace().
 		self._check_tracked_files()
 
@@ -544,7 +544,7 @@ class _CaseRunner:
 
 		if not self._monitor_cleanup_done and self.monitor is not None:
 			# Reached when the run failed or was interrupted before the agent
-			# finished. The container may already be deleted, so only the 
+			# finished. The container may already be deleted, so only the
 			# broker and its socket are released (but not the shell).
 			try:
 				self.monitor.stop()
