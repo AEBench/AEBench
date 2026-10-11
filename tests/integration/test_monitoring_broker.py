@@ -1,6 +1,6 @@
 """The broker supervisor driving the real monitor.py over a unix socket.
 
-No Docker and no Rust binary: a Python client speaks the shim's wire protocol,
+A Python client simulates a Docker container and connects to the shim's protocol,
 so this exercises the supervisor and the broker exactly as a run would.
 """
 
@@ -99,7 +99,7 @@ def test_starting_fabricates_no_record(broker: BrokerProcess) -> None:
 def test_a_dead_broker_refuses_connections_instead_of_hanging(
 	broker: BrokerProcess,
 ) -> None:
-	"""A dead broker must refuse connections rather than accept and stall.
+	"""A dead broker must refuse connections rather than accept and hang.
 
 	While any live process holds the listening socket, a broker that has died
 	still accepts into the backlog: connect(2) succeeds and the shim then blocks
@@ -114,8 +114,8 @@ def test_a_dead_broker_refuses_connections_instead_of_hanging(
 	socket_path = broker.socket_path
 	assert socket_path is not None
 
-	# Reaching for the child directly is the point: nothing else can simulate a
-	# broker that dies mid-run.
+	# Reaching for the child directly is the point to simulate a
+	# broker that crashes mid-run.
 	process = broker._process
 	assert process is not None
 	process.kill()
@@ -143,7 +143,7 @@ def test_a_command_is_recorded_with_its_output(broker: BrokerProcess) -> None:
 	assert record["argv"] == argv
 	assert record["exit_code"] == 0
 	assert record["complete"] is True
-	# The shape aebench audit-trace reads.
+	# The shape aebench audit trace reads.
 	assert record["monitors"]["timing"]["duration_ms"] >= 0
 	captured = broker.trace_dir / record["stdout"]["path"]
 	assert captured.read_bytes() == b"hello\n"
@@ -206,6 +206,51 @@ def test_an_interrupted_shell_still_leaves_a_record(broker: BrokerProcess) -> No
 	record = json.loads(broker.trace_path.read_text(encoding="utf-8").splitlines()[0])
 	assert record["complete"] is False
 	assert record["exit_code"] is None
+
+
+def test_a_command_that_edits_a_tracked_file_is_attributed_the_change(tmp_path: Path) -> None:
+	workspace = tmp_path / "workspace"
+	workspace.mkdir()
+	(workspace / "run.sh").write_text("echo run\n", encoding="utf-8")
+	(workspace / "plot.py").write_text("print(1)\n", encoding="utf-8")
+	broker = BrokerProcess(
+		trace_dir=tmp_path / "trace",
+		workspace_dir=workspace,
+		socket_root=tmp_path / "sockets",
+	)
+	broker.start()
+	try:
+		socket_path = broker.socket_path
+		assert socket_path is not None
+		client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+		client.connect(str(socket_path))
+		try:
+			info = {"argv": ["/bin/bash", "-c", "edit"], "cwd": "/repo", "pid": 1, "env_keys": []}
+			client.sendall(_frame(_COMMAND_INFO, json.dumps(info).encode("utf-8")))
+			length, _kind = _HEADER.unpack(client.recv(_HEADER.size))
+			client.recv(length)
+
+			# The "command" runs between the verdict and END.
+			(workspace / "run.sh").write_text("echo faked results\n", encoding="utf-8")
+			(workspace / "plot.py").unlink()
+			(workspace / "build.log").write_text("untracked\n", encoding="utf-8")
+
+			client.sendall(
+				_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8"))
+			)
+		finally:
+			client.close()
+
+		assert _wait_for(lambda: broker.command_count() == 1)
+		record = json.loads(broker.trace_path.read_text(encoding="utf-8").splitlines()[0])
+		snapshot = record["monitors"]["file_snapshot"]
+		assert snapshot["scope"] == "tracked"
+		assert snapshot["modified"] == ["run.sh"]
+		assert snapshot["deleted"] == ["plot.py"]
+		# Only the artifact's own files are compared.
+		assert snapshot["created"] == []
+	finally:
+		broker.stop()
 
 
 def test_stopping_releases_the_socket_and_keeps_the_trace(tmp_path: Path) -> None:
