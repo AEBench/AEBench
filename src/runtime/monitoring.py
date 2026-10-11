@@ -7,15 +7,20 @@ Two things are done here:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
+
+from models import TrackedFilesCheck
 
 from .backend import BenchRuntime
 
@@ -28,6 +33,11 @@ BROKER_SCRIPT = Path(__file__).with_name("shim") / "src" / "monitor.py"
 COMMAND_TRACE_BASENAME = "commands.jsonl"
 COMMAND_SOCKET_BASENAME = "command.sock"
 BROKER_LOG_BASENAME = "broker.log"
+# The artifact's files as they were before the agent ran, and how they compare
+# afterwards. Both live in the trace directory, which is never mounted into the
+# agent's container. monitor.py mirrors TRACKED_FILES_BASENAME.
+TRACKED_FILES_BASENAME = "tracked_files.json"
+TRACKED_FILES_DIFF_BASENAME = "tracked_files_diff.json"
 
 # Compiled into the shim (see shim/src/main.rs), so neither the socket path nor
 # the real shell has to appear in the agent's environment: the agent sees the
@@ -47,6 +57,8 @@ _BROKER_STOP_TIMEOUT_SECONDS = 10.0
 _SHIM_INSTALL_TIMEOUT_SECONDS = 60.0
 _PROBE_TIMEOUT_SECONDS = 30.0
 _PROBE_RECORD_TIMEOUT_SECONDS = 10.0
+_GIT_TIMEOUT_SECONDS = 120.0
+_HASH_CHUNK_BYTES = 1024 * 1024
 
 # install shim onto /bin/bash
 _INSTALL_SHIM = (
@@ -97,6 +109,8 @@ class BrokerProcess:
 			raise RuntimeError("the command broker is already running")
 
 		self.trace_dir.mkdir(parents=True, exist_ok=True)
+		# Save a list of tracked files before actually starting the container.
+		write_tracked_files(self.workspace_dir, self.trace_dir)
 		self._socket_root.mkdir(parents=True, exist_ok=True)
 		# Traversable so the container's agent can reach the socket, but not
 		# listable, and the generated name is unguessable.
@@ -193,3 +207,117 @@ def _broker_log_tail(trace_dir: Path) -> str:
 	except OSError:
 		return "(no broker log)"
 	return text.strip()[-2000:] or "(broker log is empty)"
+
+
+def write_tracked_files(workspace: Path, trace_dir: Path) -> Path:
+	"""Record the artifact's files size, last modification time and checksum SHA-256 before the agent runs."""
+	source, commit, paths = _list_artifact_files(workspace)
+	files: dict[str, dict[str, object]] = {}
+	for rel in paths:
+		state = _file_state(workspace / rel)
+		if state is not None:
+			files[rel] = state
+
+	target = trace_dir / TRACKED_FILES_BASENAME
+	target.write_text(
+		json.dumps({"source": source, "commit": commit, "files": files}, indent=1),
+		encoding="utf-8",
+	)
+	return target
+
+
+def check_tracked_files(workspace: Path, trace_dir: Path) -> TrackedFilesCheck | None:
+	"""Compare every tracked file against its recorded checksum."""
+	try:
+		recorded = json.loads((trace_dir / TRACKED_FILES_BASENAME).read_text(encoding="utf-8"))
+	except FileNotFoundError:
+		return None
+
+	modified: list[str] = []
+	deleted: list[str] = []
+	for rel, before in sorted(recorded["files"].items()):
+		after = _file_state(workspace / rel)
+		if after is None:
+			deleted.append(rel)
+		elif after["sha256"] != before["sha256"] or after["symlink"] != before["symlink"]:
+			modified.append(rel)
+
+	diff_path = trace_dir / TRACKED_FILES_DIFF_BASENAME
+	diff_path.write_text(
+		json.dumps(
+			{"tracked": len(recorded["files"]), "modified": modified, "deleted": deleted},
+			indent=1,
+		),
+		encoding="utf-8",
+	)
+	return TrackedFilesCheck(
+		diff_path=str(diff_path),
+		tracked=len(recorded["files"]),
+		modified_count=len(modified),
+		deleted_count=len(deleted),
+	)
+
+
+def _list_artifact_files(workspace: Path) -> tuple[str, str | None, list[str]]:
+	"""Returns (source, commit, workspace relative paths) for the artifact's own files."""
+	try:
+		listed = subprocess.run(
+			["git", "-C", str(workspace), "ls-files", "-z"],
+			capture_output=True,
+			timeout=_GIT_TIMEOUT_SECONDS,
+			check=False,
+		)
+		# An empty listing means the workspace is not a checkout of its own, only
+		# a directory inside some enclosing repository that does not track it.
+		if listed.returncode == 0 and listed.stdout:
+			head = subprocess.run(
+				["git", "-C", str(workspace), "rev-parse", "HEAD"],
+				capture_output=True,
+				text=True,
+				timeout=_GIT_TIMEOUT_SECONDS,
+				check=False,
+			)
+			commit = head.stdout.strip() if head.returncode == 0 else None
+			# Workspace relative paths, keep like this.
+			paths = [os.fsdecode(item) for item in listed.stdout.split(b"\0") if item]
+			return "git", commit, paths
+	except (OSError, subprocess.TimeoutExpired):
+		# No usable git on the host, so track every file instead.
+		logger.warning("git ls-files failed in %s; tracking every file", workspace, exc_info=True)
+
+	paths = []
+	for directory, subdirectories, filenames in os.walk(workspace):
+		subdirectories[:] = [name for name in subdirectories if name != ".git"]
+		for filename in filenames:
+			paths.append(os.path.relpath(os.path.join(directory, filename), workspace))
+	return "tree", None, paths
+
+
+def _file_state(path: Path) -> dict[str, object] | None:
+	"""Return size, modification time and checksum SHA-256 of the file."""
+	try:
+		info = os.lstat(path)
+	except OSError:
+		return None
+
+	symlink = stat.S_ISLNK(info.st_mode)
+	if symlink:
+		digest = hashlib.sha256(os.fsencode(os.readlink(path))).hexdigest()
+	elif stat.S_ISREG(info.st_mode):
+		digest = _sha256(path)
+	else:
+		return None
+	return {
+		"size": info.st_size,
+		"mtime_ns": info.st_mtime_ns,
+		"sha256": digest,
+		"symlink": symlink,
+	}
+
+
+def _sha256(path: Path) -> str:
+	digest = hashlib.sha256()
+	with path.open("rb") as handle:
+		while chunk := handle.read(_HASH_CHUNK_BYTES):
+			digest.update(chunk)
+	return digest.hexdigest()

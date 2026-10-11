@@ -330,17 +330,19 @@ class RuntimeInfo(_Model):
 	container_stopped: bool = False
 
 
+class TrackedFilesCheck(_Model):
+	diff_path: str
+	tracked: int
+	modified_count: int = 0
+	deleted_count: int = 0
+	created_count: int = 0
+
+
 class CommandMonitorInfo(_Model):
-	"""Where a monitored run's command trace landed, and what reached it.
-
-	The trace is stored per case under a run token rather than inside the run
-	output directory, so this block is the only link between a run and its
-	trace.
-	"""
-
 	run_token: str
 	trace_path: str
 	command_count: int = 0
+	tracked_files: TrackedFilesCheck | None = None
 
 
 class RunResult(_Model):
