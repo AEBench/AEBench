@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from evaluator.oracles import CaseOracleEnvSetupBase, utils  # type: ignore[import-untyped]
+from evaluator.oracles import CaseOracleEnvSetupBase  # type: ignore[import-untyped]
 from evaluator.oracles.checks import BaseCheck  # type: ignore[import-untyped]
 
 
