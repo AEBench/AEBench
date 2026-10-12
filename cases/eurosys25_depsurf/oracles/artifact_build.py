@@ -90,7 +90,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
                 timeout_seconds=1800.0,
             ),
             self.path_check(
-                name="depsurf_tracee_bpf_object_exists",
+                name="depsurf_trace_ebpf_object_exists",
                 path=tracee_bpf_object,
                 kind=PathKind.FILE,
             ),

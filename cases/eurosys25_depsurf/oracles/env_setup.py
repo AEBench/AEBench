@@ -49,7 +49,7 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
                 timeout_seconds=10.0,
             ),
             self.version_check(
-                name="llvm",
+                name="llvm_config",
                 cmd=("llvm-config", "--version"),
                 min_version=(14, 0, 0),
                 version_regex=r"([0-9]+(?:\.[0-9]+){1,2})",
