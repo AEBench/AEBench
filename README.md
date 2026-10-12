@@ -202,7 +202,6 @@ profile = "artifact-eval-v1"
 expected_score = 4
 phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
 score_mode = "phase_count"
-failure_mode = "fail_fast"
 
 [upstream]
 source_type = "git"

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from evaluator.oracles.execution import run_oracle
-from models import OracleResult, OracleStatus, RunResult
+from models import OracleFailureMode, OracleResult, OracleStatus, RunResult
 
 
 class OracleRunner(Protocol):
@@ -24,6 +24,7 @@ class OracleRunner(Protocol):
 		workspace_dir: Path | None = None,
 		runtime_session: Any | None = None,
 		runtime_backend: Any | None = None,
+		failure_mode: OracleFailureMode = OracleFailureMode.CONTINUE,
 	) -> OracleResult: ...
 
 
@@ -38,6 +39,7 @@ class DirectOracleRunner:
 		workspace_dir: Path | None = None,
 		runtime_session: Any | None = None,
 		runtime_backend: Any | None = None,
+		failure_mode: OracleFailureMode = OracleFailureMode.CONTINUE,
 	) -> OracleResult:
 		return run_oracle(
 			case_dir,
@@ -47,6 +49,7 @@ class DirectOracleRunner:
 			workspace_dir=workspace_dir,
 			runtime_session=runtime_session,
 			runtime_backend=runtime_backend,
+			failure_mode=failure_mode,
 		)
 
 
@@ -67,6 +70,7 @@ class SubprocessOracleRunner:
 		workspace_dir: Path | None = None,
 		runtime_session: Any | None = None,
 		runtime_backend: Any | None = None,
+		failure_mode: OracleFailureMode = OracleFailureMode.CONTINUE,
 	) -> OracleResult:
 		_ = case, runtime_session, runtime_backend
 		case_root = case_dir.resolve()
@@ -81,6 +85,7 @@ class SubprocessOracleRunner:
 				output_dir=output_dir,
 				runtime_result=runtime_result,
 				workspace_dir=workspace_dir,
+				failure_mode=failure_mode,
 			)
 			proc = subprocess.run(
 				_worker_command(context_path, result_path),
@@ -112,6 +117,7 @@ def _write_worker_context(
 	output_dir: Path,
 	runtime_result: Any,
 	workspace_dir: Path | None,
+	failure_mode: OracleFailureMode,
 ) -> None:
 	runtime_payload = (
 		runtime_result.model_dump(mode="json")
@@ -123,6 +129,7 @@ def _write_worker_context(
 		"output_dir": str(output_dir.resolve()),
 		"runtime_result": runtime_payload,
 		"workspace_dir": None if workspace_dir is None else str(workspace_dir.resolve()),
+		"failure_mode": OracleFailureMode(failure_mode).value,
 	}
 	path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
@@ -159,6 +166,7 @@ def _worker() -> int:
 			if payload.get("workspace_dir") is None
 			else Path(payload["workspace_dir"]).resolve()
 		),
+		failure_mode=OracleFailureMode(payload.get("failure_mode", OracleFailureMode.CONTINUE)),
 	)
 	Path(args.result_file).write_text(
 		json.dumps(result.model_dump(mode="json"), indent=2), encoding="utf-8"
