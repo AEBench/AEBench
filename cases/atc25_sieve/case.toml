@@ -1,0 +1,41 @@
+id = "atc25_sieve"
+
+[case_brief]
+core_claim = "Sieve is a fault injection testing framework that can successfully detect fine-grained fail-slow hardware failure bugs in cloud systems by exploring synchronized and timeout-protected I/O operations."
+acceptable_evidence = "The Sieve framework and ZooKeeper cluster build successfully within the Docker environment. The Sieve orchestrator engine runs, injects faults, and successfully reproduces the ZK-4 fail-slow bug, generating the 'differential observability' error in the system logs."
+allowed_tolerance = "n/a"
+
+[paper]
+title = "Understanding and Detecting Fail-Slow Hardware Failure Bugs in Cloud Systems"
+venue = "USENIX ATC 2025"
+url = "https://www.usenix.org/system/files/atc25-dong.pdf"
+sha256 = "ae622417032d8e8d12d835bed040de5bb2a0ec07350e3e7c1493ee41f6a5b729"
+
+[run]
+id = "atc25_sieve"
+
+[run.instructions]
+path = "README.md"
+
+[run.runtime]
+mode = "local"
+timeout_ms = 172800000      
+gpu = false
+interactive = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+failure_mode = "fail_fast"
+placeholder = false
+
+[upstream]
+source_type = "git"
+url = "https://github.com/RabbitDong-on/Sieve"
+ref = "00cab3736cd25c50206849f55a5cbdc4fa6b9944"
+requested_ref = "main"
+resolved_at = "2026-09-20T00:00:00+00:00"
