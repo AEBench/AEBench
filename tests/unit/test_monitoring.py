@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Mapping
 
@@ -102,17 +103,41 @@ def test_a_start_that_fails_to_spawn_leaves_nothing_behind(
 		raise OSError("fork failed")
 
 	monkeypatch.setattr(monitoring.subprocess, "Popen", refuse)
-	broker = BrokerProcess(
-		trace_dir=tmp_path / "trace",
-		workspace_dir=tmp_path,
-		socket_root=tmp_path / "sockets",
-	)
+	with tempfile.TemporaryDirectory(prefix="aebench-test-", dir="/tmp") as socket_root:
+		broker = BrokerProcess(
+			trace_dir=tmp_path / "trace",
+			workspace_dir=tmp_path,
+			socket_root=Path(socket_root),
+		)
 
-	with pytest.raises(OSError, match="fork failed"):
-		broker.start()
+		with pytest.raises(OSError, match="fork failed"):
+			broker.start()
 
-	assert list((tmp_path / "sockets").iterdir()) == []
-	assert broker.socket_dir is None
+		assert list(Path(socket_root).iterdir()) == []
+		assert broker.socket_dir is None
+
+
+def test_stop_reaps_the_broker_process(tmp_path: Path) -> None:
+	class FakeProcess:
+		def __init__(self) -> None:
+			self.killed = False
+			self.waited = False
+
+		def kill(self) -> None:
+			self.killed = True
+
+		def wait(self) -> int:
+			self.waited = True
+			return 0
+
+	process = FakeProcess()
+	broker = BrokerProcess(trace_dir=tmp_path, workspace_dir=tmp_path, socket_root=tmp_path)
+	broker._process = process  # type: ignore[assignment]
+
+	broker.stop()
+
+	assert process.killed is True
+	assert process.waited is True
 
 
 def test_verify_probes_as_the_agent_user(tmp_path: Path) -> None:

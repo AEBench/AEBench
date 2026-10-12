@@ -85,6 +85,7 @@ class _CaseRunner:
 		self.context = context
 		self.case_dir = case_dir
 		self.options = options
+		self.monitor_commands = options.monitor_commands or options.trajectory_audit
 		self.save_path = save_path
 		self.on_output_dir = on_output_dir
 
@@ -135,7 +136,7 @@ class _CaseRunner:
 			)
 		if self.task.runtime.mode == RuntimeMode.INHERIT:
 			raise ValueError("case execution requires runtime.mode to be local or docker")
-		if self.options.monitor_commands and self.task.runtime.mode != RuntimeMode.DOCKER:
+		if self.monitor_commands and self.task.runtime.mode != RuntimeMode.DOCKER:
 			raise ValueError(
 				"command monitoring requires runtime.mode = docker; monitoring a local "
 				"run would mean replacing the shell on this machine"
@@ -236,7 +237,7 @@ class _CaseRunner:
 
 			# Bound before the container starts, so no shell can ever reach a
 			# socket that is not yet listening.
-			if self.options.monitor_commands:
+			if self.monitor_commands:
 				run_token = secrets.token_hex(4)
 				self.monitor = BrokerProcess(
 					trace_dir=monitor_trace_dir(
