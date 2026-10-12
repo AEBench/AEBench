@@ -6,7 +6,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
 from evaluator.oracles.checks import (
     ListSimilarityCheck,
@@ -14,6 +13,7 @@ from evaluator.oracles.checks import (
     SimilarityMetric,
 )
 from evaluator.oracles.oracle_checks_runtime import OraclePath, RuntimeCheckExecutor
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 _log = logging.getLogger(__name__)
 
@@ -143,12 +143,12 @@ def _load_reference_csv(
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class NonEmptyFileCheck(utils.BaseCheck):
+class NonEmptyFileCheck(BaseCheck):
     path: Path
 
-    def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
+    def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
         if not executor.path_is_file(self.path):
-            return utils.CheckResult.failure(f"file missing: {self.path}")
+            return CheckResult.failure(f"file missing: {self.path}")
 
         try:
             result = executor.run_process_capture(
@@ -158,16 +158,16 @@ class NonEmptyFileCheck(utils.BaseCheck):
                 timeout_seconds=10.0,
             )
         except OSError as exc:
-            return utils.CheckResult.failure(f"cannot inspect {self.path}: {exc}")
+            return CheckResult.failure(f"cannot inspect {self.path}: {exc}")
 
         if result.returncode != 0:
-            return utils.CheckResult.failure(f"file is empty: {self.path}")
+            return CheckResult.failure(f"file is empty: {self.path}")
 
-        return utils.CheckResult.success()
+        return CheckResult.success()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class SimulationMetricCorrelationCheck(utils.BaseCheck):
+class SimulationMetricCorrelationCheck(BaseCheck):
     """Compare computed simulator metrics against reference values via Pearson similarity."""
 
     new_data_dir: Path
@@ -177,11 +177,11 @@ class SimulationMetricCorrelationCheck(utils.BaseCheck):
     threshold: float
     normalize_jct: bool = False
 
-    def check(self, executor: RuntimeCheckExecutor) -> utils.CheckResult:
+    def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
         try:
             ref_data = _load_reference_csv(self.reference_path, executor=executor)
         except (OSError, ValueError) as exc:
-            return utils.CheckResult.failure(f"cannot load reference {self.reference_path}: {exc}")
+            return CheckResult.failure(f"cannot load reference {self.reference_path}: {exc}")
 
         observed: list[float] = []
         reference: list[float] = []
@@ -227,7 +227,7 @@ class SimulationMetricCorrelationCheck(utils.BaseCheck):
                     reference.append(ref_val)
 
         if len(observed) < 3:
-            return utils.CheckResult.failure(
+            return CheckResult.failure(
                 f"too few data points for {self.metric} correlation "
                 f"(found {len(observed)}, need at least 3)"
             )
@@ -244,10 +244,10 @@ class SimulationMetricCorrelationCheck(utils.BaseCheck):
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
-    def requirements(self) -> Sequence[utils.BaseCheck]:
+    def requirements(self) -> Sequence[BaseCheck]:
         new_data = self.workspace_path("new_data")
 
-        reqs: list[utils.BaseCheck] = [
+        reqs: list[BaseCheck] = [
             self.path_check(
                 name="new_data_dir",
                 path=new_data,
