@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from evaluator.oracles import utils
+from evaluator.oracles import reporting
 from evaluator.oracles.bases import CaseOracleEnvSetupBase
 from evaluator.oracles.checks import PathKind
 
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
-    def requirements(self) -> Sequence[utils.BaseCheck]:
+    def requirements(self) -> Sequence[reporting.BaseCheck]:
         repo_root = self.workspace_path()
         bpftool_src_dir = repo_root / "depsurf" / "btf" / "bpftool" / "src"
 
@@ -58,7 +58,7 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
             self.version_check(
                 name="pahole",
                 cmd=("pahole", "--version"),
-                min_version=(1, 25, 0),
+                min_version=(1, 24, 0),
                 version_regex=r"v?([0-9]+(?:\.[0-9]+){1,2})",
                 timeout_seconds=10.0,
             ),
