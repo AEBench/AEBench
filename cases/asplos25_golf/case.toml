@@ -10,12 +10,22 @@ id = "asplos25_golf"
 
 [run.instructions]
 path = "README.md"
+required_evidence = [
+"Copy `results`, `results-perf.csv` and `results.tex` from the container's /usr/app/tester into the artifact directory (the workspace root); the experiment checks read them there.",
+]
 
 [run.runtime]
 mode = "docker"
 timeout_ms = 14400000
 gpu = false
 interactive = false
+# The agent may leave 9GBs in its container.
+snapshot_timeout_seconds = 600.0
+
+# run.sh builds the `golf` image the oracle targets, so the agent needs the host daemon.
+[run.artifact_requirements]
+docker = true
+compose = false
 
 [run.prompt]
 profile = "artifact-eval-v1"
