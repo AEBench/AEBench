@@ -2,7 +2,7 @@ id = "osdi25_basilisk"
 
 [case_brief]
 core_claim = "Set up the Basilisk artifact and reproduce its evaluation for all 16 distributed protocols, showing that provenance invariants automate proofs with few hints and reduce proof size relative to Kondo."
-acceptable_evidence = "The oracle accepts a complete zero-error verification log for all 16 protocols, the required generated outputs, exact hint counts, and a sloc.csv matching the bundled reference within the stated tolerances."
+acceptable_evidence = "The oracle accepts a complete zero-error verification log for all 16 protocols, the required generated outputs, exact hint counts, and a sloc.csv matching the oracle's reference within the stated tolerances."
 allowed_tolerance = "Verification permits no errors or timeouts; hint counts and Kondo SLOC are exact; Basilisk safety and total proof SLOC may differ by at most ±5 lines per protocol."
 
 [paper]

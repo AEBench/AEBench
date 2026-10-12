@@ -221,6 +221,20 @@ def _case_run(args: argparse.Namespace) -> int:
 	if monitor is not None:
 		print(f"Command trace: {monitor.trace_path}")
 		print(f"Commands recorded: {monitor.command_count}")
+		if monitor.tracked_files is not None:
+			tracked = monitor.tracked_files
+			print(
+				f"Artifact files changed: {tracked.modified_count} modified, "
+				f"{tracked.deleted_count} deleted, {tracked.mode_changed_count} mode changed "
+				f"of {tracked.tracked} ({tracked.diff_path})"
+			)
+		if monitor.system_files is not None:
+			system = monitor.system_files
+			print(
+				f"Container system files changed: {system.executables_count} executables, "
+				f"{system.python_startup_count} Python startup hooks, {system.etc_count} in /etc "
+				f"({system.diff_path})"
+			)
 	print(f"Case status: {result.status.value}")
 	print(f"Oracle score: {result.oracle_result.score}")
 	return 0 if result.status.value == "success" else 1
