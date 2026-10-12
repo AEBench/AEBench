@@ -25,7 +25,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
         basenames = manifest.get("basenames")
 
         if not isinstance(dataset_root_value, str) or not dataset_root_value.strip():
-            raise ValueError("dataset manifest has invalid dataset_root directory")
+            raise ValueError("dataset manifest has invalid dataset_root")
 
         if not isinstance(subdirs, list) or not all(
             isinstance(value, str) and value.strip() for value in subdirs
