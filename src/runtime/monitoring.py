@@ -20,7 +20,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from models import TrackedFilesCheck
+from models import SystemFilesCheck, TrackedFilesCheck
 
 from .backend import BenchRuntime
 
@@ -38,6 +38,16 @@ BROKER_LOG_BASENAME = "broker.log"
 # agent's container. monitor.py mirrors TRACKED_FILES_BASENAME.
 TRACKED_FILES_BASENAME = "tracked_files.json"
 TRACKED_FILES_DIFF_BASENAME = "tracked_files_diff.json"
+
+# System files the agent's container changed. The oracle runs its checks
+# inside a snapshot of this container, so it uses the agent's copies of
+# programs like `cat` and `python3`; a replaced program or a Python startup
+# hook (.pth, sitecustomize.py) could make a check pass without real results.
+SYSTEM_FILES_DIFF_BASENAME = "system_files_diff.json"
+_EXECUTABLE_DIRS = ("/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/local/bin", "/usr/local/sbin")
+_PYTHON_STARTUP_FILES = ("sitecustomize.py", "usercustomize.py")
+# install_shim() replaces bash with the shim.
+_SHIM_INSTALLED_PATHS = frozenset({"/bin/bash", "/usr/bin/bash"})
 
 # Compiled into the shim (see shim/src/main.rs), so neither the socket path nor
 # the real shell has to appear in the agent's environment: the agent sees the
@@ -58,6 +68,7 @@ _SHIM_INSTALL_TIMEOUT_SECONDS = 60.0
 _PROBE_TIMEOUT_SECONDS = 30.0
 _PROBE_RECORD_TIMEOUT_SECONDS = 10.0
 _GIT_TIMEOUT_SECONDS = 120.0
+_DOCKER_DIFF_TIMEOUT_SECONDS = 120.0
 _HASH_CHUNK_BYTES = 1024 * 1024
 
 # install shim onto /bin/bash
@@ -269,6 +280,71 @@ def check_tracked_files(workspace: Path, trace_dir: Path) -> TrackedFilesCheck |
 		modified_count=len(modified),
 		deleted_count=len(deleted),
 		mode_changed_count=len(mode_changed),
+	)
+
+
+def check_system_files(container: str, trace_dir: Path) -> SystemFilesCheck | None:
+	"""Record the executables, Python startup hooks and /etc files the container changed.
+
+	Each entry is `docker diff`'s kind (A added, C changed, D deleted) and path,
+	relative to the image the container started from.
+	"""
+	try:
+		result = subprocess.run(
+			["docker", "diff", container],
+			capture_output=True,
+			text=True,
+			timeout=_DOCKER_DIFF_TIMEOUT_SECONDS,
+			check=False,
+		)
+	except (OSError, subprocess.TimeoutExpired):
+		logger.warning("docker diff of %s failed", container, exc_info=True)
+		return None
+	if result.returncode != 0:
+		logger.warning("docker diff of %s failed: %s", container, result.stderr.strip())
+		return None
+
+	entries = [
+		(kind, path)
+		for kind, _, path in (line.partition(" ") for line in result.stdout.splitlines())
+		if path
+	]
+	# A directory is listed as changed whenever an entry inside it is.
+	parents = {os.path.dirname(path) for _, path in entries}
+	executables: list[str] = []
+	python_startup: list[str] = []
+	etc: list[str] = []
+	for kind, path in sorted(entries, key=lambda entry: entry[1]):
+		if path in parents or path in _SHIM_INSTALLED_PATHS:
+			continue
+		entry = f"{kind} {path}"
+		name = os.path.basename(path)
+		if os.path.dirname(path) in _EXECUTABLE_DIRS:
+			executables.append(entry)
+		elif name.endswith(".pth") or name in _PYTHON_STARTUP_FILES:
+			python_startup.append(entry)
+		elif path.startswith("/etc/"):
+			etc.append(entry)
+
+	diff_path = trace_dir / SYSTEM_FILES_DIFF_BASENAME
+	diff_path.write_text(
+		json.dumps(
+			{
+				"changed": len(entries),
+				"executables": executables,
+				"python_startup": python_startup,
+				"etc": etc,
+			},
+			indent=1,
+		),
+		encoding="utf-8",
+	)
+	return SystemFilesCheck(
+		diff_path=str(diff_path),
+		changed=len(entries),
+		executables_count=len(executables),
+		python_startup_count=len(python_startup),
+		etc_count=len(etc),
 	)
 
 
