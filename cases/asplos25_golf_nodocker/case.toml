@@ -1,0 +1,58 @@
+id = "asplos25_golf_nodocker"
+
+[case_brief]
+core_claim = "build golf from source without Docker (the baseline and Golf Go toolchains and golf-tester, natively in the agent environment) and reproduce the benchmark outputs"
+acceptable_evidence = "build artifacts present, datasets at expected sizes"
+allowed_tolerance = "Results may vary across environments but must preserve the reference trend."
+
+[run]
+id = "asplos25_golf_nodocker"
+
+[run.instructions]
+path = "README.md"
+required_evidence = [
+"Build `baseline/` and `golf/` in place in the workspace, so that `baseline/bin/go` and `golf/bin/go` exist, and build `tester/golf-tester`; the build checks run these binaries from the workspace.",
+"Leave `results`, `results-perf.csv` and `results.tex` from the two golf-tester runs in the workspace root or in `tester/`; the experiment checks read them there.",
+]
+
+[run.runtime]
+mode = "docker"
+timeout_ms = 14400000
+gpu = false
+interactive = false
+# The oracle checks the build in a snapshot of the agent container, which includes whatever the agent
+# installed outside the workspace (e.g. a bootstrap Go); 60 s can be too short to commit it.
+snapshot_timeout_seconds = 600.0
+
+# Reproduce golf natively: no host Docker socket, so the README's `docker build` path is unavailable.
+[run.artifact_requirements]
+docker = false
+compose = false
+
+[run.prompt]
+profile = "artifact-eval-v1"
+append = """
+Docker is not available in this environment: there is no Docker daemon. Do not install or start one, and do not
+use any other container runtime. Reproduce golf natively instead: carry out the steps of the artifact's
+Dockerfile yourself, in the workspace.
+"""
+
+[oracle]
+expected_score = 4
+phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
+score_mode = "phase_count"
+placeholder = false
+
+# Without Docker there is no `golf` image: the build and benchmark checks run in the snapshot of the
+# agent container ("task"), whose working directory is the workspace.
+[oracle.phase_targets]
+env_setup = "task"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "local"
+
+[upstream]
+source_type = "git"
+url = "https://github.com/VladSaioc/ASPLOS-artifact-2025"
+ref = "d00cf120331fc5dcaf43d37788bbc041f8b99abe"
+resolved_at = "2026-04-11T02:02:17.900240+00:00"

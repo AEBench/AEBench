@@ -13,6 +13,9 @@
     "asplos25_golf": {
       "path": "cases/asplos25_golf"
     },
+    "asplos25_golf_nodocker": {
+      "path": "cases/asplos25_golf_nodocker"
+    },
     "asplos24_morphqpv": {
       "path": "cases/asplos24_morphqpv"
     },

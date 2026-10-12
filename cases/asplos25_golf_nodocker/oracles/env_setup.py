@@ -1,0 +1,45 @@
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+from evaluator.oracles import (
+	CaseOracleEnvSetupBase,
+	PathKind,
+)
+from evaluator.oracles.reporting import BaseCheck
+
+from .consts import DOCKERFILE_PATH, GCC_MIN_VERSION, README_PATH, RUN_SH_PATH
+
+
+class OracleEnvSetup(CaseOracleEnvSetupBase):
+	def requirements(self) -> Sequence[BaseCheck]:
+		repo_root = self.workspace_path()
+
+		return (
+			self.version_check(
+				name="gcc",
+				cmd=("gcc", "--version"),
+				min_version=GCC_MIN_VERSION,
+			),
+			self.path_check(
+				name="repo_root_exists",
+				path=repo_root,
+				kind=PathKind.DIRECTORY,
+			),
+			self.path_check(
+				name="dockerfile_exists",
+				path=repo_root / DOCKERFILE_PATH,
+				kind=PathKind.FILE,
+			),
+			self.path_check(
+				name="readme_exists",
+				path=repo_root / README_PATH,
+				kind=PathKind.FILE,
+				optional=True,
+			),
+			self.path_check(
+				name="run_script_exists",
+				path=repo_root / RUN_SH_PATH,
+				kind=PathKind.FILE,
+			),
+		)
