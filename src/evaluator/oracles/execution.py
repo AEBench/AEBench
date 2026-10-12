@@ -51,7 +51,7 @@ def run_oracle_classes(
 	context: OracleInput,
 	*,
 	classes: Sequence[DiscoveredOracleClass],
-	failure_mode: OracleFailureMode | str = OracleFailureMode.FAIL_FAST,
+	failure_mode: OracleFailureMode | str = OracleFailureMode.CONTINUE,
 ) -> OracleResult:
 	"""Runs discovered oracle phases in their configured order.
 
@@ -98,9 +98,10 @@ def run_oracle_classes(
 				summary="phase raised an unexpected exception",
 				error=f"{type(exc).__name__}: {exc}",
 			)
-			failed_phases.append(definition.name)
 
 		results.append(phase_result)
+		if phase_result.status != OracleStatus.SUCCESS:
+			failed_phases.append(definition.name)
 
 		if phase_result.status != OracleStatus.SUCCESS and mode == OracleFailureMode.FAIL_FAST:
 			# Pending entries preserve the complete phase plan in the result
@@ -179,6 +180,7 @@ def run_oracle(
 	workspace_dir: Path | None = None,
 	runtime_session: Any | None = None,
 	runtime_backend: Any | None = None,
+	failure_mode: OracleFailureMode = OracleFailureMode.CONTINUE,
 ) -> OracleResult:
 	"""Loads and runs all oracle phases for a case.
 
@@ -195,6 +197,7 @@ def run_oracle(
 		workspace_dir: Explicit workspace override.
 		runtime_session: Active runtime session available to oracle checks.
 		runtime_backend: Backend associated with the active session.
+		failure_mode: Whether evaluation stops after the first failed phase.
 
 	Returns:
 		The aggregate oracle result.
@@ -210,7 +213,6 @@ def run_oracle(
 		if spec.oracle is None:
 			raise RuntimeError(f"case {spec.id!r} does not define an oracle configuration")
 
-		failure_mode = spec.oracle.failure_mode
 		artifact_dir = (case_root / ARTIFACT_DIRNAME).resolve(strict=False)
 		resolved_workspace_dir = _resolve_workspace_dir(
 			case_root=case_root,

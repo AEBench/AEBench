@@ -112,7 +112,7 @@ def _make_case_spec(id: str = "fixture_case") -> CaseConfig:
 			sha256="2717c4619708f534915e7b567feaa6a1001e1a5f782268e47e7dabdefb380de4",
 			title="Example Paper",
 		),
-		oracle=OracleConfig(expected_score=4, failure_mode=OracleFailureMode.CONTINUE),
+		oracle=OracleConfig(expected_score=4),
 	)
 
 
@@ -255,7 +255,6 @@ def fixture_case_dir_with_toml(fixture_case_dir: Path) -> Path:
 
 		[oracle]
 		expected_score = 4
-		failure_mode = "continue"
 	""")
 	(fixture_case_dir / "case.toml").write_text(toml_content, encoding="utf-8")
 	(fixture_case_dir / "artifact").mkdir(exist_ok=True)
@@ -283,3 +282,24 @@ def test_subprocess_oracle_runner_matches_direct(
 
 	assert result.status == OracleStatus.SUCCESS
 	assert result.score == 4
+
+
+@pytest.mark.sanity
+def test_subprocess_oracle_runner_honors_fail_fast(
+	fixture_case_dir_with_toml: Path, empty_workspace: Path, tmp_path: Path
+) -> None:
+	result = SubprocessOracleRunner().execute(
+		fixture_case_dir_with_toml,
+		runtime_result=_make_run_result("fixture_case", str(empty_workspace)),
+		output_dir=tmp_path / "output_subprocess_fail_fast",
+		failure_mode=OracleFailureMode.FAIL_FAST,
+	)
+
+	assert result.status == OracleStatus.ERROR
+	assert result.score == 1
+	assert [phase.status for phase in result.phases] == [
+		OracleStatus.SUCCESS,
+		OracleStatus.ERROR,
+		OracleStatus.PENDING,
+		OracleStatus.PENDING,
+	]

@@ -2,33 +2,27 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from evaluator.oracles.env_setup_checks import (
-	DependencyVersionCheck,
-	FilesystemPathCheck,
-	PathType,
-)
-from evaluator.oracles.utils import Checkable, RuntimeCheckExecutor
-
-from evaluator.oracles import utils
-from evaluator.oracles.discovery import env_setup
+from evaluator.oracles import CaseOracleEnvSetupBase, PathCheck, PathKind, VersionCheck
+from evaluator.oracles import reporting
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
+from evaluator.oracles.reporting import BaseCheck
 from models import OracleInput
 
 
-@env_setup
-def oracle_env_setup(context: OracleInput) -> Sequence[Checkable]:
+def oracle_env_setup(context: OracleInput) -> Sequence[BaseCheck]:
 	repo_root = context.workspace_dir
 	benchmarks_root = context.workspace_dir / "benchmarks"
 
 	def _check_runtime_dir_env(
 		executor: RuntimeCheckExecutor, var_name: str
-	) -> utils.CheckResult:
+	) -> reporting.CheckResult:
 		try:
-			raw_value = utils.read_check_env_var(var_name, executor=executor)
+			raw_value = executor.read_env_var(var_name)
 		except (RuntimeError, ValueError) as exc:
-			return utils.CheckResult.failure(str(exc))
+			return reporting.CheckResult.failure(str(exc))
 		if raw_value is None or not raw_value.strip():
-			return utils.CheckResult.failure(f"{var_name} is not set")
-		proc = utils.run_check_process_capture(
+			return reporting.CheckResult.failure(f"{var_name} is not set")
+		proc = executor.run_process_capture(
 			cmd=(
 				"python3",
 				"-c",
@@ -42,10 +36,9 @@ def oracle_env_setup(context: OracleInput) -> Sequence[Checkable]:
 			cwd=repo_root,
 			env=None,
 			timeout_seconds=5.0,
-			executor=executor,
 		)
 		if proc.timed_out:
-			return utils.CheckResult.failure(
+			return reporting.CheckResult.failure(
 				f"{var_name} directory check timed out",
 				stdout=proc.stdout,
 				stderr=proc.stderr,
@@ -53,14 +46,14 @@ def oracle_env_setup(context: OracleInput) -> Sequence[Checkable]:
 				cwd=repo_root,
 			)
 		if proc.returncode != 0:
-			return utils.CheckResult.failure(
+			return reporting.CheckResult.failure(
 				f"{var_name} does not point to a directory: {raw_value}",
 				stdout=proc.stdout,
 				stderr=proc.stderr,
 				returncode=proc.returncode,
 				cwd=repo_root,
 			)
-		return utils.CheckResult.success(
+		return reporting.CheckResult.success(
 			f"{var_name} points to {raw_value}",
 			stdout=proc.stdout,
 			stderr=proc.stderr,
@@ -69,41 +62,41 @@ def oracle_env_setup(context: OracleInput) -> Sequence[Checkable]:
 		)
 
 	return (
-		DependencyVersionCheck(
+		VersionCheck(
 			name="git",
 			cmd=("git", "--version"),
 			min_version=(0, 0, 0),
 			timeout_seconds=5.0,
 		),
-		DependencyVersionCheck(
+		VersionCheck(
 			name="maven",
 			cmd=("mvn", "-v"),
 			min_version=(3, 6, 3),
 			version_regex=r"Apache Maven\s+([0-9.]+)",
 			timeout_seconds=5.0,
 		),
-		DependencyVersionCheck(
+		VersionCheck(
 			name="gradle",
 			cmd=("gradle", "-v"),
 			min_version=(4, 4, 1),
 			version_regex=r"Gradle\s+([0-9.]+)",
 			timeout_seconds=5.0,
 		),
-		DependencyVersionCheck(
+		VersionCheck(
 			name="ant",
 			cmd=("ant", "-version"),
 			min_version=(1, 10, 0),
 			version_regex=r"version\s+([0-9.]+)",
 			timeout_seconds=5.0,
 		),
-		DependencyVersionCheck(
+		VersionCheck(
 			name="python3",
 			cmd=("python3", "--version"),
 			min_version=(3, 10, 0),
 			version_regex=r"Python\s+([0-9.]+)",
 			timeout_seconds=5.0,
 		),
-		DependencyVersionCheck(
+		VersionCheck(
 			name="java",
 			cmd=("java", "-version"),
 			min_version=(1, 8, 0),
@@ -111,74 +104,79 @@ def oracle_env_setup(context: OracleInput) -> Sequence[Checkable]:
 			version_regex=r'version\s+"([^"]+)"',
 			timeout_seconds=5.0,
 		),
-		DependencyVersionCheck(
+		VersionCheck(
 			name="tree",
 			cmd=("tree", "--version"),
 			min_version=(0, 0, 0),
 			optional=True,
 			timeout_seconds=5.0,
 		),
-		utils.Check(
+		reporting.Check(
 			name="WASABI_ROOT_DIR_is_directory",
 			fn=lambda executor: _check_runtime_dir_env(executor, "WASABI_ROOT_DIR"),
 		),
-		FilesystemPathCheck(
+		PathCheck(
 			name="wasabi_root_directory_exists",
 			path=repo_root,
-			path_type=PathType.DIRECTORY,
+			kind=PathKind.DIRECTORY,
 		),
-		utils.Check(
+		reporting.Check(
 			name="JAVA_HOME_is_directory",
 			fn=lambda executor: _check_runtime_dir_env(executor, "JAVA_HOME"),
 		),
-		FilesystemPathCheck(
+		PathCheck(
 			name="benchmarks_directory_exists",
 			path=benchmarks_root,
-			path_type=PathType.DIRECTORY,
+			kind=PathKind.DIRECTORY,
 		),
-		FilesystemPathCheck(
+		PathCheck(
 			name="config_directory_exists",
 			path=repo_root / "config",
-			path_type=PathType.DIRECTORY,
+			kind=PathKind.DIRECTORY,
 		),
-		FilesystemPathCheck(
+		PathCheck(
 			name="utils_directory_exists",
 			path=repo_root / "utils",
-			path_type=PathType.DIRECTORY,
+			kind=PathKind.DIRECTORY,
 		),
-		FilesystemPathCheck(
+		PathCheck(
 			name="pom_xml_exists",
 			path=repo_root / "pom.xml",
-			path_type=PathType.FILE,
+			kind=PathKind.FILE,
 		),
-		FilesystemPathCheck(
+		PathCheck(
 			name="utils_prereqs_sh_exists",
 			path=repo_root / "utils" / "prereqs.sh",
-			path_type=PathType.FILE,
+			kind=PathKind.FILE,
 		),
-		FilesystemPathCheck(
+		PathCheck(
 			name="utils_run_py_exists",
 			path=repo_root / "utils" / "run.py",
-			path_type=PathType.FILE,
+			kind=PathKind.FILE,
 		),
-		FilesystemPathCheck(
+		PathCheck(
 			name="utils_display_bug_results_py_exists",
 			path=repo_root / "utils" / "display_bug_results.py",
-			path_type=PathType.FILE,
+			kind=PathKind.FILE,
 		),
-		FilesystemPathCheck(
+		PathCheck(
 			name="config_hadoop_example_conf_exists",
 			path=repo_root / "config" / "hadoop" / "example.conf",
-			path_type=PathType.FILE,
+			kind=PathKind.FILE,
 		),
-		FilesystemPathCheck(
+		PathCheck(
 			name="config_hadoop_hadoop_conf_exists",
 			path=repo_root / "config" / "hadoop" / "hadoop.conf",
-			path_type=PathType.FILE,
+			kind=PathKind.FILE,
 		),
-		FilesystemPathCheck(
+		PathCheck(
 			name="config_hadoop_pom_hadoop_xml_exists",
 			path=repo_root / "config" / "hadoop" / "pom-hadoop.xml",
-			path_type=PathType.FILE,
+			kind=PathKind.FILE,
 		),
 	)
+
+
+class OracleEnvSetup(CaseOracleEnvSetupBase):
+	def requirements(self) -> Sequence[BaseCheck]:
+		return oracle_env_setup(self.context)

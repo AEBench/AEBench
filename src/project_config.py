@@ -1,3 +1,5 @@
+"""Load and validate project, workspace, and user configuration."""
+
 from __future__ import annotations
 
 import json
@@ -34,8 +36,11 @@ def _require_relative(path_text: str, field_name: str) -> None:
 
 
 class ArtifactMode(str, Enum):
+	"""Select local artifacts, an upstream checkout, or an upstream overlay."""
+
 	LOCAL = "local"
 	UPSTREAM = "upstream"
+	# Case bundles may include local artifacts in an overlay when enabled.
 	OVERLAY = "overlay"
 
 

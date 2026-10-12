@@ -5,13 +5,15 @@ import io
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluator.oracles.env_setup_checks import FilesystemPathCheck, PathType
-from evaluator.oracles.experiment_runs_checks import ElementwiseSimilarityThresholdCheck
-from evaluator.oracles.utils import Checkable
-
-from evaluator.oracles import utils
-from evaluator.oracles.discovery import experiment_runs
+from evaluator.oracles import (
+	CaseOracleExperimentRunsBase,
+	ElementwiseSimilarityThresholdCheck,
+	PathCheck,
+	PathKind,
+)
+from evaluator.oracles import reporting
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor, RuntimePath
+from evaluator.oracles.reporting import BaseCheck
 from models import OracleInput
 
 
@@ -68,13 +70,12 @@ def _load_observed(
 	return observed
 
 
-@experiment_runs
-def oracle_experiment_runs(context: OracleInput) -> Sequence[Checkable]:
+def oracle_experiment_runs(context: OracleInput) -> Sequence[BaseCheck]:
 	repo_root = context.workspace_dir
 	results_root = repo_root / "results"
 	truth_path = context.case_dir / "refs" / "bugs_ground_truth.csv"
 
-	def _check_ground_truth_coverage(executor: RuntimeCheckExecutor) -> utils.CheckResult:
+	def _check_ground_truth_coverage(executor: RuntimeCheckExecutor) -> reporting.CheckResult:
 		try:
 			truth = _load_ground_truth(truth_path, executor=executor)
 			location_to_benchmark = {
@@ -88,7 +89,7 @@ def oracle_experiment_runs(context: OracleInput) -> Sequence[Checkable]:
 				executor=executor,
 			)
 		except ValueError as exc:
-			return utils.CheckResult.failure(str(exc))
+			return reporting.CheckResult.failure(str(exc))
 
 		buckets = sorted(truth)
 		reference_counts = [float(len(truth[bucket])) for bucket in buckets]
@@ -104,22 +105,27 @@ def oracle_experiment_runs(context: OracleInput) -> Sequence[Checkable]:
 		if result.ok:
 			matched = int(sum(observed_counts))
 			total = int(sum(reference_counts))
-			return utils.CheckResult.success(f"matched {matched}/{total} benchmark bug signatures")
+			return reporting.CheckResult.success(f"matched {matched}/{total} benchmark bug signatures")
 		return result
 
 	return (
-		FilesystemPathCheck(
+		PathCheck(
 			name="results_root_exists",
 			path=results_root,
-			path_type=PathType.DIRECTORY,
+			kind=PathKind.DIRECTORY,
 		),
-		FilesystemPathCheck(
+		PathCheck(
 			name="ground_truth_csv_exists",
 			path=truth_path,
-			path_type=PathType.FILE,
+			kind=PathKind.FILE,
 		),
-		utils.Check(
+		reporting.Check(
 			name="ground_truth_coverage_by_bucket",
 			fn=_check_ground_truth_coverage,
 		),
 	)
+
+
+class OracleExperimentRuns(CaseOracleExperimentRunsBase):
+	def requirements(self) -> Sequence[BaseCheck]:
+		return oracle_experiment_runs(self.context)
