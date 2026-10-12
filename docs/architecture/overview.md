@@ -33,7 +33,7 @@ Every case uses the same four-phase structure, always in this order:
 3. **benchmark_prep** — datasets downloaded, checksums match, instrumentation hooks work
 4. **experiment_runs** — experiments ran and produce results within tolerance of the reference
 
-Each phase that passes scores one point. Most cases have all four phases, so the expected score is 4. The default `failure_mode` is `fail_fast`, which means if a phase fails the remaining ones are skipped (marked `PENDING`). This makes sense because you cant build without the environment, cant run experiments without the build, and so on.
+Each phase that passes scores one point. Most cases have all four phases, so the expected score is 4. By default every phase runs even if an earlier one fails. Pass `--oracle-fail-fast` to skip the remaining phases (marked `PENDING`) after the first failure, which is useful because you cant build without the environment, cant run experiments without the build, and so on.
 
 ## 3. How a case run works
 

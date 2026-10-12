@@ -8,7 +8,7 @@ from config import AppState, resolve_settings
 from evaluator.loader import load_case_spec
 from evaluator.registry import resolve_case_dir
 from log import configure_logging
-from models import AGENT_NAMES, RunOptions
+from models import AGENT_NAMES, OracleFailureMode, RunOptions
 from project_config import load_project_config
 from runtime.oracle_runner import DirectOracleRunner
 
@@ -75,6 +75,7 @@ def _build_parser() -> argparse.ArgumentParser:
 	case_oracle.add_argument("case_ref")
 	case_oracle.add_argument("--output-dir", default=None)
 	case_oracle.add_argument("--workspace-dir", default=None)
+	_add_oracle_options(case_oracle)
 
 	runtime_p = sub.add_parser("runtime", help="Low-level runtime workflows.")
 	runtime_sub = runtime_p.add_subparsers(dest="runtime_command")
@@ -82,6 +83,16 @@ def _build_parser() -> argparse.ArgumentParser:
 	_add_run_options(runtime_run)
 	runtime_run.add_argument("--input-file", required=True)
 	runtime_run.add_argument("--output-dir", default=None)
+
+	trace_p = sub.add_parser("trace", help="Export and view agent traces.")
+	trace_sub = trace_p.add_subparsers(dest="trace_command")
+	trace_export = trace_sub.add_parser("export", help="Export a run as a trace website.")
+	trace_export.add_argument("run_dir")
+	trace_export.add_argument("--output-dir", required=True)
+	trace_serve = trace_sub.add_parser("serve", help="Serve an exported trace site.")
+	trace_serve.add_argument("site_dir")
+	trace_serve.add_argument("--host", default="127.0.0.1")
+	trace_serve.add_argument("--port", type=int, default=8000)
 	return parser
 
 
@@ -105,8 +116,22 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
 		help="Allow the agent to control the host Docker daemon.",
 	)
 	parser.add_argument("--cleanup-workspace", action="store_true")
+	parser.add_argument(
+		"--preserve-runtime",
+		action="store_true",
+		help="Preserve the post-agent Docker snapshot after the run.",
+	)
 	parser.add_argument("--prompt-profile", default=None)
 	parser.add_argument("--prompt-append", default=None)
+	_add_oracle_options(parser)
+
+
+def _add_oracle_options(parser: argparse.ArgumentParser) -> None:
+	parser.add_argument(
+		"--oracle-fail-fast",
+		action="store_true",
+		help="Stop oracle evaluation at the first failed phase.",
+	)
 
 
 def _add_monitor_options(parser: argparse.ArgumentParser) -> None:
@@ -137,6 +162,7 @@ def cli_main(argv: list[str] | None = None) -> int:
 			"run": _run_benchmark,
 			"case": _handle_case,
 			"runtime": _handle_runtime,
+			"trace": _handle_trace,
 		}[args.command](args)
 	except KeyboardInterrupt:
 		print("Interrupted", file=sys.stderr)
@@ -171,6 +197,23 @@ def _handle_runtime(args: argparse.Namespace) -> int:
 	if getattr(args, "runtime_command", None) == "run":
 		return _runtime_run(args)
 	print("usage: aebench runtime {run}", file=sys.stderr)
+	return 1
+
+
+def _handle_trace(args: argparse.Namespace) -> int:
+	trace_command = getattr(args, "trace_command", None)
+	if trace_command == "export":
+		from trace_viewer import export_trace_site
+
+		index_path = export_trace_site(Path(args.run_dir), Path(args.output_dir))
+		print(f"Trace site: {index_path}")
+		return 0
+	if trace_command == "serve":
+		from trace_viewer import serve_trace_site
+
+		serve_trace_site(Path(args.site_dir), host=args.host, port=args.port)
+		return 0
+	print("usage: aebench trace {export,serve}", file=sys.stderr)
 	return 1
 
 
@@ -295,6 +338,9 @@ def _case_oracle(args: argparse.Namespace) -> int:
 		output_dir=output_dir,
 		case=case,
 		workspace_dir=_optional_path(args.workspace_dir),
+		failure_mode=(
+			OracleFailureMode.FAIL_FAST if args.oracle_fail_fast else OracleFailureMode.CONTINUE
+		),
 	)
 	print(f"Oracle status: {result.status.value}")
 	print(f"Score: {result.score}/{case.oracle.expected_score}")
@@ -324,9 +370,11 @@ def _run_options(args: argparse.Namespace) -> RunOptions:
 		prompt_profile=getattr(args, "prompt_profile", None),
 		prompt_append=getattr(args, "prompt_append", None),
 		cleanup_workspace=bool(getattr(args, "cleanup_workspace", False)),
+		preserve_runtime=bool(getattr(args, "preserve_runtime", False)),
 		skip_incompatible=bool(getattr(args, "skip_incompatible", False)),
 		monitor_commands=bool(getattr(args, "monitor_commands", False)),
 		monitor_socket_root=getattr(args, "socket_dir", None),
+		oracle_fail_fast=bool(getattr(args, "oracle_fail_fast", False)),
 	)
 
 

@@ -105,6 +105,7 @@ agent-work/
 agent_logs/
 agent_logs*/
 .agent_logs/
+.trace-site/
 .agent_state/
 .agent_cache/
 .agent_history/
