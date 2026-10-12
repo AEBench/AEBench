@@ -32,11 +32,13 @@ phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
 score_mode = "phase_count"
 placeholder = false
 
+# All phases run in the default `task` target (the committed agent container),
+# where the agent installed the environment and produced the results.
 [oracle.phase_targets]
-env_setup = "local"
-artifact_build = "local"
-benchmark_prep = "local"
-experiment_runs = "local"
+env_setup = "task"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "task"
 
 [upstream]
 source_type = "git"
