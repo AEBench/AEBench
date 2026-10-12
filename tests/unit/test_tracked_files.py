@@ -82,7 +82,6 @@ def test_the_check_reports_modified_and_deleted_tracked_files(tmp_path: Path) ->
 	assert check is not None
 	assert check.tracked == 3
 	assert (check.modified_count, check.deleted_count) == (1, 1)
-	assert check.created_count == 0
 	diff = json.loads((trace / TRACKED_FILES_DIFF_BASENAME).read_text(encoding="utf-8"))
 	assert diff == {
 		"tracked": 3,

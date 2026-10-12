@@ -336,7 +336,6 @@ class TrackedFilesCheck(_Model):
 	modified_count: int = 0
 	deleted_count: int = 0
 	mode_changed_count: int = 0
-	created_count: int = 0
 
 
 class CommandMonitorInfo(_Model):

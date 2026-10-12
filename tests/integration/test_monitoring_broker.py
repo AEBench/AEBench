@@ -247,8 +247,6 @@ def test_a_command_that_edits_a_tracked_file_is_attributed_the_change(tmp_path: 
 		assert snapshot["scope"] == "tracked"
 		assert snapshot["modified"] == ["run.sh"]
 		assert snapshot["deleted"] == ["plot.py"]
-		# Only the artifact's own files are compared.
-		assert snapshot["created"] == []
 	finally:
 		broker.stop()
 
