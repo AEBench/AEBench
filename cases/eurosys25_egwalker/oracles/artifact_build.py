@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluator.oracles import CaseOracleArtifactBuildBase  # type: ignore[import-untyped]
+from evaluator.oracles import CaseOracleArtifactBuildBase, PathKind  # type: ignore[import-untyped]
 from evaluator.oracles.checks import BaseCheck  # type: ignore[import-untyped]
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 from evaluator.oracles.reporting import CheckResult
@@ -54,9 +54,11 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):  # type: ignore[misc]
         if mode == "verify":
             return tuple(
                 self.path_check(
-                    name=f"built_output_{Path(rel_path).name}",
+                    # Named by binary and build profile (target/<profile>/<binary>):
+                    # some binaries are built in both release and memusage.
+                    name=f"built_output_{Path(rel_path).name}_{Path(rel_path).parent.name}",
                     path=self.workspace_path(rel_path),
-                    kind="file",
+                    kind=PathKind.FILE,
                 )
                 for rel_path in _EXPECTED_BUILD_OUTPUTS
             )

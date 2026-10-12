@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from evaluator.oracles import CaseOracleEnvSetupBase  # type: ignore[import-untyped]
+from evaluator.oracles import CaseOracleEnvSetupBase, PathKind  # type: ignore[import-untyped]
 from evaluator.oracles.checks import BaseCheck  # type: ignore[import-untyped]
 
 
@@ -33,16 +33,16 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):  # type: ignore[misc]
             self.path_check(
                 name="repo_root_exists",
                 path=self.workspace_path(),
-                kind="dir",
+                kind=PathKind.DIRECTORY,
             ),
             self.path_check(
                 name="datasets_ref_exists",
                 path=self.ref_path("datasets.ref.json"),
-                kind="file",
+                kind=PathKind.FILE,
             ),
             self.path_check(
                 name="timings_ref_exists",
                 path=self.ref_path("timings.ref.json"),
-                kind="file",
+                kind=PathKind.FILE,
             ),
         )
