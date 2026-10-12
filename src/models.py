@@ -338,11 +338,20 @@ class TrackedFilesCheck(_Model):
 	mode_changed_count: int = 0
 
 
+class SystemFilesCheck(_Model):
+	diff_path: str
+	changed: int
+	executables_count: int = 0
+	python_startup_count: int = 0
+	etc_count: int = 0
+
+
 class CommandMonitorInfo(_Model):
 	run_token: str
 	trace_path: str
 	command_count: int = 0
 	tracked_files: TrackedFilesCheck | None = None
+	system_files: SystemFilesCheck | None = None
 
 
 class RunResult(_Model):
