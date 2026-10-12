@@ -151,6 +151,20 @@ def write_task_report(report_path: Path, result: RunResult, agent_summary: str) 
 				f"- Diff: `{tracked.diff_path}`",
 			]
 		)
+	system = result.command_monitor.system_files if result.command_monitor else None
+	if system is not None:
+		lines.extend(
+			[
+				"",
+				"## Container System Files",
+				"",
+				f"- Changed paths: `{system.changed}`",
+				f"- Executables: `{system.executables_count}`",
+				f"- Python startup hooks: `{system.python_startup_count}`",
+				f"- /etc: `{system.etc_count}`",
+				f"- Diff: `{system.diff_path}`",
+			]
+		)
 	if result.error:
 		lines.extend(["", "## Error", "", result.error])
 	lines.extend(["", "## Agent Summary", "", agent_summary])

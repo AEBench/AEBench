@@ -50,6 +50,7 @@ from .monitoring import (
 	REAL_SHELL_PATH,
 	RUNTIME_SOCKET_DIR,
 	BrokerProcess,
+	check_system_files,
 	check_tracked_files,
 	install_shim,
 	verify_monitoring,
@@ -66,7 +67,7 @@ from .reporting import (
 	write_task_report,
 )
 from .session import RunSession
-from .workspace import cleanup_workspace, create_workspace, refs_dir_for_case_manifest
+from .workspace import cleanup_workspace, create_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,7 @@ class _CaseRunner:
 		self._agent_support_cleanup_done = False
 		self._monitor_cleanup_done = False
 		self._tracked_files_checked = False
+		self._system_files_checked = False
 
 	def prepare_case(self) -> None:
 		self.case_root = self.case_dir.expanduser().resolve()
@@ -175,7 +177,6 @@ class _CaseRunner:
 				self.workspace_root.parent,
 			)
 
-			refs = refs_dir_for_case_manifest(self.case_root / "case.toml")
 			runtime_workspace = (
 				str(self.workspace)
 				if (
@@ -184,10 +185,6 @@ class _CaseRunner:
 				)
 				else "/repo"
 			)
-
-			runtime_refs = None if refs is None else str(refs)
-			if refs is not None and self.task.runtime.mode == RuntimeMode.DOCKER:
-				runtime_refs = "/refs"
 
 			runtime_agent_support_dir = (
 				str(self.agent_support_dir)
@@ -219,7 +216,6 @@ class _CaseRunner:
 					prompt_profile=self.prompt_profile.value,
 					prompt_append=prompt_append,
 					required_evidence=self.task.instructions.required_evidence,
-					refs_path=runtime_refs,
 					host_workspace_path=str(self.workspace),
 					container_workspace_path=(
 						runtime_workspace if self.task.runtime.mode == RuntimeMode.DOCKER else None
@@ -261,8 +257,9 @@ class _CaseRunner:
 				run_control=None,
 				host_workspace=self.workspace,
 				runtime_workspace=runtime_workspace,
-				host_refs=refs,
-				runtime_refs=runtime_refs,
+				# The case's refs hold the expected results; only the oracle reads them.
+				host_refs=None,
+				runtime_refs=None,
 				host_agent_support_dir=self.agent_support_dir,
 				runtime_agent_support_dir=runtime_agent_support_dir,
 				runtime_agent_user=(
@@ -338,6 +335,7 @@ class _CaseRunner:
 			# Check tracked files before the oracle mounts the workspace read-write.
 			# Stopping the runtime ensures the agent can no longer modify them.
 			self._check_tracked_files()
+			self._check_system_files()
 
 			if (
 				self.task.runtime.mode == RuntimeMode.DOCKER
@@ -411,6 +409,8 @@ class _CaseRunner:
 			self._pipeline_failed = True
 
 	def finalize(self) -> CaseRunResult:
+		# Needs the container, which _cleanup() removes.
+		self._check_system_files()
 		self._cleanup()
 		# The container is removed after a failed, timed out or interrupted agent
 		# run, but the workspace remains on the host until cleanup_workspace().
@@ -523,6 +523,21 @@ class _CaseRunner:
 			return
 		if check is not None and self.monitor_info is not None:
 			self.monitor_info = self.monitor_info.model_copy(update={"tracked_files": check})
+
+	def _check_system_files(self) -> None:
+		"""Records the system files the agent's container changed, before the oracle runs in it."""
+		monitor = self.monitor
+		container = getattr(self.runtime, "container_id", None)
+		if monitor is None or container is None or self._system_files_checked:
+			return
+		self._system_files_checked = True
+		try:
+			check = check_system_files(container, monitor.trace_dir)
+		except Exception:
+			logger.warning("failed to check the container's system files", exc_info=True)
+			return
+		if check is not None and self.monitor_info is not None:
+			self.monitor_info = self.monitor_info.model_copy(update={"system_files": check})
 
 	def _record_error(self, message: str) -> None:
 		self.error = f"{self.error}; {message}" if self.error else message

@@ -318,6 +318,9 @@ def test_build_path_mounts_includes_standard_case_paths(
 	assert by_runtime_path["/artifact"] == context.artifact_dir.resolve()
 	assert by_runtime_path["/output"] == context.output_dir.resolve()
 
+	read_only = {str(mount.runtime_root) for mount in mounts if mount.read_only}
+	assert read_only == {"/case", "/refs"}
+
 
 def test_build_path_mounts_orders_nested_paths_first(
 	tmp_path: Path,
