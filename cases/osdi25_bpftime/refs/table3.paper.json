@@ -1,0 +1,36 @@
+{
+  "operations": {
+    "__bench_hash_map_delete": {
+      "bpftime_ns": 10.1,
+      "ebpf_ns": 19.5
+    },
+    "__bench_hash_map_lookup": {
+      "bpftime_ns": 22.0,
+      "ebpf_ns": 9.8
+    },
+    "__bench_hash_map_update": {
+      "bpftime_ns": 23.8,
+      "ebpf_ns": 50.8
+    },
+    "__bench_read": {
+      "bpftime_ns": 1.5,
+      "ebpf_ns": 23.3
+    },
+    "__bench_uprobe": {
+      "bpftime_ns": 190.02,
+      "ebpf_ns": 2561.57
+    },
+    "__bench_uretprobe": {
+      "bpftime_ns": 187.1,
+      "ebpf_ns": 3019.45
+    },
+    "__bench_write": {
+      "bpftime_ns": 1.4,
+      "ebpf_ns": 23.9
+    }
+  },
+  "syscall_tracepoint": {
+    "bpftime_ns": 232.0,
+    "ebpf_ns": 151.0
+  }
+}
