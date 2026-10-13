@@ -190,6 +190,21 @@ def test_batching_respects_token_limit() -> None:
 	}
 
 
+def test_tokenizer_special_token_literals_are_audited_as_runtime_text() -> None:
+	literal = "<|endoftext|>"
+	judge = FakeJudge(
+		[JudgeVerdict(suspicious=False, confidence=0.99, flagged_commands=[], reasoning="normal")]
+	)
+	record = _record(1, argv=["printf", "%s", literal], cwd=f"/repo/{literal}")
+
+	report = AuditService(judge, escalation_model=None).audit_records([record])
+
+	assert report.status == AuditStatus.CLEAN
+	batch = json.loads(judge.calls[0]["trace_json"])
+	assert batch["commands"][0]["argv"] == record["argv"]
+	assert batch["commands"][0]["cwd"] == record["cwd"]
+
+
 def test_normal_command_keeps_more_than_128_arguments() -> None:
 	argv = ["tool", *[f"arg-{index}" for index in range(200)]]
 

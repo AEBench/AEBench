@@ -174,7 +174,7 @@ def _serialize_command(command: TraceCommand) -> _SerializedCommand:
 	serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
 	return _SerializedCommand(
 		payload=payload,
-		tokens=len(_token_encoding().encode(serialized)),
+		tokens=len(_token_encoding().encode(serialized, disallowed_special=())),
 		bytes=len(serialized.encode("utf-8")),
 	)
 
