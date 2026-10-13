@@ -26,7 +26,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	"""
 
 	def requirements(self) -> Sequence[BaseCheck]:
-		ref = json.loads(self.read_text(self.ref_path(BENCHMARKS_REF)))
+		ref = json.loads(self.ref_path(BENCHMARKS_REF).read_text(encoding="utf-8"))
 		expected = ref["expected_status_lines"]
 
 		checks: list[BaseCheck] = []
@@ -35,7 +35,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 		checks.append(
 			self.path_check(
 				name="results_dir_exists",
-				path=self.workspace_path(RESULTS_DIR),
+				path=self.artifact_path(RESULTS_DIR),
 				kind=PathKind.DIRECTORY,
 			)
 		)
@@ -47,7 +47,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 			checks.append(
 				KoalaPassLogCheck(
 					name=f"{bench}_pass_log",
-					path=self.workspace_path(RESULTS_DIR, log_filename(bench)),
+					path=self.artifact_path(RESULTS_DIR, log_filename(bench)),
 					bench=bench,
 					optional=optional,
 				)
@@ -55,7 +55,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 			checks.append(
 				KoalaCorrectnessCheck(
 					name=f"{bench}_correctness",
-					path=self.workspace_path(RESULTS_DIR, hash_filename(bench)),
+					path=self.artifact_path(RESULTS_DIR, hash_filename(bench)),
 					expected_lines=int(expected[bench]),
 					optional=optional,
 				)
