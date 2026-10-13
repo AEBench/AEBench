@@ -652,6 +652,18 @@ class OracleResult(_Model):
 	error: str | None = None
 
 
+class OracleReevaluationResult(_Model):
+	schema_version: Literal[1] = 1
+	case_id: str
+	evaluated_at: datetime
+	source_revision: str | None = None
+	source_dirty: bool | None = None
+	run_dir: str
+	workspace_dir: str
+	runtime_snapshot: str | None = None
+	oracle_result: OracleResult
+
+
 class CaseRunResult(BaseModel):
 	model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
