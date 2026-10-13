@@ -2,7 +2,7 @@ id = "eurosys25_egwalker"
 
 [case_brief]
 core_claim = "Build eg-walker, stage the referenced datasets, and reproduce the benchmark timing outputs used to evaluate the paper's editing workloads."
-acceptable_evidence = "The oracle accepts the required build artifacts, dataset file sizes, and timings.json with strong correlation against bundled reference timings."
+acceptable_evidence = "The oracle accepts the required build artifacts, dataset file sizes, and timings.json with strong correlation against the oracle's reference timings."
 allowed_tolerance = "Timing values may vary across environments, but reproduced timings must preserve the reference trend strongly enough to achieve Pearson correlation >= 0.75."
 
 [paper]

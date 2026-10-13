@@ -5,14 +5,14 @@ import re
 from collections.abc import Sequence
 from typing import Any
 
-from evaluator.oracles import utils
+from evaluator.oracles import reporting
 from evaluator.oracles.bases import CaseOracleBenchmarkPrepBase
 from evaluator.oracles.checks import PathKind
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor, RuntimePath
 
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
-    def requirements(self) -> Sequence[utils.BaseCheck]:
+    def requirements(self) -> Sequence[reporting.BaseCheck]:
         repo_root = self.workspace_path()
 
         manifest = self._load_json_object(
@@ -41,7 +41,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
         expected_basenames = tuple(value.strip() for value in basenames)
         dataset_root = repo_root / dataset_root_value.strip()
 
-        reqs: list[utils.BaseCheck] = [
+        reqs: list[reporting.BaseCheck] = [
             self.path_check(
                 name="dataset_root_exists",
                 path=dataset_root,
@@ -61,7 +61,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
             )
 
         reqs.append(
-            utils.Check(
+            reporting.Check(
                 name="dataset_basenames_present",
                 fn=lambda executor: self._check_dataset_basenames_present(
                     dataset_root=dataset_root,
@@ -95,7 +95,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
         subdirs: Sequence[str],
         expected_basenames: Sequence[str],
         executor: RuntimeCheckExecutor,
-    ) -> utils.CheckResult:
+    ) -> reporting.CheckResult:
         expected = set(expected_basenames)
         missing: list[str] = []
 
@@ -113,7 +113,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
                     and not path.name.startswith(".")
                 }
             except OSError as exc:
-                return utils.CheckResult.failure(
+                return reporting.CheckResult.failure(
                     f"failed to read dataset directory {subdir_path}: {exc}"
                 )
 
@@ -122,6 +122,6 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
                 missing.append(f"{subdir_path}: missing {', '.join(absent[:5])}")
 
         if missing:
-            return utils.CheckResult.failure("; ".join(missing))
+            return reporting.CheckResult.failure("; ".join(missing))
 
-        return utils.CheckResult.success("dataset basenames match the manifest")
+        return reporting.CheckResult.success("dataset basenames match the manifest")

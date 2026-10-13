@@ -2,7 +2,7 @@ id = "eurosys24_unison"
 
 [case_brief]
 core_claim = "Build Unison's MTP-enabled ns-3 fat-tree simulator, run the accuracy-style Unison vs default fat-tree workloads, and reproduce the flow-monitor fidelity metrics from the EuroSys'24 artifact."
-acceptable_evidence = "Built ns3*-fat-tree-optimized binary with MTP enabled, staged scratch topologies / CDFs / exp.py drivers, and accuracy-style result metrics (flow_count / fct / e2ed / throughput / ev) whose per-metric vectors correlate with the bundled reference (Pearson >= 0.75)."
+acceptable_evidence = "Built ns3*-fat-tree-optimized binary with MTP enabled, staged scratch topologies / CDFs / exp.py drivers, and accuracy-style result metrics (flow_count / fct / e2ed / throughput / ev) whose per-metric vectors correlate with the oracle's reference (Pearson >= 0.75)."
 allowed_tolerance = "Absolute wall-clock simulation time varies by host. Flow-monitor fidelity metrics are deterministic for a fixed seed and scale; vectors across the required Unison/default cluster configs must preserve the reference trend strongly enough to achieve Pearson correlation >= 0.75."
 
 [paper]

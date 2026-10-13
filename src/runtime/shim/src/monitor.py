@@ -12,6 +12,7 @@ from typing import Any, BinaryIO, TypeAlias
 
 Frame: TypeAlias = tuple[int, bytes]
 Record: TypeAlias = dict[str, object]
+FileStat: TypeAlias = tuple[int, int, int, int]  # (size, mtime_ns, ctime_ns, inode)
 
 SOCKET_PATH = "/run/aebench/command.sock"
 LOG_BASENAME = "commands.jsonl"
@@ -22,11 +23,9 @@ MAX_FRAME_BYTES = 16 * 1024 * 1024
 MAX_STREAM_BYTES = 16 * 1024 * 1024
 
 MAX_LISTED_PATHS = 100
-MAX_SNAPSHOT_FILES = 20000
-
-# How long snapshot is before timeout. Nothing is failed when this expires. Result is abandoned, the
-# file_snapshot entry is logged. The command's record is still written in full.
-SNAPSHOT_BUDGET_SECONDS = 2.0
+MAX_SNAPSHOT_FILES = 20000  # Limit for full-workspace snapshots only
+TRACKED_FILES_BASENAME = "tracked_files.json"  # Host-provided list of files to track
+SNAPSHOT_BUDGET_SECONDS = 2.0  # Timeout for snapshots; does not fail the command
 
 COMMAND_INFO = 0
 STDOUT = 1
@@ -223,16 +222,47 @@ class CommandTiming(Monitor):
 
 
 class FileSnapshot(Monitor):
-	"""What a command changed in the workspace. Walks the whole workspace, so nothing is silently ignored"""
+	"""Track changes made by a command to specified files or the entire workspace."""
 
 	name = "file_snapshot"
 
-	def __init__(self, workspace: str | Path) -> None:
+	def __init__(self, workspace: str | Path, tracked_files: str | Path | None = None) -> None:
 		self.workspace = Path(workspace)
+		self.tracked: list[str] | None = None
 
-	def _snapshot(self) -> tuple[dict[str, tuple[int, int]] | None, str | None]:
-		"""Maps each file to (size, mtime_ns), or (None, reason) if it gave up."""
-		found: dict[str, tuple[int, int]] = {}
+		if tracked_files is not None and os.path.exists(tracked_files):
+			with open(tracked_files, encoding="utf-8") as handle:
+				self.tracked = list(json.load(handle)["files"])
+
+	def _snapshot(self) -> tuple[dict[str, FileStat] | None, str | None]:
+		if self.tracked is not None:
+			return self._snapshot_tracked()
+		return self._snapshot_walk()
+
+	def _snapshot_tracked(self) -> tuple[dict[str, FileStat] | None, str | None]:
+		"""Maps each tracked file still present to its FileStat."""
+		assert self.tracked is not None
+		found: dict[str, FileStat] = {}
+		deadline = time.monotonic() + SNAPSHOT_BUDGET_SECONDS
+
+		for rel in self.tracked:
+			if time.monotonic() >= deadline:
+				return None, f"snapshot exceeded {SNAPSHOT_BUDGET_SECONDS:g}s"
+
+			try:
+				# Using lstat to tracked symlink is the link itself.
+				stat = os.lstat(self.workspace / rel)
+			except OSError:
+				# The tracked file not found, so reported as deleted.
+				continue
+
+			found[rel] = (stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_ino)
+
+		return found, None
+
+	def _snapshot_walk(self) -> tuple[dict[str, FileStat] | None, str | None]:
+		"""Maps each file to its FileStat, or (None, reason) on error/exception."""
+		found: dict[str, FileStat] = {}
 		deadline = time.monotonic() + SNAPSHOT_BUDGET_SECONDS
 
 		for directory, _subdirectories, filenames in os.walk(self.workspace):
@@ -245,10 +275,15 @@ class FileSnapshot(Monitor):
 				try:
 					stat = os.stat(path)
 				except OSError:
-					# Vanished mid-walk, or error
+					# Deleted mid traversal, or an error raised.
 					continue
 
-				found[os.path.relpath(path, self.workspace)] = (stat.st_size, stat.st_mtime_ns)
+				found[os.path.relpath(path, self.workspace)] = (
+					stat.st_size,
+					stat.st_mtime_ns,
+					stat.st_ctime_ns,
+					stat.st_ino,
+				)
 
 				if len(found) > MAX_SNAPSHOT_FILES:
 					return None, f"workspace exceeds {MAX_SNAPSHOT_FILES} files"
@@ -274,6 +309,7 @@ class FileSnapshot(Monitor):
 		modified = sorted(name for name in set(before) & set(after) if before[name] != after[name])
 
 		return {
+			"scope": "workspace" if self.tracked is None else "tracked",
 			"watched": len(after),
 			"total_created": len(created),
 			"total_modified": len(modified),
@@ -430,7 +466,7 @@ async def serve(
 		except FileNotFoundError:
 			pass
 	register(CommandTiming())
-	register(FileSnapshot(workspace_dir))
+	register(FileSnapshot(workspace_dir, os.path.join(output_dir, TRACKED_FILES_BASENAME)))
 
 	# asyncio schedules one handler task per connection
 	async def handle_connection(

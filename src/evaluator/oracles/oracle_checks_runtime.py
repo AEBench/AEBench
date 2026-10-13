@@ -69,6 +69,9 @@ _PATH_MOUNT_ORDER = (
 	("output_dir", "/output"),
 )
 
+# The case's oracles and reference results; checks only read them.
+_READ_ONLY_MOUNTS = frozenset({"case_dir", "refs_dir"})
+
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class _PathMount:
@@ -76,6 +79,7 @@ class _PathMount:
 
 	host_root: pathlib.Path
 	runtime_root: pathlib.PurePosixPath
+	read_only: bool = False
 
 	def translate(
 		self,
@@ -256,7 +260,7 @@ def build_path_mounts(
 ) -> list[_PathMount]:
 	"""Build host-to-runtime path mappings for an oracle invocation."""
 
-	raw_mounts: list[tuple[pathlib.Path, pathlib.PurePosixPath]] = []
+	raw_mounts: list[tuple[pathlib.Path, pathlib.PurePosixPath, bool]] = []
 	refs_dir = context.case_dir / "refs"
 
 	values: dict[str, pathlib.Path] = {
@@ -277,15 +281,17 @@ def build_path_mounts(
 				(
 					host_root,
 					pathlib.PurePosixPath(runtime_root_str),
+					field_name in _READ_ONLY_MOUNTS,
 				)
 			)
 
 	unique: dict[tuple[str, str], _PathMount] = {}
 
-	for host_root, runtime_root_path in raw_mounts:
+	for host_root, runtime_root_path, read_only in raw_mounts:
 		unique[(str(host_root), str(runtime_root_path))] = _PathMount(
 			host_root=host_root,
 			runtime_root=runtime_root_path,
+			read_only=read_only,
 		)
 
 	mounts = list(unique.values())
@@ -707,7 +713,8 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 				docker_cmd.extend(
 					[
 						"-v",
-						f"{mount.host_root}:{mount.runtime_root}",
+						f"{mount.host_root}:{mount.runtime_root}"
+						+ (":ro" if mount.read_only else ""),
 					]
 				)
 

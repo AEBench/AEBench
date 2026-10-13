@@ -64,7 +64,6 @@ You are an experienced software engineer completing an artifact task.
 ENVIRONMENT:
 - You are working in an agent container.
 - The artifact repository is available at {{ container_workspace_path or workspace_path }}.
-- Read-only benchmark references are mounted at {{ refs_path or "/refs" }}.
 {% if host_agent_controls_container_shell %}
 - You are controlling the agent container from the host machine.
 - Run artifact commands in the container shell.
@@ -111,7 +110,6 @@ DOCKER_INITIAL_PROMPT_TEMPLATE = (
 DOCKER_INTERACTIVE_PROMPT_TEMPLATE = """\
 You are an experienced software engineer in an interactive Docker session.
 The artifact repository is at {{ workspace_path }}. Change to it before working.
-Reference files are available read-only at {{ refs_path or "/refs" }}.
 """
 
 
@@ -137,9 +135,7 @@ def build_prompt_bundle(context: PromptArgs) -> PromptBundle:
 
 
 def build_container_interactive_prompt() -> str:
-	return _render(
-		DOCKER_INTERACTIVE_PROMPT_TEMPLATE, {"workspace_path": "/repo", "refs_path": "/refs"}
-	)
+	return _render(DOCKER_INTERACTIVE_PROMPT_TEMPLATE, {"workspace_path": "/repo"})
 
 
 def _resolve_profile(context: PromptArgs) -> PromptProfile:
