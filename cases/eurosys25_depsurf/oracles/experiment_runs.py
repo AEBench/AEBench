@@ -7,14 +7,14 @@ import re
 from collections.abc import Sequence
 from typing import Any
 
-from evaluator.oracles import utils
+from evaluator.oracles import reporting
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
 from evaluator.oracles.checks import PathKind
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
-    def requirements(self) -> Sequence[utils.BaseCheck]:
+    def requirements(self) -> Sequence[reporting.BaseCheck]:
         repo_root = self.workspace_path()
 
         manifest = self._load_json_object(
@@ -30,7 +30,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 
         results_root = repo_root / "results"
 
-        reqs: list[utils.BaseCheck] = [
+        reqs: list[reporting.BaseCheck] = [
             self.path_check(
                 name="results_root_exists",
                 path=results_root,
@@ -54,7 +54,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
                 )
             )
             reqs.append(
-                utils.Check(
+                reporting.Check(
                     name=f"result_file_parseable_{safe_name}",
                     fn=lambda executor, path=result_path: self._check_csv_result_file_parseable(
                         path, executor=executor
@@ -80,9 +80,9 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 
     def _check_csv_result_file_parseable(
         self, path, *, executor: RuntimeCheckExecutor
-    ) -> utils.CheckResult:
+    ) -> reporting.CheckResult:
         if not executor.path_is_file(path):
-            return utils.CheckResult.failure(f"missing result file: {path}")
+            return reporting.CheckResult.failure(f"missing result file: {path}")
 
         try:
             text = executor.read_file_text(path)
@@ -92,15 +92,15 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
                 if any(cell.strip() for cell in row)
             ]
         except OSError as exc:
-            return utils.CheckResult.failure(
+            return reporting.CheckResult.failure(
                 f"failed to read result file {path}: {exc}"
             )
         except csv.Error as exc:
-            return utils.CheckResult.failure(f"invalid CSV in {path}: {exc}")
+            return reporting.CheckResult.failure(f"invalid CSV in {path}: {exc}")
 
         if len(rows) < 2:
-            return utils.CheckResult.failure(
+            return reporting.CheckResult.failure(
                 f"expected at least one data row in {path}"
             )
 
-        return utils.CheckResult.success(f"parsed {path}")
+        return reporting.CheckResult.success(f"parsed {path}")

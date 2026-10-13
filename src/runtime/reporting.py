@@ -61,12 +61,6 @@ def case_output_dir(case_id: str, *, root: Path, explicit: Path | None = None) -
 
 
 def monitor_trace_dir(case_id: str, *, root: Path, run_token: str) -> Path:
-	"""Returns the command-trace directory for one monitored run.
-
-	The trace sits beside the run output directories rather than inside one, so it
-	survives an explicit --save-path and stays in a per-case store. Nothing links a
-	run to its trace implicitly: the run result carries the token.
-	"""
 	return (root / safe_name(case_id) / MONITOR_DIRNAME / run_token).resolve()
 
 
@@ -143,6 +137,34 @@ def write_task_report(report_path: Path, result: RunResult, agent_summary: str) 
 		f"- Agent exit code: `{result.agent.exit_code}`",
 		f"- Agent messages: `{result.agent.message_count}`",
 	]
+	tracked = result.command_monitor.tracked_files if result.command_monitor else None
+	if tracked is not None:
+		lines.extend(
+			[
+				"",
+				"## Artifact Files",
+				"",
+				f"- Tracked: `{tracked.tracked}`",
+				f"- Modified: `{tracked.modified_count}`",
+				f"- Deleted: `{tracked.deleted_count}`",
+				f"- Mode changed: `{tracked.mode_changed_count}`",
+				f"- Diff: `{tracked.diff_path}`",
+			]
+		)
+	system = result.command_monitor.system_files if result.command_monitor else None
+	if system is not None:
+		lines.extend(
+			[
+				"",
+				"## Container System Files",
+				"",
+				f"- Changed paths: `{system.changed}`",
+				f"- Executables: `{system.executables_count}`",
+				f"- Python startup hooks: `{system.python_startup_count}`",
+				f"- /etc: `{system.etc_count}`",
+				f"- Diff: `{system.diff_path}`",
+			]
+		)
 	if result.error:
 		lines.extend(["", "## Error", "", result.error])
 	lines.extend(["", "## Agent Summary", "", agent_summary])

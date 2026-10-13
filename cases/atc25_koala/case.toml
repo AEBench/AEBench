@@ -34,8 +34,6 @@ profile = "artifact-eval-v1"
 
 [oracle]
 expected_score = 4
-phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
-score_mode = "phase_count"
 placeholder = false
 
 [oracle.targets.koala]
@@ -52,4 +50,4 @@ experiment_runs = "local"
 [upstream]
 source_type = "git"
 url = "https://github.com/kbensh/koala"
-ref = "5b6caaf6a96511c973f56a2c781535712d0f9337"
+ref = "a3d4972d7fff6c3ded92d3308110787679da4ead"
