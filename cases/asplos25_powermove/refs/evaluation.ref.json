@@ -1,0 +1,427 @@
+{
+  "absolute_tolerance": 1e-8,
+  "relative_tolerance": 0.01,
+  "source": {
+    "description": "Gate and excitation components from the released compiler; placement-dependent totals are not reference constants.",
+    "paper": "https://arxiv.org/html/2411.12263v1#S7.T3",
+    "released_instance": 0,
+    "seed": 0,
+    "upstream_commit": "5918ada6a19a0824ec8f3dd65344344d8bb3cb21"
+  },
+  "workloads": {
+    "bv_14": {
+      "enola": {
+        "excitation_fidelity": 0.6767263388387882,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.9369146928798039
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.6767263388387882,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.9369146928798039
+      },
+      "qubits": 14,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.9369146928798039
+      }
+    },
+    "bv_50": {
+      "enola": {
+        "excitation_fidelity": 0.07112577357411179,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.8955869907338783
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.07112577357411179,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.8955869907338783
+      },
+      "qubits": 50,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.8955869907338783
+      }
+    },
+    "bv_70": {
+      "enola": {
+        "excitation_fidelity": 0.002181674071985352,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.8348931673187264
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.002181674071985352,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.8348931673187264
+      },
+      "qubits": 70,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.8348931673187264
+      }
+    },
+    "qaoa_random_20": {
+      "enola": {
+        "excitation_fidelity": 0.8605463393821575,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.669647820470564
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.8605463393821575,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.669647820470564
+      },
+      "qubits": 20,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6696478204705641
+      }
+    },
+    "qaoa_random_30": {
+      "enola": {
+        "excitation_fidelity": 0.5708086902226912,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.33529849382817134
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.5708086902226912,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.33529849382817134
+      },
+      "qubits": 30,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.3352984938281715
+      }
+    },
+    "qaoa_regular3_100": {
+      "enola": {
+        "excitation_fidelity": 0.6061510638947133,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.47147873742168583
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.6061510638947133,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.47147873742168583
+      },
+      "qubits": 100,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.47147873742168583
+      }
+    },
+    "qaoa_regular3_30": {
+      "enola": {
+        "excitation_fidelity": 0.8605463393821575,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.7980656776819048
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.8605463393821575,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.7980656776819048
+      },
+      "qubits": 30,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.798065677681905
+      }
+    },
+    "qaoa_regular3_40": {
+      "enola": {
+        "excitation_fidelity": 0.8185257542796961,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.7402609576967045
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.8185257542796961,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.7402609576967045
+      },
+      "qubits": 40,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.7402609576967045
+      }
+    },
+    "qaoa_regular3_50": {
+      "enola": {
+        "excitation_fidelity": 0.8823587930030067,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6866430931872
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.8823587930030067,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6866430931872
+      },
+      "qubits": 50,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6866430931872
+      }
+    },
+    "qaoa_regular3_60": {
+      "enola": {
+        "excitation_fidelity": 0.8605463393821575,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6369088258938781
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.8605463393821575,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6369088258938781
+      },
+      "qubits": 60,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6369088258938781
+      }
+    },
+    "qaoa_regular3_80": {
+      "enola": {
+        "excitation_fidelity": 0.6699844104191455,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.5479862854900421
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.6699844104191455,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.5479862854900421
+      },
+      "qubits": 80,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.5479862854900421
+      }
+    },
+    "qaoa_regular4_30": {
+      "enola": {
+        "excitation_fidelity": 0.8605463393821574,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.7402609576967045
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.8605463393821574,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.7402609576967045
+      },
+      "qubits": 30,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.7402609576967046
+      }
+    },
+    "qaoa_regular4_40": {
+      "enola": {
+        "excitation_fidelity": 0.818525754279696,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6696478204705641
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.818525754279696,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6696478204705641
+      },
+      "qubits": 40,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6696478204705641
+      }
+    },
+    "qaoa_regular4_50": {
+      "enola": {
+        "excitation_fidelity": 0.7785570395897229,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6057704364907279
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.7785570395897229,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6057704364907279
+      },
+      "qubits": 50,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6057704364907279
+      }
+    },
+    "qaoa_regular4_60": {
+      "enola": {
+        "excitation_fidelity": 0.8605463393821576,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.5479862854900421
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.8605463393821576,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.5479862854900421
+      },
+      "qubits": 60,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.5479862854900421
+      }
+    },
+    "qaoa_regular4_80": {
+      "enola": {
+        "excitation_fidelity": 0.6699844104191456,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.44842820346097695
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.6699844104191456,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.44842820346097695
+      },
+      "qubits": 80,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.44842820346097695
+      }
+    },
+    "qft_18": {
+      "enola": {
+        "excitation_fidelity": 0.05346851220847845,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.21570623976979025
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.05346851220847845,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.21570623976979025
+      },
+      "qubits": 18,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.21570623976979045
+      }
+    },
+    "qft_29": {
+      "enola": {
+        "excitation_fidelity": 0.00048588387408589345,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.03308985827710756
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.00048588387408589345,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.03308985827710756
+      },
+      "qubits": 29,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.03308985827710752
+      }
+    },
+    "qsim_rand_0.3_10": {
+      "enola": {
+        "excitation_fidelity": 0.8185257542796961,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.8183201210226743
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.8185257542796961,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.8183201210226743
+      },
+      "qubits": 10,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.8183201210226743
+      }
+    },
+    "qsim_rand_0.3_20": {
+      "enola": {
+        "excitation_fidelity": 0.17339359506090235,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6057704364907278
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.17339359506090235,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6057704364907278
+      },
+      "qubits": 20,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.6057704364907278
+      }
+    },
+    "qsim_rand_0.3_40": {
+      "enola": {
+        "excitation_fidelity": 0.00024594753327395884,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.3319538913522362
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.00024594753327395884,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.3319538913522362
+      },
+      "qubits": 40,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.3319538913522363
+      }
+    },
+    "vqe_30": {
+      "enola": {
+        "excitation_fidelity": 0.9950062500000001,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.8647077305675338
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.9950062500000001,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.8647077305675338
+      },
+      "qubits": 30,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.8647077305675338
+      }
+    },
+    "vqe_50": {
+      "enola": {
+        "excitation_fidelity": 0.9950062500000001,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.7822236754458712
+      },
+      "non_storage": {
+        "excitation_fidelity": 0.9950062500000001,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.7822236754458712
+      },
+      "qubits": 50,
+      "with_storage": {
+        "excitation_fidelity": 1,
+        "one_qubit_fidelity": 1,
+        "two_qubit_fidelity": 0.7822236754458712
+      }
+    }
+  }
+}

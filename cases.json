@@ -87,6 +87,9 @@
     },
     "asplos25_unizk": {
       "path": "cases/asplos25_unizk"
+    },
+    "asplos25_powermove": {
+      "path": "cases/asplos25_powermove"
     }
   }
 }
