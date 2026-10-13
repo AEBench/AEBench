@@ -3,7 +3,7 @@ id = "osdi24_eet"
 [case_brief]
 core_claim = "Build the EET executable, prepare the benchmark scripts, and reproduce the expected benchmark bug counts for the supported database workloads."
 acceptable_evidence = "The bundle oracle accepts the built EET binary, benchmark scripts and versions, and the observed bug totals under *_test/bugs for each benchmark."
-allowed_tolerance = "Bug counts must match the bundled expected totals exactly for the evaluated benchmarks."
+allowed_tolerance = "Bug counts must match the oracle's expected totals exactly for the evaluated benchmarks."
 
 [paper]
 url = "https://www.usenix.org/system/files/osdi24-jiang.pdf"
@@ -43,5 +43,4 @@ source_type = "git"
 url = "https://github.com/JZuming/EET.git"
 ref = "b31d2534bc1079fdeda5333c73bcb99b611efe8e"
 resolved_at = "2026-03-10T03:23:39.155767+00:00"
-artifact_mode = "hybrid"
-overlay_artifact = true
+artifact_mode = "upstream"

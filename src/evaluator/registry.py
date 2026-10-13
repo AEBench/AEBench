@@ -16,7 +16,7 @@ from project_config import (
 	load_bundle_registry_file,
 )
 
-_WORKSPACE_CONFIG_TEXT = 'artifact_mode = "vendor"\n'
+_WORKSPACE_CONFIG_TEXT = 'artifact_mode = "upstream"\n'
 
 
 @dataclass(frozen=True, slots=True)

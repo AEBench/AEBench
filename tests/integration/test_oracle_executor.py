@@ -32,7 +32,6 @@ mode = "local"
 
 [oracle]
 expected_score = 4
-failure_mode = "{failure_mode}"
 placeholder = false
 """
 
@@ -84,15 +83,12 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 def write_case(
 	root: Path,
 	*,
-	failure_mode: OracleFailureMode = OracleFailureMode.FAIL_FAST,
 	artifact_build_requirements: str = "[]",
 ) -> Path:
 	case_dir = root / "fixture_case"
 	case_dir.mkdir()
 
-	(case_dir / "case.toml").write_text(
-		CASE_TOML.format(failure_mode=failure_mode.value), encoding="utf-8"
-	)
+	(case_dir / "case.toml").write_text(CASE_TOML, encoding="utf-8")
 
 	artifact_dir = case_dir / "artifact"
 	artifact_dir.mkdir()
@@ -120,14 +116,24 @@ def write_case(
 	return case_dir
 
 
-def run_case(case_dir: Path, tmp_path: Path):
+def run_case(
+	case_dir: Path,
+	tmp_path: Path,
+	failure_mode: OracleFailureMode = OracleFailureMode.CONTINUE,
+):
 	workspace = tmp_path / "workspace"
 	workspace.mkdir(exist_ok=True)
 
 	output = tmp_path / "output"
 	output.mkdir(exist_ok=True)
 
-	return run_oracle(case_dir, runtime_result=None, output_dir=output, workspace_dir=workspace)
+	return run_oracle(
+		case_dir,
+		runtime_result=None,
+		output_dir=output,
+		workspace_dir=workspace,
+		failure_mode=failure_mode,
+	)
 
 
 def test_all_oracle_classes_pass(tmp_path: Path) -> None:
@@ -182,7 +188,7 @@ def test_failed_oracle_class_marks_result_error(tmp_path: Path) -> None:
         ]""",
 	)
 
-	result = run_case(case_dir, tmp_path)
+	result = run_case(case_dir, tmp_path, OracleFailureMode.FAIL_FAST)
 
 	assert result.status == OracleStatus.ERROR
 	assert result.score == 1, [
@@ -201,7 +207,6 @@ def test_failed_oracle_class_marks_result_error(tmp_path: Path) -> None:
 def test_continue_mode_runs_remaining_oracle_classes(tmp_path: Path) -> None:
 	case_dir = write_case(
 		tmp_path,
-		failure_mode=OracleFailureMode.CONTINUE,
 		artifact_build_requirements="""[
             self.path_check(
                 name=\"missing_file\",
@@ -220,6 +225,7 @@ def test_continue_mode_runs_remaining_oracle_classes(tmp_path: Path) -> None:
 	assert result.phases[1].status == OracleStatus.ERROR
 	assert result.phases[2].status == OracleStatus.SUCCESS
 	assert result.phases[3].status == OracleStatus.SUCCESS
+	assert result.error == "oracle failed phases: artifact_build"
 
 
 def test_oracle_result_written_to_disk(tmp_path: Path) -> None:

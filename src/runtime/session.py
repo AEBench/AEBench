@@ -22,12 +22,21 @@ class RunSession:
 	runtime_workspace: str
 	host_refs: Path | None
 	runtime_refs: str | None
+	host_agent_support_dir: Path
+	runtime_agent_support_dir: str
+	runtime_agent_user: str | None
+	runtime_agent_home: str
 
 	output_dir: Path
 	task_paths: TaskPaths
 	summary_path: Path
 
 	runtime_backend: BenchRuntime
+
+	# Set only for a monitored run. The directory holds nothing but the command
+	# socket, and is the only part of the monitoring layer the agent can see.
+	host_command_socket_dir: Path | None = None
+	runtime_command_socket_dir: str | None = None
 
 	@property
 	def task_id(self) -> str:

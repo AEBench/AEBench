@@ -4,14 +4,14 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluator.oracles import utils
+from evaluator.oracles import reporting
 from evaluator.oracles.bases import CaseOracleArtifactBuildBase
 from evaluator.oracles.checks import PathKind
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 
 
 class OracleArtifactBuild(CaseOracleArtifactBuildBase):
-    def requirements(self) -> Sequence[utils.BaseCheck]:
+    def requirements(self) -> Sequence[reporting.BaseCheck]:
         repo_root = self.workspace_path()
 
         parallelism = str(max(os.cpu_count() or 1, 1))
@@ -77,7 +77,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
                 path=bcc_output_dir,
                 kind=PathKind.DIRECTORY,
             ),
-            utils.Check(
+            reporting.Check(
                 name="depsurf_bcc_objects_exist",
                 fn=lambda executor: self._check_bcc_objects_exist(
                     bcc_output_dir, executor=executor
@@ -98,24 +98,24 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 
     def _check_bcc_objects_exist(
         self, output_dir: Path, *, executor: RuntimeCheckExecutor
-    ) -> utils.CheckResult:
+    ) -> reporting.CheckResult:
         if not executor.path_is_dir(output_dir):
-            return utils.CheckResult.failure(
+            return reporting.CheckResult.failure(
                 f"BCC output directory missing or not a directory: {output_dir}"
             )
 
         try:
             objects = sorted(executor.glob(output_dir, "*.bpf.o"))
         except OSError as exc:
-            return utils.CheckResult.failure(
+            return reporting.CheckResult.failure(
                 f"failed to list BCC output directory {output_dir}: {exc}"
             )
 
         if not objects:
-            return utils.CheckResult.failure(
+            return reporting.CheckResult.failure(
                 f"no .bpf.o files found under {output_dir}"
             )
 
-        return utils.CheckResult.success(
+        return reporting.CheckResult.success(
             f"found {len(objects)} BCC BPF objects"
         )

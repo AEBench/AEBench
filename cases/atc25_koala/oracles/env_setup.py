@@ -4,7 +4,9 @@ from collections.abc import Sequence
 
 from evaluator.oracles import (
 	CaseOracleEnvSetupBase,
+	PathCheck,
 	PathKind,
+	VersionCheck,
 )
 from evaluator.oracles.reporting import BaseCheck
 
@@ -22,34 +24,34 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 
 	def requirements(self) -> Sequence[BaseCheck]:
 		return (
-			self.version_check(
+			VersionCheck(
 				name="docker",
 				cmd=("docker", "--version"),
 				min_version=DOCKER_MIN_VERSION,
 			),
-			self.path_check(
+			PathCheck(
 				name="repo_root_exists",
-				path=self.workspace_path(),
+				path=self.artifact_path(),
 				kind=PathKind.DIRECTORY,
 			),
-			self.path_check(
+			PathCheck(
 				name="dockerfile_exists",
-				path=self.workspace_path(DOCKERFILE_PATH),
+				path=self.artifact_path(DOCKERFILE_PATH),
 				kind=PathKind.FILE,
 			),
-			self.path_check(
+			PathCheck(
 				name="readme_exists",
-				path=self.workspace_path(README_PATH),
+				path=self.artifact_path(README_PATH),
 				kind=PathKind.FILE,
 			),
-			self.path_check(
+			PathCheck(
 				name="main_sh_exists",
-				path=self.workspace_path(MAIN_SH_PATH),
+				path=self.artifact_path(MAIN_SH_PATH),
 				kind=PathKind.FILE,
 			),
-			self.path_check(
+			PathCheck(
 				name="setup_sh_exists",
-				path=self.workspace_path(SETUP_SH_PATH),
+				path=self.artifact_path(SETUP_SH_PATH),
 				kind=PathKind.FILE,
 			),
 		)

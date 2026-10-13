@@ -33,7 +33,7 @@ OPTIONAL_BENCHMARKS = frozenset({"weather"})
 SPEC_SCRIPTS = ("install.sh", "fetch.sh", "execute.sh", "validate.sh", "clean.sh")
 
 # ---------------------------------------------------------------------------
-# Oracle 1: env_setup (host artifact side, golf/crocus-style)
+# Oracle 1: env_setup (host artifact side)
 # ---------------------------------------------------------------------------
 DOCKER_MIN_VERSION = (20, 10, 0)  # README requires Docker >= 20.10.0
 README_PATH = "README.md"
@@ -82,16 +82,6 @@ TIME_BINARY_PATH = "/usr/bin/time"
 
 # Python modules the harness / analysis + ml + weather pipelines import.
 REQUIRED_PY_MODULES = ("numpy", "sklearn", "matplotlib")
-
-# ---------------------------------------------------------------------------
-# Oracle 3: benchmark_prep (benchmark sources staged in the image)
-# Paths are relative to app_dir = /koala. NOTE: Koala's Dockerfile runs each
-# install.sh (deps) but NOT fetch.sh, so inputs are fetched at run time by
-# main.sh, not present in the image. benchmark_prep therefore checks each
-# benchmark dir and its five support scripts (staged & runnable); input
-# correctness is covered by experiment_runs. We do NOT require a scripts/ subdir
-# since ci-cd uses riker/ + makeself/ instead of scripts/.
-# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Oracle 4: experiment_runs (agent-saved outputs copied into the artifact dir)

@@ -2,8 +2,8 @@ id = "sosp23_acto"
 
 [case_brief]
 core_claim = "Build ACTO and reproduce the reference output tables used to summarize operator bugs and test-oracle behavior."
-acceptable_evidence = "The bundle oracle accepts the compiled ACTO helper libraries together with table5.txt through table8.txt matching the bundled reference rows."
-allowed_tolerance = "The reproduced table rows and totals must match the bundled reference content exactly for the checked outputs."
+acceptable_evidence = "The bundle oracle accepts the compiled ACTO helper libraries together with table5.txt through table8.txt matching the oracle's reference rows."
+allowed_tolerance = "The reproduced table rows and totals must match the oracle's reference content exactly for the checked outputs."
 
 [paper]
 url = "https://raw.githubusercontent.com/xlab-uiuc/acto/main/docs/acto-paper_sosp2023.pdf"
@@ -44,5 +44,5 @@ url = "https://github.com/xlab-uiuc/acto.git"
 ref = "ce5b80a87b467dc0689fc75ff0b69d09e1a3c9d2"
 requested_ref = "sosp-ae"
 resolved_at = "2026-05-01T11:06:44+00:00"
-artifact_mode = "hybrid"
+artifact_mode = "overlay"
 overlay_artifact = true

@@ -2,7 +2,7 @@ id = "osdi24_pcs"
 
 [case_brief]
 core_claim = "Build PCS, run the scheduling simulator across multiple workloads and policies, and reproduce the JCT and prediction error metrics reported in the paper."
-acceptable_evidence = "The oracle accepts result CSVs for each scheduling policy and workload whose average JCT and prediction error distributions correlate with bundled reference data at the required Pearson similarity threshold."
+acceptable_evidence = "The oracle accepts result CSVs for each scheduling policy and workload whose average JCT and prediction error distributions correlate with the oracle's reference data at the required Pearson similarity threshold."
 allowed_tolerance = "Results may vary across environments but must preserve the reference trend."
 
 [paper]
@@ -30,7 +30,6 @@ profile = "artifact-eval-v1"
 expected_score = 4
 phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
 score_mode = "phase_count"
-failure_mode = "fail_fast"
 placeholder = false
 
 [oracle.runtime]

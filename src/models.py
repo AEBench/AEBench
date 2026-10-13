@@ -9,7 +9,6 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from constants import (
-	DEFAULT_MODEL,
 	DEFAULT_PROMPT_PROFILE,
 	DEFAULT_TIMEOUT_MS,
 	INFRA_LOG_BASENAME,
@@ -26,9 +25,6 @@ from utils import safe_name
 
 class _Model(BaseModel):
 	model_config = ConfigDict(extra="forbid")
-
-
-AgentOptionValue = str | int | bool | None | list[str] | dict[str, str]
 
 
 class SourceType(str, Enum):
@@ -55,6 +51,15 @@ class PromptProfile(str, Enum):
 	ARTIFACT_EVAL_V1 = "artifact-eval-v1"
 	ARTIFACT_EVAL_LOCAL_V1 = "artifact-eval-local-v1"
 	ARTIFACT_EVAL_DOCKER_V1 = "artifact-eval-docker-v1"
+
+
+AgentName = Literal["codex", "claude", "codex_non_api", "claude_non_api"]
+AGENT_NAMES: tuple[AgentName, ...] = (
+	"codex",
+	"claude",
+	"codex_non_api",
+	"claude_non_api",
+)
 
 
 class LiveViewMode(str, Enum):
@@ -306,30 +311,10 @@ class PromptBundle(_Model):
 	initial_prompt: str
 
 
-class AgentRequest(_Model):
-	model: str = DEFAULT_MODEL
-	system_prompt: str
-	initial_prompt: str
-	combined_prompt: str = ""
-	interactive: bool = False
-	timeout_ms: int | None = None
-	agent_type: str
-	agent_options: dict[str, AgentOptionValue] = Field(default_factory=dict)
-	cwd: str | None = None
-	add_dirs: list[str] = Field(default_factory=list)
-	use_sdk_sandbox: bool = False
-	max_buffer_size: int | None = None
-
-	@model_validator(mode="after")
-	def _populate_combined_prompt(self) -> "AgentRequest":
-		if not self.combined_prompt:
-			self.combined_prompt = f"{self.system_prompt}\n\n{self.initial_prompt}".strip()
-		return self
-
-
 class AgentResult(_Model):
 	model: str
 	exit_code: int
+	reasoning_effort: str | None = None
 	message_count: int = 0
 	output: str = ""
 
@@ -338,9 +323,35 @@ class RuntimeInfo(_Model):
 	mode: RuntimeMode
 	image: str | None = None
 	workspace_mount: str | None = None
+	user: str | None = None
+	home: str | None = None
 	container_id: str | None = None
 	saved_image: str | None = None
 	container_stopped: bool = False
+
+
+class TrackedFilesCheck(_Model):
+	diff_path: str
+	tracked: int
+	modified_count: int = 0
+	deleted_count: int = 0
+	mode_changed_count: int = 0
+
+
+class SystemFilesCheck(_Model):
+	diff_path: str
+	changed: int
+	executables_count: int = 0
+	python_startup_count: int = 0
+	etc_count: int = 0
+
+
+class CommandMonitorInfo(_Model):
+	run_token: str
+	trace_path: str
+	command_count: int = 0
+	tracked_files: TrackedFilesCheck | None = None
+	system_files: SystemFilesCheck | None = None
 
 
 class RunResult(_Model):
@@ -358,6 +369,7 @@ class RunResult(_Model):
 	runtime: RuntimeInfo
 	agent_kind: str = "unknown"
 	agent: AgentResult
+	command_monitor: CommandMonitorInfo | None = None
 	error: str | None = None
 
 	@property
@@ -386,16 +398,22 @@ class RunResult(_Model):
 
 
 class RunOptions(_Model):
+	agent_type: AgentName | None = None
 	model_name: str | None = None
 	interactive: bool = False
+	allow_unsafe_local: bool = False
+	allow_host_docker: bool = False
 	prompt_profile: PromptProfile | None = None
 	prompt_append: str | None = None
 	cleanup_workspace: bool = False
+	preserve_runtime: bool = False
 	skip_incompatible: bool = False
+	monitor_commands: bool = False
+	monitor_socket_root: str | None = None
+	oracle_fail_fast: bool = False
 
 
 class UpstreamSourceType(str, Enum):
-	VENDORED = "vendored"
 	LOCAL = "local"
 	GIT = "git"
 	ARCHIVE = "archive"
@@ -457,7 +475,6 @@ class OraclePhaseTargetsConfig(_Model):
 
 class OracleConfig(_Model):
 	expected_score: int = 4
-	failure_mode: OracleFailureMode = OracleFailureMode.FAIL_FAST
 	placeholder: bool = False
 	notes: str | None = None
 	targets: dict[str, OracleTargetConfig] = Field(default_factory=dict)
@@ -476,6 +493,7 @@ class OracleConfig(_Model):
 		for key in (
 			"phases",
 			"score_mode",
+			"failure_mode",
 			OraclePhaseName.ENV_SETUP,
 			OraclePhaseName.ARTIFACT_BUILD,
 			OraclePhaseName.BENCHMARK_PREP,
@@ -544,7 +562,7 @@ class OracleConfig(_Model):
 
 
 class UpstreamConfig(_Model):
-	source_type: UpstreamSourceType = UpstreamSourceType.VENDORED
+	source_type: UpstreamSourceType | None = None
 	path: str | None = None
 	url: str | None = None
 	ref: str | None = None
