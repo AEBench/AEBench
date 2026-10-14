@@ -1,7 +1,40 @@
 {
   "schema_version": 1,
-  "verified_retry_count": 18,
+  "verified_retry_count": 20,
   "trials": [
+    {
+      "case": "asplos25_icemu",
+      "trial": 4,
+      "retry_of": [
+        1
+      ],
+      "node": "ae10-icemu-t1-20261014",
+      "case_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "aebench_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "docker",
+      "status": "success",
+      "score": 4,
+      "phase_status": {
+        "env_setup": "success",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "success"
+      },
+      "interventions": [
+        "Raised AEBench Docker snapshot timeout from 60 to 900 seconds; upstream artifact unchanged"
+      ],
+      "started_at_utc": "2026-10-14T11:24:11.996729+00:00",
+      "finished_at_utc": "2026-10-14T11:44:39.340014+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/asplos25_icemu/trial-4/ae10-icemu-t1-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/asplos25_icemu/trial-4/ae10-icemu-t1-20261014.manifest.json",
+      "archive_sha256": "910a98c2c181f58a0afbed9d85bf2df32f57e9500f7d788fa1def374971afc1d",
+      "archive_bytes": 61485
+    },
     {
       "case": "atc24_calchas",
       "trial": 4,
@@ -574,6 +607,39 @@
       "private_manifest_object": "retries/2026-10-14/osdi25_paralegal/trial-5/ae10-paralegal-t2-20261014.manifest.json",
       "archive_sha256": "120d057a8c1db4cc40460efdb03214d85785a2e50a26c8196bb06ef3defbb415",
       "archive_bytes": 33805
+    },
+    {
+      "case": "osdi25_paralegal",
+      "trial": 6,
+      "retry_of": [
+        3
+      ],
+      "node": "ae10-paralegal-t3-20261014",
+      "case_revision": "eefc19d151281144cb1a0e5aae5312acecfc8e68",
+      "aebench_revision": "eefc19d151281144cb1a0e5aae5312acecfc8e68",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "local",
+      "status": "error",
+      "score": 2,
+      "phase_status": {
+        "env_setup": "error",
+        "artifact_build": "error",
+        "benchmark_prep": "success",
+        "experiment_runs": "success"
+      },
+      "interventions": [
+        "Installed Python analysis dependencies on host; exposed existing pinned Rust and CodeQL tools on evaluator PATH; upstream artifact unchanged"
+      ],
+      "started_at_utc": "2026-10-14T11:28:31.756098+00:00",
+      "finished_at_utc": "2026-10-14T11:43:47.599576+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/osdi25_paralegal/trial-6/ae10-paralegal-t3-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/osdi25_paralegal/trial-6/ae10-paralegal-t3-20261014.manifest.json",
+      "archive_sha256": "bc75ac8d0627e61a6ef9510eb74d155b9a8884ff01e11de21541c69b79ef100f",
+      "archive_bytes": 42360
     },
     {
       "case": "sosp24_wasabi",
