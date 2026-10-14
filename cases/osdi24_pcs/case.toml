@@ -32,9 +32,6 @@ phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
 score_mode = "phase_count"
 placeholder = false
 
-[oracle.runtime]
-mode = "inherit"
-
 [upstream]
 source_type = "git"
 url = "https://github.com/TuftsNATLab/PCS"

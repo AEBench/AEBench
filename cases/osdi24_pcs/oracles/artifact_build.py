@@ -4,10 +4,10 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from evaluator.oracles import utils
 from evaluator.oracles.bases import CaseOracleArtifactBuildBase
 from evaluator.oracles.checks import PathKind
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
+from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 _BUILD_MODE_ENV = "AE_PCS_BUILD_MODE"
 _BUILD_TIMEOUT_SECONDS = 600.0
@@ -17,11 +17,11 @@ _REQUIRED_PACKAGES = ("numpy", "pandas", "scipy", "ray", "matplotlib", "seaborn"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class InvalidBuildModeCheck(utils.BaseCheck):
+class InvalidBuildModeCheck(BaseCheck):
     mode: str
 
-    def check(self, _executor: RuntimeCheckExecutor) -> utils.CheckResult:
-        return utils.CheckResult.failure(
+    def check(self, _executor: RuntimeCheckExecutor) -> CheckResult:
+        return CheckResult.failure(
             f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
         )
 
@@ -32,7 +32,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
         raw = os.environ.get(_BUILD_MODE_ENV, "verify").strip().lower()
         return raw or "verify"
 
-    def requirements(self) -> Sequence[utils.BaseCheck]:
+    def requirements(self) -> Sequence[BaseCheck]:
         repo_root = self.workspace_path()
         mode = self._build_mode()
 
@@ -47,7 +47,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
             )
 
         if mode == "verify":
-            reqs: list[utils.BaseCheck] = [
+            reqs: list[BaseCheck] = [
                 self.path_check(
                     name="requirements_txt_exists",
                     path=self.workspace_path("requirements.txt"),
