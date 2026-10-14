@@ -1,8 +1,8 @@
 id = "osdi24_eet"
 
 [case_brief]
-core_claim = "Build the EET executable, prepare the benchmark scripts, and reproduce the expected benchmark bug counts for the supported database workloads."
-acceptable_evidence = "The bundle oracle accepts the built EET binary, benchmark scripts and versions, and the observed bug totals under *_test/bugs for each benchmark."
+core_claim = "Build the EET executable and the evaluated database systems natively (without Docker), run EET against each database, and reproduce the expected bug counts."
+acceptable_evidence = "The oracle accepts the built EET binary, the evaluated database systems built at the paper's versions, and one directory per detected bug under <db>_test/bugs for each database."
 allowed_tolerance = "Bug counts must match the oracle's expected totals exactly for the evaluated benchmarks."
 
 [paper]
@@ -20,6 +20,22 @@ path = "README.md"
 
 [run.prompt]
 profile = "artifact-eval-v1"
+append = """
+NO DOCKER:
+- Docker is not available in this environment. Do not install or start Docker.
+- Do not run scripts/<db>/run_test.sh, build_docker.sh, cat_docker.sh or stop_docker.sh. They require Docker, but you can read them.
+- Build EET natively, following "Compile EET in Debian" in README.md.
+- Build and install each database natively in this environment, at the version used for artifact evaluation.
+  scripts/<db>/run_test.sh shows how each source is obtained, scripts/<db>/Dockerfile how it is built,
+  and scripts/<db>/test_setup.sh how the server and EET are started.
+- Put each database's source in <repo>/<db>_test/, in the directory scripts/<db>/run_test.sh downloads it to, and build it inside that directory.
+
+BUG RESULTS:
+- For each database <db> (mysql, postgres, sqlite, clickhouse, tidb), store every bug EET reports in its own subdirectory of <repo>/<db>_test/bugs/, laid out the way scripts/<db>/cat_docker.sh would produce it:
+  - logic bug: db_setup.sql, origin.sql, eet.sql, origin.out, eet.out (from the test's minimized/ directory)
+  - crash: db_setup.sql, unexpected.sql, unexpected.err
+- Each subdirectory must hold exactly one bug.
+"""
 
 [run.runtime]
 mode = "docker"
@@ -28,7 +44,7 @@ gpu = false
 interactive = false
 
 [run.artifact_requirements]
-docker = true
+docker = false
 compose = false
 
 [oracle]
@@ -36,7 +52,7 @@ expected_score = 4
 phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
 score_mode = "phase_count"
 placeholder = false
-notes = "Bundle-native oracle migrated from benchmark workspace data."
+notes = "Native (no-Docker) variant: the agent builds EET and the databases in its own container; bugs are collected under <db>_test/bugs."
 
 [upstream]
 source_type = "git"

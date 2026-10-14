@@ -12,11 +12,6 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 
 		return (
 			self.version_check(
-				name="docker",
-				cmd=("docker", "--version"),
-				min_version=(24, 0, 0),
-			),
-			self.version_check(
 				name="gpp",
 				cmd=("g++", "--version"),
 				min_version=(13, 2, 0),

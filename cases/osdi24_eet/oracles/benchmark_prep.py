@@ -7,47 +7,64 @@ from pathlib import Path
 from evaluator.oracles import CaseOracleBenchmarkPrepBase, PathKind
 from evaluator.oracles.reporting import BaseCheck
 
+# Passes when the source in the current directory is at version $1: a MySQL
+# release (from MYSQL_VERSION, as in the release tarball) or a git commit.
+_SOURCE_VERSION_SCRIPT = """\
+if [ -f MYSQL_VERSION ]; then
+	. ./MYSQL_VERSION
+	found="$MYSQL_VERSION_MAJOR.$MYSQL_VERSION_MINOR.$MYSQL_VERSION_PATCH"
+	expected="$1"
+else
+	found=$(git -c safe.directory='*' rev-parse HEAD) || exit 1
+	expected=$(git -c safe.directory='*' rev-parse --verify "$1^{commit}") || exit 1
+fi
+[ "$found" = "$expected" ] || { echo "source is at $found, expected $1" >&2; exit 1; }
+"""
 
-def _load_benchmark_manifest(path: Path) -> tuple[list[str], list[str], dict[str, str]]:
+# Passes when an executable named $1 was built somewhere under the current directory.
+_BUILT_BINARY_SCRIPT = """\
+found=$(find . -type f -name "$1" -perm -u+x -print -quit)
+[ -n "$found" ] || { echo "no executable named $1" >&2; exit 1; }
+echo "$found"
+"""
+
+
+def _load_benchmark_metadata(
+	path: Path,
+) -> tuple[list[str], dict[str, str], dict[str, str], dict[str, str]]:
 	try:
-		manifest = json.loads(path.read_text(encoding="utf-8"))
+		bench_metadata = json.loads(path.read_text(encoding="utf-8"))
 	except OSError as exc:
-		raise ValueError(f"failed to read benchmark manifest: {exc}") from exc
+		raise ValueError(f"failed to read benchmark metadata: {exc}") from exc
 	except json.JSONDecodeError as exc:
-		raise ValueError(f"invalid benchmark manifest: {exc}") from exc
+		raise ValueError(f"invalid benchmark metadata: {exc}") from exc
 
-	benchmarks = manifest.get("benchmarks")
-	required_files = manifest.get("required_files")
-	versions = manifest.get("versions")
-
+	benchmarks = bench_metadata.get("benchmarks")
 	if not isinstance(benchmarks, list) or not all(
 		isinstance(value, str) and value.strip() for value in benchmarks
 	):
-		raise ValueError("benchmark manifest has invalid benchmarks")
+		raise ValueError("benchmark metadata has invalid benchmarks")
 
-	if not isinstance(required_files, list) or not all(
-		isinstance(value, str) and value.strip() for value in required_files
-	):
-		raise ValueError("benchmark manifest has invalid required_files")
+	fields: list[dict[str, str]] = []
+	for field in ("sources", "binaries", "versions"):
+		values = bench_metadata.get(field)
+		if not isinstance(values, dict) or not all(
+			isinstance(values.get(benchmark), str) and values[benchmark].strip()
+			for benchmark in benchmarks
+		):
+			raise ValueError(f"benchmark metadata has invalid {field}")
+		fields.append(values)
 
-	if not isinstance(versions, dict) or not all(
-		isinstance(key, str)
-		and key.strip()
-		and isinstance(value, str)
-		and value.strip()
-		for key, value in versions.items()
-	):
-		raise ValueError("benchmark manifest has invalid versions")
-
-	return benchmarks, required_files, versions
+	sources, binaries, versions = fields
+	return benchmarks, sources, binaries, versions
 
 
 class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 	def requirements(self) -> Sequence[BaseCheck]:
 		repo_root = self.workspace_path()
-		manifest_path = self.ref_path("benchmark_manifest.json")
+		metadata_path = self.ref_path("benchmark_bench_metadata.json")
 
-		benchmarks, required_files, versions = _load_benchmark_manifest(manifest_path)
+		benchmarks, sources, binaries, versions = _load_benchmark_metadata(metadata_path)
 
 		reqs: list[BaseCheck] = [
 			self.path_check(
@@ -55,44 +72,34 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 				path=repo_root,
 				kind=PathKind.DIRECTORY,
 			),
-			self.path_check(
-				name="scripts_dir_exists",
-				path=repo_root / "scripts",
-				kind=PathKind.DIRECTORY,
-			),
 		]
 
+		# Each database is built natively from source in <repo>/<db>_test/<source>,
+		# the directory scripts/<db>/run_test.sh downloads it to.
 		for benchmark in benchmarks:
-			benchmark_dir = repo_root / "scripts" / benchmark
+			source_dir = repo_root / f"{benchmark}_test" / sources[benchmark]
 
 			reqs.append(
 				self.path_check(
-					name=f"scripts_subdir_{benchmark}",
-					path=benchmark_dir,
+					name=f"source_dir_{benchmark}",
+					path=source_dir,
 					kind=PathKind.DIRECTORY,
 				)
 			)
-
-			for filename in required_files:
-				reqs.append(
-					self.path_check(
-						name=f"scripts_file_{benchmark}_{filename}",
-						path=benchmark_dir / filename,
-						kind=PathKind.FILE,
-					)
-				)
-
-			version = versions.get(benchmark)
-			if not isinstance(version, str) or not version.strip():
-				raise ValueError(f"benchmark manifest is missing version for {benchmark!r}")
-
 			reqs.append(
 				self.command_check(
-					name=f"run_test_contains_version_{benchmark}",
-					cwd=benchmark_dir,
-					cmd=("cat", "run_test.sh"),
-					signature=version,
-					timeout_seconds=10.0,
+					name=f"source_version_{benchmark}",
+					cwd=source_dir,
+					cmd=("sh", "-c", _SOURCE_VERSION_SCRIPT, "sh", versions[benchmark]),
+					timeout_seconds=30.0,
+				)
+			)
+			reqs.append(
+				self.command_check(
+					name=f"built_binary_{benchmark}",
+					cwd=source_dir,
+					cmd=("sh", "-c", _BUILT_BINARY_SCRIPT, "sh", binaries[benchmark]),
+					timeout_seconds=300.0,
 				)
 			)
 
