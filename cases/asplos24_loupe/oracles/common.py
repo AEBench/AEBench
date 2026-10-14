@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import csv
-import hashlib
+import io
 import json
-import subprocess
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,12 +12,21 @@ from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 
-def _sha256(path: Path) -> str:
-	digest = hashlib.sha256()
-	with path.open("rb") as stream:
-		for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-			digest.update(chunk)
-	return digest.hexdigest()
+def _sha256(executor: RuntimeCheckExecutor, path: Path) -> str:
+	result = executor.run_process_capture(
+		cmd=(
+			"python3",
+			"-c",
+			"import hashlib, pathlib, sys; print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())",
+			str(executor.resolve_path(path)),
+		),
+		cwd=None,
+		env=None,
+		timeout_seconds=30.0,
+	)
+	if result.returncode != 0:
+		raise ValueError(result.stderr.strip() or f"cannot hash {path}")
+	return result.stdout.strip()
 
 
 def _load_reference(path: Path) -> dict[str, Any]:
@@ -27,12 +36,12 @@ def _load_reference(path: Path) -> dict[str, Any]:
 	return data
 
 
-def _git_head(path: Path) -> str:
-	result = subprocess.run(
-		("git", "-C", str(path), "rev-parse", "HEAD"),
-		capture_output=True,
-		text=True,
-		check=False,
+def _git_head(executor: RuntimeCheckExecutor, path: Path) -> str:
+	result = executor.run_process_capture(
+		cmd=("git", "rev-parse", "HEAD"),
+		cwd=path,
+		env=None,
+		timeout_seconds=30.0,
 	)
 	if result.returncode != 0:
 		raise ValueError(result.stderr.strip() or f"cannot read Git HEAD for {path}")
@@ -44,9 +53,9 @@ def _result_dir(workspace: Path, dockerfile_md5: str) -> Path:
 
 
 def _read_syscall_table(
-	path: Path, expected_columns: tuple[str, ...]
+	executor: RuntimeCheckExecutor, path: Path, expected_columns: tuple[str, ...]
 ) -> dict[int, tuple[str, ...]]:
-	with path.open(newline="", encoding="utf-8") as stream:
+	with io.StringIO(executor.read_file_text(path)) as stream:
 		reader = csv.reader(stream)
 		try:
 			header = tuple(column.strip() for column in next(reader))
@@ -74,6 +83,24 @@ def _read_syscall_table(
 	return rows
 
 
+def _search_syscalls(text: str) -> tuple[set[int], set[int]]:
+	groups: list[set[int]] = []
+	for label in ("Required", "Can be stubbed", "Can be faked", "Can be both stubbed or faked"):
+		match = re.search(rf"(?m)^{re.escape(label)}:\s*\n(\[[^\n]*\])", text)
+		if match is None:
+			raise ValueError(f"search log is missing {label} values")
+		values = json.loads(match.group(1))
+		if not isinstance(values, list) or any(type(value) is not int for value in values):
+			raise ValueError(f"search log has invalid {label} values")
+		group = set(values)
+		if len(group) != len(values):
+			raise ValueError(f"search log duplicates {label} values")
+		groups.append(group)
+	if sum(map(len, groups)) != len(set.union(*groups)):
+		raise ValueError("search log places a syscall in multiple categories")
+	return groups[0], set.union(*groups[1:])
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PinnedInputsCheck(BaseCheck):
 	workspace: Path
@@ -82,13 +109,13 @@ class PinnedInputsCheck(BaseCheck):
 	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
 			ref = _load_reference(self.reference)
-			if _git_head(self.workspace) != ref["loupe_commit"]:
+			if _git_head(executor, self.workspace) != ref["loupe_commit"]:
 				return CheckResult.failure("Loupe checkout is not at the pinned artifact commit")
 			for relative, expected in ref["input_sha256"].items():
 				path = self.workspace / relative
-				if not path.is_file():
+				if not executor.path_is_file(path):
 					return CheckResult.failure(f"missing pinned input: {relative}")
-				if _sha256(path) != expected:
+				if _sha256(executor, path) != expected:
 					return CheckResult.failure(f"pinned input was modified: {relative}")
 		except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
 			return CheckResult.failure(f"failed to verify pinned inputs: {exc}")
@@ -103,7 +130,7 @@ class PinnedDatabaseCheck(BaseCheck):
 	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
 			ref = _load_reference(self.reference)
-			actual = _git_head(self.workspace / "loupedb")
+			actual = _git_head(executor, self.workspace / "loupedb")
 		except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
 			return CheckResult.failure(f"failed to verify loupedb checkout: {exc}")
 		if actual != ref["loupedb_commit"]:
@@ -123,10 +150,12 @@ class LoupeTablesCheck(BaseCheck):
 			ref = _load_reference(self.reference)
 			result = _result_dir(self.workspace, str(ref["dockerfile_md5"]))
 			dynamic = _read_syscall_table(
+				executor,
 				result / "data" / "dyn.csv",
 				("# syscall", "used", "works faked", "works stubbed", "works both"),
 			)
 			static = _read_syscall_table(
+				executor,
 				result / "data" / "static_binary.csv",
 				("# syscall", "used"),
 			)
@@ -170,7 +199,7 @@ class LoupeTablesCheck(BaseCheck):
 				],
 			}
 			for path, expected in copied_inputs.items():
-				if not path.is_file() or _sha256(path) != expected:
+				if not executor.path_is_file(path) or _sha256(executor, path) != expected:
 					return CheckResult.failure(
 						f"generated result has wrong copied input: {path.name}"
 					)
@@ -200,9 +229,11 @@ class LoupeRunEvidenceCheck(BaseCheck):
 			}
 			contents: dict[str, str] = {}
 			for label, path in paths.items():
-				if not path.is_file() or path.stat().st_size == 0:
+				if not executor.path_is_file(path):
 					return CheckResult.failure(f"missing or empty {label}: {path}")
-				contents[label] = path.read_text(encoding="utf-8", errors="replace")
+				contents[label] = executor.read_file_text(path)
+				if not contents[label]:
+					return CheckResult.failure(f"missing or empty {label}: {path}")
 
 			command = contents["command"]
 			for token in ("generate", "-a aebench-nginx", "-w wrk", "Dockerfile.nginx"):
@@ -218,9 +249,16 @@ class LoupeRunEvidenceCheck(BaseCheck):
 				return CheckResult.failure(
 					"experiment log lacks Loupe's successful completion marker"
 				)
-			for marker in ("Required:", "Can be stubbed:", "Can be faked:"):
-				if marker not in contents["search log"]:
-					return CheckResult.failure(f"search log is missing {marker!r}")
+			dynamic = _read_syscall_table(
+				executor,
+				result / "data" / "dyn.csv",
+				("# syscall", "used", "works faked", "works stubbed", "works both"),
+			)
+			used = {number for number, flags in dynamic.items() if flags[0] == "Y"}
+			replaceable = {number for number, flags in dynamic.items() if "Y" in flags[1:]}
+			required_in_search, replaceable_in_search = _search_syscalls(contents["search log"])
+			if required_in_search != used - replaceable or replaceable_in_search != replaceable:
+				return CheckResult.failure("search log syscall values disagree with dyn.csv")
 		except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
 			return CheckResult.failure(f"failed to validate Loupe execution evidence: {exc}")
 		return CheckResult.success(

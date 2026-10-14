@@ -9,6 +9,7 @@ from unittest.mock import Mock
 from cases.asplos24_loupe.oracles.common import (
 	LoupeRunEvidenceCheck,
 	LoupeTablesCheck,
+	PinnedInputsCheck,
 	_read_syscall_table,
 )
 from cases.asplos24_loupe.oracles.env_setup import OracleEnvSetup
@@ -63,11 +64,37 @@ def test_read_syscall_table_rejects_duplicate(tmp_path: Path) -> None:
 	path = tmp_path / "dyn.csv"
 	path.write_text("# syscall,used\n0,Y\n0,N\n", encoding="utf-8")
 	try:
-		_read_syscall_table(path, ("# syscall", "used"))
+		_read_syscall_table(
+			LocalRuntimeCheckExecutor(default_cwd=tmp_path), path, ("# syscall", "used")
+		)
 	except ValueError as exc:
 		assert "duplicates syscall 0" in str(exc)
 	else:
 		raise AssertionError("duplicate syscall row was accepted")
+
+
+def test_pinned_inputs_use_runtime_paths(tmp_path: Path) -> None:
+	workspace = tmp_path / "runtime-only"
+	reference = tmp_path / "reference.json"
+	reference.write_text(
+		json.dumps(
+			{
+				"loupe_commit": "pinned-commit",
+				"input_sha256": {"Dockerfile": "pinned-hash"},
+			}
+		),
+		encoding="utf-8",
+	)
+	executor = Mock(spec=RuntimeCheckExecutor)
+	executor.path_is_file.return_value = True
+	executor.resolve_path.return_value = Path("/runtime/Dockerfile")
+	executor.run_process_capture.side_effect = [
+		ProcResult(returncode=0, stdout="pinned-commit\n", stderr="", timed_out=False),
+		ProcResult(returncode=0, stdout="pinned-hash\n", stderr="", timed_out=False),
+	]
+	check = PinnedInputsCheck(name="inputs", workspace=workspace, reference=reference)
+	assert check.check(executor).ok
+	assert executor.run_process_capture.call_args_list[1].kwargs["cmd"][-1] == "/runtime/Dockerfile"
 
 
 def test_loupe_tables_check_accepts_complete_nontrivial_output(tmp_path: Path) -> None:
@@ -168,11 +195,42 @@ def test_loupe_run_evidence_requires_both_replicas_and_logs(tmp_path: Path) -> N
 	logs = workspace / "aebench-results"
 	logs.mkdir()
 	(logs / "experiment.log").write_text("Done! Full analysis last 0:01:00\n", encoding="utf-8")
+	_write_table(
+		result / "data/dyn.csv", "# syscall,used,works faked,works stubbed,works both", 5, {0, 1}
+	)
+	dynamic_lines = (result / "data/dyn.csv").read_text(encoding="utf-8").splitlines()
+	dynamic_lines[2] = "1,Y,Y,N,N"
+	(result / "data/dyn.csv").write_text("\n".join(dynamic_lines) + "\n", encoding="utf-8")
 	(logs / "search.log").write_text(
-		"Required:\n[]\nCan be stubbed:\n[]\nCan be faked:\n[]\n",
+		"Required:\n[0]\nCan be stubbed:\n[1]\nCan be faked:\n[]\nCan be both stubbed or faked:\n[]\n",
 		encoding="utf-8",
 	)
 	reference = tmp_path / "reference.json"
 	reference.write_text(json.dumps({"dockerfile_md5": "testhash"}), encoding="utf-8")
 	check = LoupeRunEvidenceCheck(name="evidence", workspace=workspace, reference=reference)
 	assert check.check(LocalRuntimeCheckExecutor(default_cwd=workspace)).ok
+	(logs / "search.log").write_text(
+		"Required:\n[0]\nCan be stubbed:\n[2]\nCan be faked:\n[]\nCan be both stubbed or faked:\n[]\n",
+		encoding="utf-8",
+	)
+	result_check = check.check(LocalRuntimeCheckExecutor(default_cwd=workspace))
+	assert not result_check.ok
+	assert "disagree with dyn.csv" in result_check.message
+
+
+def test_loupe_run_evidence_reads_from_executor(tmp_path: Path) -> None:
+	workspace = tmp_path / "runtime-only"
+	reference = tmp_path / "reference.json"
+	reference.write_text(json.dumps({"dockerfile_md5": "testhash"}), encoding="utf-8")
+	executor = Mock(spec=RuntimeCheckExecutor)
+	executor.path_is_file.return_value = True
+	executor.read_file_text.side_effect = [
+		"loupe generate -a aebench-nginx -w wrk -d Dockerfile.nginx\n",
+		"replica #0\nreplica #1\n",
+		"Done! Full analysis last 0:01:00\n",
+		"Required:\n[0]\nCan be stubbed:\n[]\nCan be faked:\n[]\nCan be both stubbed or faked:\n[]\n",
+		"# syscall,used,works faked,works stubbed,works both\n0,Y,N,N,N\n",
+	]
+	check = LoupeRunEvidenceCheck(name="evidence", workspace=workspace, reference=reference)
+	assert check.check(executor).ok
+	assert executor.read_file_text.call_count == 5

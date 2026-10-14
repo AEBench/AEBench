@@ -5,8 +5,8 @@ its supplied Nginx/wrk example. Loupe executes two privileged container
 replicas, records dynamic syscall behavior, tests stubbing and faking, and
 performs static binary analysis.
 
-It does not reproduce the full 100+ application database, paper plots,
-support-plan tables, supplemental results, or performance experiments.
+It does not reproduce paper Table 1 or Figures 2-5, the full 100+ application
+database, support-plan tables, supplemental results, or performance experiments.
 
 ## Requirements
 
@@ -92,6 +92,7 @@ fresh entry at:
 loupedb/aebench-nginx/benchmark-wrk/126e629dc544b4695f12ed602f6902aa/
 ```
 
-Both CSV tables must cover syscall numbers 0 through 334. Exact classifications
-are intentionally not fixed because they can vary with the host kernel and
-container runtime.
+Both CSV tables must cover syscall numbers 0 through 334. The oracle compares
+the required and replaceable syscall IDs in the query output with the dynamic
+CSV. Exact classifications are not compared with paper results because they
+can vary with the host kernel and container runtime.

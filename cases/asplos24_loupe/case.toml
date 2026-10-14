@@ -16,7 +16,7 @@ venue = "ASPLOS 2024"
 id = "asplos24_loupe"
 
 [run.instructions]
-path = "AEBENCH.md"
+path = "REPRODUCTION.md"
 required_evidence = [
   "Keep the generated database under loupedb/aebench-nginx/benchmark-wrk/<dockerfile-hash>/, including data/dyn.csv, data/static_binary.csv, cmd.txt, and explore.logs.",
   "Save the full generate command output to aebench-results/experiment.log.",
@@ -50,7 +50,7 @@ phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
 score_mode = "phase_count"
 failure_mode = "continue"
 placeholder = false
-notes = "Bounded first slice: the supplied Nginx/wrk example only. This does not reproduce the 100+ application corpus, paper plots, support-plan tables, or performance experiments."
+notes = "Bounded first slice: the supplied Nginx/wrk example only. The oracle does not validate paper Table 1, Figures 2-5, the 100+ application corpus, support-plan tables, or performance experiments."
 
 [oracle.phase_targets]
 env_setup = "task"
