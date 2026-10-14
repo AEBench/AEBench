@@ -1,0 +1,612 @@
+{
+  "schema_version": 1,
+  "verified_retry_count": 18,
+  "trials": [
+    {
+      "case": "atc24_calchas",
+      "trial": 4,
+      "retry_of": [
+        1
+      ],
+      "node": "ae10-calchas-t1-20261014",
+      "case_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "aebench_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "docker",
+      "status": "success",
+      "score": 4,
+      "phase_status": {
+        "env_setup": "success",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "success"
+      },
+      "interventions": [
+        "Prepared AEBench agent base image with Python analysis dependencies; upstream artifact unchanged"
+      ],
+      "started_at_utc": "2026-10-14T11:24:11.989787+00:00",
+      "finished_at_utc": "2026-10-14T11:28:34.499897+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/atc24_calchas/trial-4/ae10-calchas-t1-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/atc24_calchas/trial-4/ae10-calchas-t1-20261014.manifest.json",
+      "archive_sha256": "1784a8ed244649ff45cf57e2c05815e1336223b559f34b658c5498338f57f7b7",
+      "archive_bytes": 17924
+    },
+    {
+      "case": "atc24_calchas",
+      "trial": 5,
+      "retry_of": [
+        2
+      ],
+      "node": "ae10-calchas-t1-20261014",
+      "case_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "aebench_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "docker",
+      "status": "success",
+      "score": 4,
+      "phase_status": {
+        "env_setup": "success",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "success"
+      },
+      "interventions": [
+        "Prepared AEBench agent base image with Python analysis dependencies; upstream artifact unchanged"
+      ],
+      "started_at_utc": "2026-10-14T11:30:07.353625+00:00",
+      "finished_at_utc": "2026-10-14T11:37:03.490311+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/atc24_calchas/trial-5/ae10-calchas-t1-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/atc24_calchas/trial-5/ae10-calchas-t1-20261014.manifest.json",
+      "archive_sha256": "875d8ffc031564bdde46ed169c99ff7b44aa7327c93301fa380afe3934ce9491",
+      "archive_bytes": 20960
+    },
+    {
+      "case": "atc24_calchas",
+      "trial": 6,
+      "retry_of": [
+        3
+      ],
+      "node": "ae10-calchas-t1-20261014",
+      "case_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "aebench_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "docker",
+      "status": "success",
+      "score": 4,
+      "phase_status": {
+        "env_setup": "success",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "success"
+      },
+      "interventions": [
+        "Prepared AEBench agent base image with Python analysis dependencies; upstream artifact unchanged"
+      ],
+      "started_at_utc": "2026-10-14T11:37:03.638612+00:00",
+      "finished_at_utc": "2026-10-14T11:42:37.876456+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/atc24_calchas/trial-6/ae10-calchas-t1-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/atc24_calchas/trial-6/ae10-calchas-t1-20261014.manifest.json",
+      "archive_sha256": "d3cfeba34031c1985d68aaa4c363f9227d6925e12a52863f7eeac61321a2b181",
+      "archive_bytes": 19369
+    },
+    {
+      "case": "eurosys25_depsurf",
+      "trial": 4,
+      "retry_of": [
+        1
+      ],
+      "node": "ae10-depsurf-t1-20261014",
+      "case_revision": "5cfcb8da90d06f00187c372650d1d1bbf553edde",
+      "aebench_revision": "5cfcb8da90d06f00187c372650d1d1bbf553edde",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "docker",
+      "status": "success",
+      "score": 4,
+      "phase_status": {
+        "env_setup": "success",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "success"
+      },
+      "interventions": [
+        "Corrected AEBench DepSurf oracle build paths from data/software to software; oracle file SHA-256 615060a13997a1fd41a2c54871e99a18ff324d72223867d9a67dae92dd1601ed; upstream artifact unchanged",
+        "Appended guidance to export the expected result CSVs from genuine notebook and build outputs"
+      ],
+      "started_at_utc": "2026-10-14T11:25:19.014499+00:00",
+      "finished_at_utc": "2026-10-14T11:37:10.512047+00:00",
+      "provisional": true,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/eurosys25_depsurf/trial-4/ae10-depsurf-t1-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/eurosys25_depsurf/trial-4/ae10-depsurf-t1-20261014.manifest.json",
+      "archive_sha256": "ce7adfb5efe34c06c8b90b4a842d03ccd3c8a6b7f6f968870c6b1476e4885339",
+      "archive_bytes": 43079
+    },
+    {
+      "case": "eurosys25_depsurf",
+      "trial": 5,
+      "retry_of": [
+        2
+      ],
+      "node": "ae10-depsurf-t2-20261014",
+      "case_revision": "5cfcb8da90d06f00187c372650d1d1bbf553edde",
+      "aebench_revision": "5cfcb8da90d06f00187c372650d1d1bbf553edde",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "docker",
+      "status": "success",
+      "score": 4,
+      "phase_status": {
+        "env_setup": "success",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "success"
+      },
+      "interventions": [
+        "Corrected AEBench DepSurf oracle build paths from data/software to software; oracle file SHA-256 615060a13997a1fd41a2c54871e99a18ff324d72223867d9a67dae92dd1601ed; upstream artifact unchanged",
+        "Appended guidance to export the expected result CSVs from genuine notebook and build outputs"
+      ],
+      "started_at_utc": "2026-10-14T11:28:32.552714+00:00",
+      "finished_at_utc": "2026-10-14T11:37:17.948502+00:00",
+      "provisional": true,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/eurosys25_depsurf/trial-5/ae10-depsurf-t2-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/eurosys25_depsurf/trial-5/ae10-depsurf-t2-20261014.manifest.json",
+      "archive_sha256": "27dd994dcfe4f100dbe9f35dc3fcd23f62c380fd39e9bca5a7a4b0f8b099d5dc",
+      "archive_bytes": 30494
+    },
+    {
+      "case": "eurosys25_depsurf",
+      "trial": 6,
+      "retry_of": [
+        3
+      ],
+      "node": "ae10-depsurf-t3-20261014",
+      "case_revision": "5cfcb8da90d06f00187c372650d1d1bbf553edde",
+      "aebench_revision": "5cfcb8da90d06f00187c372650d1d1bbf553edde",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "docker",
+      "status": "success",
+      "score": 4,
+      "phase_status": {
+        "env_setup": "success",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "success"
+      },
+      "interventions": [
+        "Corrected AEBench DepSurf oracle build paths from data/software to software; oracle file SHA-256 615060a13997a1fd41a2c54871e99a18ff324d72223867d9a67dae92dd1601ed; upstream artifact unchanged",
+        "Appended guidance to export the expected result CSVs from genuine notebook and build outputs"
+      ],
+      "started_at_utc": "2026-10-14T11:28:32.421267+00:00",
+      "finished_at_utc": "2026-10-14T11:41:05.087573+00:00",
+      "provisional": true,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/eurosys25_depsurf/trial-6/ae10-depsurf-t3-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/eurosys25_depsurf/trial-6/ae10-depsurf-t3-20261014.manifest.json",
+      "archive_sha256": "35cb6d21cf75b19bdcbd154b9fae6764407e6d9f729cdc6a179f70ae4d12adbb",
+      "archive_bytes": 42216
+    },
+    {
+      "case": "eurosys25_sebs_flow",
+      "trial": 4,
+      "retry_of": [
+        1
+      ],
+      "node": "ae10-sebs-flow-t1-20261014",
+      "case_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "aebench_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "local",
+      "status": "error",
+      "score": 2,
+      "phase_status": {
+        "env_setup": "error",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "error"
+      },
+      "interventions": [
+        "Installed Python analysis dependencies on host; upstream artifact unchanged",
+        "Appended task guidance to compute all four fixed-corpus metrics from released data"
+      ],
+      "started_at_utc": "2026-10-14T11:24:12.155710+00:00",
+      "finished_at_utc": "2026-10-14T11:28:37.700630+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/eurosys25_sebs_flow/trial-4/ae10-sebs-flow-t1-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/eurosys25_sebs_flow/trial-4/ae10-sebs-flow-t1-20261014.manifest.json",
+      "archive_sha256": "e62c08eda4ed9aba220a4570dade0109fa5f1af13dd610082ec66abc5310ce6d",
+      "archive_bytes": 19739
+    },
+    {
+      "case": "eurosys25_sebs_flow",
+      "trial": 5,
+      "retry_of": [
+        2
+      ],
+      "node": "ae10-sebs-flow-t2-20261014",
+      "case_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "aebench_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "local",
+      "status": "error",
+      "score": 3,
+      "phase_status": {
+        "env_setup": "error",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "success"
+      },
+      "interventions": [
+        "Installed Python analysis dependencies on host; upstream artifact unchanged",
+        "Appended task guidance to compute all four fixed-corpus metrics from released data"
+      ],
+      "started_at_utc": "2026-10-14T11:28:31.936909+00:00",
+      "finished_at_utc": "2026-10-14T11:32:05.693296+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/eurosys25_sebs_flow/trial-5/ae10-sebs-flow-t2-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/eurosys25_sebs_flow/trial-5/ae10-sebs-flow-t2-20261014.manifest.json",
+      "archive_sha256": "e599017259641f55eaa8c4c3a753c0c297e1d084a9b76e28086b2f7750ea7d19",
+      "archive_bytes": 20443
+    },
+    {
+      "case": "eurosys25_sebs_flow",
+      "trial": 6,
+      "retry_of": [
+        3
+      ],
+      "node": "ae10-sebs-flow-t3-20261014",
+      "case_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "aebench_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "local",
+      "status": "error",
+      "score": 3,
+      "phase_status": {
+        "env_setup": "error",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "success"
+      },
+      "interventions": [
+        "Installed Python analysis dependencies on host; upstream artifact unchanged",
+        "Appended task guidance to compute all four fixed-corpus metrics from released data"
+      ],
+      "started_at_utc": "2026-10-14T11:28:31.767498+00:00",
+      "finished_at_utc": "2026-10-14T11:31:49.036655+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/eurosys25_sebs_flow/trial-6/ae10-sebs-flow-t3-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/eurosys25_sebs_flow/trial-6/ae10-sebs-flow-t3-20261014.manifest.json",
+      "archive_sha256": "9d0320e084653d413e153ef841a1a6e838feaae1bb34fbda32b2dfb5c10f4282",
+      "archive_bytes": 20221
+    },
+    {
+      "case": "eurosys25_sebs_flow",
+      "trial": 7,
+      "retry_of": [
+        4
+      ],
+      "node": "ae10-sebs-flow-t1-20261014",
+      "case_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "aebench_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "local",
+      "status": "success",
+      "score": 4,
+      "phase_status": {
+        "env_setup": "success",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "success"
+      },
+      "interventions": [
+        "Installed Python analysis dependencies on host; upstream artifact unchanged",
+        "Appended task guidance to compute all four fixed-corpus metrics from released data",
+        "Installed analysis packages into the AEBench virtual environment and disabled uv resync for the trial; upstream artifact unchanged"
+      ],
+      "started_at_utc": "2026-10-14T11:30:23.936516+00:00",
+      "finished_at_utc": "2026-10-14T11:33:55.757762+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/eurosys25_sebs_flow/trial-7/ae10-sebs-flow-t1-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/eurosys25_sebs_flow/trial-7/ae10-sebs-flow-t1-20261014.manifest.json",
+      "archive_sha256": "0d7522528a5073a0dcdb51a7984e8b2ce2244cbd8553cb8196fde4e40bf869d3",
+      "archive_bytes": 19748
+    },
+    {
+      "case": "eurosys25_sebs_flow",
+      "trial": 8,
+      "retry_of": [
+        5
+      ],
+      "node": "ae10-sebs-flow-t2-20261014",
+      "case_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "aebench_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "local",
+      "status": "success",
+      "score": 4,
+      "phase_status": {
+        "env_setup": "success",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "success"
+      },
+      "interventions": [
+        "Installed Python analysis dependencies on host; upstream artifact unchanged",
+        "Appended task guidance to compute all four fixed-corpus metrics from released data",
+        "Installed analysis packages into AEBench virtual environment and disabled uv resync; upstream artifact unchanged"
+      ],
+      "started_at_utc": "2026-10-14T11:33:03.684252+00:00",
+      "finished_at_utc": "2026-10-14T11:37:01.149311+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/eurosys25_sebs_flow/trial-8/ae10-sebs-flow-t2-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/eurosys25_sebs_flow/trial-8/ae10-sebs-flow-t2-20261014.manifest.json",
+      "archive_sha256": "90e2c00922b865cc08a049af01b245b77f4c05a7756a5c94bd49b21c0c790c6c",
+      "archive_bytes": 20880
+    },
+    {
+      "case": "eurosys25_sebs_flow",
+      "trial": 9,
+      "retry_of": [
+        6
+      ],
+      "node": "ae10-sebs-flow-t3-20261014",
+      "case_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "aebench_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "local",
+      "status": "success",
+      "score": 4,
+      "phase_status": {
+        "env_setup": "success",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "success"
+      },
+      "interventions": [
+        "Installed Python analysis dependencies on host; upstream artifact unchanged",
+        "Appended task guidance to compute all four fixed-corpus metrics from released data",
+        "Installed analysis packages into AEBench virtual environment and disabled uv resync; upstream artifact unchanged"
+      ],
+      "started_at_utc": "2026-10-14T11:33:03.082052+00:00",
+      "finished_at_utc": "2026-10-14T11:36:20.660463+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/eurosys25_sebs_flow/trial-9/ae10-sebs-flow-t3-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/eurosys25_sebs_flow/trial-9/ae10-sebs-flow-t3-20261014.manifest.json",
+      "archive_sha256": "4ec74009f42b63d7b813a83da3ca51ceea25fbc17f0478dd738c2be1e3dbb44a",
+      "archive_bytes": 19898
+    },
+    {
+      "case": "osdi24_eet",
+      "trial": 4,
+      "retry_of": [
+        1
+      ],
+      "node": "ae10-eet-t1-20261014",
+      "case_revision": "5cfcb8da90d06f00187c372650d1d1bbf553edde",
+      "aebench_revision": "5cfcb8da90d06f00187c372650d1d1bbf553edde",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "docker",
+      "status": "error",
+      "score": 1,
+      "phase_status": {
+        "env_setup": "error",
+        "artifact_build": "error",
+        "benchmark_prep": "success",
+        "experiment_runs": "error"
+      },
+      "interventions": [
+        "Clarified that evaluation uses only the pinned local artifact and documented test suite; upstream artifact unchanged"
+      ],
+      "started_at_utc": "2026-10-14T11:26:08.703369+00:00",
+      "finished_at_utc": "2026-10-14T11:26:51.517404+00:00",
+      "provisional": true,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/osdi24_eet/trial-4/ae10-eet-t1-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/osdi24_eet/trial-4/ae10-eet-t1-20261014.manifest.json",
+      "archive_sha256": "51a3a64c73ca21327049a9a93df922481e3c99f4ed55783b9244b4d2bd251cfb",
+      "archive_bytes": 12252
+    },
+    {
+      "case": "osdi24_eet",
+      "trial": 5,
+      "retry_of": [
+        2
+      ],
+      "node": "ae10-eet-t2-20261014",
+      "case_revision": "5cfcb8da90d06f00187c372650d1d1bbf553edde",
+      "aebench_revision": "5cfcb8da90d06f00187c372650d1d1bbf553edde",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "docker",
+      "status": "error",
+      "score": 1,
+      "phase_status": {
+        "env_setup": "error",
+        "artifact_build": "error",
+        "benchmark_prep": "success",
+        "experiment_runs": "error"
+      },
+      "interventions": [
+        "Clarified that evaluation uses only the pinned local artifact and documented test suite; upstream artifact unchanged"
+      ],
+      "started_at_utc": "2026-10-14T11:33:57.851780+00:00",
+      "finished_at_utc": "2026-10-14T11:35:17.001714+00:00",
+      "provisional": true,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/osdi24_eet/trial-5/ae10-eet-t2-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/osdi24_eet/trial-5/ae10-eet-t2-20261014.manifest.json",
+      "archive_sha256": "dd026a1a29856910ff8e8b26b2d5c5512813c22995772c52d298794900c516ad",
+      "archive_bytes": 17751
+    },
+    {
+      "case": "osdi24_eet",
+      "trial": 6,
+      "retry_of": [
+        3
+      ],
+      "node": "ae10-eet-t3-20261014",
+      "case_revision": "5cfcb8da90d06f00187c372650d1d1bbf553edde",
+      "aebench_revision": "5cfcb8da90d06f00187c372650d1d1bbf553edde",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "docker",
+      "status": "error",
+      "score": 1,
+      "phase_status": {
+        "env_setup": "error",
+        "artifact_build": "error",
+        "benchmark_prep": "success",
+        "experiment_runs": "error"
+      },
+      "interventions": [
+        "Clarified that evaluation uses only the pinned local artifact and documented test suite; upstream artifact unchanged"
+      ],
+      "started_at_utc": "2026-10-14T11:33:57.868832+00:00",
+      "finished_at_utc": "2026-10-14T11:34:43.145577+00:00",
+      "provisional": true,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/osdi24_eet/trial-6/ae10-eet-t3-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/osdi24_eet/trial-6/ae10-eet-t3-20261014.manifest.json",
+      "archive_sha256": "858bd675cda68dbdae676b70be31d752490290b317e16d408ffb75ffed77457a",
+      "archive_bytes": 13715
+    },
+    {
+      "case": "osdi25_paralegal",
+      "trial": 4,
+      "retry_of": [
+        1
+      ],
+      "node": "ae10-paralegal-t1-20261014",
+      "case_revision": "eefc19d151281144cb1a0e5aae5312acecfc8e68",
+      "aebench_revision": "eefc19d151281144cb1a0e5aae5312acecfc8e68",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "local",
+      "status": "error",
+      "score": 2,
+      "phase_status": {
+        "env_setup": "error",
+        "artifact_build": "error",
+        "benchmark_prep": "success",
+        "experiment_runs": "success"
+      },
+      "interventions": [
+        "Installed Python analysis dependencies on host; exposed existing pinned Rust and CodeQL tools on evaluator PATH; upstream artifact unchanged"
+      ],
+      "started_at_utc": "2026-10-14T11:24:11.966895+00:00",
+      "finished_at_utc": "2026-10-14T11:37:00.446482+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/osdi25_paralegal/trial-4/ae10-paralegal-t1-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/osdi25_paralegal/trial-4/ae10-paralegal-t1-20261014.manifest.json",
+      "archive_sha256": "cf4a66efe400ebf5c66ebf08373e282fc86ca13f5837d844c61f13c28b3903a1",
+      "archive_bytes": 35126
+    },
+    {
+      "case": "osdi25_paralegal",
+      "trial": 5,
+      "retry_of": [
+        2
+      ],
+      "node": "ae10-paralegal-t2-20261014",
+      "case_revision": "eefc19d151281144cb1a0e5aae5312acecfc8e68",
+      "aebench_revision": "eefc19d151281144cb1a0e5aae5312acecfc8e68",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "local",
+      "status": "error",
+      "score": 2,
+      "phase_status": {
+        "env_setup": "error",
+        "artifact_build": "error",
+        "benchmark_prep": "success",
+        "experiment_runs": "success"
+      },
+      "interventions": [
+        "Installed Python analysis dependencies on host; exposed existing pinned Rust and CodeQL tools on evaluator PATH; upstream artifact unchanged"
+      ],
+      "started_at_utc": "2026-10-14T11:28:31.760807+00:00",
+      "finished_at_utc": "2026-10-14T11:40:24.013120+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/osdi25_paralegal/trial-5/ae10-paralegal-t2-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/osdi25_paralegal/trial-5/ae10-paralegal-t2-20261014.manifest.json",
+      "archive_sha256": "120d057a8c1db4cc40460efdb03214d85785a2e50a26c8196bb06ef3defbb415",
+      "archive_bytes": 33805
+    },
+    {
+      "case": "sosp24_wasabi",
+      "trial": 6,
+      "retry_of": [
+        3
+      ],
+      "node": "ae10-wasabi-t3-20261014",
+      "case_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "aebench_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "docker",
+      "status": "error",
+      "score": 1,
+      "phase_status": {
+        "env_setup": "error",
+        "artifact_build": "success",
+        "benchmark_prep": "error",
+        "experiment_runs": "error"
+      },
+      "interventions": [
+        "Raised AEBench Docker snapshot timeout from 60 to 900 seconds; upstream artifact unchanged"
+      ],
+      "started_at_utc": "2026-10-14T11:28:32.386976+00:00",
+      "finished_at_utc": "2026-10-14T11:41:15.098558+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/sosp24_wasabi/trial-6/ae10-wasabi-t3-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/sosp24_wasabi/trial-6/ae10-wasabi-t3-20261014.manifest.json",
+      "archive_sha256": "b3ce8c0ed74a0ed4a31d710bfe13a7e31b925537709c02f4cb7030b778ed56bb",
+      "archive_bytes": 43673
+    }
+  ]
+}
