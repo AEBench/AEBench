@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "verified_retry_count": 23,
+  "verified_retry_count": 26,
   "trials": [
     {
       "case": "asplos25_icemu",
@@ -442,6 +442,108 @@
       "private_manifest_object": "retries/2026-10-14/eurosys25_sebs_flow/trial-9/ae10-sebs-flow-t3-20261014.manifest.json",
       "archive_sha256": "4ec74009f42b63d7b813a83da3ca51ceea25fbc17f0478dd738c2be1e3dbb44a",
       "archive_bytes": 19898
+    },
+    {
+      "case": "eurosys25_wali",
+      "trial": 4,
+      "retry_of": [
+        1
+      ],
+      "node": "ae10-wali-t1-20261014",
+      "case_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "aebench_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "local",
+      "status": "error",
+      "score": 2,
+      "phase_status": {
+        "env_setup": "error",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "error"
+      },
+      "interventions": [
+        "Installed Python analysis dependencies on host; upstream artifact unchanged",
+        "Appended guidance to capture genuine WALI syscall traces and program version output"
+      ],
+      "started_at_utc": "2026-10-14T11:24:12.022477+00:00",
+      "finished_at_utc": "2026-10-14T12:01:23.511514+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/eurosys25_wali/trial-4/ae10-wali-t1-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/eurosys25_wali/trial-4/ae10-wali-t1-20261014.manifest.json",
+      "archive_sha256": "315730a4f19f62e32b6cc32c9746b1fc1904ca165a01dfd9269ef08d2af63a87",
+      "archive_bytes": 84241
+    },
+    {
+      "case": "eurosys25_wali",
+      "trial": 5,
+      "retry_of": [
+        2
+      ],
+      "node": "ae10-wali-t2-20261014",
+      "case_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "aebench_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "local",
+      "status": "error",
+      "score": 2,
+      "phase_status": {
+        "env_setup": "error",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "error"
+      },
+      "interventions": [
+        "Installed Python analysis dependencies on host; upstream artifact unchanged",
+        "Appended guidance to capture genuine WALI syscall traces and program version output"
+      ],
+      "started_at_utc": "2026-10-14T11:28:31.777800+00:00",
+      "finished_at_utc": "2026-10-14T12:04:28.805228+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/eurosys25_wali/trial-5/ae10-wali-t2-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/eurosys25_wali/trial-5/ae10-wali-t2-20261014.manifest.json",
+      "archive_sha256": "c757d2eed713d1c339ae4f242a69d1a252adf9c1d66635bfe33b271f463498e2",
+      "archive_bytes": 93791
+    },
+    {
+      "case": "eurosys25_wali",
+      "trial": 6,
+      "retry_of": [
+        3
+      ],
+      "node": "ae10-wali-t3-20261014",
+      "case_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "aebench_revision": "b1ff4c05ac5425b92ff39f6d5292f893db61ef33",
+      "model": "gpt-6-sol",
+      "reasoning_effort": "high",
+      "agent_version": "0.159.1",
+      "runtime": "local",
+      "status": "error",
+      "score": 2,
+      "phase_status": {
+        "env_setup": "error",
+        "artifact_build": "success",
+        "benchmark_prep": "success",
+        "experiment_runs": "error"
+      },
+      "interventions": [
+        "Installed Python analysis dependencies on host; upstream artifact unchanged",
+        "Appended guidance to capture genuine WALI syscall traces and program version output"
+      ],
+      "started_at_utc": "2026-10-14T11:28:31.788612+00:00",
+      "finished_at_utc": "2026-10-14T12:02:18.634605+00:00",
+      "provisional": false,
+      "private_swift_container": "aebench-runs-muneeb-20261014",
+      "private_archive_object": "retries/2026-10-14/eurosys25_wali/trial-6/ae10-wali-t3-20261014.tar.gz",
+      "private_manifest_object": "retries/2026-10-14/eurosys25_wali/trial-6/ae10-wali-t3-20261014.manifest.json",
+      "archive_sha256": "92312d839ca5e9ef8f9a3255f9fdcd23891115aa9e74c6d3faee5a8f3afaba36",
+      "archive_bytes": 93238
     },
     {
       "case": "osdi24_eet",
