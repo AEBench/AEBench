@@ -18,10 +18,10 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 
         bpftool_bin = repo_root / "depsurf" / "btf" / "bpftool" / "src" / "bpftool"
         bcc_output_dir = (
-            repo_root / "data" / "software" / "bcc" / "libbpf-tools" / ".output"
+            repo_root / "software" / "bcc" / "libbpf-tools" / ".output"
         )
         tracee_bpf_object = (
-            repo_root / "data" / "software" / "tracee" / "dist" / "tracee.bpf.o"
+            repo_root / "software" / "tracee" / "dist" / "tracee.bpf.o"
         )
 
         return (
@@ -69,7 +69,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
             self.command_check(
                 name="depsurf_build_bcc_libbpf_tools",
                 cwd=repo_root,
-                cmd=("make", "-C", "data/software/bcc/libbpf-tools", "-j", parallelism),
+                cmd=("make", "-C", "software/bcc/libbpf-tools", "-j", parallelism),
                 timeout_seconds=1800.0,
             ),
             self.path_check(
@@ -86,7 +86,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
             self.command_check(
                 name="depsurf_make_tracee_bpf",
                 cwd=repo_root,
-                cmd=("make", "-C", "data/software/tracee", "bpf", "-j", parallelism),
+                cmd=("make", "-C", "software/tracee", "bpf", "-j", parallelism),
                 timeout_seconds=1800.0,
             ),
             self.path_check(
