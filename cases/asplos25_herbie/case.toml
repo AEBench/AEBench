@@ -22,6 +22,7 @@ mode = "docker"
 timeout_ms = 14400000
 gpu = false
 interactive = false
+snapshot_timeout_seconds = 900
 
 [run.prompt]
 profile = "artifact-eval-v1"
