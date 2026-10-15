@@ -15,7 +15,7 @@ _SECRET_NAME = re.compile(
 	r"token|secret|password|passwd|credential|authorization|(?:api|access|private)[_-]?key", re.I
 )
 _ENV_LINE = re.compile(r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
-_ASSIGNMENT = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)=('[^']*'|\"(?:[^\"\\]|\\.)*\"|[^\s;]+)")
+_ASSIGNMENT = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)=('[^']*'|\"(?:[^\"\\]|\\.)*\"|[^\s;,)\]}]+)")
 _PROVIDER_TOKEN = re.compile(
 	r"\b(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}|(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}|(?:AKIA|ASIA)[A-Z0-9]{16})\b"
 )
@@ -24,6 +24,23 @@ _PRIVATE_KEY = re.compile(
 	r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\s\S]+?-----END (?:[A-Z]+ )?PRIVATE KEY-----"
 )
 _REDACTED = "[REDACTED]"
+_TEXT_SUFFIXES = {
+	".csv",
+	".json",
+	".jsonl",
+	".log",
+	".md",
+	".meta",
+	".py",
+	".sh",
+	".toml",
+	".tsv",
+	".txt",
+	".yaml",
+	".yml",
+}
+_NON_SECRET_SCALAR = re.compile(r"(?:true|false|null|none)", re.I)
+_PATH_VALUE = re.compile(r"(?:/|\./|\.\./|~/|[A-Za-z]:[\\/])[^\s?#]+")
 
 
 def redact_directory(source: Path, destination: Path, *, secret_file: Path | None = None) -> Path:
@@ -37,7 +54,11 @@ def redact_directory(source: Path, destination: Path, *, secret_file: Path | Non
 	destination = destination.resolve()
 	if source in destination.parents or destination in source.parents or source == destination:
 		raise ValueError("source and destination must not overlap")
-	secrets = {value for name, value in os.environ.items() if _is_secret_name(name) and value}
+	secrets = {
+		value
+		for name, value in os.environ.items()
+		if _is_secret_name(name) and _is_secret_value(value)
+	}
 	if secret_file is not None:
 		secrets.update(secret_file.expanduser().read_text(encoding="utf-8").splitlines())
 	secrets.discard("")
@@ -60,8 +81,9 @@ def redact_directory(source: Path, destination: Path, *, secret_file: Path | Non
 					)
 			for name in filenames:
 				data = (Path(root) / name).read_bytes()
+				text = _decode_text(data, name)
 				(staging / relative / name).write_bytes(data)
-				_discover_text(data.decode("utf-8", errors="surrogateescape"), secrets)
+				_discover_text(text, secrets)
 		# Discover across the frozen copy before replacing any values reused in other files.
 		pattern = re.compile(
 			"|".join(re.escape(value) for value in sorted(secrets, key=len, reverse=True))
@@ -69,10 +91,8 @@ def redact_directory(source: Path, destination: Path, *, secret_file: Path | Non
 		)
 		for path in staging.rglob("*"):
 			if path.is_file():
-				text = path.read_bytes().decode("utf-8", errors="surrogateescape")
-				path.write_bytes(
-					_redact_text(text, pattern).encode("utf-8", errors="surrogateescape")
-				)
+				text = _decode_text(path.read_bytes(), path.name)
+				path.write_bytes(_redact_text(text, pattern).encode("utf-8"))
 		if destination.exists() or destination.is_symlink():
 			raise ValueError("destination already exists; choose a new directory")
 		staging.rename(destination)
@@ -83,10 +103,27 @@ def _raise_walk_error(error: OSError) -> None:
 	raise error
 
 
+def _decode_text(data: bytes, name: str) -> str:
+	if Path(name).suffix.lower() not in _TEXT_SUFFIXES or b"\x00" in data:
+		raise ValueError(
+			f"source contains a binary or unsupported file: {name}; copy was not published"
+		)
+	try:
+		return data.decode("utf-8")
+	except UnicodeDecodeError as exc:
+		raise ValueError(
+			f"source contains a non-UTF-8 file: {name}; copy was not published"
+		) from exc
+
+
 def _is_secret_name(name: str) -> bool:
 	return bool(_SECRET_NAME.search(name)) and not name.lower().endswith(
 		("_file", "_path", "_count", "_limit", "_budget", "_tokens")
 	)
+
+
+def _is_secret_value(value: str) -> bool:
+	return bool(value) and not (_NON_SECRET_SCALAR.fullmatch(value) or _PATH_VALUE.fullmatch(value))
 
 
 def _json_parts(text: str) -> tuple[str, Any] | None:
@@ -122,18 +159,19 @@ def _discover_text(text: str, secrets: set[str]) -> None:
 		line = _TIMESTAMP.sub("", line)
 		matches = list(_ASSIGNMENT.finditer(line))
 		if match := _ENV_LINE.match(line):
-			matches.append(match)
+			if not matches or any(char.isspace() for char in match.group(2)):
+				matches.append(match)
 		for match in matches:
 			name, value = match.groups()
 			if _is_secret_name(name) and value:
 				if value[0] == value[-1] and value[0] in "\"'":
-					if value[1:-1]:
+					if _is_secret_value(value[1:-1]):
 						secrets.add(value[1:-1])
 					try:
 						value = json.loads(value) if value[0] == '"' else value[1:-1]
 					except json.JSONDecodeError:
 						pass
-				if value:
+				if _is_secret_value(value):
 					secrets.add(value)
 		secrets.update(_PROVIDER_TOKEN.findall(line))
 		secrets.update(_AUTH_TOKEN.findall(line))
@@ -143,13 +181,14 @@ def _discover_value(value: Any, secrets: set[str]) -> None:
 	if isinstance(value, dict):
 		for name, item in value.items():
 			_discover_text(name, secrets)
-			if _is_secret_name(name) and isinstance(item, str) and item:
+			if _is_secret_name(name) and isinstance(item, str) and _is_secret_value(item):
 				secrets.add(item)
 			_discover_value(item, secrets)
 	elif isinstance(value, list):
 		for item in value:
 			_discover_value(item, secrets)
 	elif isinstance(value, str):
+		# Tool output may contain another JSON document encoded as a string.
 		_discover_text(value, secrets)
 
 
@@ -165,27 +204,38 @@ def _redact_value(value: Any, pattern: re.Pattern[str]) -> Any:
 	if isinstance(value, list):
 		return [_redact_value(item, pattern) for item in value]
 	if isinstance(value, str):
-		return _REDACTED if pattern.fullmatch(value) else _redact_text(value, pattern)
+		if pattern.fullmatch(value):
+			return _REDACTED
+		if "\n" in value:
+			return _redact_text(value, pattern)
+		if value.startswith(("{", "[", '"')) or _TIMESTAMP.match(value):
+			if parsed := _json_parts(value):
+				return _redact_json(value, parsed, pattern)
+		return pattern.sub(_REDACTED, value)
 	return value
 
 
 def _redact_text(text: str, pattern: re.Pattern[str]) -> str:
 	parsed = _json_parts(text)
 	if parsed is not None:
-		prefix, value = parsed
-		redacted = _redact_value(value, pattern)
-		if redacted == value:
-			return text
-		ending = "\r\n" if text.endswith("\r\n") else "\n" if text.endswith("\n") else ""
-		return prefix + json.dumps(redacted, ensure_ascii=True) + ending
+		return _redact_json(text, parsed, pattern)
 	result = []
 	plain: list[str] = []
 	for line in text.splitlines(keepends=True):
-		if _json_parts(line) is not None:
+		if parsed := _json_parts(line):
 			result.append(pattern.sub(_REDACTED, "".join(plain)))
 			plain.clear()
-			result.append(_redact_text(line, pattern))
+			result.append(_redact_json(line, parsed, pattern))
 		else:
 			plain.append(line)
 	result.append(pattern.sub(_REDACTED, "".join(plain)))
 	return "".join(result)
+
+
+def _redact_json(text: str, parsed: tuple[str, Any], pattern: re.Pattern[str]) -> str:
+	prefix, value = parsed
+	redacted = _redact_value(value, pattern)
+	if redacted == value:
+		return text
+	ending = "\r\n" if text.endswith("\r\n") else "\n" if text.endswith("\n") else ""
+	return prefix + json.dumps(redacted, ensure_ascii=True) + ending

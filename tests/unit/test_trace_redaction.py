@@ -37,7 +37,7 @@ def test_redact_saved_credentials_across_run_and_monitor_files(
 		encoding="utf-8",
 	)
 	stream = source / "monitor" / "stream" / "command-1" / "stderr.log"
-	stream.write_bytes(b"\xff\x00diagnostic: " + token.encode() + b"\r\n")
+	stream.write_bytes(b"\x1b[31mdiagnostic: " + token.encode() + b"\r\n")
 	(source / "run" / "case_result.json").write_text('{"score": 4}\n', encoding="utf-8")
 	originals = {p.relative_to(source): p.read_bytes() for p in source.rglob("*") if p.is_file()}
 	destination = tmp_path / "shared"
@@ -61,7 +61,7 @@ def test_redact_saved_credentials_across_run_and_monitor_files(
 	)
 	assert (
 		destination / stream.relative_to(source)
-	).read_bytes() == b"\xff\x00diagnostic: [REDACTED]\r\n"
+	).read_bytes() == b"\x1b[31mdiagnostic: [REDACTED]\r\n"
 	assert (destination / "run" / "case_result.json").read_bytes() == originals[
 		Path("run/case_result.json")
 	]
@@ -85,6 +85,68 @@ def test_redact_context_credentials_and_provider_tokens(tmp_path: Path) -> None:
 		"input_tokens": 123,
 	}
 	assert (tmp_path / "shared/output.txt").read_text() == "\n".join(["[REDACTED]"] * 3)
+
+
+@pytest.mark.parametrize(
+	"name,data",
+	[
+		("payload.bin", b"token=private-value"),
+		("payload.log", b"\x00token=private-value"),
+		("payload.log", b"\xfftoken=private-value"),
+	],
+)
+def test_redact_refuses_binary_files_without_publishing(
+	tmp_path: Path, name: str, data: bytes
+) -> None:
+	from trace_viewer.redaction import redact_directory
+
+	source = tmp_path / "run"
+	source.mkdir()
+	(source / name).write_bytes(data)
+	with pytest.raises(ValueError, match="binary|non-UTF-8"):
+		redact_directory(source, tmp_path / "shared")
+	assert (source / name).read_bytes() == data
+	assert not (tmp_path / "shared").exists()
+
+
+def test_redact_keeps_path_and_boolean_values_but_not_numeric_passwords(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	from trace_viewer.redaction import redact_directory
+
+	monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/credentials.json")
+	source = tmp_path / "run"
+	source.mkdir()
+	(source / "env.log").write_text(
+		"GOOGLE_APPLICATION_CREDENTIALS=/tmp/credentials.json\n"
+		"FEATURE_TOKEN=true\nPASSWORD=12345678\n"
+		"ACCESS_TOKEN=https://example.invalid/?sig=private\n",
+		encoding="utf-8",
+	)
+	(source / "output.txt").write_text(
+		"/tmp/credentials.json true 12345678 https://example.invalid/?sig=private\n",
+		encoding="utf-8",
+	)
+	redact_directory(source, tmp_path / "shared")
+	assert (tmp_path / "shared/output.txt").read_text() == (
+		"/tmp/credentials.json true [REDACTED] [REDACTED]\n"
+	)
+
+
+@pytest.mark.parametrize("closing", [")", "]", "}"])
+def test_redact_token_before_closing_bracket(tmp_path: Path, closing: str) -> None:
+	from trace_viewer.redaction import redact_directory
+
+	source = tmp_path / "run"
+	source.mkdir()
+	(source / "output.log").write_text(
+		f"my_method(token=1a2b3c4d{closing}\ntoken=1a2b3c4d{closing}\nagain=1a2b3c4d\n",
+		encoding="utf-8",
+	)
+	redact_directory(source, tmp_path / "shared")
+	assert (tmp_path / "shared/output.log").read_text() == (
+		f"my_method(token=[REDACTED]{closing}\ntoken=[REDACTED]{closing}\nagain=[REDACTED]\n"
+	)
 
 
 @pytest.mark.parametrize(
@@ -187,6 +249,21 @@ def test_redact_json_escaping_numeric_strings_and_multiline_keys(tmp_path: Path)
 	assert (tmp_path / "shared/stdout.log").read_text() == (
 		"API_TOKEN=[REDACTED]\nPASSWORD=[REDACTED]\nPRIVATE_KEY=[REDACTED]\n"
 	)
+
+
+def test_redact_secret_in_nested_json_string_with_unicode_escape(tmp_path: Path) -> None:
+	from trace_viewer.redaction import redact_directory
+
+	source = tmp_path / "run"
+	source.mkdir()
+	(source / "env.log").write_text("API_TOKEN=history-token-value\n", encoding="utf-8")
+	(source / "result.jsonl").write_text(
+		json.dumps({"text": '{"output":"\\u0068istory-token-value"}'}) + "\n",
+		encoding="utf-8",
+	)
+	redact_directory(source, tmp_path / "shared")
+	outer = json.loads((tmp_path / "shared/result.jsonl").read_text())
+	assert json.loads(outer["text"]) == {"output": "[REDACTED]"}
 
 
 def test_redact_does_not_publish_json_with_colliding_redacted_keys(tmp_path: Path) -> None:
