@@ -1,18 +1,16 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
-from evaluator.oracles.checks import ListSimilarityCheck, PathCheck, PathKind, SimilarityMetric
+from evaluator.oracles.checks import PathCheck, PathKind
 from evaluator.oracles.oracle_checks_runtime import OraclePath, RuntimeCheckExecutor, RuntimePath
 from evaluator.oracles.reporting import BaseCheck, CheckResult
-
-_START_ERROR_SIMILARITY = 0.90
-_END_ERROR_SIMILARITY = 0.50
 
 
 def _load_results_json(path: OraclePath, *, executor: RuntimeCheckExecutor) -> dict[str, Any]:
@@ -27,10 +25,13 @@ def _load_results_json(path: OraclePath, *, executor: RuntimeCheckExecutor) -> d
 
 
 def _discover_herbie_report(
-	repo_root: Path, *, executor: RuntimeCheckExecutor
+	repo_root: Path, reference_path: OraclePath, *, executor: RuntimeCheckExecutor
 ) -> tuple[OraclePath, OraclePath] | None:
-	"""Find the best Herbie report directory under the workspace root."""
-	best: tuple[int, OraclePath, OraclePath] | None = None
+	"""Find the newest report for the pinned Hamming benchmark suite."""
+	reference = _load_results_json(reference_path, executor=executor)
+	# The bundled report uses zero iterations, so only its test names and commit are comparable.
+	expected_names = {test["name"] for test in reference["tests"]}
+	best: tuple[float, OraclePath, OraclePath] | None = None
 	for results_path in executor.glob(repo_root, "*/results.json"):
 		report_dir = results_path.parent
 		if report_dir.name.startswith("."):
@@ -52,11 +53,19 @@ def _discover_herbie_report(
 			continue
 
 		tests = data["tests"]
-		if not tests:
+		if (
+			data.get("commit") != reference.get("commit")
+			or len(tests) != len(expected_names)
+			or any(not isinstance(test, dict) for test in tests)
+			or {test.get("name") for test in tests} != expected_names
+		):
 			continue
 
-		if best is None or len(tests) > best[0]:
-			best = (len(tests), html_path, runtime_results_path)
+		date = data.get("date")
+		if not isinstance(date, (int, float)):
+			continue
+		if best is None or date > best[0]:
+			best = (date, html_path, runtime_results_path)
 
 	if best is None:
 		return None
@@ -95,8 +104,8 @@ class ResultsJSONStructureCheck(BaseCheck):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class HerbieNoRegressionCheck(BaseCheck):
-	"""Fail if any test has end > start (accuracy regression)."""
+class HerbieAccuracyImprovementCheck(BaseCheck):
+	"""Require the pinned benchmark suite to improve without regressions."""
 
 	results_path: OraclePath
 
@@ -107,13 +116,23 @@ class HerbieNoRegressionCheck(BaseCheck):
 			return CheckResult.failure(f"cannot load results: {exc}")
 
 		violations: list[str] = []
+		improved = 0
 		for test in data["tests"]:
+			if not isinstance(test, dict):
+				return CheckResult.failure("report contains a non-object test entry")
 			start = test.get("start")
 			end = test.get("end")
-			if not isinstance(start, (int, float)) or not isinstance(end, (int, float)):
-				continue
+			if (
+				not isinstance(start, (int, float))
+				or not isinstance(end, (int, float))
+				or not math.isfinite(start)
+				or not math.isfinite(end)
+			):
+				return CheckResult.failure(f"{test.get('name', '?')}: nonnumeric error value")
 			if end > start:
 				violations.append(f"{test.get('name', '?')}: end={end:.4f} > start={start:.4f}")
+			elif end < start:
+				improved += 1
 
 		if violations:
 			detail = "\n".join(f"- {v}" for v in violations[:10])
@@ -122,9 +141,12 @@ class HerbieNoRegressionCheck(BaseCheck):
 				f"{len(violations)} test(s) regressed (end > start):\n{detail}{more}"
 			)
 
-		return CheckResult.success(
-			message=f"all {len(data['tests'])} tests satisfy end <= start"
-		)
+		if improved <= len(data["tests"]) / 2:
+			return CheckResult.failure(
+				f"only {improved}/{len(data['tests'])} tests improved; expected a majority"
+			)
+
+		return CheckResult.success(message=f"{improved}/{len(data['tests'])} tests improved without regressions")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -154,77 +176,11 @@ class BenchmarkCountCheck(BaseCheck):
 		)
 
 
-def _extract_values(
-	results_path: OraclePath,
-	reference_path: OraclePath,
-	field: str,
-	*,
-	executor: RuntimeCheckExecutor,
-) -> tuple[list[float], list[float]]:
-	results = _load_results_json(results_path, executor=executor)
-	reference = _load_results_json(reference_path, executor=executor)
-
-	ref_by_name: dict[str, float] = {}
-	for test in reference["tests"]:
-		name = test.get("name", "")
-		value = test.get(field)
-		if isinstance(value, (int, float)) and name:
-			ref_by_name[name] = float(value)
-
-	observed: list[float] = []
-	ref_values: list[float] = []
-	for test in results["tests"]:
-		name = test.get("name", "")
-		value = test.get(field)
-		if name in ref_by_name and isinstance(value, (int, float)):
-			observed.append(float(value))
-			ref_values.append(ref_by_name[name])
-
-	return observed, ref_values
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class HerbieValueSimilarityCheck(BaseCheck):
-	"""Pearson similarity of a numeric field against reference."""
-
-	results_path: OraclePath
-	reference_path: OraclePath
-	field: str
-	threshold: float
-
-	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
-		try:
-			observed, reference = _extract_values(
-				self.results_path,
-				self.reference_path,
-				self.field,
-				executor=executor,
-			)
-		except (OSError, json.JSONDecodeError, ValueError) as exc:
-			return CheckResult.failure(f"cannot extract {self.field}: {exc}")
-
-		if len(observed) < 2:
-			return CheckResult.failure(
-				f"too few matching tests for {self.field} correlation "
-				f"(found {len(observed)}, need at least 2)"
-			)
-
-		delegated = ListSimilarityCheck(
-			name=self.name,
-			optional=self.optional,
-			observed=observed,
-			reference=reference,
-			metric=SimilarityMetric.PEARSON,
-			min_similarity=self.threshold,
-		)
-		return delegated.check(executor)
-
-
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	def requirements(self) -> Sequence[BaseCheck]:
 		repo_root = self._workspace_dir
-		report = _discover_herbie_report(repo_root, executor=self.executor)
 		reference_path = self.ref_path("results.ref.json")
+		report = _discover_herbie_report(repo_root, reference_path, executor=self.executor)
 
 		checks: list[BaseCheck] = []
 
@@ -255,8 +211,8 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 		)
 
 		checks.append(
-			HerbieNoRegressionCheck(
-				name="no_accuracy_regression",
+			HerbieAccuracyImprovementCheck(
+				name="accuracy_improvement",
 				results_path=results_path,
 			)
 		)
@@ -266,26 +222,6 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 				name="benchmark_count",
 				results_path=results_path,
 				reference_path=reference_path,
-			)
-		)
-
-		checks.append(
-			HerbieValueSimilarityCheck(
-				name="start_error_correlation",
-				results_path=results_path,
-				reference_path=reference_path,
-				field="start",
-				threshold=_START_ERROR_SIMILARITY,
-			)
-		)
-
-		checks.append(
-			HerbieValueSimilarityCheck(
-				name="end_error_correlation",
-				results_path=results_path,
-				reference_path=reference_path,
-				field="end",
-				threshold=_END_ERROR_SIMILARITY,
 			)
 		)
 
