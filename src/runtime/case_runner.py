@@ -36,6 +36,8 @@ from models import (
 from prompting import build_prompt_bundle
 from sources import prepare_workspace
 from task_loader import compose_task_text, read_instruction_text
+from trajectory_audit.judge import OpenAIResponsesJudge
+from trajectory_audit.service import AuditService
 from utils import safe_name
 
 from .agent_runner import (
@@ -85,6 +87,7 @@ class _CaseRunner:
 		self.context = context
 		self.case_dir = case_dir
 		self.options = options
+		self.monitor_commands = options.monitor_commands or options.trajectory_audit
 		self.save_path = save_path
 		self.on_output_dir = on_output_dir
 
@@ -95,6 +98,7 @@ class _CaseRunner:
 		self.session: RunSession | None = None
 		self.monitor: BrokerProcess | None = None
 		self.monitor_info: CommandMonitorInfo | None = None
+		self.task_context = ""
 
 		self.error: str | None = None
 		self.interrupted: KeyboardInterrupt | SystemExit | None = None
@@ -136,7 +140,7 @@ class _CaseRunner:
 			)
 		if self.task.runtime.mode == RuntimeMode.INHERIT:
 			raise ValueError("case execution requires runtime.mode to be local or docker")
-		if self.options.monitor_commands and self.task.runtime.mode != RuntimeMode.DOCKER:
+		if self.monitor_commands and self.task.runtime.mode != RuntimeMode.DOCKER:
 			raise ValueError(
 				"command monitoring requires runtime.mode = docker; monitoring a local "
 				"run would mean replacing the shell on this machine"
@@ -201,15 +205,13 @@ class _CaseRunner:
 				else self.task.prompt.append
 			)
 
+			self.task_context = compose_task_text(
+				read_instruction_text(self.workspace, self.task.instructions.path),
+				self.case.case_brief,
+			)
 			prompt = build_prompt_bundle(
 				PromptArgs(
-					task_text=compose_task_text(
-						read_instruction_text(
-							self.workspace,
-							self.task.instructions.path,
-						),
-						self.case.case_brief,
-					),
+					task_text=self.task_context,
 					workspace_path=runtime_workspace,
 					runtime_mode=self.task.runtime.mode,
 					timeout_ms=self.task.runtime.timeout_ms,
@@ -233,7 +235,7 @@ class _CaseRunner:
 
 			# Bound before the container starts, so no shell can ever reach a
 			# socket that is not yet listening.
-			if self.options.monitor_commands:
+			if self.monitor_commands:
 				run_token = secrets.token_hex(4)
 				self.monitor = BrokerProcess(
 					trace_dir=monitor_trace_dir(
@@ -407,6 +409,24 @@ class _CaseRunner:
 				encoding="utf-8",
 			)
 			self._pipeline_failed = True
+
+	def run_trajectory_audit(self) -> None:
+		"""Write advisory audit output without changing the benchmark result."""
+		if not self.options.trajectory_audit or self.monitor is None:
+			return
+		try:
+			report = AuditService(OpenAIResponsesJudge()).audit_jsonl(
+				self.monitor.trace_path,
+				task_context=self.task_context,
+			)
+			(self.output_dir / "audit_report.json").write_text(
+				report.model_dump_json(indent=2) + "\n",
+				encoding="utf-8",
+			)
+		except Exception as exc:
+			logger.exception("trajectory audit failed")
+			with self.paths.infra_log_path.open("a", encoding="utf-8") as handle:
+				handle.write(f"\ntrajectory audit failed: {type(exc).__name__}: {exc}\n")
 
 	def finalize(self) -> CaseRunResult:
 		# Needs the container, which _cleanup() removes.
@@ -610,6 +630,7 @@ def run_case(
 		runner.prepare_case()
 		runner.execute_agent()
 		runner.run_oracle()
+		runner.run_trajectory_audit()
 		return runner.finalize()
 	finally:
 		runner._cleanup()
