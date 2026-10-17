@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from cli import _build_parser, _run_options
 from config import AppState, resolve_settings
 from models import (
 	AgentResult,
@@ -471,3 +472,41 @@ def test_monitoring_requires_docker(tmp_path: Path) -> None:
 			),
 			save_path=tmp_path / "output",
 		)
+
+
+def _docker_case_runner(tmp_path: Path, *cli_args: str) -> _CaseRunner:
+	project = tmp_path / "project"
+	shutil.copytree(_FIXTURE, project)
+	manifest = project / "bundles" / "mock_apt_case" / "case.toml"
+	manifest.write_text(
+		manifest.read_text(encoding="utf-8").replace(
+			'mode = "local"\ntimeout_ms',
+			'mode = "docker"\nimage = "aebench-agent:latest"\ntimeout_ms',
+		),
+		encoding="utf-8",
+	)
+	state = load_project_config(project)
+	args = _build_parser().parse_args(
+		["case", "run", "mock_apt_case", "--agent", "codex", "--model", "gpt-test", *cli_args]
+	)
+	return _CaseRunner(
+		AppState(project_state=state, settings=resolve_settings(state)),
+		project / "bundles" / "mock_apt_case",
+		options=_run_options(args),
+		save_path=tmp_path / "output",
+		on_output_dir=None,
+	)
+
+
+@pytest.mark.parametrize(
+	("cli_args", "kept"),
+	[((), True), (("--delete-image",), False)],
+)
+def test_delete_image_flag_sets_the_effective_runtime_config(
+	tmp_path: Path, cli_args: tuple[str, ...], kept: bool
+) -> None:
+	runner = _docker_case_runner(tmp_path, *cli_args)
+
+	runner.prepare_case()
+
+	assert runner.task.runtime.keep_committed_snapshot is kept
