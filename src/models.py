@@ -160,8 +160,8 @@ class RuntimeConfig(_Model):
 	gpu: bool = False
 	interactive: bool = False
 	commit_before_oracle: bool = True
-	keep_committed_snapshot: bool = False
-	snapshot_timeout_seconds: float = 60.0
+	keep_committed_snapshot: bool = True
+	snapshot_timeout_seconds: float = 3600.0
 
 	@model_validator(mode="after")
 	def _normalize(self) -> "RuntimeConfig":
