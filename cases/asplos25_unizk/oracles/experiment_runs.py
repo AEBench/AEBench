@@ -13,6 +13,7 @@ from evaluator.oracles.checks import (
     PathKind,
     SimilarityMetric,
 )
+from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 from .consts import (
@@ -96,7 +97,7 @@ class SimulationLogsPresentCheck(BaseCheck):
     repo_root: Path
     required_logs: tuple[str, ...]
 
-    def check(self) -> CheckResult:
+    def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
         missing: list[str] = []
         unparsable: list[str] = []
 
@@ -131,7 +132,7 @@ class ReferenceWorkloadsExactCheck(BaseCheck):
     reference_path: Path
     required_workloads: tuple[str, ...]
 
-    def check(self) -> CheckResult:
+    def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
         try:
             reference = _load_reference(self.reference_path)
         except (OSError, json.JSONDecodeError, ValueError) as exc:
@@ -172,7 +173,7 @@ class SimulationMetricSimilarityCheck(BaseCheck):
     threshold: float
     required_workloads: tuple[str, ...]
 
-    def check(self) -> CheckResult:
+    def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
         try:
             reference = _load_reference(self.reference_path)
         except (OSError, json.JSONDecodeError, ValueError) as exc:
@@ -231,7 +232,7 @@ class SimulationMetricSimilarityCheck(BaseCheck):
             reference=expected,
             metric=SimilarityMetric.PEARSON,
             min_similarity=self.threshold,
-        ).check()
+        ).check(executor)
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
