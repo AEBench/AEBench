@@ -116,12 +116,8 @@ class _CaseRunner:
 
 		self.task = task_from_case(self.case_root, self.case)
 
-		if self.options.preserve_runtime:
-			if self.task.runtime.mode != RuntimeMode.DOCKER:
-				raise ValueError("--preserve-runtime requires runtime.mode = 'docker'")
-			if not self.task.runtime.commit_before_oracle:
-				raise ValueError("--preserve-runtime requires runtime.commit_before_oracle = true")
-			self.task.runtime.keep_committed_snapshot = True
+		if self.options.delete_image:
+			self.task.runtime.keep_committed_snapshot = False
 
 		self.agent = _agent_name(self.options)
 		self.model = _model_name(self.options)

@@ -19,7 +19,7 @@ from constants import (
 	TOOL_OUTPUT_DIRNAME,
 	TRANSCRIPT_BASENAME,
 )
-from models import CaseRunResult, PromptBundle, RunResult
+from models import CaseRunResult, PromptBundle, RunResult, RuntimeInfo
 from utils import safe_name
 
 
@@ -34,6 +34,16 @@ class TaskPaths:
 	infra_log_path: Path
 	progress_log_path: Path
 	tool_output_dir: Path
+
+
+def snapshot_status(runtime: RuntimeInfo) -> str:
+	"""After a failed snapshot, whether the agent's container survived to retry it."""
+	if runtime.container_removed or runtime.container_id is None:
+		return "failed; the container was removed"
+	return (
+		f"failed; container `{runtime.container_id}` was kept "
+		f"(retry: `docker commit {runtime.container_id} <tag>`)"
+	)
 
 
 def task_paths_for(output_dir: Path, safe_id: str) -> TaskPaths:
@@ -131,6 +141,7 @@ def write_task_report(report_path: Path, result: RunResult, agent_summary: str) 
 		f"- Container ID: `{runtime.container_id}`",
 		f"- Saved image: `{runtime.saved_image}`",
 		f"- Container stopped: `{runtime.container_stopped}`",
+		*([f"- Snapshot: {snapshot_status(runtime)}"] if runtime.snapshot_failed else []),
 		f"- Agent harness: `{result.agent_kind}`",
 		f"- Agent model: `{result.agent.model}`",
 		f"- Agent reasoning effort: `{result.agent.reasoning_effort or 'default'}`",

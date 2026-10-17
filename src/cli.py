@@ -130,9 +130,9 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
 		help="Record and audit the agent's shell-command trajectory after the run.",
 	)
 	parser.add_argument(
-		"--preserve-runtime",
+		"--delete-image",
 		action="store_true",
-		help="Preserve the post-agent Docker snapshot after the run.",
+		help="Delete the post-agent Docker snapshot after the run (kept by default).",
 	)
 	parser.add_argument("--prompt-profile", default=None)
 	parser.add_argument("--prompt-append", default=None)
@@ -277,6 +277,10 @@ def _case_run(args: argparse.Namespace) -> int:
 				f"{system.python_startup_count} Python startup hooks, {system.etc_count} in /etc "
 				f"({system.diff_path})"
 			)
+	if result.runtime_result.runtime.snapshot_failed:
+		from runtime.reporting import snapshot_status
+
+		print(f"Docker snapshot: {snapshot_status(result.runtime_result.runtime)}")
 	print(f"Case status: {result.status.value}")
 	print(f"Oracle score: {result.oracle_result.score}")
 	return 0 if result.status.value == "success" else 1
@@ -444,7 +448,7 @@ def _run_options(args: argparse.Namespace) -> RunOptions:
 		prompt_profile=getattr(args, "prompt_profile", None),
 		prompt_append=getattr(args, "prompt_append", None),
 		cleanup_workspace=bool(getattr(args, "cleanup_workspace", False)),
-		preserve_runtime=bool(getattr(args, "preserve_runtime", False)),
+		delete_image=bool(getattr(args, "delete_image", False)),
 		skip_incompatible=bool(getattr(args, "skip_incompatible", False)),
 		monitor_commands=bool(getattr(args, "monitor_commands", False)) or trajectory_audit,
 		monitor_socket_root=getattr(args, "socket_dir", None),

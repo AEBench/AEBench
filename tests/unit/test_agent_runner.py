@@ -465,7 +465,10 @@ def test_docker_stop_preserves_container_until_cleanup(
 	)
 	session = SimpleNamespace(
 		task_id="test",
-		run_spec=TaskConfig(id="test", runtime=RuntimeConfig(mode="docker")),
+		run_spec=TaskConfig(
+			id="test",
+			runtime=RuntimeConfig(mode="docker", keep_committed_snapshot=False),
+		),
 	)
 
 	runtime.stop(session)  # type: ignore[arg-type]
