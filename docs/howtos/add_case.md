@@ -70,8 +70,8 @@ timeout_ms = 345600000
 gpu = false
 interactive = false
 commit_before_oracle = true
-keep_committed_snapshot = false
-snapshot_timeout_seconds = 60.0
+keep_committed_snapshot = true
+snapshot_timeout_seconds = 3600.0
 
 [run.artifact_requirements]
 docker = true
