@@ -277,6 +277,10 @@ def _case_run(args: argparse.Namespace) -> int:
 				f"{system.python_startup_count} Python startup hooks, {system.etc_count} in /etc "
 				f"({system.diff_path})"
 			)
+	if result.runtime_result.runtime.snapshot_failed:
+		from runtime.reporting import snapshot_status
+
+		print(f"Docker snapshot: {snapshot_status(result.runtime_result.runtime)}")
 	print(f"Case status: {result.status.value}")
 	print(f"Oracle score: {result.oracle_result.score}")
 	return 0 if result.status.value == "success" else 1

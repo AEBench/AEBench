@@ -328,6 +328,9 @@ class RuntimeInfo(_Model):
 	container_id: str | None = None
 	saved_image: str | None = None
 	container_stopped: bool = False
+	container_removed: bool = False
+	# docker commit failed or timed out, so the oracle had no snapshot to run in.
+	snapshot_failed: bool = False
 
 
 class TrackedFilesCheck(_Model):
