@@ -116,6 +116,7 @@ class DockerRuntime:
 	container_removed: bool = False
 	container_stopped: bool = False
 	saved_image: str | None = None
+	snapshot_failed: bool = False
 	path_separator: str = ":"
 
 	def _docker_run_command(self, session: RunSession) -> list[str]:
@@ -291,6 +292,8 @@ class DockerRuntime:
 			return self.saved_image
 
 		tag = f"aebench-oracle-snapshots:{safe_name(session.task_id)}-{uuid.uuid4().hex[:8]}"
+		# Cleared only on success: a timeout raises out of subprocess.run below.
+		self.snapshot_failed = True
 		result = subprocess.run(
 			["docker", "commit", self.container_id, tag],
 			capture_output=True,
@@ -304,6 +307,7 @@ class DockerRuntime:
 			)
 
 		self.saved_image = tag
+		self.snapshot_failed = False
 		logger.info("committed docker container %s to %s", self.container_id, tag)
 		return tag
 
@@ -367,6 +371,8 @@ class DockerRuntime:
 			container_id=self.container_id or self.last_container_id,
 			saved_image=self.saved_image,
 			container_stopped=self.container_stopped or self.container_removed,
+			container_removed=self.container_removed,
+			snapshot_failed=self.snapshot_failed,
 		)
 
 

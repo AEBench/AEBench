@@ -6,10 +6,12 @@ import subprocess
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
+from cli import _build_parser, _run_options
 from config import AppState, resolve_settings
 from models import (
 	AgentResult,
@@ -21,9 +23,37 @@ from models import (
 	RuntimeMode,
 )
 from project_config import load_project_config
-from runtime.case_runner import run_case
+from runtime.case_runner import _CaseRunner, run_case
 
 _FIXTURE = Path(__file__).parent / "mock-case" / "fixture"
+
+
+def test_trajectory_audit_failure_is_advisory(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+	runner = object.__new__(_CaseRunner)
+	runner.options = RunOptions(trajectory_audit=True)
+	runner.monitor = SimpleNamespace(trace_path=tmp_path / "commands.jsonl")
+	runner.output_dir = tmp_path
+	runner.task_context = "do the task"
+	runner.oracle_result = OracleResult(status=OracleStatus.SUCCESS, score=4)
+	runner.paths = SimpleNamespace(infra_log_path=tmp_path / "infra.log")
+
+	class FailingAuditService:
+		def __init__(self, _judge: object) -> None:
+			pass
+
+		def audit_jsonl(self, *_args: object, **_kwargs: object) -> None:
+			raise RuntimeError("judge unavailable")
+
+	monkeypatch.setattr("runtime.case_runner.OpenAIResponsesJudge", object)
+	monkeypatch.setattr("runtime.case_runner.AuditService", FailingAuditService)
+
+	runner.run_trajectory_audit()
+
+	assert runner.oracle_result.score == 4
+	assert "trajectory audit failed" in caplog.text
+	assert "judge unavailable" in (tmp_path / "infra.log").read_text(encoding="utf-8")
 
 
 def test_case_runner_executes_agent_then_oracle(
@@ -363,10 +393,32 @@ def test_monitored_case_orders_the_broker_and_shim(
 
 	monkeypatch.setattr("runtime.case_runner.DirectOracleRunner", StubOracleRunner)
 
+	class FakeReport:
+		def model_dump_json(self, *, indent: int) -> str:
+			assert indent == 2
+			return '{"status":"clean","score_effect":"none"}'
+
+	class FakeAuditService:
+		def __init__(self, _judge: object) -> None:
+			pass
+
+		def audit_jsonl(self, trace_path: Path, *, task_context: str) -> FakeReport:
+			events.append("audit")
+			assert trace_path.name == "commands.jsonl"
+			assert "apt-get install zip" in task_context
+			return FakeReport()
+
+	monkeypatch.setattr("runtime.case_runner.OpenAIResponsesJudge", object)
+	monkeypatch.setattr("runtime.case_runner.AuditService", FakeAuditService)
+
 	result = run_case(
 		context,
 		project / "bundles" / "mock_apt_case",
-		options=RunOptions(agent_type="codex", model_name="gpt-test", monitor_commands=True),
+		options=RunOptions(
+			agent_type="codex",
+			model_name="gpt-test",
+			trajectory_audit=True,
+		),
 		save_path=tmp_path / "output",
 	)
 
@@ -380,6 +432,7 @@ def test_monitored_case_orders_the_broker_and_shim(
 		"container-stop",
 		"snapshot",
 		"oracle",
+		"audit",
 		"cleanup",
 	]
 	# AEBench's own shells bypass the shim; the agent's do not.
@@ -393,6 +446,10 @@ def test_monitored_case_orders_the_broker_and_shim(
 	assert trace_dir.parent.name == "monitor"
 	assert trace_dir.name == monitor.run_token
 	assert trace_dir != Path(result.runtime_result.output_dir)
+	assert json.loads((tmp_path / "output" / "audit_report.json").read_text()) == {
+		"score_effect": "none",
+		"status": "clean",
+	}
 
 
 def test_monitoring_requires_docker(tmp_path: Path) -> None:
@@ -415,3 +472,41 @@ def test_monitoring_requires_docker(tmp_path: Path) -> None:
 			),
 			save_path=tmp_path / "output",
 		)
+
+
+def _docker_case_runner(tmp_path: Path, *cli_args: str) -> _CaseRunner:
+	project = tmp_path / "project"
+	shutil.copytree(_FIXTURE, project)
+	manifest = project / "bundles" / "mock_apt_case" / "case.toml"
+	manifest.write_text(
+		manifest.read_text(encoding="utf-8").replace(
+			'mode = "local"\ntimeout_ms',
+			'mode = "docker"\nimage = "aebench-agent:latest"\ntimeout_ms',
+		),
+		encoding="utf-8",
+	)
+	state = load_project_config(project)
+	args = _build_parser().parse_args(
+		["case", "run", "mock_apt_case", "--agent", "codex", "--model", "gpt-test", *cli_args]
+	)
+	return _CaseRunner(
+		AppState(project_state=state, settings=resolve_settings(state)),
+		project / "bundles" / "mock_apt_case",
+		options=_run_options(args),
+		save_path=tmp_path / "output",
+		on_output_dir=None,
+	)
+
+
+@pytest.mark.parametrize(
+	("cli_args", "kept"),
+	[((), True), (("--delete-image",), False)],
+)
+def test_delete_image_flag_sets_the_effective_runtime_config(
+	tmp_path: Path, cli_args: tuple[str, ...], kept: bool
+) -> None:
+	runner = _docker_case_runner(tmp_path, *cli_args)
+
+	runner.prepare_case()
+
+	assert runner.task.runtime.keep_committed_snapshot is kept

@@ -1,6 +1,8 @@
 # cases/<case>/artifact
 cases/*/artifact/
 
+.eval-tools/
+
 
 # Python bytecode / caches
 __pycache__/

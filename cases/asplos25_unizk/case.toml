@@ -21,6 +21,7 @@ path = "README.md"
 [run.runtime]
 mode = "docker"
 timeout_ms = 345600000
+snapshot_timeout_seconds = 600.0
 gpu = false
 interactive = false
 

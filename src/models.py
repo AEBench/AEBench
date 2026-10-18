@@ -160,8 +160,8 @@ class RuntimeConfig(_Model):
 	gpu: bool = False
 	interactive: bool = False
 	commit_before_oracle: bool = True
-	keep_committed_snapshot: bool = False
-	snapshot_timeout_seconds: float = 60.0
+	keep_committed_snapshot: bool = True
+	snapshot_timeout_seconds: float = 3600.0
 
 	@model_validator(mode="after")
 	def _normalize(self) -> "RuntimeConfig":
@@ -328,6 +328,9 @@ class RuntimeInfo(_Model):
 	container_id: str | None = None
 	saved_image: str | None = None
 	container_stopped: bool = False
+	container_removed: bool = False
+	# docker commit failed or timed out, so the oracle had no snapshot to run in.
+	snapshot_failed: bool = False
 
 
 class TrackedFilesCheck(_Model):
@@ -406,10 +409,11 @@ class RunOptions(_Model):
 	prompt_profile: PromptProfile | None = None
 	prompt_append: str | None = None
 	cleanup_workspace: bool = False
-	preserve_runtime: bool = False
+	delete_image: bool = False
 	skip_incompatible: bool = False
 	monitor_commands: bool = False
 	monitor_socket_root: str | None = None
+	trajectory_audit: bool = False
 	oracle_fail_fast: bool = False
 
 
