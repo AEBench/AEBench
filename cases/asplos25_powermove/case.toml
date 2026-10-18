@@ -2,8 +2,8 @@ id = "asplos25_powermove"
 
 [case_brief]
 core_claim = "Set up PowerMove and reproduce its neutral-atom compilation evaluation on the five workload families used in Figure 6, showing that the continuous router improves QAOA-regular3 fidelity and execution time over Enola while storage-zone compilation eliminates excitation error."
-acceptable_evidence = "Complete results and logs cover fixed released QAOA, QSim, QFT, VQE, and BV inputs in both PowerMove modes, plus the scoped Enola comparison; the compiler metrics match the bundled reference, their fidelity components are internally consistent, and the router and storage-zone relations hold."
-allowed_tolerance = "Workload coverage and log completion are exact. Deterministic compiler metrics allow 1% relative or 1e-8 absolute tolerance for dependency and floating-point drift. Machine-dependent compilation seconds are recorded but not scored."
+acceptable_evidence = "The upstream test_scripts regenerate data/<family>_{no_storage,storage}_compare.txt for QAOA-regular3-30 i0, QSim-rand-0.3-10 i0, QFT-18, VQE-30, and BV-14, with matching logs; gate-level fidelities match the bundled reference, total fidelity is the product of its components, and the router and storage-zone relations hold."
+allowed_tolerance = "Workload coverage and log cross-checks are exact. Gate-level fidelities (one-qubit, two-qubit, excitation) allow 1% relative tolerance for qiskit and floating-point drift. Durations, movement stages, transfer and coherence fidelity depend on placement order and are only compared between compilers within the same run."
 
 [paper]
 title = "PowerMove: Optimizing Compilation for Neutral Atom Quantum Computers with Zoned Architecture"
@@ -16,16 +16,27 @@ version = "arXiv v1 corresponding to the ASPLOS 2025 paper"
 id = "asplos25_powermove"
 
 [run.instructions]
-path = "AEBENCH.md"
+path = "README.md"
 required_evidence = [
-  "Run PowerMove with and without the storage zone on the released QAOA-regular3-30 instance i0, QSim-rand-0.3-10 instance i0, QFT-18, VQE-30, and BV-14 inputs. Also run Enola on QAOA-regular3-30.",
-  "Keep one result per workload as evaluation/results/<workload>.json and preserve complete stdout and stderr as evaluation/logs/<workload>.log. Each log must contain exact lines '===== BEGIN <workload> =====' and '===== END <workload> status=0 ====='.",
+  "Run test_scripts/<family>_no_storage_compare.py and test_scripts/<family>_storage_compare.py for qaoa_regular3 (30 qubits, instance i0), qsim_rand_0.3 (10 qubits, instance i0), qft (18 qubits), vqe (30 qubits), and bv (14 qubits), so that each writes data/<script>.txt.",
+  "Save the complete stdout and stderr of each script run as logs/<script>.log.",
 ]
+
+[run.prompt]
+profile = "artifact-eval-v1"
+append = """
+EVALUATION:
+- README.md only names the project. The paper's evaluation is produced by the scripts in test_scripts/, run from the repository root. Each <family>_no_storage_compare.py compares PowerMove without the storage zone against Enola; each <family>_storage_compare.py compares PowerMove with and without the storage zone. Each writes data/<script>.txt.
+- Run both scripts for these families and sizes only: qaoa_regular3 at 30 qubits, qsim_rand_0.3 at 10 qubits, qft at 18 qubits, vqe at 30 qubits, bv at 14 qubits. Larger sizes are not needed.
+- You may edit the scripts' N_Qubit_List to the size above, and fix the instance index to 0 where a script picks it with random.choice. Do not change mvqc.py, enola.py, or anything under placer/, router/, or scheduler/.
+- Save the complete stdout and stderr of each script run as logs/<script>.log, e.g. mkdir -p logs && PYTHONPATH=. python3 test_scripts/qft_no_storage_compare.py 2>&1 | tee logs/qft_no_storage_compare.log.
+- Enola is slow on QFT; let it finish.
+"""
 
 [run.runtime]
 mode = "docker"
 image = "aebench-agent:latest"
-timeout_ms = 7200000
+timeout_ms = 43200000
 gpu = false
 interactive = false
 
@@ -35,9 +46,6 @@ compose = false
 
 [run.artifact_requirements.hardware]
 network = true
-
-[run.prompt]
-profile = "artifact-eval-v1"
 
 [oracle]
 expected_score = 4
