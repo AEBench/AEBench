@@ -89,7 +89,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
 				name="released_evaluation_inputs",
 				paths={
 					workload: (qubits, self.runtime_path(path))
-					for workload, (qubits, path) in WORKLOADS.items()
+					for workload, (_, qubits, path) in WORKLOADS.items()
 				},
 			),
 		)

@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from evaluator.oracles import CaseOracleExperimentRunsBase
 from evaluator.oracles.reporting import BaseCheck
 
-from .consts import EVALUATION_DIR, WORKLOADS
+from .consts import WORKLOADS
 from .parsing import PowerMoveEvaluationCheck
 
 
@@ -14,9 +14,16 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 		return (
 			PowerMoveEvaluationCheck(
 				name="powermove_evaluation",
-				results_dir=self.runtime_path(EVALUATION_DIR, "results"),
-				logs_dir=self.runtime_path(EVALUATION_DIR, "logs"),
+				workloads={
+					workload: (
+						qubits,
+						self.runtime_path("data", f"{family}_no_storage_compare.txt"),
+						self.runtime_path("data", f"{family}_storage_compare.txt"),
+						self.runtime_path("logs", f"{family}_no_storage_compare.log"),
+						self.runtime_path("logs", f"{family}_storage_compare.log"),
+					)
+					for workload, (family, qubits, _) in WORKLOADS.items()
+				},
 				reference_path=self.ref_path("evaluation.ref.json"),
-				expected_workloads=tuple(WORKLOADS),
 			),
 		)
