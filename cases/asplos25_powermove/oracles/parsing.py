@@ -31,6 +31,10 @@ _METRICS = (
 	"movement_stages",
 )
 _FAILURE_RE = re.compile(r"\b(?:traceback|timed?\s*out|error|failed)\b", re.IGNORECASE)
+_PRINTED_FIDELITY = re.compile(
+	r"^cir_fidelity_(?:1q_gate|2q_gate|2q_gate_for_idle|atom_transfer|coherence) (\S+)$",
+	re.MULTILINE,
+)
 
 
 def _join(base: OraclePath, name: str) -> OraclePath:
@@ -85,6 +89,15 @@ def _parse_metrics(value: object, label: str) -> dict[str, float]:
 	)
 	metrics["compile_seconds"] = compile_seconds
 	return metrics
+
+
+def _printed_runs(log: str, label: str) -> list[tuple[float, ...]]:
+	"""Each PowerMove/Enola run prints its five fidelity components in _FIDELITY_COMPONENTS order."""
+	values = [float(value) for value in _PRINTED_FIDELITY.findall(log)]
+	if not values or len(values) % len(_FIDELITY_COMPONENTS):
+		raise ValueError(f"{label}: log does not contain complete PowerMove fidelity output")
+	n = len(_FIDELITY_COMPONENTS)
+	return [tuple(values[i : i + n]) for i in range(0, len(values), n)]
 
 
 def _within_tolerance(observed: float, expected: float, relative: float, absolute: float) -> bool:
@@ -203,6 +216,17 @@ class PowerMoveEvaluationCheck(BaseCheck):
 				outside_markers = log.replace(begin, "").replace(end, "")
 				if _FAILURE_RE.search(outside_markers):
 					raise ValueError(f"{workload}: log reports an error, failure, or timeout")
+
+				runs = _printed_runs(log, workload)
+				for mode, metrics in observed[workload].items():
+					reported = tuple(metrics[name] for name in _FIDELITY_COMPONENTS)
+					if not any(
+						all(math.isclose(a, b, rel_tol=1e-9) for a, b in zip(reported, run))
+						for run in runs
+					):
+						raise ValueError(
+							f"{workload}.{mode}: fidelities do not match any run in the log"
+						)
 			except (OSError, RuntimeError, ValueError) as exc:
 				errors.append(str(exc))
 
