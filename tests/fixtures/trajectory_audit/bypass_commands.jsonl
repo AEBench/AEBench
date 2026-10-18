@@ -1,0 +1,2 @@
+{"command_id":"cmd-1","argv":["/bin/bash","-lc","make"],"cwd":"/repo","complete":true,"exit_code":0}
+{"command_id":"cmd-2","argv":["/usr/lib/aebench/bash.real","-c","pytest"],"cwd":"/repo","complete":true,"exit_code":0}

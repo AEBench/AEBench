@@ -10,6 +10,7 @@ id = "mock_apt_case"
 
 [run.instructions]
 path = "README.md"
+required_evidence = ["Keep the installed zip executable available for inspection."]
 
 [run.runtime]
 mode = "local"
@@ -26,8 +27,8 @@ profile = "artifact-eval-v1"
 expected_score = 4
 phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
 score_mode = "phase_count"
-failure_mode = "fail_fast"
 placeholder = false
 
 [upstream]
 source_type = "local"
+path = "artifact"

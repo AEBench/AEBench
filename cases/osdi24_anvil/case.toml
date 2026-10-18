@@ -2,8 +2,8 @@ id = "osdi24_anvil"
 
 [case_brief]
 core_claim = "Set up the Anvil artifact and its ACTO dependency, then reproduce the controller evaluation outputs summarized in the artifact's table 3 workflow."
-acceptable_evidence = "The bundle oracle accepts the Anvil checkout, ACTO helper libraries at the expected revision, and a results/table3.md whose controller ratios align with bundled references."
-allowed_tolerance = "Controller ratios may vary, but each reproduced verified-to-reference ratio pair must stay close enough to the bundled refs to satisfy the oracle's similarity threshold."
+acceptable_evidence = "The bundle oracle accepts the Anvil checkout, ACTO helper libraries at the expected revision, and a results/table3.md whose controller ratios align with the oracle's reference values."
+allowed_tolerance = "Controller ratios may vary, but each reproduced verified-to-reference ratio pair must stay close enough to the oracle's reference values to satisfy the oracle's similarity threshold."
 
 [paper]
 url = "https://www.usenix.org/system/files/osdi24-sun-xudong.pdf"
@@ -44,5 +44,5 @@ url = "https://github.com/anvil-verifier/anvil.git"
 ref = "8d27a89a18e8ae07cb609369f3e932fd5e8462b2"
 requested_ref = "osdi24"
 resolved_at = "2026-03-10T03:22:57.856952+00:00"
-artifact_mode = "hybrid"
+artifact_mode = "overlay"
 overlay_artifact = true

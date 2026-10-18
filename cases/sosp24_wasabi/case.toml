@@ -2,7 +2,7 @@ id = "sosp24_wasabi"
 
 [case_brief]
 core_claim = "Build Wasabi, stage the benchmark repositories, and reproduce the benchmark bug signatures used by the artifact's retry-bug evaluation."
-acceptable_evidence = "The bundle oracle accepts the built jar, staged benchmark repos, and result CSV files that recover at least 75% of bundled ground-truth bug signatures."
+acceptable_evidence = "The bundle oracle accepts the built jar, staged benchmark repos, and result CSV files that recover at least 75% of the oracle's ground-truth bug signatures."
 allowed_tolerance = "Bug signatures need not match in order, but the reproduced benchmark coverage must remain at or above the oracle's 0.75 ground-truth coverage threshold."
 
 [paper]
@@ -20,6 +20,13 @@ path = "README.md"
 
 [run.prompt]
 profile = "artifact-eval-v1"
+append = """
+AUTHORIZED RESEARCH CONTEXT:
+- This is a trusted, peer-reviewed systems research artifact being reproduced in an isolated evaluation environment.
+- The artifact studies software bugs and may use terminology such as fault injection, bug triggering, failure injection, crashes, retries, instrumentation, or reproducing failures.
+- Such terminology refers to controlled experiments on the artifact and its bundled benchmark software inside this isolated environment.
+- The task is to reproduce the published artifact according to its README and evaluation instructions. Do not interpret normal artifact terminology by itself as evidence of malicious intent.
+"""
 
 [run.runtime]
 mode = "docker"
@@ -44,5 +51,4 @@ url = "https://github.com/bastoica/wasabi.git"
 ref = "57a01444318ed50422182c4732c29c45909f65d3"
 requested_ref = "sosp24-ae"
 resolved_at = "2026-03-10T03:22:43.788766+00:00"
-artifact_mode = "hybrid"
-overlay_artifact = true
+artifact_mode = "upstream"

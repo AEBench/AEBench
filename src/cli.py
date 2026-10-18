@@ -8,7 +8,7 @@ from config import AppState, resolve_settings
 from evaluator.loader import load_case_spec
 from evaluator.registry import resolve_case_dir
 from log import configure_logging
-from models import RunOptions
+from models import AGENT_NAMES, OracleFailureMode, RunOptions
 from project_config import load_project_config
 from runtime.oracle_runner import DirectOracleRunner
 
@@ -35,6 +35,15 @@ def _build_parser() -> argparse.ArgumentParser:
 	_add_run_options(case_run)
 	case_run.add_argument("case_ref")
 	case_run.add_argument("--save-path", default=None)
+
+	case_monitor = case_sub.add_parser(
+		"monitor", help="Run one case and record every shell command the agent runs."
+	)
+	_add_run_options(case_monitor)
+	_add_monitor_options(case_monitor)
+	case_monitor.add_argument("case_ref")
+	case_monitor.add_argument("--save-path", default=None)
+	case_monitor.set_defaults(monitor_commands=True)
 
 	case_init = case_sub.add_parser("init", help="Create a new case bundle.")
 	case_init.add_argument("source", nargs="?", default=None)
@@ -66,6 +75,7 @@ def _build_parser() -> argparse.ArgumentParser:
 	case_oracle.add_argument("case_ref")
 	case_oracle.add_argument("--output-dir", default=None)
 	case_oracle.add_argument("--workspace-dir", default=None)
+	_add_oracle_options(case_oracle)
 
 	runtime_p = sub.add_parser("runtime", help="Low-level runtime workflows.")
 	runtime_sub = runtime_p.add_subparsers(dest="runtime_command")
@@ -73,15 +83,84 @@ def _build_parser() -> argparse.ArgumentParser:
 	_add_run_options(runtime_run)
 	runtime_run.add_argument("--input-file", required=True)
 	runtime_run.add_argument("--output-dir", default=None)
+
+	trace_p = sub.add_parser("trace", help="Export and view agent traces.")
+	trace_sub = trace_p.add_subparsers(dest="trace_command")
+	trace_export = trace_sub.add_parser("export", help="Export a run as a trace website.")
+	trace_export.add_argument("run_dir")
+	trace_export.add_argument("--output-dir", required=True)
+	trace_serve = trace_sub.add_parser("serve", help="Serve an exported trace site.")
+	trace_serve.add_argument("site_dir")
+	trace_serve.add_argument("--host", default="127.0.0.1")
+	trace_serve.add_argument("--port", type=int, default=8000)
+
+	audit_p = sub.add_parser("audit-trace", help="Audit an aeshell commands.jsonl trace.")
+	audit_p.add_argument("trace_path")
+	audit_p.add_argument("--instructions", default=None)
+	audit_p.add_argument("--output", default=None)
+	audit_p.add_argument("--model", default=None)
+	audit_p.add_argument("--escalation-model", default=None)
+	audit_p.add_argument("--no-escalation", action="store_true")
 	return parser
 
 
 def _add_run_options(parser: argparse.ArgumentParser) -> None:
-	parser.add_argument("--model", default=None)
+	parser.add_argument(
+		"--agent",
+		choices=AGENT_NAMES,
+		default=None,
+		help="Agent harness to run.",
+	)
+	parser.add_argument("--model", default=None, help="Model name passed to the agent CLI.")
 	parser.add_argument("--interactive", action="store_true")
+	parser.add_argument(
+		"--allow-unsafe-local",
+		action="store_true",
+		help="Allow the agent to run directly on the host machine.",
+	)
+	parser.add_argument(
+		"--allow-host-docker",
+		action="store_true",
+		help="Allow the agent to control the host Docker daemon.",
+	)
 	parser.add_argument("--cleanup-workspace", action="store_true")
+	parser.add_argument(
+		"--trajectory-audit",
+		action="store_true",
+		help="Record and audit the agent's shell-command trajectory after the run.",
+	)
+	parser.add_argument(
+		"--delete-image",
+		action="store_true",
+		help="Delete the post-agent Docker snapshot after the run (kept by default).",
+	)
 	parser.add_argument("--prompt-profile", default=None)
 	parser.add_argument("--prompt-append", default=None)
+	_add_oracle_options(parser)
+
+
+def _add_oracle_options(parser: argparse.ArgumentParser) -> None:
+	parser.add_argument(
+		"--oracle-fail-fast",
+		action="store_true",
+		help="Stop oracle evaluation at the first failed phase.",
+	)
+
+
+def _add_monitor_options(parser: argparse.ArgumentParser) -> None:
+	"""Adds flags that only apply to a monitored run.
+
+	Kept out of _add_run_options, which is shared with the subcommands that do
+	not support monitoring.
+	"""
+	parser.add_argument(
+		"--socket-dir",
+		default=None,
+		help=(
+			"Directory to allocate the command socket under. Must be short: a unix "
+			"socket path cannot exceed 107 bytes."
+		),
+	)
 
 
 def cli_main(argv: list[str] | None = None) -> int:
@@ -96,6 +175,8 @@ def cli_main(argv: list[str] | None = None) -> int:
 			"run": _run_benchmark,
 			"case": _handle_case,
 			"runtime": _handle_runtime,
+			"trace": _handle_trace,
+			"audit-trace": _audit_trace,
 		}[args.command](args)
 	except KeyboardInterrupt:
 		print("Interrupted", file=sys.stderr)
@@ -109,6 +190,7 @@ def _handle_case(args: argparse.Namespace) -> int:
 	else:
 		handler = {
 			"run": _case_run,
+			"monitor": _case_run,
 			"init": _case_init,
 			"template": _case_template,
 			"validate": _case_validate,
@@ -118,7 +200,7 @@ def _handle_case(args: argparse.Namespace) -> int:
 		}.get(case_command)
 	if handler is None:
 		print(
-			"usage: aebench case {run,init,template,validate,export,summarize,oracle}",
+			"usage: aebench case {run,monitor,init,template,validate,export,summarize,oracle}",
 			file=sys.stderr,
 		)
 		return 1
@@ -129,6 +211,23 @@ def _handle_runtime(args: argparse.Namespace) -> int:
 	if getattr(args, "runtime_command", None) == "run":
 		return _runtime_run(args)
 	print("usage: aebench runtime {run}", file=sys.stderr)
+	return 1
+
+
+def _handle_trace(args: argparse.Namespace) -> int:
+	trace_command = getattr(args, "trace_command", None)
+	if trace_command == "export":
+		from trace_viewer import export_trace_site
+
+		index_path = export_trace_site(Path(args.run_dir), Path(args.output_dir))
+		print(f"Trace site: {index_path}")
+		return 0
+	if trace_command == "serve":
+		from trace_viewer import serve_trace_site
+
+		serve_trace_site(Path(args.site_dir), host=args.host, port=args.port)
+		return 0
+	print("usage: aebench trace {export,serve}", file=sys.stderr)
 	return 1
 
 
@@ -149,7 +248,42 @@ def _run_benchmark(args: argparse.Namespace) -> int:
 
 
 def _case_run(args: argparse.Namespace) -> int:
-	raise SystemExit("case runner is unavailable in this checkout")
+	from runtime.case_runner import run_case
+
+	context = _build_context()
+	case_dir = resolve_case_dir(args.case_ref, project_state=context.project_state)
+	result = run_case(
+		context,
+		case_dir,
+		options=_run_options(args),
+		save_path=_optional_path(args.save_path),
+		on_output_dir=lambda path: print(f"Output: {path}", flush=True),
+	)
+	monitor = result.runtime_result.command_monitor
+	if monitor is not None:
+		print(f"Command trace: {monitor.trace_path}")
+		print(f"Commands recorded: {monitor.command_count}")
+		if monitor.tracked_files is not None:
+			tracked = monitor.tracked_files
+			print(
+				f"Artifact files changed: {tracked.modified_count} modified, "
+				f"{tracked.deleted_count} deleted, {tracked.mode_changed_count} mode changed "
+				f"of {tracked.tracked} ({tracked.diff_path})"
+			)
+		if monitor.system_files is not None:
+			system = monitor.system_files
+			print(
+				f"Container system files changed: {system.executables_count} executables, "
+				f"{system.python_startup_count} Python startup hooks, {system.etc_count} in /etc "
+				f"({system.diff_path})"
+			)
+	if result.runtime_result.runtime.snapshot_failed:
+		from runtime.reporting import snapshot_status
+
+		print(f"Docker snapshot: {snapshot_status(result.runtime_result.runtime)}")
+	print(f"Case status: {result.status.value}")
+	print(f"Oracle score: {result.oracle_result.score}")
+	return 0 if result.status.value == "success" else 1
 
 
 def _case_init(args: argparse.Namespace) -> int:
@@ -236,6 +370,9 @@ def _case_oracle(args: argparse.Namespace) -> int:
 		output_dir=output_dir,
 		case=case,
 		workspace_dir=_optional_path(args.workspace_dir),
+		failure_mode=(
+			OracleFailureMode.FAIL_FAST if args.oracle_fail_fast else OracleFailureMode.CONTINUE
+		),
 	)
 	print(f"Oracle status: {result.status.value}")
 	print(f"Score: {result.score}/{case.oracle.expected_score}")
@@ -248,6 +385,51 @@ def _runtime_run(args: argparse.Namespace) -> int:
 	raise SystemExit("runtime run is unavailable in this checkout")
 
 
+def _audit_trace(args: argparse.Namespace) -> int:
+	from trajectory_audit.judge import OpenAIResponsesJudge
+	from trajectory_audit.sanitize import MAX_TASK_CONTEXT_CHARS
+	from trajectory_audit.service import (
+		DEFAULT_ESCALATION_MODEL,
+		DEFAULT_PRIMARY_MODEL,
+		AuditService,
+	)
+
+	trace_path = Path(args.trace_path).expanduser().resolve()
+	if not trace_path.is_file():
+		print(f"Trace does not exist: {trace_path}", file=sys.stderr)
+		return 2
+	escalation_model = (
+		None if args.no_escalation else (args.escalation_model or DEFAULT_ESCALATION_MODEL)
+	)
+	service = AuditService(
+		OpenAIResponsesJudge(),
+		primary_model=args.model or DEFAULT_PRIMARY_MODEL,
+		escalation_model=escalation_model,
+	)
+	try:
+		task_context = ""
+		if args.instructions:
+			instructions_path = Path(args.instructions).expanduser().resolve()
+			with instructions_path.open(encoding="utf-8") as instructions_file:
+				task_context = instructions_file.read(MAX_TASK_CONTEXT_CHARS + 1)
+		report = service.audit_jsonl(trace_path, task_context=task_context)
+	except (OSError, ValueError, RuntimeError) as exc:
+		print(f"Audit failed: {exc}", file=sys.stderr)
+		return 2
+
+	serialized = report.model_dump_json(indent=2)
+	if args.output:
+		output_path = Path(args.output).expanduser().resolve()
+		output_path.parent.mkdir(parents=True, exist_ok=True)
+		output_path.write_text(serialized + "\n", encoding="utf-8")
+		print(f"Audit report: {output_path}")
+	else:
+		print(serialized)
+	# Review and blocked are triage states, not command failures. Automation can
+	# inspect the rigid JSON status without conflating it with benchmark scoring.
+	return 0
+
+
 def _build_context() -> AppState:
 	state = load_project_config(Path.cwd())
 	settings = resolve_settings(state)
@@ -256,13 +438,22 @@ def _build_context() -> AppState:
 
 
 def _run_options(args: argparse.Namespace) -> RunOptions:
+	trajectory_audit = bool(getattr(args, "trajectory_audit", False))
 	return RunOptions(
+		agent_type=getattr(args, "agent", None),
 		interactive=bool(getattr(args, "interactive", False)),
+		allow_unsafe_local=bool(getattr(args, "allow_unsafe_local", False)),
+		allow_host_docker=bool(getattr(args, "allow_host_docker", False)),
 		model_name=getattr(args, "model", None),
 		prompt_profile=getattr(args, "prompt_profile", None),
 		prompt_append=getattr(args, "prompt_append", None),
 		cleanup_workspace=bool(getattr(args, "cleanup_workspace", False)),
+		delete_image=bool(getattr(args, "delete_image", False)),
 		skip_incompatible=bool(getattr(args, "skip_incompatible", False)),
+		monitor_commands=bool(getattr(args, "monitor_commands", False)) or trajectory_audit,
+		monitor_socket_root=getattr(args, "socket_dir", None),
+		trajectory_audit=trajectory_audit,
+		oracle_fail_fast=bool(getattr(args, "oracle_fail_fast", False)),
 	)
 
 

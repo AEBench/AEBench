@@ -14,10 +14,9 @@ class OraclePhaseName(str, Enum):
 
 DEFAULT_TIMEOUT_MS: int = 345_600_000
 DEFAULT_DOCKER_IMAGE: str = "aebench-agent:latest"
-DEFAULT_MODEL: str = "claude-sonnet-4-5-20250929"
 DEFAULT_PROMPT_PROFILE: str = "artifact-eval-v1"
 DEFAULT_OUTPUTS_DIR: str = "./outputs"
-DEFAULT_AGENT_MAX_BUFFER_SIZE: int = 8 * 1024 * 1024
+DEFAULT_MONITOR_SOCKET_ROOT_DIR: str = "/tmp/aebench-sockets"
 
 CASE_MANIFEST_FILENAME: str = "case.toml"
 ORACLE_RESULT_FILENAME: str = "oracle_result.json"
@@ -40,6 +39,7 @@ RUNNER_LOG_BASENAME = "runner_output.log"
 INFRA_LOG_BASENAME = "infra.log"
 PROGRESS_LOG_BASENAME = "progress.log"
 TOOL_OUTPUT_DIRNAME = "artifacts/tool-output"
+MONITOR_DIRNAME = "monitor"
 LIVE_EVENT_DIRNAME = ".aebench-live"
 LIVE_TRANSCRIPT_BASENAME = "agent_events.jsonl"
 LIVE_RENDERED_BASENAME = "agent_rendered.log"

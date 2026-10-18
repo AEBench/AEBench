@@ -2,7 +2,7 @@ id = "osdi24_kondo"
 
 [case_brief]
 core_claim = "Set up the Kondo artifact and reproduce the SLOC statistics for the evaluated distributed protocols, showing that invariant taxonomy reduces proof size."
-acceptable_evidence = "The oracle accepts a sloc.csv whose sync_spec, manual_proof, and sync_proof line counts for each evaluated protocol match the bundled reference values within ±5 lines."
+acceptable_evidence = "The oracle accepts a sloc.csv whose sync_spec, manual_proof, and sync_proof line counts for each evaluated protocol match the oracle's reference values within ±5 lines."
 allowed_tolerance = "SLOC counts must stay within ±5 lines of reference for each protocol and field."
 
 [paper]
@@ -33,7 +33,6 @@ profile = "artifact-eval-v1"
 
 [oracle]
 expected_score = 4
-failure_mode = "fail_fast"
 placeholder = false
 
 [oracle.phase_targets]

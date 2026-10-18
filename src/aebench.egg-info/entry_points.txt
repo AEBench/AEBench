@@ -1,4 +1,0 @@
-[console_scripts]
-aebench = cli:cli_main
-aebench-mcp-server = mcp.server:stdio_main
-aebench-runner = runner:docker_main

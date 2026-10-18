@@ -54,6 +54,7 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 			)
 
 		# GNU time (noisy/non-zero --version on some builds) -> path check.
+		# runtime_path so it resolves inside the koala image, not on the host.
 		checks.append(
 			self.path_check(
 				name="gnu_time_present",

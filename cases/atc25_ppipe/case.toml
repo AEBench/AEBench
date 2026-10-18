@@ -2,7 +2,7 @@ id = "atc25_ppipe"
 
 [case_brief]
 core_claim = "Build the PPipe MILP scheduler, run planning for the benchmark video analytics workloads, and reproduce the throughput characteristics of the generated execution plans."
-acceptable_evidence = "The oracle accepts plan JSON files for each benchmark workload whose per-plan throughput values correlate with the bundled reference plans at the required Pearson similarity threshold."
+acceptable_evidence = "The oracle accepts plan JSON files for each benchmark workload whose per-plan throughput values correlate with the oracle's reference plans at the required Pearson similarity threshold."
 allowed_tolerance = "Results may vary across environments but must preserve the reference trend."
 
 [paper]
@@ -30,11 +30,15 @@ profile = "artifact-eval-v1"
 expected_score = 4
 phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
 score_mode = "phase_count"
-failure_mode = "fail_fast"
 placeholder = false
 
-[oracle.runtime]
-mode = "local"
+# All phases run in the default `task` target (the committed agent container),
+# where the agent installed the environment and produced the results.
+[oracle.phase_targets]
+env_setup = "task"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "task"
 
 [upstream]
 source_type = "git"

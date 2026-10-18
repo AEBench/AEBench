@@ -37,16 +37,17 @@ profile = "artifact-eval-v1"
 
 [oracle]
 expected_score = 4
-failure_mode = "fail_fast"
 placeholder = false
 
 
 
+# All phases run in the default `task` target (the committed agent container),
+# where the agent installed the environment and produced the results.
 [oracle.phase_targets]
-env_setup = "local"
-artifact_build = "local"
-benchmark_prep = "local"
-experiment_runs = "local"
+env_setup = "task"
+artifact_build = "task"
+benchmark_prep = "task"
+experiment_runs = "task"
 
 [upstream]
 source_type = "git"

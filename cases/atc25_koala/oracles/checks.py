@@ -1,12 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
-from evaluator.oracles.oracle_checks_runtime import (
-	OraclePath,
-	RuntimeCheckExecutor,
-	check_read_file_text,
-)
 from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 
@@ -24,13 +20,13 @@ class KoalaCorrectnessCheck(BaseCheck):
 	number of status lines (no scripts silently skipped on --min).
 	"""
 
-	path: OraclePath
+	path: Path
 	expected_lines: int
 
-	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
+	def check(self) -> CheckResult:
 		try:
-			text = check_read_file_text(self.path, encoding="utf-8", executor=executor)
-		except (OSError, UnicodeError) as exc:
+			text = self.path.read_text(encoding="utf-8", errors="replace")
+		except OSError as exc:
 			return CheckResult.failure(f"failed to read {self.path}: {exc}")
 
 		lines = _status_lines(text)
@@ -64,13 +60,13 @@ class KoalaCorrectnessCheck(BaseCheck):
 class KoalaPassLogCheck(BaseCheck):
 	"""Pass iff the harness log shows ``<bench> [pass]`` and never ``<bench> [fail]``."""
 
-	path: OraclePath
+	path: Path
 	bench: str
 
-	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
+	def check(self) -> CheckResult:
 		try:
-			text = check_read_file_text(self.path, encoding="utf-8", executor=executor)
-		except (OSError, UnicodeError) as exc:
+			text = self.path.read_text(encoding="utf-8", errors="replace")
+		except OSError as exc:
 			return CheckResult.failure(f"failed to read {self.path}: {exc}")
 
 		fail_marker = f"{self.bench} [fail]"

@@ -69,6 +69,9 @@ _PATH_MOUNT_ORDER = (
 	("output_dir", "/output"),
 )
 
+# The case's oracles and reference results; checks only read them.
+_READ_ONLY_MOUNTS = frozenset({"case_dir", "refs_dir"})
+
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class _PathMount:
@@ -76,6 +79,7 @@ class _PathMount:
 
 	host_root: pathlib.Path
 	runtime_root: pathlib.PurePosixPath
+	read_only: bool = False
 
 	def translate(
 		self,
@@ -249,10 +253,14 @@ def _prepare_runtime_command(
 	return list(cmd)
 
 
-def build_path_mounts(context: OracleInput) -> list[_PathMount]:
+def build_path_mounts(
+	context: OracleInput,
+	*,
+	workspace_runtime_root: str = "/workspace",
+) -> list[_PathMount]:
 	"""Build host-to-runtime path mappings for an oracle invocation."""
 
-	raw_mounts: list[tuple[pathlib.Path, pathlib.PurePosixPath]] = []
+	raw_mounts: list[tuple[pathlib.Path, pathlib.PurePosixPath, bool]] = []
 	refs_dir = context.case_dir / "refs"
 
 	values: dict[str, pathlib.Path] = {
@@ -264,6 +272,8 @@ def build_path_mounts(context: OracleInput) -> list[_PathMount]:
 	}
 
 	for field_name, runtime_root_str in _PATH_MOUNT_ORDER:
+		if field_name == "workspace_dir":
+			runtime_root_str = workspace_runtime_root
 		host_root = _resolved_path(values[field_name])
 
 		if host_root.exists() or field_name in {"artifact_dir", "output_dir"}:
@@ -271,15 +281,17 @@ def build_path_mounts(context: OracleInput) -> list[_PathMount]:
 				(
 					host_root,
 					pathlib.PurePosixPath(runtime_root_str),
+					field_name in _READ_ONLY_MOUNTS,
 				)
 			)
 
 	unique: dict[tuple[str, str], _PathMount] = {}
 
-	for host_root, runtime_root_path in raw_mounts:
+	for host_root, runtime_root_path, read_only in raw_mounts:
 		unique[(str(host_root), str(runtime_root_path))] = _PathMount(
 			host_root=host_root,
 			runtime_root=runtime_root_path,
+			read_only=read_only,
 		)
 
 	mounts = list(unique.values())
@@ -617,6 +629,8 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		path_mounts: Sequence[_PathMount],
 		default_cwd: pathlib.Path,
 		runtime_cwd: pathlib.PurePosixPath | None = None,
+		user: str | None = None,
+		home: str | None = None,
 	) -> None:
 		"""Initializes a Docker-backed executor.
 
@@ -627,6 +641,8 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 			path_mounts: Host directories exposed inside the container.
 			default_cwd: Default host working directory for checks.
 			runtime_cwd: Default working directory inside the container.
+			user: User for oracle commands. Uses the image default when omitted.
+			home: HOME value for oracle commands. Uses the image default when omitted.
 
 		Raises:
 			ValueError: If runtime_cwd is relative.
@@ -634,6 +650,8 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 		super().__init__(default_cwd=default_cwd)
 		self._image = image
 		self._path_mounts = tuple(path_mounts)
+		self._user = user
+		self._home = home
 
 		if runtime_cwd is not None and not runtime_cwd.is_absolute():
 			raise ValueError("runtime_cwd must be an absolute POSIX path")
@@ -685,13 +703,18 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 			"--name",
 			self._container_name,
 		]
+		if self._user is not None:
+			docker_cmd.extend(["--user", self._user])
+		if self._home is not None:
+			docker_cmd.extend(["-e", f"HOME={self._home}"])
 
 		for mount in self._path_mounts:
 			if mount.host_root.exists():
 				docker_cmd.extend(
 					[
 						"-v",
-						f"{mount.host_root}:{mount.runtime_root}",
+						f"{mount.host_root}:{mount.runtime_root}"
+						+ (":ro" if mount.read_only else ""),
 					]
 				)
 
@@ -966,6 +989,25 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 			on_chunk=on_chunk,
 		)
 
+	def close(self) -> None:
+		"""Removes the lazily created check container."""
+		if self._container_id is None:
+			return
+
+		container_id = self._container_id
+		result = subprocess.run(
+			["docker", "rm", "-f", container_id],
+			capture_output=True,
+			text=True,
+			check=False,
+		)
+		if result.returncode != 0:
+			detail = (result.stderr or result.stdout).strip()
+			raise RuntimeError(
+				f"failed to remove oracle container {container_id}: {detail or result.returncode}"
+			)
+		self._container_id = None
+
 
 def _build_task_runtime_check_executor(
 	context: OracleInput,
@@ -1001,10 +1043,17 @@ def _build_task_runtime_check_executor(
 			"Cannot build oracle runtime executor: task Docker runtime has no image."
 		)
 
+	workspace_mount = runtime_result.runtime.workspace_mount or "/workspace"
 	return DockerRuntimeCheckExecutor(
 		image=image,
-		path_mounts=build_path_mounts(context),
+		path_mounts=build_path_mounts(
+			context,
+			workspace_runtime_root=workspace_mount,
+		),
 		default_cwd=context.workspace_dir,
+		runtime_cwd=pathlib.PurePosixPath(workspace_mount),
+		user=runtime_result.runtime.user,
+		home=runtime_result.runtime.home,
 	)
 
 

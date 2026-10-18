@@ -2,7 +2,7 @@ id = "asplos25_icemu"
 
 [case_brief]
 core_claim = "Build the NACHO artifact's patched LLVM toolchain, ICEmu, and plugins, then reproduce its evaluation across all nine benchmarks: NACHO retains the paper's lower average runtime-overhead trend against Clank, PROWL, and ReplayCache while producing the reported cache, checkpoint, non-volatile-memory, optimization, and power-failure results."
-acceptable_evidence = "All 72 benchmark ELF files are present; the complete 729-run matrix has a positive cycle result for every run; the main -Os, 512-byte two-way-cache results and NACHO power-failure re-execution values match the bundled reference; and all three evaluation notebooks execute without errors and produce their plots and tables."
+acceptable_evidence = "All 72 benchmark ELF files are present; the complete 729-run matrix has a positive cycle result for every run; the main -Os, 512-byte two-way-cache results and NACHO power-failure re-execution values match the oracle's reference; and all three evaluation notebooks execute without errors and produce their plots and tables."
 allowed_tolerance = "The pinned emulator outputs are deterministic. Main run metrics use 1% relative tolerance for build-environment drift, and the derived power-failure re-execution percentages allow 0.25 percentage points. Every expected run must be present with a positive cycle count."
 
 [paper]
@@ -39,7 +39,6 @@ profile = "artifact-eval-v1"
 
 [oracle]
 expected_score = 4
-failure_mode = "fail_fast"
 placeholder = false
 
 [oracle.phase_targets]
@@ -53,5 +52,4 @@ source_type = "git"
 url = "https://github.com/TUDSSL/intermittent-risc-v.git"
 ref = "9ff2de3438e27235ed8b521a8ce150399b74b2f8"
 requested_ref = "nacho-artifact-release"
-artifact_mode = "hybrid"
-overlay_artifact = true
+artifact_mode = "upstream"

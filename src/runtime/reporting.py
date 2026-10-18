@@ -11,6 +11,7 @@ from constants import (
 	AGENT_SUMMARY_FALLBACK_MAX,
 	INFRA_LOG_BASENAME,
 	LOG_BASENAME_TEMPLATE,
+	MONITOR_DIRNAME,
 	PROGRESS_LOG_BASENAME,
 	PROMPT_BASENAME_TEMPLATE,
 	RENDERED_LOG_BASENAME,
@@ -18,7 +19,7 @@ from constants import (
 	TOOL_OUTPUT_DIRNAME,
 	TRANSCRIPT_BASENAME,
 )
-from models import CaseRunResult, PromptBundle, RunResult
+from models import CaseRunResult, PromptBundle, RunResult, RuntimeInfo
 from utils import safe_name
 
 
@@ -33,6 +34,16 @@ class TaskPaths:
 	infra_log_path: Path
 	progress_log_path: Path
 	tool_output_dir: Path
+
+
+def snapshot_status(runtime: RuntimeInfo) -> str:
+	"""After a failed snapshot, whether the agent's container survived to retry it."""
+	if runtime.container_removed or runtime.container_id is None:
+		return "failed; the container was removed"
+	return (
+		f"failed; container `{runtime.container_id}` was kept "
+		f"(retry: `docker commit {runtime.container_id} <tag>`)"
+	)
 
 
 def task_paths_for(output_dir: Path, safe_id: str) -> TaskPaths:
@@ -57,6 +68,10 @@ def case_output_dir(case_id: str, *, root: Path, explicit: Path | None = None) -
 		out = (root / safe_name(case_id) / stamp).resolve()
 	out.mkdir(parents=True, exist_ok=True)
 	return out
+
+
+def monitor_trace_dir(case_id: str, *, root: Path, run_token: str) -> Path:
+	return (root / safe_name(case_id) / MONITOR_DIRNAME / run_token).resolve()
 
 
 def write_prompt_file(prompt_path: Path, prompt_bundle: PromptBundle) -> None:
@@ -126,11 +141,41 @@ def write_task_report(report_path: Path, result: RunResult, agent_summary: str) 
 		f"- Container ID: `{runtime.container_id}`",
 		f"- Saved image: `{runtime.saved_image}`",
 		f"- Container stopped: `{runtime.container_stopped}`",
-		f"- Agent driver: `{result.agent_kind}`",
+		*([f"- Snapshot: {snapshot_status(runtime)}"] if runtime.snapshot_failed else []),
+		f"- Agent harness: `{result.agent_kind}`",
 		f"- Agent model: `{result.agent.model}`",
+		f"- Agent reasoning effort: `{result.agent.reasoning_effort or 'default'}`",
 		f"- Agent exit code: `{result.agent.exit_code}`",
 		f"- Agent messages: `{result.agent.message_count}`",
 	]
+	tracked = result.command_monitor.tracked_files if result.command_monitor else None
+	if tracked is not None:
+		lines.extend(
+			[
+				"",
+				"## Artifact Files",
+				"",
+				f"- Tracked: `{tracked.tracked}`",
+				f"- Modified: `{tracked.modified_count}`",
+				f"- Deleted: `{tracked.deleted_count}`",
+				f"- Mode changed: `{tracked.mode_changed_count}`",
+				f"- Diff: `{tracked.diff_path}`",
+			]
+		)
+	system = result.command_monitor.system_files if result.command_monitor else None
+	if system is not None:
+		lines.extend(
+			[
+				"",
+				"## Container System Files",
+				"",
+				f"- Changed paths: `{system.changed}`",
+				f"- Executables: `{system.executables_count}`",
+				f"- Python startup hooks: `{system.python_startup_count}`",
+				f"- /etc: `{system.etc_count}`",
+				f"- Diff: `{system.diff_path}`",
+			]
+		)
 	if result.error:
 		lines.extend(["", "## Error", "", result.error])
 	lines.extend(["", "## Agent Summary", "", agent_summary])

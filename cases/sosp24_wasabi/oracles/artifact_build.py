@@ -6,11 +6,10 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from evaluator.oracles.utils import Checkable
-
-from evaluator.oracles import utils
-from evaluator.oracles.discovery import artifact_build
+from evaluator.oracles import CaseOracleArtifactBuildBase
+from evaluator.oracles import reporting
 from evaluator.oracles.oracle_checks_runtime import OraclePath, RuntimeCheckExecutor, RuntimePath
+from evaluator.oracles.reporting import BaseCheck
 from models import OracleInput
 
 _PRIMARY_ARTIFACT = "edu.uchicago.cs.systems:wasabi"
@@ -143,8 +142,7 @@ def _repo_path(
 	)
 
 
-@artifact_build
-def oracle_artifact_build(context: OracleInput) -> Sequence[Checkable]:
+def oracle_artifact_build(context: OracleInput) -> Sequence[BaseCheck]:
 	repo_root = context.workspace_dir
 	cache: dict[str, list[dict[str, Any]]] = {}
 
@@ -204,18 +202,18 @@ def oracle_artifact_build(context: OracleInput) -> Sequence[Checkable]:
 		cache["modules"] = parsed_modules
 		return parsed_modules
 
-	def _check_build_inputs(executor: RuntimeCheckExecutor) -> utils.CheckResult:
+	def _check_build_inputs(executor: RuntimeCheckExecutor) -> reporting.CheckResult:
 		try:
 			_load_modules(executor)
 		except ValueError as exc:
-			return utils.CheckResult.failure(str(exc))
-		return utils.CheckResult.success(f"loaded Maven module metadata under {repo_root}")
+			return reporting.CheckResult.failure(str(exc))
+		return reporting.CheckResult.success(f"loaded Maven module metadata under {repo_root}")
 
-	def _check_primary_module_artifact(executor: RuntimeCheckExecutor) -> utils.CheckResult:
+	def _check_primary_module_artifact(executor: RuntimeCheckExecutor) -> reporting.CheckResult:
 		try:
 			modules = _load_modules(executor)
 		except ValueError as exc:
-			return utils.CheckResult.failure(str(exc))
+			return reporting.CheckResult.failure(str(exc))
 
 		want_group_id, want_artifact_id = _PRIMARY_ARTIFACT.split(":", 1)
 		chosen: dict[str, Any] | None = None
@@ -227,13 +225,13 @@ def oracle_artifact_build(context: OracleInput) -> Sequence[Checkable]:
 				break
 
 		if chosen is None:
-			return utils.CheckResult.failure(
+			return reporting.CheckResult.failure(
 				f"primary module not found for selector {_PRIMARY_ARTIFACT!r}"
 			)
 
 		packaging = str(chosen.get("packaging") or "jar").strip()
 		if packaging == "pom":
-			return utils.CheckResult.failure("primary module resolved to packaging=pom")
+			return reporting.CheckResult.failure("primary module resolved to packaging=pom")
 
 		group_id = str(chosen["groupId"]).strip()
 		artifact_id = str(chosen["artifactId"]).strip()
@@ -250,26 +248,31 @@ def oracle_artifact_build(context: OracleInput) -> Sequence[Checkable]:
 			executor=executor,
 		)
 		if built is None or installed is None:
-			return utils.CheckResult.failure("missing built jar and/or installed artifact")
+			return reporting.CheckResult.failure("missing built jar and/or installed artifact")
 
 		built_sha = _sha256(built, executor=executor)
 		installed_sha = _sha256(installed, executor=executor)
 		if built_sha != installed_sha:
-			return utils.CheckResult.failure(
+			return reporting.CheckResult.failure(
 				"primary artifact mismatch: target jar does not match local Maven repo jar"
 			)
 
-		return utils.CheckResult.success(
+		return reporting.CheckResult.success(
 			f"primary module artifact matches local Maven repository: {artifact_id}-{version}"
 		)
 
 	return (
-		utils.Check(
+		reporting.Check(
 			name="build_inputs",
 			fn=_check_build_inputs,
 		),
-		utils.Check(
+		reporting.Check(
 			name="primary_module_artifact",
 			fn=_check_primary_module_artifact,
 		),
 	)
+
+
+class OracleArtifactBuild(CaseOracleArtifactBuildBase):
+	def requirements(self) -> Sequence[BaseCheck]:
+		return oracle_artifact_build(self.context)

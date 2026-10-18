@@ -2,7 +2,7 @@ id = "asplos25_herbie"
 
 [case_brief]
 core_claim = "Build Herbie, run the floating-point accuracy benchmarks, and reproduce the end-to-end error improvements reported in the paper."
-acceptable_evidence = "The oracle accepts a results.json whose test entries show Herbie reduces floating-point error (end ≤ start), whose benchmark count matches the reference, and whose start/end error distributions correlate with bundled reference data."
+acceptable_evidence = "The oracle accepts a results.json whose test entries show Herbie reduces floating-point error (end ≤ start), whose benchmark count matches the reference, and whose start/end error distributions correlate with the oracle's reference data."
 allowed_tolerance = "Results may vary across environments but must preserve the reference trend."
 
 [paper]
@@ -30,7 +30,6 @@ profile = "artifact-eval-v1"
 expected_score = 4
 phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
 score_mode = "phase_count"
-failure_mode = "fail_fast"
 placeholder = false
 
 [upstream]

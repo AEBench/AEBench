@@ -1,6 +1,8 @@
 # cases/<case>/artifact
 cases/*/artifact/
 
+.eval-tools/
+
 
 # Python bytecode / caches
 __pycache__/
@@ -105,6 +107,7 @@ agent-work/
 agent_logs/
 agent_logs*/
 .agent_logs/
+.trace-site/
 .agent_state/
 .agent_cache/
 .agent_history/
@@ -116,3 +119,6 @@ AGENT_SCRATCH.md
 TODO.agent.md
 *.agent.md
 *.scratch.md
+
+# Rust shim build output
+src/runtime/shim/target/
