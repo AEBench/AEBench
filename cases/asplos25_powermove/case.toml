@@ -55,5 +55,5 @@ source_type = "git"
 url = "https://github.com/Scarlett0815/PowerMove.git"
 ref = "5918ada6a19a0824ec8f3dd65344344d8bb3cb21"
 requested_ref = "main"
-artifact_mode = "hybrid"
+artifact_mode = "overlay"
 overlay_artifact = true
