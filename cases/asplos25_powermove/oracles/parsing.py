@@ -264,6 +264,9 @@ class PowerMoveEvaluationCheck(BaseCheck):
 		enola_execution = qaoa["enola"]["transfer_duration"] + qaoa["enola"]["move_duration"]
 		if powermove_execution >= enola_execution:
 			errors.append("qaoa_regular3_30: continuous router did not reduce execution time")
+		# Wall-clock seconds are machine-dependent, so compare against Enola from the same run.
+		if qaoa["non_storage"]["compile_seconds"] >= qaoa["enola"]["compile_seconds"]:
+			errors.append("qaoa_regular3_30: PowerMove did not compile faster than Enola")
 
 		if errors:
 			return CheckResult.failure("PowerMove claim mismatch: " + "; ".join(errors))
