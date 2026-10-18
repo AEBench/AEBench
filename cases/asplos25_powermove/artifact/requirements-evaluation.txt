@@ -1,4 +1,0 @@
-matplotlib>=3.7
-networkx>=3.0
-numpy<2
-qiskit==1.2.4
