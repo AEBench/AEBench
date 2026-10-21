@@ -42,7 +42,8 @@ def snapshot_status(runtime: RuntimeInfo) -> str:
 		return "failed; the container was removed"
 	return (
 		f"failed; container `{runtime.container_id}` was kept "
-		f"(retry: `docker commit {runtime.container_id} <tag>`)"
+		f"(retry: `docker commit {runtime.container_id} <tag>`, "
+		f"then remove it: `docker rm {runtime.container_id}`)"
 	)
 
 
