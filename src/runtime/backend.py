@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -11,7 +12,7 @@ import subprocess
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Protocol
 
 from constants import DEFAULT_ORACLE_CHECK_TIMEOUT
@@ -334,10 +335,15 @@ class DockerRuntime:
 				)
 			return result.stdout.strip()
 
-		# Files copied into a declared volume would not be committed.
+		# Files copied into a declared volume, or under one, would not be committed.
 		volumes = docker("image", "inspect", "--format", "{{json .Config.Volumes}}", tag)
-		if f'"{session.runtime_workspace}"' in volumes:
-			raise RuntimeError(f"the image declares {session.runtime_workspace} as a volume")
+		workspace = PurePosixPath(session.runtime_workspace)
+		for volume in json.loads(volumes) or {}:
+			path = PurePosixPath(volume)
+			if path == workspace or path in workspace.parents or workspace in path.parents:
+				raise RuntimeError(
+					f"the image declares {volume} as a volume, which overlaps {workspace}"
+				)
 
 		container = docker("create", tag)
 		try:
@@ -373,7 +379,11 @@ class DockerRuntime:
 
 	def cleanup(self, session: RunSession) -> None:
 		target = self.container_id or self.container_name
-		if target:
+		if self.snapshot_failed and self.container_id is not None:
+			# Nothing else holds the environment the agent built, so keep the container
+			# for the commit to be retried.
+			logger.warning("keeping container %s after the failed snapshot", self.container_id)
+		elif target:
 			if self.container_id is not None:
 				self.last_container_id = self.container_id
 			result = subprocess.run(
