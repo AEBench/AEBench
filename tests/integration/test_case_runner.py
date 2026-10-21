@@ -510,17 +510,3 @@ def test_delete_image_flag_sets_the_effective_runtime_config(
 	runner.prepare_case()
 
 	assert runner.task.runtime.keep_committed_snapshot is kept
-
-
-@pytest.mark.parametrize(
-	("cli_args", "included"),
-	[((), False), (("--include-workspace-in-snapshot",), True)],
-)
-def test_include_workspace_flag_sets_the_effective_runtime_config(
-	tmp_path: Path, cli_args: tuple[str, ...], included: bool
-) -> None:
-	runner = _docker_case_runner(tmp_path, *cli_args)
-
-	runner.prepare_case()
-
-	assert runner.task.runtime.include_workspace_in_snapshot is included

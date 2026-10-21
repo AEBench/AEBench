@@ -467,7 +467,9 @@ def test_docker_stop_preserves_container_until_cleanup(
 		task_id="test",
 		run_spec=TaskConfig(
 			id="test",
-			runtime=RuntimeConfig(mode="docker", keep_committed_snapshot=False),
+			runtime=RuntimeConfig(
+				mode="docker", keep_committed_snapshot=False, include_workspace_in_snapshot=False
+			),
 		),
 	)
 
