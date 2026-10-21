@@ -99,7 +99,6 @@ def test_snapshot_can_include_the_workspace(tmp_path: Path) -> None:
 		runtime=RuntimeConfig(
 			mode=RuntimeMode.DOCKER,
 			image=_IMAGE,
-			include_workspace_in_snapshot=True,
 		),
 	)
 	session = SimpleNamespace(

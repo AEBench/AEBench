@@ -113,7 +113,11 @@ def test_snapshot_timeout_is_passed_to_docker_commit(
 	runtime = _stopped_container()
 
 	tag = runtime.snapshot(
-		_session(RuntimeConfig(mode="docker", snapshot_timeout_seconds=timeout))  # type: ignore[arg-type]
+		_session(
+			RuntimeConfig(
+				mode="docker", snapshot_timeout_seconds=timeout, include_workspace_in_snapshot=False
+			)
+		)  # type: ignore[arg-type]
 	)
 
 	assert calls == [(["docker", "commit", "container-id", tag], calls[0][1])]
@@ -123,7 +127,7 @@ def test_snapshot_timeout_is_passed_to_docker_commit(
 def test_successful_snapshot_is_kept_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
 	calls = _fake_docker(monkeypatch)
 	runtime = _stopped_container()
-	session = _session(RuntimeConfig(mode="docker"))
+	session = _session(RuntimeConfig(mode="docker", include_workspace_in_snapshot=False))
 
 	tag = runtime.snapshot(session)  # type: ignore[arg-type]
 	runtime.cleanup(session)  # type: ignore[arg-type]
@@ -146,7 +150,11 @@ def test_deleting_the_image_removes_the_committed_snapshot(
 	calls = _fake_docker(monkeypatch)
 	runtime = _stopped_container()
 	# What --delete-image applies to the case's runtime configuration.
-	session = _session(RuntimeConfig(mode="docker", keep_committed_snapshot=False))
+	session = _session(
+		RuntimeConfig(
+			mode="docker", keep_committed_snapshot=False, include_workspace_in_snapshot=False
+		)
+	)
 
 	tag = runtime.snapshot(session)  # type: ignore[arg-type]
 	runtime.cleanup(session)  # type: ignore[arg-type]
@@ -162,7 +170,11 @@ def test_deleting_the_image_removes_the_committed_snapshot(
 def test_failed_snapshot_leaves_no_image_to_delete(monkeypatch: pytest.MonkeyPatch) -> None:
 	calls = _fake_docker(monkeypatch, commit_returncode=1)
 	runtime = _stopped_container()
-	session = _session(RuntimeConfig(mode="docker", keep_committed_snapshot=False))
+	session = _session(
+		RuntimeConfig(
+			mode="docker", keep_committed_snapshot=False, include_workspace_in_snapshot=False
+		)
+	)
 
 	with pytest.raises(RuntimeError, match="docker commit failed"):
 		runtime.snapshot(session)  # type: ignore[arg-type]
@@ -214,14 +226,25 @@ def test_snapshot_status_names_a_kept_container_and_how_to_retry() -> None:
 	)
 
 
-def test_workspace_is_left_out_of_the_snapshot_by_default() -> None:
-	assert RuntimeConfig(mode="docker").include_workspace_in_snapshot is False
+def test_workspace_is_copied_into_the_snapshot_by_default() -> None:
+	assert RuntimeConfig(mode="docker").include_workspace_in_snapshot is True
+
+
+def test_workspace_copy_can_be_turned_off(monkeypatch: pytest.MonkeyPatch) -> None:
+	calls = _fake_docker(monkeypatch)
+	runtime = _stopped_container()
+	session = _session(RuntimeConfig(mode="docker", include_workspace_in_snapshot=False))
+
+	runtime.snapshot(session)  # type: ignore[arg-type]
+
+	assert [cmd[1] for cmd, _ in calls] == ["commit"]
+	assert runtime.workspace_in_snapshot is False
 
 
 def test_workspace_is_copied_into_the_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
 	calls = _fake_docker(monkeypatch)
 	runtime = _stopped_container()
-	session = _session(RuntimeConfig(mode="docker", include_workspace_in_snapshot=True))
+	session = _session(RuntimeConfig(mode="docker"))
 
 	tag = runtime.snapshot(session)  # type: ignore[arg-type]
 
@@ -241,7 +264,7 @@ def test_workspace_is_copied_into_the_snapshot(monkeypatch: pytest.MonkeyPatch) 
 def test_failed_workspace_copy_keeps_the_plain_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
 	calls = _fake_docker(monkeypatch, failing="cp")
 	runtime = _stopped_container()
-	session = _session(RuntimeConfig(mode="docker", include_workspace_in_snapshot=True))
+	session = _session(RuntimeConfig(mode="docker"))
 
 	tag = runtime.snapshot(session)  # type: ignore[arg-type]
 
@@ -256,7 +279,7 @@ def test_failed_workspace_copy_keeps_the_plain_snapshot(monkeypatch: pytest.Monk
 def test_workspace_declared_as_a_volume_is_not_copied(monkeypatch: pytest.MonkeyPatch) -> None:
 	calls = _fake_docker(monkeypatch, volumes='{"/repo":{}}')
 	runtime = _stopped_container()
-	session = _session(RuntimeConfig(mode="docker", include_workspace_in_snapshot=True))
+	session = _session(RuntimeConfig(mode="docker"))
 
 	runtime.snapshot(session)  # type: ignore[arg-type]
 
