@@ -118,8 +118,6 @@ class _CaseRunner:
 
 		if self.options.delete_image:
 			self.task.runtime.keep_committed_snapshot = False
-		if self.options.include_workspace_in_snapshot:
-			self.task.runtime.include_workspace_in_snapshot = True
 
 		self.agent = _agent_name(self.options)
 		self.model = _model_name(self.options)

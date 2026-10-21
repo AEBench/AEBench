@@ -134,11 +134,6 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
 		action="store_true",
 		help="Delete the post-agent Docker snapshot after the run (kept by default).",
 	)
-	parser.add_argument(
-		"--include-workspace-in-snapshot",
-		action="store_true",
-		help="Copy the workspace into the post-agent Docker snapshot so it can be inspected later.",
-	)
 	parser.add_argument("--prompt-profile", default=None)
 	parser.add_argument("--prompt-append", default=None)
 	_add_oracle_options(parser)
@@ -454,7 +449,6 @@ def _run_options(args: argparse.Namespace) -> RunOptions:
 		prompt_append=getattr(args, "prompt_append", None),
 		cleanup_workspace=bool(getattr(args, "cleanup_workspace", False)),
 		delete_image=bool(getattr(args, "delete_image", False)),
-		include_workspace_in_snapshot=bool(getattr(args, "include_workspace_in_snapshot", False)),
 		skip_incompatible=bool(getattr(args, "skip_incompatible", False)),
 		monitor_commands=bool(getattr(args, "monitor_commands", False)) or trajectory_audit,
 		monitor_socket_root=getattr(args, "socket_dir", None),

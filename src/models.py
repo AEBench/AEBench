@@ -162,7 +162,7 @@ class RuntimeConfig(_Model):
 	commit_before_oracle: bool = True
 	keep_committed_snapshot: bool = True
 	# Also copy the bind-mounted workspace into the snapshot, so it can be inspected later.
-	include_workspace_in_snapshot: bool = False
+	include_workspace_in_snapshot: bool = True
 	snapshot_timeout_seconds: float = 3600.0
 
 	@model_validator(mode="after")
@@ -415,7 +415,6 @@ class RunOptions(_Model):
 	prompt_append: str | None = None
 	cleanup_workspace: bool = False
 	delete_image: bool = False
-	include_workspace_in_snapshot: bool = False
 	skip_incompatible: bool = False
 	monitor_commands: bool = False
 	monitor_socket_root: str | None = None
