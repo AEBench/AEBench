@@ -87,6 +87,90 @@ def test_stopped_container_can_be_committed_for_detached_scoring(tmp_path: Path)
 			)
 
 
+def test_snapshot_can_include_the_workspace(tmp_path: Path) -> None:
+	_require_docker_image()
+
+	workspace = tmp_path / "workspace"
+	agent_support_dir = tmp_path / "agent-support"
+	workspace.mkdir()
+	agent_support_dir.mkdir()
+	task = TaskConfig(
+		id="docker-workspace-snapshot-test",
+		runtime=RuntimeConfig(
+			mode=RuntimeMode.DOCKER,
+			image=_IMAGE,
+			include_workspace_in_snapshot=True,
+		),
+	)
+	session = SimpleNamespace(
+		task_id=task.id,
+		run_spec=task,
+		settings=SimpleNamespace(default_docker_image=_IMAGE),
+		host_workspace=workspace,
+		runtime_workspace="/repo",
+		host_refs=None,
+		host_agent_support_dir=agent_support_dir,
+		runtime_agent_support_dir="/run/aebench-agent",
+		runtime_agent_user="agent",
+		runtime_agent_home="/home/agent",
+		host_command_socket_dir=None,
+		runtime_command_socket_dir=None,
+	)
+	runtime = DockerRuntime(image=_IMAGE)
+	saved_image: str | None = None
+
+	try:
+		runtime.prepare(session)  # type: ignore[arg-type]
+		result = runtime.run_process(
+			["sh", "-c", "mkdir -p results && printf done > results/out.txt"]
+		)
+		assert result.returncode == 0
+
+		runtime.stop(session)  # type: ignore[arg-type]
+		saved_image = runtime.snapshot(session)  # type: ignore[arg-type]
+		assert saved_image is not None
+		assert runtime.workspace_in_snapshot is True
+
+		probe = subprocess.run(
+			["docker", "run", "--rm", saved_image, "cat", "/repo/results/out.txt"],
+			capture_output=True,
+			text=True,
+			check=False,
+		)
+		assert probe.returncode == 0
+		assert probe.stdout == "done"
+
+		# The oracle mounts the host workspace over the copy, so it sees only the mount.
+		(tmp_path / "empty").mkdir()
+		hidden = subprocess.run(
+			[
+				"docker",
+				"run",
+				"--rm",
+				"-v",
+				f"{tmp_path / 'empty'}:/repo",
+				saved_image,
+				"ls",
+				"-A",
+				"/repo",
+			],
+			capture_output=True,
+			text=True,
+			check=False,
+		)
+		assert hidden.returncode == 0
+		assert hidden.stdout == ""
+	finally:
+		runtime.cleanup(session)  # type: ignore[arg-type]
+		if saved_image is not None:
+			subprocess.run(
+				["docker", "rmi", "-f", saved_image],
+				capture_output=True,
+				text=True,
+				check=False,
+			)
+
+
 def test_task_oracle_uses_agent_home_from_saved_runtime(tmp_path: Path) -> None:
 	_require_docker_image()
 
