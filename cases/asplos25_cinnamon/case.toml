@@ -12,20 +12,36 @@ id = "asplos25_cinnamon"
 path = "README.md"
 
 [run.runtime]
-mode = "local"
+mode = "docker"
+image = "aebench-agent:latest"
 timeout_ms = 172800000      
 gpu = false
 interactive = false
+snapshot_timeout_seconds = 1800
+
+[run.artifact_requirements]
+docker = true
+compose = false
 
 [run.prompt]
 profile = "artifact-eval-v1"
+append = """
+Evaluator requirement: Do not execute the final 'docker stop cinnamon' instruction. After all builds, simulations, output validation, and other work are complete, leave the container named 'cinnamon' running. Do not stop, kill, remove, rename, or replace it. The post-run evaluator must inspect that running container, its output mount, scripts, and built libcinnamon.so.
+"""
 
 [oracle]
 expected_score = 4
 phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
 score_mode = "phase_count"
 
+[oracle.phase_targets]
+env_setup = "local"
+artifact_build = "local"
+benchmark_prep = "local"
+experiment_runs = "local"
+
 [upstream]
+artifact_mode = "upstream"
 source_type = "git"
 url = "https://github.com/sidjay10/asplos25_cinnamon_artifact.git"
 ref = "07db6d58e438518e99ca5ec68f0320bbf83f4077" 
