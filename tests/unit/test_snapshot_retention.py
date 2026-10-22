@@ -19,6 +19,7 @@ def _session(runtime: RuntimeConfig) -> SimpleNamespace:
 	return SimpleNamespace(
 		task_id="test",
 		run_spec=TaskConfig(id="test", runtime=runtime),
+		host_workspace=Path("/host/workspace"),
 		runtime_workspace="/repo",
 		runtime_agent_user="agent",
 		runtime_agent_home="/home/agent",
@@ -26,14 +27,21 @@ def _session(runtime: RuntimeConfig) -> SimpleNamespace:
 
 
 def _fake_docker(
-	monkeypatch: pytest.MonkeyPatch, *, commit_returncode: int = 0
+	monkeypatch: pytest.MonkeyPatch,
+	*,
+	commit_returncode: int = 0,
+	failing: str | None = None,
+	volumes: str = "null",
 ) -> list[tuple[list[str], dict[str, object]]]:
 	calls: list[tuple[list[str], dict[str, object]]] = []
+	stdout = {"create": "copy-id\n", "image": volumes}
 
 	def run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
 		calls.append((cmd, kwargs))
 		returncode = commit_returncode if cmd[:2] == ["docker", "commit"] else 0
-		return subprocess.CompletedProcess(cmd, returncode, "", "commit failed")
+		if cmd[1] == failing:
+			returncode = 1
+		return subprocess.CompletedProcess(cmd, returncode, stdout.get(cmd[1], ""), "failed")
 
 	monkeypatch.setattr(subprocess, "run", run)
 	return calls
@@ -105,7 +113,11 @@ def test_snapshot_timeout_is_passed_to_docker_commit(
 	runtime = _stopped_container()
 
 	tag = runtime.snapshot(
-		_session(RuntimeConfig(mode="docker", snapshot_timeout_seconds=timeout))  # type: ignore[arg-type]
+		_session(
+			RuntimeConfig(
+				mode="docker", snapshot_timeout_seconds=timeout, include_workspace_in_snapshot=False
+			)
+		)  # type: ignore[arg-type]
 	)
 
 	assert calls == [(["docker", "commit", "container-id", tag], calls[0][1])]
@@ -115,7 +127,7 @@ def test_snapshot_timeout_is_passed_to_docker_commit(
 def test_successful_snapshot_is_kept_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
 	calls = _fake_docker(monkeypatch)
 	runtime = _stopped_container()
-	session = _session(RuntimeConfig(mode="docker"))
+	session = _session(RuntimeConfig(mode="docker", include_workspace_in_snapshot=False))
 
 	tag = runtime.snapshot(session)  # type: ignore[arg-type]
 	runtime.cleanup(session)  # type: ignore[arg-type]
@@ -138,7 +150,11 @@ def test_deleting_the_image_removes_the_committed_snapshot(
 	calls = _fake_docker(monkeypatch)
 	runtime = _stopped_container()
 	# What --delete-image applies to the case's runtime configuration.
-	session = _session(RuntimeConfig(mode="docker", keep_committed_snapshot=False))
+	session = _session(
+		RuntimeConfig(
+			mode="docker", keep_committed_snapshot=False, include_workspace_in_snapshot=False
+		)
+	)
 
 	tag = runtime.snapshot(session)  # type: ignore[arg-type]
 	runtime.cleanup(session)  # type: ignore[arg-type]
@@ -154,14 +170,18 @@ def test_deleting_the_image_removes_the_committed_snapshot(
 def test_failed_snapshot_leaves_no_image_to_delete(monkeypatch: pytest.MonkeyPatch) -> None:
 	calls = _fake_docker(monkeypatch, commit_returncode=1)
 	runtime = _stopped_container()
-	session = _session(RuntimeConfig(mode="docker", keep_committed_snapshot=False))
+	session = _session(
+		RuntimeConfig(
+			mode="docker", keep_committed_snapshot=False, include_workspace_in_snapshot=False
+		)
+	)
 
 	with pytest.raises(RuntimeError, match="docker commit failed"):
 		runtime.snapshot(session)  # type: ignore[arg-type]
 	runtime.cleanup(session)  # type: ignore[arg-type]
 
-	# Cleanup is otherwise unchanged: the container is removed, and no rmi is attempted.
-	assert [cmd[:2] for cmd, _ in calls] == [["docker", "commit"], ["docker", "rm"]]
+	# The container is kept to retry the commit, and no rmi is attempted.
+	assert [cmd[:2] for cmd, _ in calls] == [["docker", "commit"]]
 	assert runtime.saved_image is None
 
 
@@ -179,9 +199,11 @@ def test_failed_snapshot_is_recorded_in_the_runtime_result(
 	result = runtime.runtime_result(session)  # type: ignore[arg-type]
 	assert result.snapshot_failed is True
 	assert result.container_id == "container-id"
-	# Cleanup still removes the container after a failed snapshot.
-	assert result.container_removed is True
-	assert snapshot_status(result) == "failed; the container was removed"
+	assert result.container_removed is False
+	assert snapshot_status(result) == (
+		"failed; container `container-id` was kept (retry: `docker commit container-id <tag>`, "
+		"then remove it: `docker rm container-id`)"
+	)
 
 
 def test_timed_out_snapshot_is_recorded_as_failed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -202,5 +224,91 @@ def test_snapshot_status_names_a_kept_container_and_how_to_retry() -> None:
 	kept = RuntimeInfo(mode=RuntimeMode.DOCKER, container_id="abc123", snapshot_failed=True)
 
 	assert snapshot_status(kept) == (
-		"failed; container `abc123` was kept (retry: `docker commit abc123 <tag>`)"
+		"failed; container `abc123` was kept (retry: `docker commit abc123 <tag>`, "
+		"then remove it: `docker rm abc123`)"
 	)
+
+
+def test_snapshot_status_says_when_the_container_was_removed() -> None:
+	removed = RuntimeInfo(
+		mode=RuntimeMode.DOCKER,
+		container_id="abc123",
+		container_removed=True,
+		snapshot_failed=True,
+	)
+
+	assert snapshot_status(removed) == "failed; the container was removed"
+
+
+def test_workspace_is_copied_into_the_snapshot_by_default() -> None:
+	assert RuntimeConfig(mode="docker").include_workspace_in_snapshot is True
+
+
+def test_workspace_copy_can_be_turned_off(monkeypatch: pytest.MonkeyPatch) -> None:
+	calls = _fake_docker(monkeypatch)
+	runtime = _stopped_container()
+	session = _session(RuntimeConfig(mode="docker", include_workspace_in_snapshot=False))
+
+	runtime.snapshot(session)  # type: ignore[arg-type]
+
+	assert [cmd[1] for cmd, _ in calls] == ["commit"]
+	assert runtime.workspace_in_snapshot is False
+
+
+def test_workspace_is_copied_into_the_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
+	calls = _fake_docker(monkeypatch)
+	runtime = _stopped_container()
+	session = _session(RuntimeConfig(mode="docker"))
+
+	tag = runtime.snapshot(session)  # type: ignore[arg-type]
+
+	assert [cmd for cmd, _ in calls] == [
+		["docker", "commit", "container-id", tag],
+		["docker", "image", "inspect", "--format", "{{json .Config.Volumes}}", tag],
+		["docker", "create", tag],
+		["docker", "cp", "-a", "/host/workspace/.", "copy-id:/repo"],
+		["docker", "commit", "copy-id", tag],
+		["docker", "rm", "-f", "copy-id"],
+	]
+	result = runtime.runtime_result(session)  # type: ignore[arg-type]
+	assert result.saved_image == tag
+	assert result.workspace_in_snapshot is True
+
+
+def test_failed_workspace_copy_keeps_the_plain_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
+	calls = _fake_docker(monkeypatch, failing="cp")
+	runtime = _stopped_container()
+	session = _session(RuntimeConfig(mode="docker"))
+
+	tag = runtime.snapshot(session)  # type: ignore[arg-type]
+
+	# The copy is not committed over the tag, and the temporary container is removed.
+	assert [cmd[:3] for cmd, _ in calls][-2:] == [["docker", "cp", "-a"], ["docker", "rm", "-f"]]
+	result = runtime.runtime_result(session)  # type: ignore[arg-type]
+	assert result.saved_image == tag
+	assert result.snapshot_failed is False
+	assert result.workspace_in_snapshot is False
+
+
+@pytest.mark.parametrize("volume", ["/repo", "/repo/data", "/"])
+def test_volume_overlapping_the_workspace_is_not_copied(
+	monkeypatch: pytest.MonkeyPatch, volume: str
+) -> None:
+	calls = _fake_docker(monkeypatch, volumes=f'{{"{volume}":{{}}}}')
+	runtime = _stopped_container()
+	session = _session(RuntimeConfig(mode="docker"))
+
+	runtime.snapshot(session)  # type: ignore[arg-type]
+
+	assert [cmd[1] for cmd, _ in calls] == ["commit", "image"]
+	assert runtime.workspace_in_snapshot is False
+
+
+def test_volume_beside_the_workspace_is_still_copied(monkeypatch: pytest.MonkeyPatch) -> None:
+	_fake_docker(monkeypatch, volumes='{"/var/lib/data":{},"/repository":{}}')
+	runtime = _stopped_container()
+	session = _session(RuntimeConfig(mode="docker"))
+
+	runtime.snapshot(session)  # type: ignore[arg-type]
+
+	assert runtime.workspace_in_snapshot is True

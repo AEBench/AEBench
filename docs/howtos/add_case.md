@@ -71,6 +71,7 @@ gpu = false
 interactive = false
 commit_before_oracle = true
 keep_committed_snapshot = true
+include_workspace_in_snapshot = true
 snapshot_timeout_seconds = 3600.0
 
 [run.artifact_requirements]

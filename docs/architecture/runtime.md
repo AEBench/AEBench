@@ -104,6 +104,10 @@ Read the trace as a record of shell invocations, not of every command:
 
 For Docker runs, AEBench stops the agent container and commits its filesystem changes when `commit_before_oracle = true`. It then passes the committed image and host workspace to the oracle runtime registry. The `task` oracle target starts from the committed image. It does not share the agent process tree. Local targets and targets defined in `case.toml` use the evaluator target registry.
 
+The workspace is a bind mount, so `docker commit` leaves it out of the image. By default (`include_workspace_in_snapshot = true` under `[run.runtime]`), AEBench also copies the host workspace into the committed image at the workspace mount path, before the oracle runs, so the image can be reopened later without the host directory: `docker run --rm -it --entrypoint bash <saved image>`. The oracle still mounts the host workspace over that copy, so what it sees is unchanged. The copy costs one full write of the workspace into Docker's storage. If it fails, or if the image declares a volume at, above or inside the workspace path (Docker would leave those files out), the run keeps the snapshot without the workspace and logs a warning.
+
+If `docker commit` itself fails or times out, AEBench keeps the stopped agent container and prints its ID with the commands to retry the commit and to remove the container afterwards. It also keeps the host workspace, even with `--cleanup-workspace`, because the container does not hold the bind-mounted workspace.
+
 The oracle still runs after the agent exits with a nonzero status or reaches its time limit. The agent result records that status. The oracle scores the evidence in the final workspace.
 
 ## Credentials
