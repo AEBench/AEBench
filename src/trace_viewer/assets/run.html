@@ -110,6 +110,16 @@
           </svg>
           <span>Run trace</span>
         </button>
+        <button class="tab-btn" data-tab="visualize" role="tab">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="18" cy="5" r="3"></circle>
+            <circle cx="6" cy="12" r="3"></circle>
+            <circle cx="18" cy="19" r="3"></circle>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+          </svg>
+          <span>Visualize</span>
+        </button>
         <button class="tab-btn" data-tab="oracle" role="tab">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <line x1="12" y1="3" x2="12" y2="20"></line>
@@ -162,6 +172,29 @@
         <div id="trace"></div>
       </section>
 
+      <section id="section-visualize" class="section">
+        <header class="visualize-toolbar">
+          <div class="visualize-toolbar-summary" id="graph-stats-summary">
+            <span>Loading graph topology…</span>
+          </div>
+          <div class="visualize-toolbar-actions">
+            <button type="button" id="graph-btn-loops" class="btn btn-secondary btn-small" title="Filter to loop & backtrack edges only">Loops only</button>
+            <button type="button" id="graph-btn-lowsignal" class="btn btn-secondary btn-small" title="Hide simple navigation commands (pwd, whoami)">Hide low-signal</button>
+            <div class="zoom-controls">
+              <button type="button" id="graph-btn-zoomin" class="btn btn-icon btn-small" title="Zoom in">+</button>
+              <button type="button" id="graph-btn-zoomout" class="btn btn-icon btn-small" title="Zoom out">−</button>
+              <button type="button" id="graph-btn-fit" class="btn btn-secondary btn-small" title="Fit graph to screen">Fit</button>
+            </div>
+          </div>
+        </header>
+        <div class="graph-canvas-container" id="graph-canvas-container">
+          <svg id="graph-svg" class="graph-svg">
+            <g id="graph-viewport"></g>
+          </svg>
+          <aside id="graph-inspector" class="graph-inspector hidden" aria-label="Node inspector drawer"></aside>
+        </div>
+      </section>
+
       <section id="section-oracle" class="section">
         <header class="section-header">
           <p class="muted section-desc">The AEBench oracle scores the final artifact workspace in four phases.</p>
@@ -206,6 +239,8 @@
   <script src="assets/theme.js"></script>
   <script src="assets/tooltip.js"></script>
   <script src="assets/catalog.js"></script>
+  <script src="assets/dagre.min.js"></script>
+  <script src="assets/graph_view.js"></script>
   <script src="assets/run.js"></script>
 </body>
 </html>

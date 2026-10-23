@@ -85,6 +85,7 @@ async function load() {
     renderMiniCharts();
     renderMiniTokens();
     setupTabs();
+    setupGraphView();
     setupCopyId();
     setupSummaryDetails();
     setupTraceControls();
@@ -355,6 +356,25 @@ function updateActionFilterUI() {
   if (els.actionClearBtn) {
     els.actionClearBtn.classList.toggle('hidden', SELECTED_ACTIONS.size === 0);
   }
+  updateGraphActionHighlight();
+}
+
+function updateGraphActionHighlight() {
+  const svg = document.getElementById('graph-svg');
+  if (!svg) return;
+  const nodes = svg.querySelectorAll('.graph-node');
+  const hasFilter = SELECTED_ACTIONS.size > 0;
+  nodes.forEach(el => {
+    if (!hasFilter) {
+      el.classList.remove('filter-dimmed', 'filter-highlighted');
+      return;
+    }
+    const actionClass = [...el.classList].find(c => c.startsWith('node-'));
+    const action = actionClass ? actionClass.replace('node-', '') : '';
+    const match = SELECTED_ACTIONS.has(action);
+    el.classList.toggle('filter-highlighted', match);
+    el.classList.toggle('filter-dimmed', !match);
+  });
 }
 
 function safeReturnUrl() {
@@ -1256,8 +1276,33 @@ function setupTabs() {
     }
     if (name === 'prompt') loadPrompt();
     if (name === 'trace') markClippedOutputs();
+    if (name === 'visualize') {
+      if (window.GraphView) {
+        window.GraphView.renderGraph();
+        requestAnimationFrame(() => window.GraphView.fitToScreen());
+      }
+    }
   }
 }
+
+function setupGraphView() {
+  if (RECORD && RECORD.graph && window.GraphView) {
+    window.GraphView.init(RECORD.graph, RECORD.events);
+  }
+}
+
+window.jumpToTraceTurn = function (turnNum) {
+  const traceBtn = els.tabNav ? els.tabNav.querySelector('.tab-btn[data-tab="trace"]') : null;
+  if (traceBtn) traceBtn.click();
+  requestAnimationFrame(() => {
+    const target = document.getElementById(`turn-${turnNum}`);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('flash-highlight');
+      setTimeout(() => target.classList.remove('flash-highlight'), 2200);
+    }
+  });
+};
 
 function scrollSectionBelowTabs(element) {
   if (!element) return;

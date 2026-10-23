@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .action_mapper import classify_event, compute_action_summary
+from .graph_builder import build_trajectory_graph
 
 RUNNER_LOG = "runner_output.log"
 RUN_RESULT = "result.jsonl"
@@ -305,6 +306,7 @@ def _build_record(
 	total_cost = float(total_cost) if isinstance(total_cost, (int, float)) else None
 	sessions = _sessions(events, model)
 	action_summary = compute_action_summary(events)
+	trajectory_graph = build_trajectory_graph(events, trace_format=trace_format)
 	meta = {
 		"run_id": run_id,
 		"case_id": case_id,
@@ -366,6 +368,7 @@ def _build_record(
 		"session_ids": [session["session_id"] for session in sessions],
 		"num_turns": turn_count,
 		"action_summary": action_summary,
+		"graph_summary": trajectory_graph.stats,
 	}
 	if trace_format == "claude_code":
 		init_raw = _claude_init(events)
@@ -397,6 +400,7 @@ def _build_record(
 		"oracle": _redact_value(oracle, secrets),
 		"prompt": _redact(prompt, secrets),
 		"events": events,
+		"graph": trajectory_graph.to_dict(),
 	}
 
 
@@ -526,6 +530,8 @@ def _copy_assets(output_dir: Path) -> None:
 		"theme.js",
 		"tooltip.js",
 		"styles.css",
+		"dagre.min.js",
+		"graph_view.js",
 	):
 		with asset_root.joinpath(name).open("rb") as source:
 			with (output_assets / name).open("wb") as target:
