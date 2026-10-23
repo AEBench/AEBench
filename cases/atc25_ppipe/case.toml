@@ -22,6 +22,7 @@ mode = "docker"
 timeout_ms = 14400000
 gpu = false
 interactive = false
+snapshot_timeout_seconds = 1800
 
 [run.prompt]
 profile = "artifact-eval-v1"
@@ -41,6 +42,7 @@ benchmark_prep = "task"
 experiment_runs = "task"
 
 [upstream]
+artifact_mode = "upstream"
 source_type = "git"
 url = "https://github.com/JonnyKong/PPipe"
 ref = "03cd8df0f226f204c4795a4edbf9986aaa2fa247"

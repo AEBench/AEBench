@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -11,7 +12,7 @@ import subprocess
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Protocol
 
 from constants import DEFAULT_ORACLE_CHECK_TIMEOUT
@@ -117,6 +118,7 @@ class DockerRuntime:
 	container_stopped: bool = False
 	saved_image: str | None = None
 	snapshot_failed: bool = False
+	workspace_in_snapshot: bool = False
 	path_separator: str = ":"
 
 	def _docker_run_command(self, session: RunSession) -> list[str]:
@@ -309,7 +311,53 @@ class DockerRuntime:
 		self.saved_image = tag
 		self.snapshot_failed = False
 		logger.info("committed docker container %s to %s", self.container_id, tag)
+		if session.run_spec.runtime.include_workspace_in_snapshot:
+			try:
+				self._copy_workspace_into(tag, session)
+			except (RuntimeError, subprocess.TimeoutExpired) as exc:
+				# The snapshot without the workspace is still valid for the oracle.
+				logger.warning("could not add the workspace to %s: %s", tag, exc)
 		return tag
+
+	def _copy_workspace_into(self, tag: str, session: RunSession) -> None:
+		# docker commit leaves out bind mounts, so copy the workspace into a container
+		# created without one and commit it over the same tag. The oracle mounts the host
+		# workspace over this copy, so what it sees is unchanged.
+		timeout = session.run_spec.runtime.snapshot_timeout_seconds
+
+		def docker(*args: str) -> str:
+			result = subprocess.run(
+				["docker", *args], capture_output=True, text=True, timeout=timeout, check=False
+			)
+			if result.returncode != 0:
+				raise RuntimeError(
+					f"docker {args[0]} failed: {(result.stderr or result.stdout).strip()}"
+				)
+			return result.stdout.strip()
+
+		# Files copied into a declared volume, or under one, would not be committed.
+		volumes = docker("image", "inspect", "--format", "{{json .Config.Volumes}}", tag)
+		workspace = PurePosixPath(session.runtime_workspace)
+		for volume in json.loads(volumes) or {}:
+			path = PurePosixPath(volume)
+			if path == workspace or path in workspace.parents or workspace in path.parents:
+				raise RuntimeError(
+					f"the image declares {volume} as a volume, which overlaps {workspace}"
+				)
+
+		container = docker("create", tag)
+		try:
+			docker(
+				"cp",
+				"-a",
+				f"{session.host_workspace}/.",
+				f"{container}:{session.runtime_workspace}",
+			)
+			docker("commit", container, tag)
+		finally:
+			subprocess.run(["docker", "rm", "-f", container], capture_output=True, check=False)
+		self.workspace_in_snapshot = True
+		logger.info("added workspace %s to %s", session.host_workspace, tag)
 
 	def stop(self, session: RunSession) -> None:
 		_ = session
@@ -331,7 +379,11 @@ class DockerRuntime:
 
 	def cleanup(self, session: RunSession) -> None:
 		target = self.container_id or self.container_name
-		if target:
+		if self.snapshot_failed and self.container_id is not None:
+			# Nothing else holds the environment the agent built, so keep the container
+			# for the commit to be retried.
+			logger.warning("keeping container %s after the failed snapshot", self.container_id)
+		elif target:
 			if self.container_id is not None:
 				self.last_container_id = self.container_id
 			result = subprocess.run(
@@ -373,6 +425,7 @@ class DockerRuntime:
 			container_stopped=self.container_stopped or self.container_removed,
 			container_removed=self.container_removed,
 			snapshot_failed=self.snapshot_failed,
+			workspace_in_snapshot=self.workspace_in_snapshot,
 		)
 
 
