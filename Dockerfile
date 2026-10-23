@@ -46,8 +46,8 @@ RUN arch="$(dpkg --print-architecture)" \
  && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 # Install pinned CLI harness versions.
-ARG CLAUDE_CODE_VERSION=2.1.157
-ARG CODEX_VERSION=0.146.0
+ARG CLAUDE_CODE_VERSION=2.1.284
+ARG CODEX_VERSION=0.159.1
 
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
  && apt-get install -y --no-install-recommends nodejs \
