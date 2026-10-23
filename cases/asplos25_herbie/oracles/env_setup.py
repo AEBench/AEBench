@@ -3,39 +3,37 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from evaluator.oracles.bases import CaseOracleEnvSetupBase
-from evaluator.oracles.checks import (
-	PathCheck,
-	PathKind,
-	VersionCheck,
-)
 from evaluator.oracles.reporting import BaseCheck
 
 
 class OracleEnvSetup(CaseOracleEnvSetupBase):
 	def requirements(self) -> Sequence[BaseCheck]:
-		repo_root = self._workspace_dir
-
 		return (
-			VersionCheck(
-				name="racket",
-				cmd=("racket", "--version"),
-				min_version=(8, 0, 0),
+			*(
+				self.version_check(name=tool, cmd=(tool, "--version"), min_version=version)
+				for tool, version in (
+					("racket", (8, 0, 0)),
+					("rustc", (1, 77, 2)),
+					("python3", (3, 10, 0)),
+					("julia", (1, 10, 0)),
+					("clang", (14, 0, 0)),
+					("cmake", (3, 0, 0)),
+					("make", (3, 81, 0)),
+				)
 			),
-			VersionCheck(
-				name="rustc",
-				cmd=("rustc", "--version"),
-				min_version=(1, 60, 0),
-				optional=True,
+			self.command_check(
+				name="python_evaluation_libraries",
+				cmd=("python3", "-c", "import numpy, matplotlib, scipy"),
+				timeout_seconds=30,
 			),
-			VersionCheck(
-				name="make",
-				cmd=("make", "--version"),
-				min_version=(4, 4, 0),
-				version_regex=r"GNU Make\s+([0-9]+(?:\.[0-9]+){1,2})",
-			),
-                        PathCheck(
-				name="repo_root_exists",
-				path=repo_root,
-				kind=PathKind.DIRECTORY,
+			self.command_check(
+				name="vdt_library",
+				cmd=(
+					"sh",
+					"-c",
+					"printf '#include <vdt/vdtMath.h>\\nint main() { return 0; }\\n' "
+					"| clang++ -x c++ - -lvdt -o /dev/null",
+				),
+				timeout_seconds=30,
 			),
 		)
