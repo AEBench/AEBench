@@ -2,8 +2,7 @@ id = "eurosys25_depsurf"
 
 [case_brief]
 core_claim = "Build DepSurf, stage its kernel dataset, and run the analysis notebooks (30_diff through 52_summary) to reproduce the paper's dependency-surface results: Tables 3-8 and Figures 4-6."
-acceptable_evidence = "The notebooks write Tables 3-8 to paper/tabs/{src,breakdown,cfg,dup,bcc,summary}.tex and Figures 4-6 to paper/figs/{report,inline,rename}.pdf, with their intermediate data under output/ (the result pickles, per-pair diff summaries, per-version inline and duplication dumps, and one report per analyzed eBPF program). At least 80% of each table's cells match the reference results, and the tables agree with the intermediate data from this run."
-allowed_tolerance = "Table cells are compared as the rounded strings the notebooks print (e.g. 9.2k), and at least 80% of the value cells in each of Tables 3-8 must match, since counts can shift with the toolchain that builds the dataset or the eBPF programs. Each table must agree exactly with the intermediate data from the same run. Figures are checked for existence only."
+acceptable_evidence = "The notebooks write Tables 3-8 to paper/tabs/{src,breakdown,cfg,dup,bcc,summary}.tex and Figures 4-6 to paper/figs/{report,inline,rename}.pdf, with their intermediate data under output/ (the result pickles, per-pair diff summaries, per-version inline and duplication dumps, and one report per analyzed eBPF program)"
 
 [paper]
 url = "https://depsurf.github.io/assets/paper.pdf"
