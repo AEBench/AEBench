@@ -161,6 +161,8 @@ class RuntimeConfig(_Model):
 	interactive: bool = False
 	commit_before_oracle: bool = True
 	keep_committed_snapshot: bool = True
+	# Also copy the bind-mounted workspace into the snapshot, so it can be inspected later.
+	include_workspace_in_snapshot: bool = True
 	snapshot_timeout_seconds: float = 3600.0
 
 	@model_validator(mode="after")
@@ -174,6 +176,7 @@ class RuntimeConfig(_Model):
 			self.gpu = False
 			self.commit_before_oracle = False
 			self.keep_committed_snapshot = False
+			self.include_workspace_in_snapshot = False
 		return self
 
 
@@ -331,6 +334,8 @@ class RuntimeInfo(_Model):
 	container_removed: bool = False
 	# docker commit failed or timed out, so the oracle had no snapshot to run in.
 	snapshot_failed: bool = False
+	# The snapshot image also holds a copy of the workspace taken before the oracle ran.
+	workspace_in_snapshot: bool = False
 
 
 class TrackedFilesCheck(_Model):

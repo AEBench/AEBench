@@ -42,7 +42,8 @@ def snapshot_status(runtime: RuntimeInfo) -> str:
 		return "failed; the container was removed"
 	return (
 		f"failed; container `{runtime.container_id}` was kept "
-		f"(retry: `docker commit {runtime.container_id} <tag>`)"
+		f"(retry: `docker commit {runtime.container_id} <tag>`, "
+		f"then remove it: `docker rm {runtime.container_id}`)"
 	)
 
 
@@ -140,6 +141,11 @@ def write_task_report(report_path: Path, result: RunResult, agent_summary: str) 
 		f"- Runtime image: `{runtime.image}`",
 		f"- Container ID: `{runtime.container_id}`",
 		f"- Saved image: `{runtime.saved_image}`",
+		*(
+			[f"- Saved image includes workspace at `{runtime.workspace_mount}`"]
+			if runtime.workspace_in_snapshot
+			else []
+		),
 		f"- Container stopped: `{runtime.container_stopped}`",
 		*([f"- Snapshot: {snapshot_status(runtime)}"] if runtime.snapshot_failed else []),
 		f"- Agent harness: `{result.agent_kind}`",

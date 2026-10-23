@@ -510,3 +510,51 @@ def test_delete_image_flag_sets_the_effective_runtime_config(
 	runner.prepare_case()
 
 	assert runner.task.runtime.keep_committed_snapshot is kept
+
+
+def test_failed_snapshot_keeps_the_workspace_despite_cleanup(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	monkeypatch.delenv("AEBENCH_PRESERVE_FAILED_WORKSPACE", raising=False)
+	runner = _docker_case_runner(tmp_path, "--allow-host-docker", "--cleanup-workspace")
+
+	class FailingSnapshotRuntime:
+		path_separator = ":"
+
+		def prepare(self, _session: Any) -> None:
+			pass
+
+		def stop(self, _session: Any) -> None:
+			pass
+
+		def snapshot(self, _session: Any) -> str:
+			raise RuntimeError("docker commit failed: no space left on device")
+
+		def cleanup(self, _session: Any) -> None:
+			pass
+
+		def runtime_result(self, _session: Any) -> RuntimeInfo:
+			return RuntimeInfo(
+				mode=RuntimeMode.DOCKER, container_id="container-id", snapshot_failed=True
+			)
+
+		def run_process(self, cmd: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
+			return subprocess.CompletedProcess(cmd, 0, "", "")
+
+	monkeypatch.setattr(
+		"runtime.case_runner.get_runtime", lambda *_args, **_kwargs: FailingSnapshotRuntime()
+	)
+	monkeypatch.setattr("runtime.case_runner.prepare_agent_runtime", lambda _runtime: None)
+	monkeypatch.setattr(
+		"runtime.case_runner.run_agent",
+		lambda *_args, model, **_kwargs: AgentResult(model=model, exit_code=0),
+	)
+
+	runner.prepare_case()
+	runner.execute_agent()
+	runner.run_oracle()
+	result = runner.finalize()
+
+	assert result.status != CaseStatus.SUCCESS
+	assert result.runtime_result.runtime.snapshot_failed is True
+	assert Path(result.runtime_result.workspace_path).is_dir()

@@ -492,8 +492,12 @@ class _CaseRunner:
 			cleanup_workspace(
 				self.workspace_root,
 				keep=(
-					case_result.status != CaseStatus.SUCCESS
-					and self.context.settings.preserve_failed_workspace
+					# Without a snapshot, the host workspace is the only copy of the agent's work.
+					runtime_info.snapshot_failed
+					or (
+						case_result.status != CaseStatus.SUCCESS
+						and self.context.settings.preserve_failed_workspace
+					)
 				),
 			)
 
