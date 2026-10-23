@@ -2,14 +2,14 @@ from __future__ import annotations
 
 TABLES_REF = "tables.ref.json"
 
-# Fraction of each table's value cells that must match the reference.
+# Fraction of each table's value cells that must match the reference
 TABLE_MIN_MATCH_FRACTION = 0.8
 
 TABLES_DIR = ("paper", "tabs")
 FIGURES_DIR = ("paper", "figs")
 OUTPUT_DIR = ("output",)
 
-# Paper table -> file written by save_latex, in paper order.
+# Paper table to .tex file (see DepSurf's save_latex)
 TABLE_FILES = {
 	"table3_src": "src.tex",
 	"table4_breakdown": "breakdown.tex",
@@ -19,25 +19,23 @@ TABLE_FILES = {
 	"table8_summary": "summary.tex",
 }
 
-# Paper figure -> file written by save_fig.
+# Paper figure to .pdf file (see DepSurf's save_fig)
 FIGURE_FILES = {
 	"figure4_report": "report.pdf",
 	"figure5_inline": "inline.pdf",
 	"figure6_rename": "rename.pdf",
 }
 
-# Pickles written by save_pkl, which the table and figure cells load.
-PICKLE_FILES = ("src.pkl", "config.pkl", "inline.pkl", "rename.pkl", "dup.pkl", "bcc.pkl")
+# Object files (see DepSurf's save_pkl) need to generate tables and figures
+PKL_FILES = ("src.pkl", "config.pkl", "inline.pkl", "rename.pkl", "dup.pkl", "bcc.pkl")
 
-# Per-version text dumps: 40_inline covers the 17 regular releases plus 4
-# architectures, 42_dup the 5 LTS releases.
+# Per-version text format logs for the 40_inline covers script
 VERSION_DUMPS = {
 	"inline": ("selective.txt", 21),
 	"dup": ("static_static.txt", 5),
 }
 
-# 30_diff writes output/src/<group>/<v1>_<v2>/Summary.txt; Table 3 shows the
-# groups and pairs in this order.
+# Log files content written by 30_diff (Table 3)
 SRC_DIFF_PAIRS = {
 	"LTS (2 yr)": ("LTS", ("4.4_4.15", "4.15_5.4", "5.4_5.15", "5.15_6.8")),
 	"Regular Releases (6 mo)": (
@@ -63,7 +61,7 @@ SRC_DIFF_PAIRS = {
 	),
 }
 
-# output/config/<group>/<pair>, in the column order of Table 5.
+# 30_diff generated files (Table 5)
 CONFIG_DIFF_PAIRS = (
 	"Arch/amd64_arm64",
 	"Arch/amd64_armhf",
