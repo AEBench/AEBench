@@ -369,9 +369,11 @@ function updateGraphActionHighlight() {
       el.classList.remove('filter-dimmed', 'filter-highlighted');
       return;
     }
-    const actionClass = [...el.classList].find(c => c.startsWith('node-'));
-    const action = actionClass ? actionClass.replace('node-', '') : '';
-    const match = SELECTED_ACTIONS.has(action);
+    const phasesAttr = el.getAttribute('data-phases');
+    const phases = phasesAttr
+      ? phasesAttr.split(',').filter(Boolean)
+      : [[...el.classList].find(c => c.startsWith('node-'))?.replace('node-', '') || ''];
+    const match = phases.some(p => SELECTED_ACTIONS.has(p));
     el.classList.toggle('filter-highlighted', match);
     el.classList.toggle('filter-dimmed', !match);
   });
@@ -1292,6 +1294,11 @@ function setupGraphView() {
 }
 
 window.jumpToTraceTurn = function (turnNum) {
+  if (!document.getElementById(`turn-${turnNum}`) && SELECTED_ACTIONS.size > 0) {
+    SELECTED_ACTIONS.clear();
+    updateActionFilterUI();
+    renderTrace();
+  }
   const traceBtn = els.tabNav ? els.tabNav.querySelector('.tab-btn[data-tab="trace"]') : null;
   if (traceBtn) traceBtn.click();
   requestAnimationFrame(() => {

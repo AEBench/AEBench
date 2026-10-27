@@ -136,8 +136,7 @@
     });
     g.setDefaultEdgeLabel(() => ({}));
 
-    // Filter nodes if low-signal filter is enabled
-    const visibleNodes = GRAPH_DATA.nodes.filter(node => {
+    const candidateNodes = GRAPH_DATA.nodes.filter(node => {
       if (filterHideLowSignal && node.visit_count === 1) {
         const cmd = (node.command || '').trim().split(' ')[0].toLowerCase();
         if (LOW_SIGNAL_CMDS.has(cmd)) return false;
@@ -145,9 +144,29 @@
       return true;
     });
 
-    const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+    const candidateNodeIds = new Set(candidateNodes.map(n => n.id));
 
-    // Register nodes
+    const visibleEdges = (GRAPH_DATA.edges || []).filter(edge => {
+      if (!candidateNodeIds.has(edge.source) || !candidateNodeIds.has(edge.target)) return false;
+      if (filterLoopsOnly && !edge.is_self_loop && !edge.is_backtrack && edge.count <= 1) return false;
+      return true;
+    });
+
+    const loopActiveNodeIds = new Set();
+    if (filterLoopsOnly) {
+      candidateNodes.forEach(node => {
+        if (node.visit_count > 1) loopActiveNodeIds.add(node.id);
+      });
+      visibleEdges.forEach(edge => {
+        loopActiveNodeIds.add(edge.source);
+        loopActiveNodeIds.add(edge.target);
+      });
+    }
+
+    const visibleNodes = filterLoopsOnly
+      ? candidateNodes.filter(node => loopActiveNodeIds.has(node.id))
+      : candidateNodes;
+
     visibleNodes.forEach(node => {
       const isLoop = node.visit_count > 1;
       const width = isLoop ? 240 : 210;
@@ -159,23 +178,14 @@
       });
     });
 
-    // Register edges
-    const visibleEdges = (GRAPH_DATA.edges || []).filter(edge => {
-      if (!visibleNodeIds.has(edge.source) || !visibleNodeIds.has(edge.target)) return false;
-      if (filterLoopsOnly && !edge.is_self_loop && !edge.is_backtrack && edge.count <= 1) return false;
-      return true;
-    });
-
     visibleEdges.forEach(edge => {
       if (!edge.is_self_loop) {
         g.setEdge(edge.source, edge.target, { edgeData: edge }, edge.id);
       }
     });
 
-    // Calculate layout
     dagre.layout(g);
 
-    // Build SVG markup
     let out = `
       <defs>
         <marker id="arrow-default" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -196,7 +206,6 @@
     const edgesLayer = VIEWPORT_EL.querySelector('#edges-layer');
     const nodesLayer = VIEWPORT_EL.querySelector('#nodes-layer');
 
-    // Render Edges
     let edgesHtml = '';
     visibleEdges.forEach(edge => {
       const src = g.node(edge.source);
@@ -204,7 +213,6 @@
       if (!src || !tgt) return;
 
       if (edge.is_self_loop) {
-        // Draw self loop arc on right side of node
         const x = src.x + src.width / 2;
         const yTop = src.y - 12;
         const yBot = src.y + 12;
@@ -239,7 +247,6 @@
     });
     edgesLayer.innerHTML = edgesHtml;
 
-    // Render Nodes
     let nodesHtml = '';
     visibleNodes.forEach(node => {
       const pos = g.node(node.id);
@@ -249,15 +256,17 @@
       const x = pos.x - pos.width / 2;
       const y = pos.y - pos.height / 2;
       const action = node.action || 'misc';
+      const phases = Array.isArray(node.phases) && node.phases.length > 0 ? node.phases : [action];
+      const actionDisplay = phases.length > 1 ? phases.join(' / ') : action;
       const isLoop = node.visit_count > 1;
 
-      // Check if any occurrence failed
       const hasFailure = node.occurrences && node.occurrences.some(o => o.outcome === 'failure');
       const allPassed = node.occurrences && node.occurrences.every(o => o.outcome === 'success');
 
       nodesHtml += `
         <g class="graph-node node-${action} ${isLoop ? 'is-loop' : ''} ${isSelected ? 'selected' : ''}"
            data-node-id="${node.id}"
+           data-phases="${escapeHtml(phases.join(','))}"
            transform="translate(${x}, ${y})"
            tabindex="0"
            role="button"
@@ -267,7 +276,7 @@
           
           <g class="node-content" transform="translate(12, 16)">
             <text class="node-tool-tag">${escapeHtml(node.tool)}</text>
-            <text class="node-action-tag action-badge action-${action}" x="${pos.width - 24}" text-anchor="end">${escapeHtml(action)}</text>
+            <text class="node-action-tag action-badge action-${action}" x="${pos.width - 24}" text-anchor="end">${escapeHtml(actionDisplay)}</text>
             <text class="node-label" y="24" title="${escapeHtml(node.command || node.label)}">${escapeHtml(truncate(node.label, 26))}</text>
           </g>
 
@@ -288,7 +297,6 @@
     });
     nodesLayer.innerHTML = nodesHtml;
 
-    // Attach click listeners to nodes
     nodesLayer.querySelectorAll('.graph-node').forEach(nodeEl => {
       nodeEl.addEventListener('click', e => {
         e.stopPropagation();
@@ -330,7 +338,6 @@
     const node = GRAPH_DATA.nodes.find(n => n.id === nodeId);
     if (!node) return;
 
-    // Highlight node in DOM
     if (VIEWPORT_EL) {
       VIEWPORT_EL.querySelectorAll('.graph-node').forEach(el => {
         el.classList.toggle('selected', el.getAttribute('data-node-id') === nodeId);
@@ -362,10 +369,12 @@
     }
 
     const firstOcc = occurrences[0] || {};
+    const nodePhases = Array.isArray(node.phases) && node.phases.length > 0 ? node.phases : [node.action];
+    const phaseBadges = nodePhases.map(p => `<span class="action-badge action-${p}">${escapeHtml(p)}</span>`).join(' ');
     const inspectorContent = `
       <div class="inspector-header">
         <div class="inspector-title-row">
-          <span class="action-badge action-${node.action}">${escapeHtml(node.action)}</span>
+          ${phaseBadges}
           <span class="inspector-tool-label">${escapeHtml(node.tool)}</span>
           ${isLoop ? `<span class="inspector-loop-counter">${occurrences.length} total visits</span>` : ''}
         </div>
@@ -386,11 +395,9 @@
 
     INSPECTOR_EL.innerHTML = inspectorContent;
 
-    // Hook close button
     const closeBtn = INSPECTOR_EL.querySelector('#inspector-close-btn');
     if (closeBtn) closeBtn.addEventListener('click', closeInspector);
 
-    // Hook occurrence tab buttons
     INSPECTOR_EL.querySelectorAll('.inspector-tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         INSPECTOR_EL.querySelectorAll('.inspector-tab-btn').forEach(b => b.classList.remove('active'));
@@ -413,12 +420,13 @@
       : occ.outcome === 'failure'
       ? '<span class="status-tag status-failure">Failed</span>'
       : '<span class="status-tag status-neutral">Neutral</span>';
+    const turnNum = occ.turn_idx != null ? occ.turn_idx : occ.step_idx;
 
     return `
       <div class="inspector-occ-meta">
         <div>
           <span class="muted">Occurrence:</span> <strong>${index + 1} of ${total}</strong>
-          ${occ.step_idx != null ? `<span class="muted">· Turn</span> <strong>#${occ.step_idx}</strong>` : ''}
+          ${turnNum != null ? `<span class="muted">· Turn</span> <strong>#${turnNum}</strong>` : ''}
         </div>
         <div>${outcomeBadge}</div>
       </div>
@@ -438,8 +446,8 @@
       ` : ''}
 
       <div class="inspector-actions-row">
-        <button type="button" id="inspector-jump-turn" class="btn btn-primary btn-small" data-turn="${occ.step_idx}">
-          Jump to Turn #${occ.step_idx} in Timeline
+        <button type="button" id="inspector-jump-turn" class="btn btn-primary btn-small" data-turn="${turnNum}">
+          Jump to Turn #${turnNum} in Timeline
         </button>
       </div>
     `;
