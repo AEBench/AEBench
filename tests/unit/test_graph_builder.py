@@ -4,13 +4,9 @@ from typing import Any
 
 from src.trace_viewer.action_mapper import SemanticAction
 from src.trace_viewer.graph_builder import (
-	GraphEdge,
-	GraphNode,
-	TrajectoryGraph,
 	build_trajectory_graph,
 	canonical_node_signature,
 	detect_outcome,
-	normalize_bash_for_signature,
 )
 
 
