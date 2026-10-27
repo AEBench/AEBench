@@ -146,13 +146,17 @@ _EXPLORATION_CMDS = {
 	"ag",
 	"ack",
 	"wc",
+	"du",
 	"file",
 	"stat",
 	"which",
 	"whereis",
 	"type",
+	"command",
 	"uname",
 }
+
+_READONLY_SAFE_EXECS = _EXPLORATION_CMDS | {"sed", "git", "echo", "printf", "true", "sort", "uniq", "tr", "cut", "awk"}
 
 _STRIP_PREFIX_REGEX = re.compile(
 	r"^(?:sudo|time|nohup|exec)\s+", re.IGNORECASE
@@ -162,6 +166,8 @@ _BASH_WRAPPER_REGEX = re.compile(
 	r"^(?:/bin/)?(?:bash|sh|zsh)\s+(?:-[a-zA-Z]*c\s+)([\"'])(.*)\1\s*$",
 	re.DOTALL,
 )
+
+_WRITE_REDIR_REGEX = re.compile(r"(?:^|[^0-9>&])>>?\s*(?!/dev/null\b)&?[a-zA-Z0-9_./~-]")
 
 
 def unwrap_command(raw_cmd: str) -> str:
@@ -187,10 +193,84 @@ def extract_command_executables(cmd_str: str) -> list[str]:
 		for token in tokens:
 			if "=" in token and not token.startswith("-"):
 				continue
+			if token in ("sudo", "time", "nohup", "exec"):
+				continue
 			base = token.split("/")[-1] if not token.startswith(("./", "../")) else token
 			execs.append(base.lower())
 			break
 	return execs
+
+
+def is_readonly_shell_command(cmd_str: str) -> bool:
+	cmd_lower = unwrap_command(cmd_str).lower()
+	if not cmd_lower:
+		return False
+	if re.search(r"\bsed\s+-[a-zA-Z]*i\b", cmd_lower):
+		return False
+	if "<<" in cmd_lower or _WRITE_REDIR_REGEX.search(cmd_lower):
+		return False
+	if re.search(r"\bgit\s+(?:add|commit|checkout|reset|clean|apply|merge|rebase|cherry-pick|mv|rm)\b", cmd_lower):
+		return False
+	execs = extract_command_executables(cmd_lower)
+	if not execs:
+		return False
+	if any(e == "sed" for e in execs) and not re.search(r"\bsed\s+-n\b", cmd_lower):
+		return False
+	if any(e == "git" for e in execs) and not re.search(
+		r"\bgit\s+(?:status|log|diff|branch|show|rev-parse|ls-files)\b", cmd_lower
+	):
+		return False
+	return all(e in _READONLY_SAFE_EXECS for e in execs)
+
+
+def _classify_description(desc_lower: str) -> str | None:
+	if not desc_lower:
+		return None
+	if any(
+		w in desc_lower
+		for w in ("plot", "verify", "verif", "proof", "passed", "compare", "reference", "result", "metric", "check_claim")
+	):
+		return SemanticAction.VERIFY.value
+	if any(
+		w in desc_lower
+		for w in (
+			"run benchmark",
+			"reproduce",
+			"reproduction",
+			"execute experiment",
+			"run test",
+			"experiment",
+			"workload",
+			"run all",
+			"figure script",
+			"figure",
+		)
+	):
+		return SemanticAction.RUN.value
+	if any(
+		w in desc_lower
+		for w in (
+			"install",
+			"setup",
+			"dependency",
+			"dependencies",
+			"environment",
+			"download",
+			"fetch",
+			"data prep",
+			"explore repo",
+			"explore directory",
+			"find files",
+			"explore",
+			"inspect",
+		)
+	):
+		return SemanticAction.SETUP.value
+	if any(w in desc_lower for w in ("build", "compile")):
+		return SemanticAction.BUILD.value
+	if any(w in desc_lower for w in ("patch", "edit", "fix", "modify")):
+		return SemanticAction.MODIFY.value
+	return None
 
 
 def classify_command(raw_command: str, description: str = "") -> str:
@@ -198,17 +278,10 @@ def classify_command(raw_command: str, description: str = "") -> str:
 	cmd = unwrap_command(raw_command)
 	cmd_lower = cmd.lower()
 
-	if desc_lower:
-		if any(w in desc_lower for w in ("plot", "verify", "verif", "proof", "passed", "compare", "reference", "result", "metric", "check_claim")):
-			return SemanticAction.VERIFY.value
-		if any(w in desc_lower for w in ("run benchmark", "reproduce", "reproduction", "execute experiment", "run test", "experiment", "workload", "run all", "figure script", "figure")):
-			return SemanticAction.RUN.value
-		if any(w in desc_lower for w in ("install", "setup", "dependency", "dependencies", "environment", "download", "fetch", "data prep", "explore repo", "explore directory", "find files", "explore", "inspect")):
-			return SemanticAction.SETUP.value
-		if any(w in desc_lower for w in ("build", "compile")):
-			return SemanticAction.BUILD.value
-		if any(w in desc_lower for w in ("patch", "edit", "fix", "modify")):
-			return SemanticAction.MODIFY.value
+	if not cmd_lower:
+		return _classify_description(desc_lower) or SemanticAction.MISC.value
+
+	execs = extract_command_executables(cmd_lower)
 
 	if re.search(r"\bsed\s+-[a-zA-Z]*i\b", cmd_lower):
 		return SemanticAction.MODIFY.value
@@ -219,7 +292,32 @@ def classify_command(raw_command: str, description: str = "") -> str:
 	if re.search(r"\b(echo|printf|cat)\b.*>\s*[^/]+", cmd) and not cmd.strip().endswith("> /dev/null"):
 		return SemanticAction.MODIFY.value
 
-	if "/refs" in cmd or "ref.json" in cmd or "gold.csv" in cmd_lower or "ground_truth" in cmd_lower:
+	if is_readonly_shell_command(cmd_lower):
+		if ("build.log" in cmd_lower or "compile.log" in cmd_lower) and not any(
+			k in cmd_lower for k in ("verify", "eval", "test")
+		):
+			return SemanticAction.BUILD.value
+		if ("/refs/" in cmd_lower or "ref.json" in cmd_lower or "gold.csv" in cmd_lower or "ground_truth" in cmd_lower) and any(
+			e in ("cat", "head", "tail", "less", "more", "bat", "grep", "rg", "diff", "cmp", "sed") for e in execs
+		):
+			return SemanticAction.VERIFY.value
+		if re.search(
+			r"(?:[a-zA-Z0-9_.-]*(?:verify|eval|test|result|claim|output)[a-zA-Z0-9_.-]*\.(?:log|output)|/tasks/[a-zA-Z0-9_.-]+\.output)\b",
+			cmd_lower,
+		):
+			return SemanticAction.VERIFY.value
+		if "results/" in cmd_lower and any(e in ("cat", "head", "tail", "ls", "wc", "grep", "rg") for e in execs):
+			return SemanticAction.VERIFY.value
+		if re.search(r"\b(cat|head|tail|less|more|bat)\b.*\.(csv|tsv|png|pdf)\b", cmd_lower) and "protocols.csv" not in cmd_lower:
+			return SemanticAction.VERIFY.value
+		return SemanticAction.SETUP.value
+
+	if re.search(r"\b(?:--version|--list-sdks|--list-runtimes)\b", cmd_lower) and not any(
+		e in _ENV_SETUP_CMDS | _DOWNLOAD_CMDS | _ARCHIVE_CMDS | _BUILD_CMDS for e in execs
+	) and not any(w in cmd_lower for w in ("mkdir", "cp ", "mv ", "ln ", "chmod", "zipfile")):
+		return SemanticAction.SETUP.value
+
+	if "/refs/" in cmd_lower or "ref.json" in cmd or "gold.csv" in cmd_lower or "ground_truth" in cmd_lower:
 		return SemanticAction.VERIFY.value
 	if re.search(r"\b(diff|cmp)\b", cmd_lower) and any(
 		term in cmd_lower for term in ("output", "result", "log", "gold", "ground", "table", "csv", "ref")
@@ -227,13 +325,21 @@ def classify_command(raw_command: str, description: str = "") -> str:
 		return SemanticAction.VERIFY.value
 	if any(re.search(rf"\b{re.escape(c)}\b", cmd_lower) for c in _CHECKSUM_CMDS):
 		return SemanticAction.VERIFY.value
-	if re.search(r"\bpython[0-9.]*\s+.*(?:plot|analyze|parse_results|check_claims|eval_results|calc_metrics)[a-zA-Z0-9_.-]*\.py\b", cmd_lower):
-		return SemanticAction.VERIFY.value
-	if "csv" in cmd_lower and any(term in cmd_lower for term in ("dictreader", "sloc", "gold", "reduction", "calc", "metric", "parse", "csv count")):
-		return SemanticAction.VERIFY.value
-	if re.search(r"[a-zA-Z0-9_.-]*(?:verify|eval|test|result|claim|output)[a-zA-Z0-9_.-]*\.(?:log|output)\b", cmd_lower) and any(
-		term in cmd_lower for term in ("cat", "head", "tail", "less", "more", "bat", "rg", "grep", "sed", "wc")
+	if re.search(
+		r"\bpython[0-9.]*\s+.*(?:plot|analyze|parse_results|check_claims|eval_results|calc_metrics|verify)[a-zA-Z0-9_.-]*\.py\b",
+		cmd_lower,
 	):
+		return SemanticAction.VERIFY.value
+	if "csv" in cmd_lower and any(
+		term in cmd_lower for term in ("dictreader", "sloc", "gold", "reduction", "calc", "metric", "parse", "csv count")
+	):
+		return SemanticAction.VERIFY.value
+	if re.search(
+		r"(?:[a-zA-Z0-9_.-]*(?:verify|eval|test|result|claim|output)[a-zA-Z0-9_.-]*\.(?:log|output)|/tasks/[a-zA-Z0-9_.-]+\.output)\b",
+		cmd_lower,
+	) and any(
+		term in cmd_lower for term in ("cat", "head", "tail", "less", "more", "bat", "rg", "grep", "sed", "wc")
+	) and "until " not in cmd_lower:
 		return SemanticAction.VERIFY.value
 	if "results/" in cmd_lower and any(term in cmd_lower for term in ("wc -l", "grep", "ls")):
 		return SemanticAction.VERIFY.value
@@ -254,7 +360,10 @@ def classify_command(raw_command: str, description: str = "") -> str:
 		return SemanticAction.SETUP.value
 	if any(re.search(rf"\b{re.escape(c)}\b", cmd_lower) for c in _ARCHIVE_CMDS):
 		return SemanticAction.SETUP.value
-	if re.search(r"\b(download|get_data|fetch_data|prep_data|prepare_benchmarks|generate_data|make_dataset)[a-zA-Z0-9_.-]*\b", cmd_lower):
+	if re.search(
+		r"\b(download|get_data|fetch_data|prep_data|prepare_benchmarks|generate_data|make_dataset|setup)[a-zA-Z0-9_.-]*\b",
+		cmd_lower,
+	):
 		return SemanticAction.SETUP.value
 	if "dataset" in cmd_lower and any(w in cmd_lower for w in ("download", "extract", "fetch", "prep", "generate")):
 		return SemanticAction.SETUP.value
@@ -272,11 +381,16 @@ def classify_command(raw_command: str, description: str = "") -> str:
 	if ("build.log" in cmd_lower or "compile.log" in cmd_lower) and not any(k in cmd_lower for k in ("verify", "eval", "test")):
 		return SemanticAction.BUILD.value
 
-	if re.search(r"\b(pytest|ctest|cargo\s+test)\b", cmd_lower):
+	if re.search(r"\b(pytest|ctest|cargo\s+test|dotnet\s+test)\b", cmd_lower):
 		return SemanticAction.RUN.value
-	if re.search(r"\b(dafny|z3|boogie)\b", cmd_lower):
+	if any(
+		e in ("dafny", "z3", "boogie") or e.startswith(("z3-", "./dafny", "./verify"))
+		for e in execs
+	) and "--version" not in cmd_lower:
 		return SemanticAction.RUN.value
 	if re.search(r"\./(?:run|eval|bench|reproduce|test|verify-all|figure)[a-zA-Z0-9_.-]*", cmd_lower):
+		if re.search(r"^\./verify-all\b.*>\s*\S+\s+2>&1;\s*result=\$\?;\s*cp\b", cmd_lower):
+			return SemanticAction.RUN.value
 		return SemanticAction.RUN.value
 	if re.search(r"\./[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)*/verify\b", cmd_lower):
 		return SemanticAction.RUN.value
@@ -288,17 +402,18 @@ def classify_command(raw_command: str, description: str = "") -> str:
 		return SemanticAction.RUN.value
 	if "figure" in cmd_lower and (".sh" in cmd_lower or "bash" in cmd_lower or "chmod +x" in cmd_lower):
 		return SemanticAction.RUN.value
+	if cmd_lower.startswith("until ") and "sleep" in cmd_lower:
+		return SemanticAction.VERIFY.value
 
 	if re.search(r"\b(ps\s+aux|ps\s+-ef|kill|killall|top|uptime|whoami|uname)\b", cmd_lower):
 		return SemanticAction.MISC.value
 	if "/proc/" in cmd_lower or "sleep" in cmd_lower:
 		return SemanticAction.MISC.value
 
-	if re.search(r"\bgit\s+(status|log|diff|branch|show|rev-parse)\b", cmd_lower):
+	if re.search(r"\bgit\s+(status|log|diff|branch|show|rev-parse|ls-files)\b", cmd_lower):
 		return SemanticAction.SETUP.value
 	if re.search(r"\bsed\s+-n\b", cmd_lower):
 		return SemanticAction.SETUP.value
-	execs = extract_command_executables(cmd_lower)
 	if execs and all(e in _EXPLORATION_CMDS for e in execs):
 		if re.search(r"\b(cat|head|tail|less|more|bat)\b.*\.(csv|tsv|png|pdf)\b", cmd_lower):
 			return SemanticAction.VERIFY.value
@@ -308,7 +423,7 @@ def classify_command(raw_command: str, description: str = "") -> str:
 			return SemanticAction.VERIFY.value
 		return SemanticAction.SETUP.value
 
-	return SemanticAction.MISC.value
+	return _classify_description(desc_lower) or SemanticAction.MISC.value
 
 
 def classify_event(
@@ -357,6 +472,9 @@ def classify_event(
 							return action, ACTION_METADATA[action]["short_label"]
 
 						if tool_name in ("Read", "Glob", "Grep"):
+							file_path = str(inp_dict.get("file_path") or inp_dict.get("path") or "").lower()
+							if file_path.endswith(".output") and "/tasks/" in file_path:
+								return SemanticAction.VERIFY.value, ACTION_METADATA[SemanticAction.VERIFY.value]["short_label"]
 							return SemanticAction.SETUP.value, ACTION_METADATA[SemanticAction.SETUP.value]["short_label"]
 
 						if tool_name in ("Edit", "Write"):

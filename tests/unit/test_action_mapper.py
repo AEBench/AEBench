@@ -8,6 +8,7 @@ from trace_viewer.action_mapper import (
 	classify_command,
 	classify_event,
 	compute_action_summary,
+	is_readonly_shell_command,
 	unwrap_command,
 )
 
@@ -47,6 +48,8 @@ def test_classify_command_exploration_is_setup() -> None:
 	assert classify_command("rg 'def evaluate' src/") == SemanticAction.SETUP.value
 	assert classify_command("git status --short") == SemanticAction.SETUP.value
 	assert classify_command("sed -n '227,249p' log.txt") == SemanticAction.SETUP.value
+	assert classify_command("sed -n '1,220p' local-dafny/Makefile && sed -n '1,200p' kondoPrototypes/verify-all") == SemanticAction.SETUP.value
+	assert is_readonly_shell_command("sed -n '1,220p' local-dafny/Makefile && sed -n '1,200p' kondoPrototypes/verify-all") is True
 
 
 def test_classify_command_run() -> None:
@@ -99,6 +102,13 @@ def test_classify_event_claude() -> None:
 	}
 	action, _ = classify_event(read_event, trace_format="claude_code")
 	assert action == SemanticAction.SETUP.value
+
+	read_task_output_event = {
+		"type": "assistant",
+		"blocks": [{"type": "tool_use", "name": "Read", "input": {"file_path": "/tmp/claude-0/tasks/b0a7e4a.output"}}],
+	}
+	action, _ = classify_event(read_task_output_event, trace_format="claude_code")
+	assert action == SemanticAction.VERIFY.value
 
 	thinking_event = {
 		"type": "assistant",
@@ -272,4 +282,3 @@ def test_classify_event_system_task_started_inheritance() -> None:
 	action, label = classify_event(task_event, trace_format="claude_code", tool_action_map=tool_map)
 	assert action == SemanticAction.RUN.value
 	assert label == ACTION_METADATA[SemanticAction.RUN.value]["short_label"]
-
