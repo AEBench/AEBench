@@ -15,13 +15,16 @@ from trace_viewer.action_mapper import (
 
 def test_unwrap_command() -> None:
 	assert unwrap_command("sudo time /bin/bash -lc 'ls -la'") == "ls -la"
-	assert unwrap_command("bash -c \"pip install numpy\"") == "pip install numpy"
+	assert unwrap_command('bash -c "pip install numpy"') == "pip install numpy"
 	assert unwrap_command("time pytest") == "pytest"
 
 
 def test_classify_command_setup() -> None:
 	assert classify_command("pip install torch") == SemanticAction.SETUP.value
-	assert classify_command("apt-get update && apt-get install -y libssl-dev") == SemanticAction.SETUP.value
+	assert (
+		classify_command("apt-get update && apt-get install -y libssl-dev")
+		== SemanticAction.SETUP.value
+	)
 	assert classify_command("conda env create -f environment.yml") == SemanticAction.SETUP.value
 	assert classify_command("export PATH=/opt/bin:$PATH") == SemanticAction.SETUP.value
 	assert classify_command("source /venv/bin/activate") == SemanticAction.SETUP.value
@@ -29,8 +32,14 @@ def test_classify_command_setup() -> None:
 	assert classify_command("tar -xzf dataset.tar.gz") == SemanticAction.SETUP.value
 	assert classify_command("unzip data.zip -d /data") == SemanticAction.SETUP.value
 	assert classify_command("python download_data.py") == SemanticAction.SETUP.value
-	assert classify_command("python3 -c 'import zipfile; z=zipfile.ZipFile(\"/tmp/kondo-z3.zip\")'") == SemanticAction.SETUP.value
-	assert classify_command("bash setup.sh", description="Install pinned requirements") == SemanticAction.SETUP.value
+	assert (
+		classify_command("python3 -c 'import zipfile; z=zipfile.ZipFile(\"/tmp/kondo-z3.zip\")'")
+		== SemanticAction.SETUP.value
+	)
+	assert (
+		classify_command("bash setup.sh", description="Install pinned requirements")
+		== SemanticAction.SETUP.value
+	)
 
 
 def test_classify_command_build() -> None:
@@ -48,8 +57,18 @@ def test_classify_command_exploration_is_setup() -> None:
 	assert classify_command("rg 'def evaluate' src/") == SemanticAction.SETUP.value
 	assert classify_command("git status --short") == SemanticAction.SETUP.value
 	assert classify_command("sed -n '227,249p' log.txt") == SemanticAction.SETUP.value
-	assert classify_command("sed -n '1,220p' local-dafny/Makefile && sed -n '1,200p' kondoPrototypes/verify-all") == SemanticAction.SETUP.value
-	assert is_readonly_shell_command("sed -n '1,220p' local-dafny/Makefile && sed -n '1,200p' kondoPrototypes/verify-all") is True
+	assert (
+		classify_command(
+			"sed -n '1,220p' local-dafny/Makefile && sed -n '1,200p' kondoPrototypes/verify-all"
+		)
+		== SemanticAction.SETUP.value
+	)
+	assert (
+		is_readonly_shell_command(
+			"sed -n '1,220p' local-dafny/Makefile && sed -n '1,200p' kondoPrototypes/verify-all"
+		)
+		is True
+	)
 
 
 def test_classify_command_run() -> None:
@@ -57,7 +76,10 @@ def test_classify_command_run() -> None:
 	assert classify_command("./run.sh") == SemanticAction.RUN.value
 	assert classify_command("./reproduce_eval.sh") == SemanticAction.RUN.value
 	assert classify_command("./verify-all > /tmp/kondo-verify-all.log") == SemanticAction.RUN.value
-	assert classify_command("./simplifiedLeaderElection/sync/verify > /tmp/sync.log") == SemanticAction.RUN.value
+	assert (
+		classify_command("./simplifiedLeaderElection/sync/verify > /tmp/sync.log")
+		== SemanticAction.RUN.value
+	)
 	assert classify_command("python3 benchmark.py --epochs 10") == SemanticAction.RUN.value
 	assert classify_command("make test") == SemanticAction.RUN.value
 
@@ -68,7 +90,10 @@ def test_classify_command_verify() -> None:
 	assert classify_command("sha256sum dataset.tar.gz") == SemanticAction.VERIFY.value
 	assert classify_command("python plot_figures.py") == SemanticAction.VERIFY.value
 	assert classify_command("tail -20 /tmp/kondo-verify-all.log") == SemanticAction.VERIFY.value
-	assert classify_command("rg -n 'Verifying Flexible' /tmp/kondo-verify-all.log") == SemanticAction.VERIFY.value
+	assert (
+		classify_command("rg -n 'Verifying Flexible' /tmp/kondo-verify-all.log")
+		== SemanticAction.VERIFY.value
+	)
 
 
 def test_classify_command_modify() -> None:
@@ -105,7 +130,13 @@ def test_classify_event_claude() -> None:
 
 	read_task_output_event = {
 		"type": "assistant",
-		"blocks": [{"type": "tool_use", "name": "Read", "input": {"file_path": "/tmp/claude-0/tasks/b0a7e4a.output"}}],
+		"blocks": [
+			{
+				"type": "tool_use",
+				"name": "Read",
+				"input": {"file_path": "/tmp/claude-0/tasks/b0a7e4a.output"},
+			}
+		],
 	}
 	action, _ = classify_event(read_task_output_event, trace_format="claude_code")
 	assert action == SemanticAction.VERIFY.value
@@ -244,9 +275,17 @@ def test_classify_event_user_tool_result_inheritance() -> None:
 	# Run tool_result event
 	run_result_event = {
 		"type": "user",
-		"blocks": [{"type": "tool_result", "tool_use_id": "toolu_run_1", "content": "Benchmark done in 10s"}],
+		"blocks": [
+			{
+				"type": "tool_result",
+				"tool_use_id": "toolu_run_1",
+				"content": "Benchmark done in 10s",
+			}
+		],
 	}
-	action, label = classify_event(run_result_event, trace_format="claude_code", tool_action_map=tool_map)
+	action, label = classify_event(
+		run_result_event, trace_format="claude_code", tool_action_map=tool_map
+	)
 	assert action == SemanticAction.RUN.value
 	assert label == ACTION_METADATA[SemanticAction.RUN.value]["short_label"]
 
@@ -255,7 +294,9 @@ def test_classify_event_user_tool_result_inheritance() -> None:
 		"type": "user",
 		"blocks": [{"type": "tool_result", "tool_use_id": "toolu_verify_1", "content": "diff ok"}],
 	}
-	action, label = classify_event(verify_result_event, trace_format="claude_code", tool_action_map=tool_map)
+	action, label = classify_event(
+		verify_result_event, trace_format="claude_code", tool_action_map=tool_map
+	)
 	assert action == SemanticAction.VERIFY.value
 	assert label == ACTION_METADATA[SemanticAction.VERIFY.value]["short_label"]
 
@@ -264,7 +305,9 @@ def test_classify_event_user_tool_result_inheritance() -> None:
 		"type": "user",
 		"blocks": [{"type": "tool_result", "tool_use_id": "toolu_unknown", "content": "foo"}],
 	}
-	action, label = classify_event(unmapped_event, trace_format="claude_code", tool_action_map=tool_map)
+	action, label = classify_event(
+		unmapped_event, trace_format="claude_code", tool_action_map=tool_map
+	)
 	assert action == SemanticAction.MISC.value
 
 

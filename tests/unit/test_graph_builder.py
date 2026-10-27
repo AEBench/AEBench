@@ -20,8 +20,18 @@ def test_detect_outcome() -> None:
 	assert detect_outcome("Random text", is_error=True) == "failure"
 	assert detect_outcome("=== OVERALL: FAIL ===") == "failure"
 	assert detect_outcome("<tool_use_error>Sibling tool call errored</tool_use_error>") == "failure"
-	assert detect_outcome("Error: value in source code", exit_code=0, tool="Read", command="src/main.rs") == "neutral"
-	assert detect_outcome("Error: value in source code", exit_code=0, tool="Bash", command="cat src/main.rs") == "neutral"
+	assert (
+		detect_outcome(
+			"Error: value in source code", exit_code=0, tool="Read", command="src/main.rs"
+		)
+		== "neutral"
+	)
+	assert (
+		detect_outcome(
+			"Error: value in source code", exit_code=0, tool="Bash", command="cat src/main.rs"
+		)
+		== "neutral"
+	)
 
 
 def test_canonical_node_signature_bash() -> None:
@@ -244,14 +254,24 @@ def test_passive_read_after_run_not_flagged_as_backtrack() -> None:
 			"type": "assistant",
 			"action": SemanticAction.RUN.value,
 			"blocks": [
-				{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "./run_eval.sh"}}
+				{
+					"type": "tool_use",
+					"id": "t1",
+					"name": "Bash",
+					"input": {"command": "./run_eval.sh"},
+				}
 			],
 		},
 		{
 			"type": "assistant",
 			"action": SemanticAction.SETUP.value,
 			"blocks": [
-				{"type": "tool_use", "id": "t2", "name": "Read", "input": {"file_path": "/workspace/output.txt"}}
+				{
+					"type": "tool_use",
+					"id": "t2",
+					"name": "Read",
+					"input": {"file_path": "/workspace/output.txt"},
+				}
 			],
 		},
 	]

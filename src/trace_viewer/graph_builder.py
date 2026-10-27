@@ -137,14 +137,20 @@ def detect_outcome(
 	if tool in ("Read", "Glob", "Grep", "Think"):
 		return "neutral"
 
-	if tool in ("Bash", "command_execution", "sh", "bash") and command and is_readonly_shell_command(command):
+	if (
+		tool in ("Bash", "command_execution", "sh", "bash")
+		and command
+		and is_readonly_shell_command(command)
+	):
 		if "command not found" in out_lower or "no such file or directory" in out_lower:
 			return "failure"
 		return "neutral"
 
 	if any(indicator in out_lower for indicator in _FAILURE_INDICATORS):
 		return "failure"
-	if exit_code == 0 or any(w in out_lower for w in ("success", "succeed", "passed", "ok", "completed", "finish")):
+	if exit_code == 0 or any(
+		w in out_lower for w in ("success", "succeed", "passed", "ok", "completed", "finish")
+	):
 		return "success"
 	return "neutral"
 
@@ -391,13 +397,20 @@ def build_trajectory_graph(
 					tool_name = str(t_use.get("name", "tool"))
 					inp = t_use.get("input", {})
 					inp_dict: dict[str, Any] = inp if isinstance(inp, dict) else {}
-					raw_cmd = str(inp_dict.get("command") or inp_dict.get("file_path") or inp_dict.get("path") or "")
+					raw_cmd = str(
+						inp_dict.get("command")
+						or inp_dict.get("file_path")
+						or inp_dict.get("path")
+						or ""
+					)
 
 					tool_id = str(t_use.get("id") or "")
 					res_block = tool_results.get(tool_id, {})
 					res_out = str(res_block.get("content") or "")
 					is_err = bool(res_block.get("is_error", False))
-					outcome = detect_outcome(res_out, is_error=is_err, tool=tool_name, command=raw_cmd)
+					outcome = detect_outcome(
+						res_out, is_error=is_err, tool=tool_name, command=raw_cmd
+					)
 
 					prev_node_id, prev_action, has_executed = _record_step(
 						tool_name=tool_name,
@@ -424,7 +437,13 @@ def build_trajectory_graph(
 			item = ev.get("item")
 			if isinstance(item, dict):
 				item_type = str(item.get("type", ""))
-				if item_type in ("agent_message", "assistant_message", "command_execution", "file_change", "web_search"):
+				if item_type in (
+					"agent_message",
+					"assistant_message",
+					"command_execution",
+					"file_change",
+					"web_search",
+				):
 					turn_counter += 1
 
 				if item_type in ("reasoning", "agent_message", "assistant_message"):
@@ -436,7 +455,9 @@ def build_trajectory_graph(
 					raw_cmd = str(item.get("command", "")).strip()
 					res_out = str(item.get("aggregated_output", ""))
 					exit_code = item.get("exit_code")
-					outcome = detect_outcome(res_out, exit_code=exit_code, tool="Bash", command=raw_cmd)
+					outcome = detect_outcome(
+						res_out, exit_code=exit_code, tool="Bash", command=raw_cmd
+					)
 
 					prev_node_id, prev_action, has_executed = _record_step(
 						tool_name="Bash",
@@ -461,10 +482,16 @@ def build_trajectory_graph(
 
 				elif item_type == "file_change":
 					raw_changes = item.get("changes")
-					changes_list = raw_changes if isinstance(raw_changes, list) and raw_changes else [{"path": "file"}]
+					changes_list = (
+						raw_changes
+						if isinstance(raw_changes, list) and raw_changes
+						else [{"path": "file"}]
+					)
 					for change in changes_list:
 						step_counter += 1
-						file_path = str(change.get("path", "file")) if isinstance(change, dict) else "file"
+						file_path = (
+							str(change.get("path", "file")) if isinstance(change, dict) else "file"
+						)
 						prev_node_id, prev_action, has_executed = _record_step(
 							tool_name="Edit",
 							raw_cmd=file_path,
@@ -489,7 +516,9 @@ def build_trajectory_graph(
 	if pending_thoughts:
 		step_counter += 1
 		terminal_thought = "\n\n".join(pending_thoughts)
-		sig, _, _ = canonical_node_signature("Think", terminal_thought[:50], SemanticAction.THINK.value)
+		sig, _, _ = canonical_node_signature(
+			"Think", terminal_thought[:50], SemanticAction.THINK.value
+		)
 		node_id = f"node_{len(nodes_by_sig)}"
 		term_node = GraphNode(
 			id=node_id,

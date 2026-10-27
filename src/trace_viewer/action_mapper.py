@@ -156,11 +156,20 @@ _EXPLORATION_CMDS = {
 	"uname",
 }
 
-_READONLY_SAFE_EXECS = _EXPLORATION_CMDS | {"sed", "git", "echo", "printf", "true", "sort", "uniq", "tr", "cut", "awk"}
+_READONLY_SAFE_EXECS = _EXPLORATION_CMDS | {
+	"sed",
+	"git",
+	"echo",
+	"printf",
+	"true",
+	"sort",
+	"uniq",
+	"tr",
+	"cut",
+	"awk",
+}
 
-_STRIP_PREFIX_REGEX = re.compile(
-	r"^(?:sudo|time|nohup|exec)\s+", re.IGNORECASE
-)
+_STRIP_PREFIX_REGEX = re.compile(r"^(?:sudo|time|nohup|exec)\s+", re.IGNORECASE)
 
 _BASH_WRAPPER_REGEX = re.compile(
 	r"^(?:/bin/)?(?:bash|sh|zsh)\s+(?:-[a-zA-Z]*c\s+)([\"'])(.*)\1\s*$",
@@ -209,7 +218,10 @@ def is_readonly_shell_command(cmd_str: str) -> bool:
 		return False
 	if "<<" in cmd_lower or _WRITE_REDIR_REGEX.search(cmd_lower):
 		return False
-	if re.search(r"\bgit\s+(?:add|commit|checkout|reset|clean|apply|merge|rebase|cherry-pick|mv|rm)\b", cmd_lower):
+	if re.search(
+		r"\bgit\s+(?:add|commit|checkout|reset|clean|apply|merge|rebase|cherry-pick|mv|rm)\b",
+		cmd_lower,
+	):
 		return False
 	execs = extract_command_executables(cmd_lower)
 	if not execs:
@@ -228,7 +240,18 @@ def _classify_description(desc_lower: str) -> str | None:
 		return None
 	if any(
 		w in desc_lower
-		for w in ("plot", "verify", "verif", "proof", "passed", "compare", "reference", "result", "metric", "check_claim")
+		for w in (
+			"plot",
+			"verify",
+			"verif",
+			"proof",
+			"passed",
+			"compare",
+			"reference",
+			"result",
+			"metric",
+			"check_claim",
+		)
 	):
 		return SemanticAction.VERIFY.value
 	if any(
@@ -289,7 +312,9 @@ def classify_command(raw_command: str, description: str = "") -> str:
 		return SemanticAction.MODIFY.value
 	if "<<" in cmd and "eof" in cmd_lower:
 		return SemanticAction.MODIFY.value
-	if re.search(r"\b(echo|printf|cat)\b.*>\s*[^/]+", cmd) and not cmd.strip().endswith("> /dev/null"):
+	if re.search(r"\b(echo|printf|cat)\b.*>\s*[^/]+", cmd) and not cmd.strip().endswith(
+		"> /dev/null"
+	):
 		return SemanticAction.MODIFY.value
 
 	if is_readonly_shell_command(cmd_lower):
@@ -297,8 +322,14 @@ def classify_command(raw_command: str, description: str = "") -> str:
 			k in cmd_lower for k in ("verify", "eval", "test")
 		):
 			return SemanticAction.BUILD.value
-		if ("/refs/" in cmd_lower or "ref.json" in cmd_lower or "gold.csv" in cmd_lower or "ground_truth" in cmd_lower) and any(
-			e in ("cat", "head", "tail", "less", "more", "bat", "grep", "rg", "diff", "cmp", "sed") for e in execs
+		if (
+			"/refs/" in cmd_lower
+			or "ref.json" in cmd_lower
+			or "gold.csv" in cmd_lower
+			or "ground_truth" in cmd_lower
+		) and any(
+			e in ("cat", "head", "tail", "less", "more", "bat", "grep", "rg", "diff", "cmp", "sed")
+			for e in execs
 		):
 			return SemanticAction.VERIFY.value
 		if re.search(
@@ -306,21 +337,36 @@ def classify_command(raw_command: str, description: str = "") -> str:
 			cmd_lower,
 		):
 			return SemanticAction.VERIFY.value
-		if "results/" in cmd_lower and any(e in ("cat", "head", "tail", "ls", "wc", "grep", "rg") for e in execs):
+		if "results/" in cmd_lower and any(
+			e in ("cat", "head", "tail", "ls", "wc", "grep", "rg") for e in execs
+		):
 			return SemanticAction.VERIFY.value
-		if re.search(r"\b(cat|head|tail|less|more|bat)\b.*\.(csv|tsv|png|pdf)\b", cmd_lower) and "protocols.csv" not in cmd_lower:
+		if (
+			re.search(r"\b(cat|head|tail|less|more|bat)\b.*\.(csv|tsv|png|pdf)\b", cmd_lower)
+			and "protocols.csv" not in cmd_lower
+		):
 			return SemanticAction.VERIFY.value
 		return SemanticAction.SETUP.value
 
-	if re.search(r"\b(?:--version|--list-sdks|--list-runtimes)\b", cmd_lower) and not any(
-		e in _ENV_SETUP_CMDS | _DOWNLOAD_CMDS | _ARCHIVE_CMDS | _BUILD_CMDS for e in execs
-	) and not any(w in cmd_lower for w in ("mkdir", "cp ", "mv ", "ln ", "chmod", "zipfile")):
+	if (
+		re.search(r"\b(?:--version|--list-sdks|--list-runtimes)\b", cmd_lower)
+		and not any(
+			e in _ENV_SETUP_CMDS | _DOWNLOAD_CMDS | _ARCHIVE_CMDS | _BUILD_CMDS for e in execs
+		)
+		and not any(w in cmd_lower for w in ("mkdir", "cp ", "mv ", "ln ", "chmod", "zipfile"))
+	):
 		return SemanticAction.SETUP.value
 
-	if "/refs/" in cmd_lower or "ref.json" in cmd or "gold.csv" in cmd_lower or "ground_truth" in cmd_lower:
+	if (
+		"/refs/" in cmd_lower
+		or "ref.json" in cmd
+		or "gold.csv" in cmd_lower
+		or "ground_truth" in cmd_lower
+	):
 		return SemanticAction.VERIFY.value
 	if re.search(r"\b(diff|cmp)\b", cmd_lower) and any(
-		term in cmd_lower for term in ("output", "result", "log", "gold", "ground", "table", "csv", "ref")
+		term in cmd_lower
+		for term in ("output", "result", "log", "gold", "ground", "table", "csv", "ref")
 	):
 		return SemanticAction.VERIFY.value
 	if any(re.search(rf"\b{re.escape(c)}\b", cmd_lower) for c in _CHECKSUM_CMDS):
@@ -331,15 +377,30 @@ def classify_command(raw_command: str, description: str = "") -> str:
 	):
 		return SemanticAction.VERIFY.value
 	if "csv" in cmd_lower and any(
-		term in cmd_lower for term in ("dictreader", "sloc", "gold", "reduction", "calc", "metric", "parse", "csv count")
+		term in cmd_lower
+		for term in (
+			"dictreader",
+			"sloc",
+			"gold",
+			"reduction",
+			"calc",
+			"metric",
+			"parse",
+			"csv count",
+		)
 	):
 		return SemanticAction.VERIFY.value
-	if re.search(
-		r"(?:[a-zA-Z0-9_.-]*(?:verify|eval|test|result|claim|output)[a-zA-Z0-9_.-]*\.(?:log|output)|/tasks/[a-zA-Z0-9_.-]+\.output)\b",
-		cmd_lower,
-	) and any(
-		term in cmd_lower for term in ("cat", "head", "tail", "less", "more", "bat", "rg", "grep", "sed", "wc")
-	) and "until " not in cmd_lower:
+	if (
+		re.search(
+			r"(?:[a-zA-Z0-9_.-]*(?:verify|eval|test|result|claim|output)[a-zA-Z0-9_.-]*\.(?:log|output)|/tasks/[a-zA-Z0-9_.-]+\.output)\b",
+			cmd_lower,
+		)
+		and any(
+			term in cmd_lower
+			for term in ("cat", "head", "tail", "less", "more", "bat", "rg", "grep", "sed", "wc")
+		)
+		and "until " not in cmd_lower
+	):
 		return SemanticAction.VERIFY.value
 	if "results/" in cmd_lower and any(term in cmd_lower for term in ("wc -l", "grep", "ls")):
 		return SemanticAction.VERIFY.value
@@ -350,13 +411,18 @@ def classify_command(raw_command: str, description: str = "") -> str:
 		return SemanticAction.SETUP.value
 	if re.search(r"\b(cargo\s+install|dotnet\s+tool|dotnet\s+add)\b", cmd_lower):
 		return SemanticAction.SETUP.value
-	if re.search(r"\b(export\s+(?:path|ld_library_path|pythonpath)=|source\s+.*activate)", cmd_lower):
+	if re.search(
+		r"\b(export\s+(?:path|ld_library_path|pythonpath)=|source\s+.*activate)", cmd_lower
+	):
 		return SemanticAction.SETUP.value
 	if "setup.py" in cmd_lower and any(w in cmd_lower for w in ("install", "develop", "egg_info")):
 		return SemanticAction.SETUP.value
 	if "docker" in cmd_lower and any(w in cmd_lower for w in ("build", "run", "pull", "daemon")):
 		return SemanticAction.SETUP.value
-	if any(re.search(rf"\b{re.escape(c)}\b", cmd_lower) for c in _DOWNLOAD_CMDS) or "git lfs" in cmd_lower:
+	if (
+		any(re.search(rf"\b{re.escape(c)}\b", cmd_lower) for c in _DOWNLOAD_CMDS)
+		or "git lfs" in cmd_lower
+	):
 		return SemanticAction.SETUP.value
 	if any(re.search(rf"\b{re.escape(c)}\b", cmd_lower) for c in _ARCHIVE_CMDS):
 		return SemanticAction.SETUP.value
@@ -365,7 +431,9 @@ def classify_command(raw_command: str, description: str = "") -> str:
 		cmd_lower,
 	):
 		return SemanticAction.SETUP.value
-	if "dataset" in cmd_lower and any(w in cmd_lower for w in ("download", "extract", "fetch", "prep", "generate")):
+	if "dataset" in cmd_lower and any(
+		w in cmd_lower for w in ("download", "extract", "fetch", "prep", "generate")
+	):
 		return SemanticAction.SETUP.value
 	if "zipfile" in cmd_lower and "z3" in cmd_lower:
 		return SemanticAction.SETUP.value
@@ -378,29 +446,45 @@ def classify_command(raw_command: str, description: str = "") -> str:
 		return SemanticAction.BUILD.value
 	if re.search(r"\b(build\.sh|compile\.sh)\b", cmd_lower):
 		return SemanticAction.BUILD.value
-	if ("build.log" in cmd_lower or "compile.log" in cmd_lower) and not any(k in cmd_lower for k in ("verify", "eval", "test")):
+	if ("build.log" in cmd_lower or "compile.log" in cmd_lower) and not any(
+		k in cmd_lower for k in ("verify", "eval", "test")
+	):
 		return SemanticAction.BUILD.value
 
 	if re.search(r"\b(pytest|ctest|cargo\s+test|dotnet\s+test)\b", cmd_lower):
 		return SemanticAction.RUN.value
-	if any(
-		e in ("dafny", "z3", "boogie") or e.startswith(("z3-", "./dafny", "./verify"))
-		for e in execs
-	) and "--version" not in cmd_lower:
+	if (
+		any(
+			e in ("dafny", "z3", "boogie") or e.startswith(("z3-", "./dafny", "./verify"))
+			for e in execs
+		)
+		and "--version" not in cmd_lower
+	):
 		return SemanticAction.RUN.value
-	if re.search(r"\./(?:run|eval|bench|reproduce|test|verify-all|figure)[a-zA-Z0-9_.-]*", cmd_lower):
+	if re.search(
+		r"\./(?:run|eval|bench|reproduce|test|verify-all|figure)[a-zA-Z0-9_.-]*", cmd_lower
+	):
 		if re.search(r"^\./verify-all\b.*>\s*\S+\s+2>&1;\s*result=\$\?;\s*cp\b", cmd_lower):
 			return SemanticAction.RUN.value
 		return SemanticAction.RUN.value
 	if re.search(r"\./[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)*/verify\b", cmd_lower):
 		return SemanticAction.RUN.value
-	if any(w in cmd_lower for w in ("benchmark", "reproduce", "run_exp", "eval_results", "plot_figures")):
+	if any(
+		w in cmd_lower
+		for w in ("benchmark", "reproduce", "run_exp", "eval_results", "plot_figures")
+	):
 		return SemanticAction.RUN.value
-	if re.search(r"\bpython[0-9.]*\s+.*(?:run|eval|bench|reproduce)[a-zA-Z0-9_.-]*\.py\b", cmd_lower):
+	if re.search(
+		r"\bpython[0-9.]*\s+.*(?:run|eval|bench|reproduce)[a-zA-Z0-9_.-]*\.py\b", cmd_lower
+	):
 		return SemanticAction.RUN.value
-	if re.search(r"\b(bash|sh)\s+.*(?:run|eval|bench|reproduce|figure)[a-zA-Z0-9_.-]*\.sh\b", cmd_lower):
+	if re.search(
+		r"\b(bash|sh)\s+.*(?:run|eval|bench|reproduce|figure)[a-zA-Z0-9_.-]*\.sh\b", cmd_lower
+	):
 		return SemanticAction.RUN.value
-	if "figure" in cmd_lower and (".sh" in cmd_lower or "bash" in cmd_lower or "chmod +x" in cmd_lower):
+	if "figure" in cmd_lower and (
+		".sh" in cmd_lower or "bash" in cmd_lower or "chmod +x" in cmd_lower
+	):
 		return SemanticAction.RUN.value
 	if cmd_lower.startswith("until ") and "sleep" in cmd_lower:
 		return SemanticAction.VERIFY.value
@@ -435,7 +519,9 @@ def classify_event(
 	subtype = str(event.get("subtype", ""))
 
 	if subtype == "init":
-		return SemanticAction.SETUP.value, ACTION_METADATA[SemanticAction.SETUP.value]["short_label"]
+		return SemanticAction.SETUP.value, ACTION_METADATA[SemanticAction.SETUP.value][
+			"short_label"
+		]
 
 	if trace_format == "claude_code" or "blocks" in event:
 		if ev_type == "system":
@@ -448,10 +534,14 @@ def classify_event(
 				raw_desc = raw.get("description") or raw.get("summary") or ""
 				action = classify_command("", description=str(raw_desc))
 				return action, ACTION_METADATA[action]["short_label"]
-			return SemanticAction.MISC.value, ACTION_METADATA[SemanticAction.MISC.value]["short_label"]
+			return SemanticAction.MISC.value, ACTION_METADATA[SemanticAction.MISC.value][
+				"short_label"
+			]
 
 		if ev_type == "result":
-			return SemanticAction.MISC.value, ACTION_METADATA[SemanticAction.MISC.value]["short_label"]
+			return SemanticAction.MISC.value, ACTION_METADATA[SemanticAction.MISC.value][
+				"short_label"
+			]
 
 		if ev_type == "assistant":
 			blocks = event.get("blocks")
@@ -472,20 +562,36 @@ def classify_event(
 							return action, ACTION_METADATA[action]["short_label"]
 
 						if tool_name in ("Read", "Glob", "Grep"):
-							file_path = str(inp_dict.get("file_path") or inp_dict.get("path") or "").lower()
+							file_path = str(
+								inp_dict.get("file_path") or inp_dict.get("path") or ""
+							).lower()
 							if file_path.endswith(".output") and "/tasks/" in file_path:
-								return SemanticAction.VERIFY.value, ACTION_METADATA[SemanticAction.VERIFY.value]["short_label"]
-							return SemanticAction.SETUP.value, ACTION_METADATA[SemanticAction.SETUP.value]["short_label"]
+								return SemanticAction.VERIFY.value, ACTION_METADATA[
+									SemanticAction.VERIFY.value
+								]["short_label"]
+							return SemanticAction.SETUP.value, ACTION_METADATA[
+								SemanticAction.SETUP.value
+							]["short_label"]
 
 						if tool_name in ("Edit", "Write"):
-							return SemanticAction.MODIFY.value, ACTION_METADATA[SemanticAction.MODIFY.value]["short_label"]
+							return SemanticAction.MODIFY.value, ACTION_METADATA[
+								SemanticAction.MODIFY.value
+							]["short_label"]
 
-						return SemanticAction.MISC.value, ACTION_METADATA[SemanticAction.MISC.value]["short_label"]
+						return SemanticAction.MISC.value, ACTION_METADATA[
+							SemanticAction.MISC.value
+						]["short_label"]
 
-				if any(isinstance(b, dict) and b.get("type") in ("thinking", "text") for b in blocks):
-					return SemanticAction.THINK.value, ACTION_METADATA[SemanticAction.THINK.value]["short_label"]
+				if any(
+					isinstance(b, dict) and b.get("type") in ("thinking", "text") for b in blocks
+				):
+					return SemanticAction.THINK.value, ACTION_METADATA[SemanticAction.THINK.value][
+						"short_label"
+					]
 
-			return SemanticAction.THINK.value, ACTION_METADATA[SemanticAction.THINK.value]["short_label"]
+			return SemanticAction.THINK.value, ACTION_METADATA[SemanticAction.THINK.value][
+				"short_label"
+			]
 
 		if ev_type == "user":
 			blocks = event.get("blocks")
@@ -497,7 +603,9 @@ def classify_event(
 							action = tool_action_map[str(tool_use_id)]
 							return action, ACTION_METADATA[action]["short_label"]
 
-			return SemanticAction.MISC.value, ACTION_METADATA[SemanticAction.MISC.value]["short_label"]
+			return SemanticAction.MISC.value, ACTION_METADATA[SemanticAction.MISC.value][
+				"short_label"
+			]
 
 		return SemanticAction.MISC.value, ACTION_METADATA[SemanticAction.MISC.value]["short_label"]
 
@@ -511,12 +619,18 @@ def classify_event(
 				return action, ACTION_METADATA[action]["short_label"]
 
 			if item_type == "file_change":
-				return SemanticAction.MODIFY.value, ACTION_METADATA[SemanticAction.MODIFY.value]["short_label"]
+				return SemanticAction.MODIFY.value, ACTION_METADATA[SemanticAction.MODIFY.value][
+					"short_label"
+				]
 
 			if item_type in ("reasoning", "agent_message", "web_search"):
-				return SemanticAction.THINK.value, ACTION_METADATA[SemanticAction.THINK.value]["short_label"]
+				return SemanticAction.THINK.value, ACTION_METADATA[SemanticAction.THINK.value][
+					"short_label"
+				]
 
-			return SemanticAction.MISC.value, ACTION_METADATA[SemanticAction.MISC.value]["short_label"]
+			return SemanticAction.MISC.value, ACTION_METADATA[SemanticAction.MISC.value][
+				"short_label"
+			]
 
 	return SemanticAction.MISC.value, ACTION_METADATA[SemanticAction.MISC.value]["short_label"]
 

@@ -209,7 +209,9 @@ def _claude_event(
 			usage=_redact_value(payload.get("usage", {}), secrets),
 			result_text=_redact(str(payload.get("result") or ""), secrets),
 		)
-	action, action_label = classify_event(event, trace_format="claude_code", tool_action_map=tool_action_map)
+	action, action_label = classify_event(
+		event, trace_format="claude_code", tool_action_map=tool_action_map
+	)
 	event["action"] = action
 	event["action_label"] = action_label
 
