@@ -51,6 +51,7 @@ const els = {
   traceViewAll: document.getElementById('trace-view-all'),
   summaryActionBlock: document.getElementById('summary-action-block'),
   actionClearBtn: document.getElementById('action-clear-btn'),
+  actionTotalCount: document.getElementById('action-total-count'),
   actionBar: document.getElementById('action-bar'),
   actionLegend: document.getElementById('action-legend'),
 };
@@ -274,6 +275,13 @@ function renderActionSummary(actionSum) {
   const counts = actionSum.counts || {};
   const pcts = actionSum.percentages || {};
   const meta = actionSum.metadata || {};
+
+  if (els.actionTotalCount) {
+    const totalEvents = actionSum.total_events != null
+      ? actionSum.total_events
+      : (RECORD && Array.isArray(RECORD.events) ? RECORD.events.length : 0);
+    els.actionTotalCount.textContent = Number(totalEvents).toLocaleString();
+  }
 
   if (els.actionBar) {
     const segments = [];

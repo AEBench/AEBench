@@ -496,12 +496,20 @@
     if (!statsEl || !GRAPH_DATA || !GRAPH_DATA.stats) return;
 
     const s = GRAPH_DATA.stats;
+    const nodesCount = s.unique_nodes || 0;
+    const actionsCount = Array.isArray(ALL_EVENTS) ? ALL_EVENTS.length : (s.total_events || 0);
+    const stepsCount = s.total_steps || 0;
+    const compPct = s.compression_ratio || 0;
+    const subItems = [];
+    if (s.loop_edge_count) {
+      subItems.push(`<span class="badge-loop-stat">${s.loop_edge_count} loops</span>`);
+    }
+    if (s.backtrack_edge_count) {
+      subItems.push(`<span class="badge-backtrack-stat">${s.backtrack_edge_count} backtracks</span>`);
+    }
     statsEl.innerHTML = `
-      <span><strong>${s.unique_nodes || 0}</strong> nodes (${s.total_steps || 0} linear steps)</span>
-      <span class="stat-separator">·</span>
-      <span><strong>${s.compression_ratio || 0}%</strong> compression</span>
-      ${s.loop_edge_count ? `<span class="stat-separator">·</span><span class="badge-loop-stat"><strong>${s.loop_edge_count}</strong> loops</span>` : ''}
-      ${s.backtrack_edge_count ? `<span class="stat-separator">·</span><span class="badge-backtrack-stat"><strong>${s.backtrack_edge_count}</strong> backtracks</span>` : ''}
+      <div class="visualize-summary-line">${nodesCount} nodes from ${actionsCount} actions compressed from ${stepsCount} steps (${compPct}% compression)</div>
+      ${subItems.length ? `<div class="visualize-summary-subline">${subItems.join('<span class="stat-separator">·</span>')}</div>` : ''}
     `;
   }
 

@@ -63,13 +63,16 @@
 
         <div id="summary-action-block" class="summary-action-block hidden">
           <div class="summary-action-head">
-            <span class="summary-label">Actions</span>
-            <button type="button" id="action-clear-btn" class="action-clear-btn hidden" aria-label="Clear action filters" title="Clear action filters">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
+            <span class="summary-label">Actions (Source Events)</span>
+            <div class="summary-action-head-right">
+              <button type="button" id="action-clear-btn" class="action-clear-btn hidden" aria-label="Clear action filters" title="Clear action filters">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+              <span id="action-total-count" class="summary-action-total"></span>
+            </div>
           </div>
           <div class="action-bar" id="action-bar" aria-label="Action distribution" role="progressbar"></div>
           <div class="action-legend" id="action-legend"></div>
@@ -178,12 +181,14 @@
             <span>Loading graph topology…</span>
           </div>
           <div class="visualize-toolbar-actions">
-            <button type="button" id="graph-btn-loops" class="btn btn-secondary btn-small" title="Filter to loop & backtrack edges only">Loops only</button>
-            <button type="button" id="graph-btn-lowsignal" class="btn btn-secondary btn-small" title="Hide simple navigation commands (pwd, whoami)">Hide low-signal</button>
-            <div class="zoom-controls">
-              <button type="button" id="graph-btn-zoomin" class="btn btn-icon btn-small" title="Zoom in">+</button>
-              <button type="button" id="graph-btn-zoomout" class="btn btn-icon btn-small" title="Zoom out">−</button>
-              <button type="button" id="graph-btn-fit" class="btn btn-secondary btn-small" title="Fit graph to screen">Fit</button>
+            <div class="visualize-filter-group" role="group" aria-label="Graph filters">
+              <button type="button" id="graph-btn-loops" class="trace-view-btn" title="Filter to loop & backtrack edges only">Loops only</button>
+              <button type="button" id="graph-btn-lowsignal" class="trace-view-btn" title="Hide simple navigation commands (pwd, whoami)">Hide low-signal</button>
+            </div>
+            <div class="zoom-controls" role="group" aria-label="Zoom controls">
+              <button type="button" id="graph-btn-zoomin" class="trace-view-btn" title="Zoom in">+</button>
+              <button type="button" id="graph-btn-zoomout" class="trace-view-btn" title="Zoom out">−</button>
+              <button type="button" id="graph-btn-fit" class="trace-view-btn" title="Fit graph to screen">Fit</button>
             </div>
           </div>
         </header>
