@@ -394,6 +394,35 @@ def test_session_executor_translates_cwd_and_shell_command(
 	]
 
 
+def test_session_executor_translates_symlink_to_runtime_only_target(
+	tmp_path: Path,
+) -> None:
+	context = _oracle_context(tmp_path)
+	venv_bin = context.workspace_dir / "venv" / "bin"
+	venv_bin.mkdir(parents=True)
+	(venv_bin / "python").symlink_to(tmp_path / "not-mounted" / "python3")
+	backend = _FakeRuntimeBackend()
+	executor = _session_executor(context, backend)
+
+	assert executor.path_is_file(venv_bin / "python") is True
+	assert backend.calls[-1]["cmd"] == [
+		"test",
+		"-f",
+		"/workspace/venv/bin/python",
+	]
+
+
+def test_session_executor_follows_symlink_to_mounted_target(
+	tmp_path: Path,
+) -> None:
+	context = _oracle_context(tmp_path)
+	(context.workspace_dir / "refs").symlink_to(context.case_dir / "refs")
+	backend = _FakeRuntimeBackend()
+	executor = _session_executor(context, backend)
+
+	assert executor.resolve_path(context.workspace_dir / "refs") == PurePosixPath("/refs")
+
+
 def test_session_executor_rejects_string_without_shell(
 	tmp_path: Path,
 ) -> None:
