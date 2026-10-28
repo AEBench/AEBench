@@ -6,6 +6,7 @@ from pathlib import Path
 
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
 from evaluator.oracles.checks import (
+    ElementwiseSimilarityThresholdCheck,
     ListSimilarityCheck,
     PathCheck,
     PathKind,
@@ -85,7 +86,15 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
                 observed=observed,
                 reference=reference,
                 metric=SimilarityMetric.PEARSON,
-                min_similarity=0.75,
+                min_similarity=0.95,
+            )
+        )
+        checks.append(
+            ElementwiseSimilarityThresholdCheck(
+                name="results_element_similarity",
+                observed=observed,
+                reference=reference,
+                threshold=0.95,
             )
         )
 
