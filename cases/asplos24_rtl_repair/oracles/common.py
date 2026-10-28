@@ -117,7 +117,7 @@ class ToolLookup:
 				else os.path.join(bin_dir, tool)
 			)
 			if self._executor.path_is_file(executable):
-				return str(self._executor.resolve_path(executable))
+				return os.path.join(str(self._executor.resolve_path(bin_dir)), tool)
 		return None
 
 	def command(
