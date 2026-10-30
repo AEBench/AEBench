@@ -136,7 +136,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
         )
         checks: list[BaseCheck] = []
 
-        #existance of pdfs
+        # Check existance of PDFs
         for pdf_name in ["keyswitch_comparison.pdf", "bootstrap_comparison.pdf", "performance.pdf", "performance_per_dollar.pdf"]:
             checks.append(
                 PathCheck(
@@ -146,7 +146,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
                 )
             )
 
-        #pdfs generated during this agent run (not stale or copied from elsewhere)
+        # Check PDFs generated during this agent run (not stale or copied from elsewhere)
         runtime_result = self.context.runtime_result
         started_at = None if runtime_result is None else runtime_result.started_at
         finished_at = None if runtime_result is None else runtime_result.finished_at
@@ -160,7 +160,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
                 )
             )
 
-        #txt file existance
+        # Check txt file existance
         txt_path = outputs_dir / "performance_table.txt"
         checks.append(
             PathCheck(
