@@ -11,7 +11,7 @@ class OracleBenchmarkPrep(CaseOracleBenchmarkPrepBase):
     def requirements(self) -> Sequence[BaseCheck]:
         checks: list[BaseCheck] = []
 
-        # output directory located by its contents, wherever the agent created it
+        #output folder created (located by its contents, wherever the agent made it)
         outputs_dir = find_outputs_dir(self.workspace_path(), executor=self.executor)
         checks.append(
             PathCheck(

@@ -9,10 +9,11 @@ from evaluator.oracles.checks import CommandCheck, PathCheck, PathKind
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 from evaluator.oracles.reporting import BaseCheck, CheckResult
 
-from .common import find_outputs_dir
+from .common import PdfCreatedDuringRunCheck, find_outputs_dir
 
 _BUILD_MODE_ENV = "AE_CINNAMON_BUILD_MODE"
 _BUILD_TIMEOUT_SECONDS = 600.0
+
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -23,6 +24,7 @@ class InvalidBuildModeCheck(BaseCheck):
 		return CheckResult.failure(
 			f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
 		)
+
 
 
 class OracleArtifactBuild(CaseOracleArtifactBuildBase):
@@ -48,21 +50,31 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 			)
 
 		if mode == "verify":
-			# Running build_cinnamon.sh produces libcinnamon.so, which SST needs to 
-			# simulate for the experiments; in turn, it will write out a set of PDFs
-			# which we consider evidence of building CINNAMON
+			# Without a built libcinnamon.so every simulation aborts and plot.py
+			# writes nothing, so the comparison PDFs prove the build works.
 			outputs_dir = (
 				find_outputs_dir(repo_root, executor=self.executor)
 				or repo_root / "outputs"
 			)
-			return tuple(
-				PathCheck(
-					name=f"built_simulator_produced_{pdf_name.split('.')[0]}",
-					path=outputs_dir / pdf_name,
-					kind=PathKind.FILE,
+			runtime_result = self.context.runtime_result
+			checks: list[BaseCheck] = []
+			for pdf_name in ("keyswitch_comparison.pdf", "bootstrap_comparison.pdf"):
+				checks.append(
+					PathCheck(
+						name=f"built_simulator_produced_{pdf_name.split('.')[0]}",
+						path=outputs_dir / pdf_name,
+						kind=PathKind.FILE,
+					)
 				)
-				for pdf_name in ("keyswitch_comparison.pdf", "bootstrap_comparison.pdf")
-			)
+				checks.append(
+					PdfCreatedDuringRunCheck(
+						name=f"created_during_run_{pdf_name.split('.')[0]}",
+						pdf_path=outputs_dir / pdf_name,
+						started_at=None if runtime_result is None else runtime_result.started_at,
+						finished_at=None if runtime_result is None else runtime_result.finished_at,
+					)
+				)
+			return tuple(checks)
 
 		return (
 			InvalidBuildModeCheck(
