@@ -5,9 +5,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from evaluator.oracles.bases import CaseOracleArtifactBuildBase
-from evaluator.oracles.checks import CommandCheck
+from evaluator.oracles.checks import CommandCheck, PathCheck, PathKind
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 from evaluator.oracles.reporting import BaseCheck, CheckResult
+
+from .common import PdfCreatedDuringRunCheck, find_outputs_dir
 
 _BUILD_MODE_ENV = "AE_CINNAMON_BUILD_MODE"
 _BUILD_TIMEOUT_SECONDS = 600.0
@@ -48,35 +50,31 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 			)
 
 		if mode == "verify":
-			return (
-				CommandCheck(
-                    name="cinnamon_container_is_running",
-                    cmd=("docker", "inspect", "-f", "{{.State.Running}}", "cinnamon"),
-                    signature="true",
-                    timeout_seconds=10.0,
-                ),
-				CommandCheck(
-                    name="build_script_exists",
-                    cmd=("docker", "exec", "cinnamon", "ls", "build_cinnamon.sh"),
-                    timeout_seconds=10.0,
-                ),
-				CommandCheck(
-                    name="run_keyswitch_comparison_script_exists",
-                    cmd=("docker", "exec", "cinnamon", "ls", "run_keyswitch_comparison.sh"),
-                    timeout_seconds=10.0,
-                ),
-                CommandCheck(
-                    name="run_bootstrap_comparison_script_exists",
-                    cmd=("docker", "exec", "cinnamon", "ls", "run_bootstrap_comparison.sh"),
-                    timeout_seconds=10.0,
-                ),
-                CommandCheck(
-                    name="run_performance_script_exists",
-                    cmd=("docker", "exec", "cinnamon", "ls", "run_performance.sh"),
-                    timeout_seconds=10.0,
-                )
-                
+			# Without a built libcinnamon.so every simulation aborts and plot.py
+			# writes nothing, so the comparison PDFs prove the build works.
+			outputs_dir = (
+				find_outputs_dir(repo_root, executor=self.executor)
+				or repo_root / "outputs"
 			)
+			runtime_result = self.context.runtime_result
+			checks: list[BaseCheck] = []
+			for pdf_name in ("keyswitch_comparison.pdf", "bootstrap_comparison.pdf"):
+				checks.append(
+					PathCheck(
+						name=f"built_simulator_produced_{pdf_name.split('.')[0]}",
+						path=outputs_dir / pdf_name,
+						kind=PathKind.FILE,
+					)
+				)
+				checks.append(
+					PdfCreatedDuringRunCheck(
+						name=f"created_during_run_{pdf_name.split('.')[0]}",
+						pdf_path=outputs_dir / pdf_name,
+						started_at=None if runtime_result is None else runtime_result.started_at,
+						finished_at=None if runtime_result is None else runtime_result.finished_at,
+					)
+				)
+			return tuple(checks)
 
 		return (
 			InvalidBuildModeCheck(

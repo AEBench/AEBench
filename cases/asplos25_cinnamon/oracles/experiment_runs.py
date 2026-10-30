@@ -15,6 +15,8 @@ from evaluator.oracles.checks import (
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor
 from evaluator.oracles.reporting import BaseCheck
 
+from .common import PdfCreatedDuringRunCheck, find_outputs_dir
+
 
 def _extract_floats_from_txt(
     txt_path: Path, *, executor: RuntimeCheckExecutor
@@ -51,16 +53,33 @@ def _load_reference_floats(
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
     def requirements(self) -> Sequence[BaseCheck]:
-        outputs_dir = self.workspace_path() / "outputs"
+        outputs_dir = (
+            find_outputs_dir(self.workspace_path(), executor=self.executor)
+            or self.workspace_path() / "outputs"
+        )
         checks: list[BaseCheck] = []
 
-        #existance of pdfs
-        for pdf_name in ["keyswitch_comparison.pdf", "bootstrap_comparison.pdf", "performance.pdf", "performance_per_dollar.pdf"]:
+        #existance of pdfs (the comparison pdfs are checked by artifact_build)
+        for pdf_name in ["performance.pdf", "performance_per_dollar.pdf"]:
             checks.append(
                 PathCheck(
                     name=f"exists_{pdf_name.split('.')[0]}",
                     path=outputs_dir / pdf_name,
                     kind=PathKind.FILE,
+                )
+            )
+
+        #pdfs generated during this agent run (not stale or copied from elsewhere)
+        runtime_result = self.context.runtime_result
+        started_at = None if runtime_result is None else runtime_result.started_at
+        finished_at = None if runtime_result is None else runtime_result.finished_at
+        for pdf_name in ["performance.pdf", "performance_per_dollar.pdf"]:
+            checks.append(
+                PdfCreatedDuringRunCheck(
+                    name=f"created_during_run_{pdf_name.split('.')[0]}",
+                    pdf_path=outputs_dir / pdf_name,
+                    started_at=started_at,
+                    finished_at=finished_at,
                 )
             )
 
