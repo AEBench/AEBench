@@ -10,6 +10,7 @@ import pytest
 
 from evaluator.authoring.validate import validate_case_bundle
 from evaluator.oracles.discovery import discover_oracle_classes
+from evaluator.oracles.oracle_checks_runtime import LocalRuntimeCheckExecutor
 from evaluator.oracles.reporting import BaseCheck
 
 WASABI_CASE = Path(__file__).resolve().parents[2] / "cases" / "sosp24_wasabi"
@@ -23,15 +24,22 @@ def test_git_upstream_case_does_not_need_materialized_artifact(tmp_path: Path) -
 
 
 def test_wasabi_oracle_phases_construct_current_checks(tmp_path: Path) -> None:
-	context = SimpleNamespace(workspace_dir=tmp_path, case_dir=WASABI_CASE)
+	# The oracles look for benchmarks/ and results/ beside the artifact, as run.py does.
+	workspace = tmp_path / "repo"
+	for name in ("repo", "benchmarks", "results"):
+		(tmp_path / name).mkdir()
+	context = SimpleNamespace(workspace_dir=workspace, case_dir=WASABI_CASE)
+	executor = LocalRuntimeCheckExecutor(default_cwd=workspace)
 	for phase in discover_oracle_classes(WASABI_CASE):
 		oracle = object.__new__(phase.cls)
 		oracle._context = context
+		oracle._default_target_name = "main"
+		oracle._runtime_registry = SimpleNamespace(executor_for=lambda _name: executor)
 		checks = oracle.requirements()
 		assert checks
 		assert all(isinstance(check, BaseCheck) for check in checks)
 		if phase.name == "experiment_runs":
-			assert "ground_truth_coverage_by_bucket" in {check.name for check in checks}
+			assert "ground_truth_coverage" in {check.name for check in checks}
 
 
 @pytest.mark.parametrize(
