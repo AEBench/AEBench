@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +27,13 @@ _BUILD_COMMAND: tuple[str, ...] = (
 _EXPECTED_BUILD_OUTPUTS = _BUILD_COMMAND[2:]
 _BUILD_MODE_ENV = "AE_EGWALKER_BUILD_MODE"
 
+# The Makefile calls cargo, which rustup installs into ~/.cargo/bin. But plain
+# `docker exec` PATH does not include it, so the build adds it explicitly.
+_CARGO_PATH = 'export PATH="$HOME/.cargo/bin:$PATH"; '
+
+# A clean build compiles four Rust workspaces, some in two profiles.
+_BUILD_TIMEOUT_SECONDS = 1800.0
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class InvalidBuildModeCheck(BaseCheck):  # type: ignore[misc]
@@ -46,15 +54,15 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):  # type: ignore[misc]
                 self.command_check(
                     name="artifact_core_make_tools",
                     cwd=self.workspace_path(),
-                    cmd=_BUILD_COMMAND,
-                    timeout_seconds=300.0,
+                    cmd=("sh", "-c", _CARGO_PATH + shlex.join(_BUILD_COMMAND)),
+                    timeout_seconds=_BUILD_TIMEOUT_SECONDS,
                 ),
             )
 
         if mode == "verify":
             return tuple(
                 self.path_check(
-                    # Named by binary and build profile (target/<profile>/<binary>):
+                    # Naming convention -- binary and build profile (e.g., target/<profile>/<binary>):
                     # some binaries are built in both release and memusage.
                     name=f"built_output_{Path(rel_path).name}_{Path(rel_path).parent.name}",
                     path=self.workspace_path(rel_path),
