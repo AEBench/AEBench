@@ -182,6 +182,12 @@ def test_export_trace_site_writes_run_data_and_updates_index(tmp_path: Path) -> 
 	assert record["summary"]["usage"] == {"input_tokens": 20, "output_tokens": 4}
 	assert record["prompt"] == "# Prompt\n"
 	assert record["events"][0]["item"]["text"] == "complete"
+	assert record["events"][0]["action"] == "think"
+	assert "action_summary" in record["summary"]
+	assert "graph_summary" in record["summary"]
+	assert "graph" in record
+	assert (site_dir / "assets" / "dagre.min.js").is_file()
+	assert (site_dir / "assets" / "graph_view.js").is_file()
 
 
 def test_export_trace_site_uses_latest_oracle_reevaluation(tmp_path: Path) -> None:
