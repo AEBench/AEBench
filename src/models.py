@@ -53,13 +53,8 @@ class PromptProfile(str, Enum):
 	ARTIFACT_EVAL_DOCKER_V1 = "artifact-eval-docker-v1"
 
 
-AgentName = Literal["codex", "claude", "codex_non_api", "claude_non_api"]
-AGENT_NAMES: tuple[AgentName, ...] = (
-	"codex",
-	"claude",
-	"codex_non_api",
-	"claude_non_api",
-)
+# The name of an agent directory (agents/<name>/); see runtime.agents for discovery.
+AgentName = str
 
 
 class LiveViewMode(str, Enum):
@@ -376,6 +371,9 @@ class RunResult(_Model):
 	prompt_profile: PromptProfile
 	runtime: RuntimeInfo
 	agent_kind: str = "unknown"
+	# How `aebench trace export` reads runner_output.log, from the agent's agent.toml.
+	trace_format: str | None = None
+	trace_converter: str | None = None
 	agent: AgentResult
 	command_monitor: CommandMonitorInfo | None = None
 	error: str | None = None
