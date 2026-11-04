@@ -7,6 +7,17 @@ COPY src/runtime/shim ./
 RUN cargo build --release --locked
 
 
+################# agent installers #################
+# Keeps only each agent's install.sh, so editing an agent.sh or agent.toml does
+# not invalidate the install layer in the final image (those files are copied
+# into every run, not baked into the image).
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS agent-installers
+
+COPY agents /agents
+RUN find /agents -type f ! -name install.sh -delete \
+ && find /agents -mindepth 1 -type d -empty -delete
+
+
 ################# everything else! #################
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
@@ -45,16 +56,24 @@ RUN arch="$(dpkg --print-architecture)" \
     -o /usr/local/lib/docker/cli-plugins/docker-compose \
  && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
-# Install pinned CLI harness versions.
-ARG CLAUDE_CODE_VERSION=2.1.284
-ARG CODEX_VERSION=0.159.1
-
+# Node.js 22 is part of the base environment that agents and artifacts see.
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
  && apt-get install -y --no-install-recommends nodejs \
- && npm install -g \
-    "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
-    "@openai/codex@${CODEX_VERSION}" \
  && rm -rf /var/lib/apt/lists/*
+
+# Agent harnesses: runs agents/<name>/install.sh for every agent that has one.
+# Each pins its own version; see docs/howtos/add_agent.md.
+COPY --from=agent-installers /agents /opt/aebench/agent-installers
+RUN set -e; \
+    for script in /opt/aebench/agent-installers/*/install.sh; do \
+      [ -e "$script" ] || continue; \
+      name="$(basename "$(dirname "$script")")"; \
+      echo "Installing agent harness: $name"; \
+      mkdir -p "/opt/aebench/agents/$name"; \
+      AEBENCH_AGENT_NAME="$name" AEBENCH_AGENT_PREFIX="/opt/aebench/agents/$name" \
+        bash -euo pipefail "$script"; \
+    done; \
+    rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock README.md ./
 
