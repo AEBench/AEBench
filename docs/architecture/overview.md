@@ -77,7 +77,8 @@ src/
 ├── runtime/                # task execution layer
 │   ├── case_runner.py      # prepares and runs one case, then starts the oracle
 │   ├── agent_runner.py     # prepares credentials and runs a shell harness
-│   ├── agent_scripts/      # Codex and Claude Code shell harnesses
+│   ├── agents.py           # agent discovery and agent.toml validation
+│   ├── agent_support/      # entry script and output timestamper shared by all agents
 │   ├── oracle_runner.py    # in-process and subprocess oracle runners
 │   ├── backend.py          # Docker and local runtime backends
 │   ├── session.py          # RunSession: shared state for one task run
