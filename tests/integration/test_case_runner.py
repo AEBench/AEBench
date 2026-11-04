@@ -28,6 +28,69 @@ from runtime.case_runner import _CaseRunner, run_case
 _FIXTURE = Path(__file__).parent / "mock-case" / "fixture"
 
 
+@pytest.fixture(autouse=True)
+def _mock_agent(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+	# These runs use a throwaway agent that declares an API key, so the secret
+	# handling runs too; most tests replace the agent process with a fake.
+	agents = tmp_path_factory.mktemp("agents")
+	(agents / "mock_agent").mkdir()
+	(agents / "mock_agent" / "agent.sh").write_text("true\n", encoding="utf-8")
+	(agents / "mock_agent" / "agent.toml").write_text(
+		'description = "test agent"\n[[secrets]]\nname = "MOCK_API_KEY"\n', encoding="utf-8"
+	)
+	monkeypatch.setenv("AEBENCH_AGENT_DIRS", str(agents))
+	monkeypatch.setenv("MOCK_API_KEY", "test-key")
+
+
+def test_unknown_agent_fails_before_preparing_the_case(tmp_path: Path) -> None:
+	project = tmp_path / "project"
+	shutil.copytree(_FIXTURE, project)
+	state = load_project_config(project)
+	context = AppState(project_state=state, settings=resolve_settings(state))
+
+	with pytest.raises(ValueError, match="unknown agent 'nope'"):
+		run_case(
+			context,
+			project / "bundles" / "mock_apt_case",
+			options=RunOptions(agent_type="nope", model_name="m", allow_unsafe_local=True),
+			save_path=tmp_path / "output",
+		)
+	assert not (tmp_path / "output").exists()
+
+
+def test_project_agent_runs_without_code_changes(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""An agent added as agents/<name>/ in the project runs end to end."""
+	project = tmp_path / "project"
+	shutil.copytree(_FIXTURE, project)
+	agent_dir = project / "agents" / "echo_agent"
+	agent_dir.mkdir(parents=True)
+	(agent_dir / "agent.toml").write_text(
+		'description = "test agent"\nrequires = ["bash"]\n', encoding="utf-8"
+	)
+	(agent_dir / "agent.sh").write_text(
+		'echo "model=$AEBENCH_MODEL"\necho note > "$AEBENCH_ARTIFACTS_DIR/note.txt"\n',
+		encoding="utf-8",
+	)
+	state = load_project_config(project)
+	context = AppState(project_state=state, settings=resolve_settings(state))
+	output_dir = tmp_path / "output"
+
+	result = run_case(
+		context,
+		project / "bundles" / "mock_apt_case",
+		options=RunOptions(agent_type="echo_agent", model_name="m1", allow_unsafe_local=True),
+		save_path=output_dir,
+	)
+
+	assert result.runtime_result.agent_kind == "echo_agent"
+	assert result.runtime_result.agent.exit_code == 0
+	assert result.runtime_result.trace_format == "raw"
+	assert "model=m1" in (output_dir / "runner_output.log").read_text(encoding="utf-8")
+	assert (output_dir / "agent-artifacts" / "note.txt").read_text(encoding="utf-8") == "note\n"
+
+
 def test_trajectory_audit_failure_is_advisory(
 	tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -100,7 +163,7 @@ def test_case_runner_executes_agent_then_oracle(
 	result = run_case(
 		context,
 		project / "bundles" / "mock_apt_case",
-		options=RunOptions(agent_type="codex", model_name="gpt-test", allow_unsafe_local=True),
+		options=RunOptions(agent_type="mock_agent", model_name="gpt-test", allow_unsafe_local=True),
 		save_path=output_dir,
 		on_output_dir=record_output_dir,
 	)
@@ -108,7 +171,7 @@ def test_case_runner_executes_agent_then_oracle(
 	assert events == [f"output:{output_dir}", "agent"]
 	assert result.status == CaseStatus.SUCCESS
 	assert result.oracle_result.score == 4
-	assert result.runtime_result.agent_kind == "codex"
+	assert result.runtime_result.agent_kind == "mock_agent"
 	assert result.runtime_result.agent.reasoning_effort == "high"
 	assert result.runtime_result.duration_ms == 2_000
 	assert runtime_paths["home"] == str(Path.home())
@@ -134,7 +197,7 @@ def test_case_runner_rejects_unisolated_local_agent(tmp_path: Path) -> None:
 		run_case(
 			context,
 			project / "bundles" / "mock_apt_case",
-			options=RunOptions(agent_type="codex", model_name="gpt-test"),
+			options=RunOptions(agent_type="mock_agent", model_name="gpt-test"),
 		)
 
 
@@ -154,7 +217,7 @@ def test_case_runner_rejects_incomplete_local_source(tmp_path: Path) -> None:
 			context,
 			project / "bundles" / "mock_apt_case",
 			options=RunOptions(
-				agent_type="codex",
+				agent_type="mock_agent",
 				model_name="gpt-test",
 				allow_unsafe_local=True,
 			),
@@ -177,7 +240,7 @@ def test_case_runner_scores_workspace_after_agent_timeout(
 	result = run_case(
 		context,
 		project / "bundles" / "mock_apt_case",
-		options=RunOptions(agent_type="codex", model_name="gpt-test", allow_unsafe_local=True),
+		options=RunOptions(agent_type="mock_agent", model_name="gpt-test", allow_unsafe_local=True),
 		save_path=tmp_path / "output",
 	)
 
@@ -283,7 +346,7 @@ def test_docker_case_scores_stopped_snapshot_not_live_session(
 	result = run_case(
 		context,
 		project / "bundles" / "mock_apt_case",
-		options=RunOptions(agent_type="codex", model_name="gpt-test"),
+		options=RunOptions(agent_type="mock_agent", model_name="gpt-test"),
 		save_path=tmp_path / "output",
 	)
 
@@ -415,7 +478,7 @@ def test_monitored_case_orders_the_broker_and_shim(
 		context,
 		project / "bundles" / "mock_apt_case",
 		options=RunOptions(
-			agent_type="codex",
+			agent_type="mock_agent",
 			model_name="gpt-test",
 			trajectory_audit=True,
 		),
@@ -465,7 +528,7 @@ def test_monitoring_requires_docker(tmp_path: Path) -> None:
 			context,
 			project / "bundles" / "mock_apt_case",
 			options=RunOptions(
-				agent_type="codex",
+				agent_type="mock_agent",
 				model_name="gpt-test",
 				monitor_commands=True,
 				allow_unsafe_local=True,
@@ -487,7 +550,7 @@ def _docker_case_runner(tmp_path: Path, *cli_args: str) -> _CaseRunner:
 	)
 	state = load_project_config(project)
 	args = _build_parser().parse_args(
-		["case", "run", "mock_apt_case", "--agent", "codex", "--model", "gpt-test", *cli_args]
+		["case", "run", "mock_apt_case", "--agent", "mock_agent", "--model", "gpt-test", *cli_args]
 	)
 	return _CaseRunner(
 		AppState(project_state=state, settings=resolve_settings(state)),
