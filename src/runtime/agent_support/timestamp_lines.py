@@ -5,7 +5,7 @@
 
 Output format: [2026-04-03T14:05:32Z] <original line>
 
-This script records the time of each output line from Codex or Claude Code.
+This script records the time of each output line from the agent harness.
 """
 
 import sys

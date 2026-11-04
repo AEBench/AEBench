@@ -59,8 +59,8 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 runtime = [
-  "agent_scripts/*/solve.sh",
-  "agent_scripts/timestamp_lines.py",
+  "agent_support/entry.sh",
+  "agent_support/timestamp_lines.py",
   "shim/src/monitor.py",
 ]
 trace_viewer = ["assets/*"]
