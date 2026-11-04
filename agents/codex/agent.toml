@@ -1,0 +1,9 @@
+description = "Codex CLI with an OpenAI API key"
+requires = ["codex"]
+reasoning_effort = "high"
+trace_format = "codex"
+
+[[secrets]]
+name = "OPENAI_API_KEY"
+from_env = ["OPENAI_API_KEY", "CODEX_API_KEY"]
+hint = "set OPENAI_API_KEY or CODEX_API_KEY"
