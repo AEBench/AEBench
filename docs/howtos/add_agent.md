@@ -1,14 +1,13 @@
 # Agent Harnesses
 
-AEBench invokes Codex and Claude Code through shell scripts. Each script
-receives two environment variables:
+An agent harness is a directory under `agents/`. AEBench finds every directory
+there and runs the selected one with `--agent <name>`; nothing in AEBench's
+code names a specific agent. `aebench agent list` shows the agents found and
+reports any problem with their files.
 
-- `PROMPT`: the complete AEBench prompt
-- `AGENT_CONFIG`: the selected model name
-
-AEBench starts each agent CLI without prompts for user input and writes its
-timestamped output to `runner_output.log`. GNU `timeout` terminates the CLI when the
-`run.runtime.timeout_ms` limit expires.
+AEBench starts the agent without prompts for user input and writes its
+timestamped output to `runner_output.log`. GNU `timeout` terminates the agent
+when the `run.runtime.timeout_ms` limit expires.
 
 The AEBench runtime image includes the Codex and Claude Code CLIs. Install
 Docker on the Chameleon instance. No agent CLI installation is required there.
@@ -142,12 +141,140 @@ uv run aebench case run asplos24_crocus \
 This option mounts the host Docker socket and gives the agent control of the
 Chameleon instance's Docker daemon.
 
-## Adding another CLI
+## Adding an agent
 
-1. Add `src/runtime/agent_scripts/<name>/solve.sh`.
-2. Add the name to `AgentName` and `AGENT_NAMES` in `models.py`.
-3. Pass only the credentials required by that harness in `_agent_env()`.
-4. Add unit tests for the command, environment, time limit, and CLI output.
+Adding an agent needs no change to AEBench: create a directory, rebuild the
+runtime image, and run it.
 
-The solve script starts the agent. AEBench prepares the source, manages the
-runtime, runs the oracle, and stores the result.
+```
+agents/<name>/
+  agent.sh      required: starts the agent CLI
+  agent.toml    what AEBench must provide: credentials, required binaries, ...
+  install.sh    installs the CLI into the runtime image
+  trace.py      optional: converts the CLI's output for the trace viewer
+  ...           any other files agent.sh needs (config templates, helpers)
+```
+
+The directory name is the `--agent` value (lowercase letters, digits, `_`, `-`).
+For the smallest working example, see `agents/claude/`.
+
+### agent.sh
+
+AEBench copies the agent directory into the run and runs `agent.sh` with bash,
+as the unprivileged `agent` user inside the workspace, with stdin from
+`/dev/null`. Whatever it prints becomes `runner_output.log`; its exit code is
+the agent's exit code (0 means success).
+
+| Variable | Value |
+| --- | --- |
+| `PROMPT` | the complete AEBench prompt (also in the file `$AEBENCH_PROMPT_FILE`) |
+| `AEBENCH_MODEL` | the `--model` value (`AGENT_CONFIG` is the same, for older scripts) |
+| `AEBENCH_REASONING_EFFORT` | `reasoning_effort` from `agent.toml`, if set |
+| `AEBENCH_TIMEOUT_SECONDS` | the case's time limit; AEBench enforces it |
+| `AEBENCH_WORKSPACE` | the artifact workspace (also the working directory) |
+| `AEBENCH_AGENT_NAME` | the agent's name |
+| `AEBENCH_AGENT_DIR` | the run's copy of the agent directory, for templates and helpers |
+| `AEBENCH_STATE_DIR` | where the CLI keeps its config, sessions and caches; deleted after the run |
+| `AEBENCH_ARTIFACTS_DIR` | files written here are saved to `<run>/agent-artifacts/`, even after a timeout |
+| `HOME` | `/home/agent` in Docker; your own home directory for `mode = "local"` cases |
+| declared secrets | each `[[secrets]]` entry, as an ordinary environment variable |
+
+Rules for the script:
+
+- Start the CLI in its non-interactive mode with every permission prompt
+  disabled; the container is the sandbox. Turn off the CLI's own sandbox if it
+  has one.
+- Point the CLI's config directory at `$AEBENCH_STATE_DIR` (for example
+  `CLAUDE_CONFIG_DIR`, `CODEX_HOME`). For `mode = "local"` cases, `HOME` is your
+  real home directory, so this keeps the run from reading or changing your own
+  CLI configuration.
+- Print the CLI's machine-readable output (JSON lines) on stdout. That output is
+  the only record AEBench keeps of what the agent did; copy anything else worth
+  keeping, such as session files, into `$AEBENCH_ARTIFACTS_DIR`.
+- Turn off telemetry and uploads the CLI does by default.
+- Let long commands finish: raise the CLI's per-command timeout. The prompt tells
+  agents not to set their own timeouts.
+- Command monitoring (`aebench case monitor`, `--trajectory-audit`) records
+  each shell the CLI starts through `/bin/bash`. A CLI that runs one long-lived
+  shell and writes commands to it shows up as a single command.
+
+### agent.toml
+
+Every field is optional; an agent without `agent.toml` gets no credentials.
+
+```toml
+description = "My CLI with an API key"   # shown by `aebench agent list`
+requires = ["mycli"]                     # checked before the agent starts
+reasoning_effort = "high"                # exported and recorded with the result
+prompt_append = "Extra instructions for this agent only."
+trace_format = "claude_code"             # claude_code | codex | raw (default)
+trace_converter = "trace.py"             # optional, see below
+
+# A credential read from the host and exported to agent.sh.
+[[secrets]]
+name = "MYCLI_API_KEY"                   # the variable agent.sh sees
+from_env = ["MYCLI_API_KEY", "OTHER_NAME"]  # host variables, first non-empty wins (default: [name])
+from_file_env = "MYCLI_KEY_FILE"         # or a host variable naming a file holding it
+optional = false
+hint = "set MYCLI_API_KEY"               # shown when it is missing
+
+# A host file copied into $AEBENCH_STATE_DIR before the run (mode 600).
+[[files]]
+target = ".mycli/auth.json"
+sources = ["${MYCLI_AUTH_FILE}", "~/.mycli/auth.json"]  # first one whose variables are set
+hint = "run `mycli login`"
+```
+
+A missing required secret or file stops the run before anything starts.
+Secrets reach the agent through a private file in the support directory, never
+on the `docker exec` command line.
+
+`agent.toml` cannot change the container: privileges, mounts, network access
+and the shell are the same for every agent, and the case decides whether the
+host Docker socket or GPUs are available. Copy files with `[[files]]` instead of
+mounting them.
+
+### install.sh
+
+The `Dockerfile` runs every `agents/*/install.sh` as root while it builds the
+runtime image, with `AEBENCH_AGENT_PREFIX=/opt/aebench/agents/<name>`. Pin the
+CLI's version in the script. Install into the prefix and link the binary into
+`/usr/local/bin` when the CLI brings its own runtime, so the tools artifacts
+see (Node.js 22, Python) stay unchanged. Several agents can share one CLI; only
+one of them needs the install script (`claude_non_api` uses `claude`'s).
+
+Rebuild the image after adding or changing an `install.sh`:
+
+```bash
+docker build -t aebench-agent:latest .
+```
+
+Changes to `agent.sh` or `agent.toml` do not need a rebuild.
+
+### Trace viewer
+
+`aebench trace export` reads `runner_output.log` according to `trace_format`.
+Use `claude_code` or `codex` when the CLI prints the same JSON events as Claude
+Code (`--output-format stream-json`) or Codex (`exec --json`). Otherwise the
+viewer shows the plain log, or the agent can ship a `trace_converter`: a script
+that receives the run directory as its argument and prints Claude Code
+stream-json events on stdout. AEBench runs it on the host when exporting, so
+only use converters you trust.
+
+### Checking an agent
+
+```bash
+uv run aebench agent list                 # finds the agent and validates agent.toml
+uv run pytest tests/unit/test_agents.py   # runs the checks every agent gets
+```
+
+Then run a short case with `--agent <name>` and look at `runner_output.log`
+and `aebench trace export`.
+
+### Agents outside this repository
+
+Set `AEBENCH_AGENT_DIRS` to one or more directories (separated by `:`) that hold
+agent directories, or put them in an `agents/` directory next to your project's
+`aebench.toml`. An agent name may appear only once across all of them. Their
+`install.sh` is not run by this repository's `Dockerfile`; build an image from
+`aebench-agent:latest` that runs it, and tag that image `aebench-agent:latest`.
