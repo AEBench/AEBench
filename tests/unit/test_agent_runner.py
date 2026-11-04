@@ -10,35 +10,41 @@ from types import SimpleNamespace
 import pytest
 
 from models import (
-	AgentName,
 	ArtifactRequirementsConfig,
 	RuntimeConfig,
 	RuntimeMode,
 	TaskConfig,
 )
+from runtime import agent_runner
 from runtime.agent_runner import (
-	_REASONING_EFFORT,
 	_agent_env,
 	_agent_shell_command,
 	_prompt_for_agent,
-	_solve_script,
 	_timeout_command,
+	check_agent_requirements,
+	collect_agent_artifacts,
 	prepare_agent_runtime,
 	prepare_agent_support_dir,
 	run_agent,
 )
+from runtime.agents import AgentConfigError, AgentDefinition, load_agent_dir
 from runtime.backend import DockerRuntime, LocalRuntime
+
+_PIPELINE = (
+	'bash "$AEBENCH_AGENT_SUPPORT_DIR"/aebench/entry.sh </dev/null 2>&1 | '
+	'python3 "$AEBENCH_AGENT_SUPPORT_DIR"/aebench/timestamp_lines.py'
+)
 
 
 class FakeRuntime:
 	path_separator = ":"
 
-	def __init__(self) -> None:
+	def __init__(self, installed: tuple[str, ...] = ("timeout",)) -> None:
 		self.command: list[str] = []
 		self.cwd: str | None = None
 		self.env: dict[str, str] = {}
 		self.stdin_text: str | None = None
-		self.has_timeout = True
+		self.installed = set(installed)
 
 	def resolve_executable(
 		self,
@@ -48,7 +54,7 @@ class FakeRuntime:
 		env: Mapping[str, str] | None = None,
 	) -> str | None:
 		_ = cwd, env
-		return f"/usr/bin/{executable}" if self.has_timeout and executable == "timeout" else None
+		return f"/usr/bin/{executable}" if executable in self.installed else None
 
 	def run_process_to_file(
 		self,
@@ -81,6 +87,27 @@ class FakeRuntime:
 		return subprocess.CompletedProcess(cmd, 0, "", "")
 
 
+def _write_agent(directory: Path, script: str, manifest: str = "") -> AgentDefinition:
+	directory.mkdir(parents=True)
+	(directory / "agent.sh").write_text(script, encoding="utf-8")
+	if manifest:
+		(directory / "agent.toml").write_text(manifest, encoding="utf-8")
+	return load_agent_dir(directory)
+
+
+_TOKEN_AGENT = """
+reasoning_effort = "high"
+
+[[secrets]]
+name = "API_TOKEN"
+hint = "export API_TOKEN"
+"""
+
+
+def _token_agent(tmp_path: Path) -> AgentDefinition:
+	return _write_agent(tmp_path / "agents" / "token_agent", "true\n", _TOKEN_AGENT)
+
+
 @pytest.mark.parametrize(
 	"error", [OSError("docker unavailable"), subprocess.TimeoutExpired("docker", 5)]
 )
@@ -98,43 +125,23 @@ def test_timeout_lookup_reports_runtime_failure(
 	assert caught.value.__cause__ is error
 
 
-def test_codex_script_streams_json_without_secret_echoes() -> None:
-	script = _solve_script("codex")
-	assert "printf '%s' \"$PROMPT\" | codex --search exec --json" in script
-	assert 'model_reasoning_effort=\\"$AEBENCH_REASONING_EFFORT\\"' in script
-	assert "model_reasoning_summary=detailed" in script
-	assert "--skip-git-repo-check --yolo" in script
-	assert "echo $OPENAI_API_KEY" not in script
-	assert "echo $CODEX_API_KEY" not in script
-	assert _REASONING_EFFORT["codex"] == "high"
+def test_agent_without_prompt_append_gets_the_prompt_unchanged(tmp_path: Path) -> None:
+	agent = _write_agent(tmp_path / "plain", "true\n")
+	assert _prompt_for_agent(agent, "do the task") == "do the task"
 
 
-def test_claude_script_streams_json_without_permission_prompts() -> None:
-	script = _solve_script("claude")
-	assert 'BASH_MAX_TIMEOUT_MS="36000000"' in script
-	assert "claude --print --verbose" in script
-	assert "--output-format stream-json --thinking-display summarized" in script
-	assert "--dangerously-skip-permissions" in script
-	assert "claude" not in _REASONING_EFFORT
-	assert _REASONING_EFFORT["claude_non_api"] == "high"
-	assert '--effort "$AEBENCH_REASONING_EFFORT"' in _solve_script("claude_non_api")
-
-
-@pytest.mark.parametrize("agent", ["claude", "claude_non_api"])
-def test_claude_prompt_includes_noninteractive_guidance(agent: AgentName) -> None:
-	prompt = _prompt_for_agent(agent, "do the task\n")
-	assert prompt.startswith("do the task\n\n")
-	assert "Wait for every process that you start to finish" in prompt
-
-
-def test_codex_prompt_is_unchanged() -> None:
-	assert _prompt_for_agent("codex", "do the task") == "do the task"
+def test_prompt_append_follows_a_blank_line(tmp_path: Path) -> None:
+	agent = _write_agent(tmp_path / "append", "true\n", 'prompt_append = "Be brief."\n')
+	assert _prompt_for_agent(agent, "do the task\n") == "do the task\n\nBe brief."
 
 
 def test_docker_agent_runs_as_unprivileged_user() -> None:
 	command = _agent_shell_command(DockerRuntime())
 	assert command[:4] == ["bash", "-o", "pipefail", "-c"]
-	assert "runuser --user agent --preserve-environment -- bash -s" in command[-1]
+	assert command[-1].startswith(
+		'runuser --user agent --preserve-environment -- bash "$AEBENCH_AGENT_SUPPORT_DIR"'
+		"/aebench/entry.sh </dev/null 2>&1 | "
+	)
 
 
 def test_docker_agent_runtime_matches_host_socket_group(
@@ -162,29 +169,25 @@ def test_docker_agent_runtime_matches_host_socket_group(
 
 
 def test_local_agent_uses_current_user() -> None:
-	assert _agent_shell_command(LocalRuntime()) == [
-		"bash",
-		"-o",
-		"pipefail",
-		"-c",
-		'bash -s 2>&1 | python3 "$AEBENCH_AGENT_SUPPORT_DIR/timestamp_lines.py"',
-	]
+	assert _agent_shell_command(LocalRuntime()) == ["bash", "-o", "pipefail", "-c", _PIPELINE]
 
 
-def test_runner_passes_harness_contract_and_saves_output(
-	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-	monkeypatch.setenv("OPENAI_API_KEY", "secret")
+def test_runner_passes_harness_contract_and_saves_output(tmp_path: Path) -> None:
+	agent = _token_agent(tmp_path)
+	support_dir = prepare_agent_support_dir(
+		agent, tmp_path / "run", environ={"API_TOKEN": "token-secret"}
+	)
 	runtime = FakeRuntime()
-	output_path = tmp_path / "solve_out.txt"
+	output_path = tmp_path / "runner_output.log"
 
 	result = run_agent(
-		"codex",
-		model="gpt-test",
+		agent,
+		model="model-test",
 		prompt="do the task",
 		runtime=runtime,  # type: ignore[arg-type]
 		cwd="/repo",
 		runtime_home="/home/agent",
+		host_support_dir=support_dir,
 		runtime_support_dir="/run/aebench-agent",
 		timeout_seconds=600,
 		output_path=output_path,
@@ -199,115 +202,208 @@ def test_runner_passes_harness_contract_and_saves_output(
 		"-o",
 		"pipefail",
 		"-c",
-		'bash -s 2>&1 | python3 "$AEBENCH_AGENT_SUPPORT_DIR/timestamp_lines.py"',
+		_PIPELINE,
 	]
 	assert runtime.cwd == "/repo"
-	assert runtime.env["HOME"] == "/home/agent"
-	assert runtime.env["AEBENCH_AGENT_SUPPORT_DIR"] == "/run/aebench-agent"
-	assert runtime.env["PROMPT"] == "do the task"
-	assert runtime.env["AGENT_CONFIG"] == "gpt-test"
-	assert runtime.env["AEBENCH_REASONING_EFFORT"] == "high"
-	assert runtime.env["OPENAI_API_KEY"] == "secret"
-	assert runtime.env["CODEX_API_KEY"] == "secret"
-	assert "ANTHROPIC_API_KEY" not in runtime.env
-	assert runtime.stdin_text == _solve_script("codex")
+	assert runtime.env == {
+		"HOME": "/home/agent",
+		"AEBENCH_AGENT_NAME": "token_agent",
+		"AEBENCH_AGENT_SUPPORT_DIR": "/run/aebench-agent",
+		"AEBENCH_AGENT_DIR": "/run/aebench-agent/agent",
+		"AEBENCH_STATE_DIR": "/run/aebench-agent/state",
+		"AEBENCH_ARTIFACTS_DIR": "/run/aebench-agent/artifacts",
+		"AEBENCH_PROMPT_FILE": "/run/aebench-agent/aebench/prompt.txt",
+		"AEBENCH_WORKSPACE": "/repo",
+		"AEBENCH_TIMEOUT_SECONDS": "600",
+		"AEBENCH_MODEL": "model-test",
+		"AGENT_CONFIG": "model-test",
+		"AEBENCH_REASONING_EFFORT": "high",
+	}
+	# Secrets and the prompt never travel on the `docker exec` command line.
+	assert "token-secret" not in " ".join(runtime.command + list(runtime.env.values()))
+	assert runtime.stdin_text == ""
+	assert (support_dir / "aebench" / "prompt.txt").read_text(encoding="utf-8") == "do the task"
+	assert (support_dir / "aebench" / "secrets.sh").read_text(encoding="utf-8") == (
+		"export API_TOKEN=token-secret\n"
+	)
 	assert result.exit_code == 0
 	assert result.reasoning_effort == "high"
 	assert output_path.read_text(encoding="utf-8") == '{"type":"result"}\n'
 
 
-def test_local_runner_timestamps_stdout_and_stderr(
+def test_runner_fails_before_starting_when_the_harness_is_not_installed(
+	tmp_path: Path,
+) -> None:
+	agent = _write_agent(tmp_path / "needs_cli", "probe-cli\n", 'requires = ["probe-cli"]\n')
+	(agent.directory / "install.sh").write_text("true\n", encoding="utf-8")
+	runtime = FakeRuntime(installed=("timeout",))
+	with pytest.raises(RuntimeError, match="requires probe-cli") as caught:
+		check_agent_requirements(agent, runtime)  # type: ignore[arg-type]
+	assert str(agent.directory / "install.sh") in str(caught.value)
+	assert runtime.command == []
+
+
+def test_support_dir_holds_agent_copy_and_aebench_files(tmp_path: Path) -> None:
+	agent = _token_agent(tmp_path)
+	support_dir = prepare_agent_support_dir(
+		agent, tmp_path / "run", environ={"API_TOKEN": "token-secret"}
+	)
+
+	assert support_dir.stat().st_mode & 0o777 == 0o700
+	assert (support_dir / "aebench" / "entry.sh").is_file()
+	assert (support_dir / "aebench" / "timestamp_lines.py").is_file()
+	assert (support_dir / "agent" / "agent.sh").read_text(encoding="utf-8") == "true\n"
+	assert (support_dir / "state").is_dir()
+	assert (support_dir / "artifacts").is_dir()
+	secrets = support_dir / "aebench" / "secrets.sh"
+	assert secrets.stat().st_mode & 0o777 == 0o600
+
+
+_FILE_AGENT = """
+[[files]]
+target = ".cli/auth.json"
+sources = ["${AUTH_OVERRIDE}", "${CLI_HOME}/auth.json"]
+hint = "log in first"
+"""
+
+
+def test_declared_files_are_copied_to_private_state_dir(tmp_path: Path) -> None:
+	auth = tmp_path / "auth.json"
+	auth.write_text('{"tokens":{}}', encoding="utf-8")
+	support_dir = prepare_agent_support_dir(
+		_write_agent(tmp_path / "file_agent", "true\n", _FILE_AGENT),
+		tmp_path / "run",
+		environ={"AUTH_OVERRIDE": str(auth)},
+	)
+
+	target = support_dir / "state" / ".cli" / "auth.json"
+	assert target.read_text(encoding="utf-8") == '{"tokens":{}}'
+	assert target.stat().st_mode & 0o777 == 0o600
+	assert not (support_dir / "aebench" / "secrets.sh").exists()
+
+
+def test_missing_declared_file_does_not_leave_support_dir(tmp_path: Path) -> None:
+	parent = tmp_path / "run"
+	with pytest.raises(AgentConfigError, match="log in first") as caught:
+		prepare_agent_support_dir(
+			_write_agent(tmp_path / "file_agent", "true\n", _FILE_AGENT),
+			parent,
+			environ={"AUTH_OVERRIDE": str(tmp_path / "missing.json")},
+		)
+	assert "missing.json" in str(caught.value)
+	assert not (parent / "agent-support").exists()
+
+
+def test_missing_secret_names_the_variable_and_hint(tmp_path: Path) -> None:
+	with pytest.raises(AgentConfigError, match="missing API_TOKEN: export API_TOKEN"):
+		prepare_agent_support_dir(_token_agent(tmp_path), tmp_path / "run", environ={})
+
+
+def test_docker_agent_environment_does_not_copy_host_runtime(
 	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-	monkeypatch.setenv("OPENAI_API_KEY", "secret")
-	monkeypatch.setattr(
-		"runtime.agent_runner._solve_script",
-		lambda _agent: "printf 'first\\n'; printf 'second\\n' >&2; exit 7",
+	monkeypatch.setenv("API_TOKEN", "token-secret")
+	monkeypatch.setenv("PATH", "/host/bin")
+	env = _agent_env(
+		_token_agent(tmp_path),
+		model="model-test",
+		cwd="/repo",
+		runtime_home="/home/agent",
+		runtime_support_dir="/run/aebench-agent",
+		timeout_seconds=60,
+		include_host_runtime=False,
 	)
-	monkeypatch.setattr("runtime.agent_runner._timeout_command", lambda *_args: [])
-	support_dir = prepare_agent_support_dir("codex", tmp_path)
+	assert "PATH" not in env
+	assert "API_TOKEN" not in env
+	assert "PROMPT" not in env
+
+
+def test_local_agent_runs_through_the_whole_contract(tmp_path: Path) -> None:
+	"""A throwaway agent, run for real: environment, secrets, stdin, artifacts, exit code."""
+	agent = _write_agent(
+		tmp_path / "agents" / "probe",
+		r"""#!/bin/bash
+printf 'prompt=%s\n' "$PROMPT"
+printf 'secret=%s\n' "$PROBE_TOKEN"
+printf 'model=%s effort=%s agent=%s\n' "$AEBENCH_MODEL" "$AEBENCH_REASONING_EFFORT" "$AEBENCH_AGENT_NAME"
+printf 'cwd=%s\n' "$(pwd)"
+printf 'timeout=%s\n' "$AEBENCH_TIMEOUT_SECONDS"
+if read -r line; then echo "stdin=open"; else echo "stdin=empty"; fi
+test -f "$AEBENCH_AGENT_SUPPORT_DIR/aebench/secrets.sh" && echo "secrets-file=present" || echo "secrets-file=removed"
+cat "$AEBENCH_AGENT_DIR/notes.txt"
+echo 'saved' > "$AEBENCH_ARTIFACTS_DIR/session.jsonl"
+echo 'to stderr' >&2
+exit 7
+""",
+		"""
+reasoning_effort = "low"
+prompt_append = "Be brief."
+
+[[secrets]]
+name = "PROBE_TOKEN"
+from_env = ["HOST_PROBE_TOKEN"]
+""",
+	)
+	(agent.directory / "notes.txt").write_text("helper file\n", encoding="utf-8")
+	workspace = tmp_path / "workspace"
+	workspace.mkdir()
+	support_dir = prepare_agent_support_dir(
+		agent, tmp_path / "run", environ={"HOST_PROBE_TOKEN": 'it\'s $ecret "x"'}
+	)
 	output_path = tmp_path / "runner_output.log"
 
 	result = run_agent(
-		"codex",
-		model="gpt-test",
-		prompt="do the task",
-		runtime=LocalRuntime(workspace=str(tmp_path)),
-		cwd=str(tmp_path),
-		runtime_home=str(support_dir),
+		agent,
+		model="model-x",
+		prompt="line one\nline two",
+		runtime=LocalRuntime(workspace=str(workspace)),
+		cwd=str(workspace),
+		runtime_home=str(tmp_path),
+		host_support_dir=support_dir,
 		runtime_support_dir=str(support_dir),
-		timeout_seconds=10,
+		timeout_seconds=30,
 		output_path=output_path,
 	)
 
 	assert result.exit_code == 7
+	assert result.reasoning_effort == "low"
 	lines = output_path.read_text(encoding="utf-8").splitlines()
-	assert len(lines) == 2
 	assert all(re.match(r"^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\] ", line) for line in lines)
-	assert lines[0].endswith(" first")
-	assert lines[1].endswith(" second")
+	text = [line.split("] ", 1)[1] for line in lines]
+	assert text[:4] == ["prompt=line one", "line two", "", "Be brief."]
+	assert 'secret=it\'s $ecret "x"' in text
+	assert "model=model-x effort=low agent=probe" in text
+	assert f"cwd={workspace}" in text
+	assert "timeout=30" in text
+	assert "stdin=empty" in text
+	assert "secrets-file=removed" in text
+	assert "helper file" in text
+	assert "to stderr" in text
+
+	output_dir = tmp_path / "output"
+	saved = collect_agent_artifacts(support_dir, output_dir)
+	assert saved == output_dir / "agent-artifacts"
+	assert (saved / "session.jsonl").read_text(encoding="utf-8") == "saved\n"
 
 
-def test_subscription_auth_is_copied_to_private_support_dir(tmp_path: Path) -> None:
-	auth = tmp_path / "auth.json"
-	auth.write_text('{"tokens":{}}', encoding="utf-8")
-	support_dir = prepare_agent_support_dir(
-		"codex_non_api",
-		tmp_path / "run",
-		environ={"AEBENCH_CODEX_AUTH_FILE": str(auth)},
-	)
+def test_artifact_symlinks_are_copied_as_links(tmp_path: Path) -> None:
+	host_secret = tmp_path / "host-secret"
+	host_secret.write_text("do not copy", encoding="utf-8")
+	support_dir = tmp_path / "agent-support"
+	(support_dir / "artifacts").mkdir(parents=True)
+	(support_dir / "artifacts" / "link").symlink_to(host_secret)
 
-	target = support_dir / ".codex" / "auth.json"
-	assert target.read_text(encoding="utf-8") == '{"tokens":{}}'
-	assert target.stat().st_mode & 0o777 == 0o600
-	assert (support_dir / "timestamp_lines.py").is_file()
+	saved = collect_agent_artifacts(support_dir, tmp_path / "output")
+
+	assert saved is not None
+	assert (saved / "link").is_symlink()
 
 
-def test_claude_subscription_token_is_written_to_private_support_dir(tmp_path: Path) -> None:
-	support_dir = prepare_agent_support_dir(
-		"claude_non_api",
-		tmp_path / "run",
-		environ={"CLAUDE_CODE_OAUTH_TOKEN": "oauth-secret"},
-	)
-
-	target = support_dir / "oauth_token"
-	assert target.read_text(encoding="utf-8") == "oauth-secret"
-	assert target.stat().st_mode & 0o777 == 0o600
-
-
-def test_missing_subscription_auth_does_not_leave_support_dir(tmp_path: Path) -> None:
-	parent = tmp_path / "run"
-	with pytest.raises(RuntimeError, match="Codex subscription auth not found"):
-		prepare_agent_support_dir(
-			"codex_non_api",
-			parent,
-			environ={"AEBENCH_CODEX_AUTH_FILE": str(tmp_path / "missing.json")},
-		)
-	assert not (parent / "agent-support").exists()
-
-
-def test_docker_agent_environment_does_not_copy_host_runtime(
-	monkeypatch: pytest.MonkeyPatch,
-) -> None:
-	monkeypatch.setenv("OPENAI_API_KEY", "openai-secret")
-	monkeypatch.setenv("PATH", "/host/bin")
-	env = _agent_env(
-		"codex",
-		model="gpt-test",
-		prompt="do work",
-		runtime_home="/home/agent",
-		runtime_support_dir="/run/aebench-agent",
-		include_host_runtime=False,
-	)
-	assert env == {
-		"AEBENCH_AGENT_SUPPORT_DIR": "/run/aebench-agent",
-		"AEBENCH_REASONING_EFFORT": "high",
-		"AGENT_CONFIG": "gpt-test",
-		"CODEX_API_KEY": "openai-secret",
-		"HOME": "/home/agent",
-		"OPENAI_API_KEY": "openai-secret",
-		"PROMPT": "do work",
-	}
+def test_no_artifacts_means_no_artifacts_dir(tmp_path: Path) -> None:
+	support_dir = tmp_path / "agent-support"
+	(support_dir / "artifacts").mkdir(parents=True)
+	assert collect_agent_artifacts(support_dir, tmp_path / "output") is None
+	assert not (tmp_path / "output" / "agent-artifacts").exists()
 
 
 def test_local_runtime_streams_combined_output_to_file(tmp_path: Path) -> None:
@@ -435,9 +531,12 @@ def test_agent_shell_command_can_bypass_the_shim() -> None:
 	command = _agent_shell_command(DockerRuntime(), shell_path=real_shell)
 
 	assert command[0] == real_shell
-	# Both the outer pipeline shell and the inner one the agent script runs on.
-	assert f"-- {real_shell} -s" in command[-1]
-	assert "bash -s" not in command[-1]
+	# Both the outer pipeline shell and the inner one the entry script runs on...
+	assert f'-- {real_shell} "$AEBENCH_AGENT_SUPPORT_DIR"/aebench/entry.sh' in command[-1]
+	assert "-- bash " not in command[-1]
+	# ...which runs agent.sh on the same shell, not on /bin/bash (the shim).
+	entry = (Path(agent_runner.__file__).with_name("agent_support") / "entry.sh").read_text()
+	assert 'exec "$BASH" "$AEBENCH_AGENT_DIR/agent.sh"' in entry
 
 
 def test_agent_shell_command_defaults_to_plain_bash() -> None:
@@ -445,7 +544,7 @@ def test_agent_shell_command_defaults_to_plain_bash() -> None:
 	command = _agent_shell_command(DockerRuntime())
 
 	assert command[0] == "bash"
-	assert "-- bash -s" in command[-1]
+	assert '-- bash "$AEBENCH_AGENT_SUPPORT_DIR"/aebench/entry.sh' in command[-1]
 
 
 def test_docker_stop_preserves_container_until_cleanup(
