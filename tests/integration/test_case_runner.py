@@ -29,16 +29,8 @@ _FIXTURE = Path(__file__).parent / "mock-case" / "fixture"
 
 
 @pytest.fixture(autouse=True)
-def _mock_agent(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
-	# These runs use a throwaway agent that declares an API key, so the secret
-	# handling runs too; most tests replace the agent process with a fake.
-	agents = tmp_path_factory.mktemp("agents")
-	(agents / "mock_agent").mkdir()
-	(agents / "mock_agent" / "agent.sh").write_text("true\n", encoding="utf-8")
-	(agents / "mock_agent" / "agent.toml").write_text(
-		'description = "test agent"\n[[secrets]]\nname = "MOCK_API_KEY"\n', encoding="utf-8"
-	)
-	monkeypatch.setenv("AEBENCH_AGENT_DIRS", str(agents))
+def _mock_agent_key(monkeypatch: pytest.MonkeyPatch) -> None:
+	# The fixture project ships agents/mock_agent, which declares this key.
 	monkeypatch.setenv("MOCK_API_KEY", "test-key")
 
 

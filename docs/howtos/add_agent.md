@@ -264,8 +264,8 @@ and `aebench trace export`.
 
 ### Agents outside this repository
 
-Set `AEBENCH_AGENT_DIRS` to one or more directories (separated by `:`) that hold
-agent directories, or put them in an `agents/` directory next to your project's
-`aebench.toml`. An agent name may appear only once across all of them. Their
+Put them in an `agents/` directory next to your project's `aebench.toml`. An
+agent name may appear only once across that directory and this repository's
+`agents/`. Their
 `install.sh` is not run by this repository's `Dockerfile`; build an image from
 `aebench-agent:latest` that runs it, and tag that image `aebench-agent:latest`.

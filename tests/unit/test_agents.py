@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
+import runtime.agents as agents_module
 from runtime.agents import (
-	AGENT_DIRS_ENV,
 	BUILTIN_AGENTS_DIR,
 	AgentConfigError,
 	TraceFormat,
@@ -37,12 +37,12 @@ def _write_agent(root: Path, name: str, config: str = "", script: str = "true\n"
 
 
 def test_builtin_agents_are_valid() -> None:
-	assert discover_agents(environ={}).problems == {}
+	assert discover_agents().problems == {}
 
 
 @pytest.mark.parametrize("name", _BUILTIN_AGENTS)
 def test_builtin_agent_is_well_formed(name: str) -> None:
-	agent = load_agent(name, environ={})
+	agent = load_agent(name)
 	assert agent.config.description, "describe the agent in agent.toml"
 	assert agent.config.requires, "list the executables agent.sh needs in requires"
 	for path in (agent.directory / "agent.sh", agent.install_script):
@@ -56,7 +56,7 @@ def test_builtin_agent_requirements_are_installed_by_some_agent(name: str) -> No
 	installers = "\n".join(
 		path.read_text(encoding="utf-8") for path in BUILTIN_AGENTS_DIR.glob("*/install.sh")
 	)
-	for executable in load_agent(name, environ={}).config.requires:
+	for executable in load_agent(name).config.requires:
 		assert executable in installers, f"no agents/*/install.sh installs {executable}"
 
 
@@ -64,35 +64,34 @@ def test_builtin_agent_requirements_are_installed_by_some_agent(name: str) -> No
 
 
 def test_minimal_agent_is_just_a_script(tmp_path: Path) -> None:
-	_write_agent(tmp_path, "minimal")
-	agent = load_agent("minimal", environ={AGENT_DIRS_ENV: str(tmp_path)})
+	_write_agent(tmp_path / "agents", "minimal")
+	agent = load_agent("minimal", tmp_path)
 	assert agent.config.trace_format == TraceFormat.RAW
 	assert agent.config.secrets == []
 	assert agent.install_script is None
 
 
-def test_project_and_extra_dirs_are_searched(tmp_path: Path) -> None:
+def test_project_and_builtin_dirs_are_searched(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
 	project = tmp_path / "project"
 	_write_agent(project / "agents", "project_agent")
-	extra_a = tmp_path / "a"
-	extra_b = tmp_path / "b"
-	_write_agent(extra_a, "agent_a")
-	_write_agent(extra_b, "agent_b")
+	_write_agent(tmp_path / "builtin", "builtin_agent")
+	monkeypatch.setattr(agents_module, "BUILTIN_AGENTS_DIR", tmp_path / "builtin")
 
-	catalog = discover_agents(project, environ={AGENT_DIRS_ENV: f"{extra_a}:{extra_b}"})
+	catalog = discover_agents(project)
 
-	assert {"project_agent", "agent_a", "agent_b"} <= set(catalog.agents)
-	assert catalog.search_dirs[:3] == [
-		extra_a.resolve(),
-		extra_b.resolve(),
-		(project / "agents").resolve(),
-	]
+	assert set(catalog.agents) == {"project_agent", "builtin_agent"}
+	assert catalog.search_dirs == [(project / "agents").resolve(), (tmp_path / "builtin").resolve()]
 
 
-def test_same_name_twice_is_an_error_not_a_shadow(tmp_path: Path) -> None:
-	_write_agent(tmp_path / "a", "dup")
-	_write_agent(tmp_path / "b", "dup")
-	catalog = discover_agents(environ={AGENT_DIRS_ENV: f"{tmp_path / 'a'}:{tmp_path / 'b'}"})
+def test_same_name_twice_is_an_error_not_a_shadow(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	_write_agent(tmp_path / "project" / "agents", "dup")
+	_write_agent(tmp_path / "builtin", "dup")
+	monkeypatch.setattr(agents_module, "BUILTIN_AGENTS_DIR", tmp_path / "builtin")
+	catalog = discover_agents(tmp_path / "project")
 	assert "dup" not in catalog.agents
 	assert "defined more than once" in catalog.problems["dup"]
 	with pytest.raises(AgentConfigError, match="defined more than once"):
@@ -100,36 +99,36 @@ def test_same_name_twice_is_an_error_not_a_shadow(tmp_path: Path) -> None:
 
 
 def test_broken_agent_does_not_hide_the_others(tmp_path: Path) -> None:
-	_write_agent(tmp_path, "broken", 'trace_format = "nope"\n')
-	_write_agent(tmp_path, "fine")
-	catalog = discover_agents(environ={AGENT_DIRS_ENV: str(tmp_path)})
+	_write_agent(tmp_path / "agents", "broken", 'trace_format = "nope"\n')
+	_write_agent(tmp_path / "agents", "fine")
+	catalog = discover_agents(tmp_path)
 	assert "trace_format" in catalog.problems["broken"]
 	assert "fine" in catalog.agents
 
 
 def test_unknown_agent_lists_the_available_ones(tmp_path: Path) -> None:
-	_write_agent(tmp_path, "known")
+	_write_agent(tmp_path / "agents", "known")
 	with pytest.raises(AgentConfigError, match="available: .*known"):
-		load_agent("does-not-exist", environ={AGENT_DIRS_ENV: str(tmp_path)})
+		load_agent("does-not-exist", tmp_path)
 
 
 def test_directories_without_agent_files_are_ignored(tmp_path: Path) -> None:
-	(tmp_path / "notes").mkdir()
-	catalog = discover_agents(environ={AGENT_DIRS_ENV: str(tmp_path)})
+	(tmp_path / "agents" / "notes").mkdir(parents=True)
+	catalog = discover_agents(tmp_path)
 	assert "notes" not in catalog.agents and "notes" not in catalog.problems
 
 
 def test_config_without_script_is_reported(tmp_path: Path) -> None:
-	directory = tmp_path / "noscript"
-	directory.mkdir()
+	directory = tmp_path / "agents" / "noscript"
+	directory.mkdir(parents=True)
 	(directory / "agent.toml").write_text('description = "x"\n', encoding="utf-8")
-	catalog = discover_agents(environ={AGENT_DIRS_ENV: str(tmp_path)})
+	catalog = discover_agents(tmp_path)
 	assert "has no agent.sh" in catalog.problems["noscript"]
 
 
 def test_invalid_agent_name_is_reported(tmp_path: Path) -> None:
-	_write_agent(tmp_path, "Bad Name")
-	catalog = discover_agents(environ={AGENT_DIRS_ENV: str(tmp_path)})
+	_write_agent(tmp_path / "agents", "Bad Name")
+	catalog = discover_agents(tmp_path)
 	assert any("names must match" in problem for problem in catalog.problems.values())
 
 

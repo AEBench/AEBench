@@ -27,7 +27,6 @@ else:
 AGENT_CONFIG_FILE = "agent.toml"
 AGENT_SCRIPT = "agent.sh"
 INSTALL_SCRIPT = "install.sh"
-AGENT_DIRS_ENV = "AEBENCH_AGENT_DIRS"
 PROJECT_AGENTS_SUBDIR = "agents"
 # The agents shipped with AEBench, at the root of the source checkout.
 BUILTIN_AGENTS_DIR = Path(__file__).resolve().parents[2] / PROJECT_AGENTS_SUBDIR
@@ -150,21 +149,14 @@ class AgentCatalog:
 		return agent
 
 
-def agent_search_dirs(
-	project_root: Path | None = None,
-	*,
-	environ: Mapping[str, str] | None = None,
-) -> list[Path]:
-	"""Returns the directories searched for agents, most specific first.
+def agent_search_dirs(project_root: Path | None = None) -> list[Path]:
+	"""Returns the directories searched for agents.
 
-	``$AEBENCH_AGENT_DIRS`` (os.pathsep-separated), then the project's ``agents/``,
-	then the agents shipped with AEBench. Missing directories are skipped.
+	The project's ``agents/``, then the agents shipped with AEBench. Missing
+	directories are skipped. A name found in more than one is an error, not an
+	override (see ``discover_agents``).
 	"""
-	env = os.environ if environ is None else environ
 	candidates: list[Path] = []
-	for entry in env.get(AGENT_DIRS_ENV, "").split(os.pathsep):
-		if entry.strip():
-			candidates.append(Path(entry.strip()).expanduser())
 	if project_root is not None:
 		candidates.append(project_root / PROJECT_AGENTS_SUBDIR)
 	candidates.append(BUILTIN_AGENTS_DIR)
@@ -177,12 +169,8 @@ def agent_search_dirs(
 	return resolved
 
 
-def discover_agents(
-	project_root: Path | None = None,
-	*,
-	environ: Mapping[str, str] | None = None,
-) -> AgentCatalog:
-	catalog = AgentCatalog(search_dirs=agent_search_dirs(project_root, environ=environ))
+def discover_agents(project_root: Path | None = None) -> AgentCatalog:
+	catalog = AgentCatalog(search_dirs=agent_search_dirs(project_root))
 	found: dict[str, list[Path]] = {}
 	for search_dir in catalog.search_dirs:
 		for directory in sorted(path for path in search_dir.iterdir() if path.is_dir()):
@@ -211,13 +199,8 @@ def discover_agents(
 	return catalog
 
 
-def load_agent(
-	name: str,
-	project_root: Path | None = None,
-	*,
-	environ: Mapping[str, str] | None = None,
-) -> AgentDefinition:
-	return discover_agents(project_root, environ=environ).get(name)
+def load_agent(name: str, project_root: Path | None = None) -> AgentDefinition:
+	return discover_agents(project_root).get(name)
 
 
 def load_agent_dir(directory: Path) -> AgentDefinition:
