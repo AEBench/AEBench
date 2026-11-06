@@ -35,7 +35,7 @@ BUILTIN_AGENTS_DIR = Path(__file__).resolve().parents[2] / PROJECT_AGENTS_SUBDIR
 _AGENT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 _ENV_REFERENCE_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 # Variables AEBench sets itself; a secret must not silently replace one.
-_RESERVED_ENV_NAMES = frozenset({"HOME", "PATH", "PROMPT", "AGENT_CONFIG"})
+_RESERVED_ENV_NAMES = frozenset({"HOME", "PATH", "PROMPT"})
 
 
 class AgentConfigError(ValueError):

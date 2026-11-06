@@ -168,11 +168,8 @@ the agent's exit code (0 means success).
 | Variable | Value |
 | --- | --- |
 | `PROMPT` | the complete AEBench prompt (also in the file `$AEBENCH_PROMPT_FILE`) |
-| `AEBENCH_MODEL` | the `--model` value (`AGENT_CONFIG` is the same, for older scripts) |
+| `AEBENCH_MODEL` | the `--model` value |
 | `AEBENCH_REASONING_EFFORT` | `reasoning_effort` from `agent.toml`, if set |
-| `AEBENCH_TIMEOUT_SECONDS` | the case's time limit; AEBench enforces it |
-| `AEBENCH_WORKSPACE` | the artifact workspace (also the working directory) |
-| `AEBENCH_AGENT_NAME` | the agent's name |
 | `AEBENCH_AGENT_DIR` | the run's copy of the agent directory, for templates and helpers |
 | `AEBENCH_STATE_DIR` | where the CLI keeps its config, sessions and caches; deleted after the run |
 | `AEBENCH_ARTIFACTS_DIR` | files written here are saved to `<run>/agent-artifacts/`, even after a timeout |

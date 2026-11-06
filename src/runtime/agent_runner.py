@@ -122,10 +122,8 @@ def run_agent(
 	env = _agent_env(
 		agent,
 		model=model,
-		cwd=cwd,
 		runtime_home=runtime_home,
 		runtime_support_dir=runtime_support_dir,
-		timeout_seconds=timeout_seconds,
 		include_host_runtime=isinstance(runtime, LocalRuntime),
 	)
 	command = _timeout_command(runtime, timeout_seconds) + _agent_shell_command(
@@ -251,10 +249,8 @@ def _agent_env(
 	agent: AgentDefinition,
 	*,
 	model: str,
-	cwd: str,
 	runtime_home: str,
 	runtime_support_dir: str,
-	timeout_seconds: float,
 	include_host_runtime: bool,
 ) -> dict[str, str]:
 	"""The agent's environment, minus secrets and the prompt.
@@ -270,17 +266,12 @@ def _agent_env(
 	env.update(
 		{
 			"HOME": runtime_home,
-			"AEBENCH_AGENT_NAME": agent.name,
 			"AEBENCH_AGENT_SUPPORT_DIR": runtime_support_dir,
 			"AEBENCH_AGENT_DIR": f"{runtime_support_dir}/{AGENT_SUBDIR}",
 			"AEBENCH_STATE_DIR": f"{runtime_support_dir}/{STATE_SUBDIR}",
 			"AEBENCH_ARTIFACTS_DIR": f"{runtime_support_dir}/{ARTIFACTS_SUBDIR}",
 			"AEBENCH_PROMPT_FILE": f"{runtime_support_dir}/{AEBENCH_SUBDIR}/{PROMPT_FILE}",
-			"AEBENCH_WORKSPACE": cwd,
-			"AEBENCH_TIMEOUT_SECONDS": str(int(timeout_seconds)),
 			"AEBENCH_MODEL": model,
-			# The original name of AEBENCH_MODEL, kept for existing scripts.
-			"AGENT_CONFIG": model,
 		}
 	)
 	if agent.config.reasoning_effort is not None:

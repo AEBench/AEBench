@@ -207,16 +207,12 @@ def test_runner_passes_harness_contract_and_saves_output(tmp_path: Path) -> None
 	assert runtime.cwd == "/repo"
 	assert runtime.env == {
 		"HOME": "/home/agent",
-		"AEBENCH_AGENT_NAME": "token_agent",
 		"AEBENCH_AGENT_SUPPORT_DIR": "/run/aebench-agent",
 		"AEBENCH_AGENT_DIR": "/run/aebench-agent/agent",
 		"AEBENCH_STATE_DIR": "/run/aebench-agent/state",
 		"AEBENCH_ARTIFACTS_DIR": "/run/aebench-agent/artifacts",
 		"AEBENCH_PROMPT_FILE": "/run/aebench-agent/aebench/prompt.txt",
-		"AEBENCH_WORKSPACE": "/repo",
-		"AEBENCH_TIMEOUT_SECONDS": "600",
 		"AEBENCH_MODEL": "model-test",
-		"AGENT_CONFIG": "model-test",
 		"AEBENCH_REASONING_EFFORT": "high",
 	}
 	# Secrets and the prompt never travel on the `docker exec` command line.
@@ -307,10 +303,8 @@ def test_docker_agent_environment_does_not_copy_host_runtime(
 	env = _agent_env(
 		_token_agent(tmp_path),
 		model="model-test",
-		cwd="/repo",
 		runtime_home="/home/agent",
 		runtime_support_dir="/run/aebench-agent",
-		timeout_seconds=60,
 		include_host_runtime=False,
 	)
 	assert "PATH" not in env
@@ -325,9 +319,8 @@ def test_local_agent_runs_through_the_whole_contract(tmp_path: Path) -> None:
 		r"""#!/bin/bash
 printf 'prompt=%s\n' "$PROMPT"
 printf 'secret=%s\n' "$PROBE_TOKEN"
-printf 'model=%s effort=%s agent=%s\n' "$AEBENCH_MODEL" "$AEBENCH_REASONING_EFFORT" "$AEBENCH_AGENT_NAME"
+printf 'model=%s effort=%s\n' "$AEBENCH_MODEL" "$AEBENCH_REASONING_EFFORT"
 printf 'cwd=%s\n' "$(pwd)"
-printf 'timeout=%s\n' "$AEBENCH_TIMEOUT_SECONDS"
 if read -r line; then echo "stdin=open"; else echo "stdin=empty"; fi
 test -f "$AEBENCH_AGENT_SUPPORT_DIR/aebench/secrets.sh" && echo "secrets-file=present" || echo "secrets-file=removed"
 cat "$AEBENCH_AGENT_DIR/notes.txt"
@@ -372,9 +365,8 @@ from_env = ["HOST_PROBE_TOKEN"]
 	text = [line.split("] ", 1)[1] for line in lines]
 	assert text[:4] == ["prompt=line one", "line two", "", "Be brief."]
 	assert 'secret=it\'s $ecret "x"' in text
-	assert "model=model-x effort=low agent=probe" in text
+	assert "model=model-x effort=low" in text
 	assert f"cwd={workspace}" in text
-	assert "timeout=30" in text
 	assert "stdin=empty" in text
 	assert "secrets-file=removed" in text
 	assert "helper file" in text
