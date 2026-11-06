@@ -215,7 +215,6 @@ trace_converter = "trace.py"             # optional, see below
 name = "MYCLI_API_KEY"                   # the variable agent.sh sees
 from_env = ["MYCLI_API_KEY", "OTHER_NAME"]  # host variables, first non-empty wins (default: [name])
 from_file_env = "MYCLI_KEY_FILE"         # or a host variable naming a file holding it
-optional = false
 hint = "set MYCLI_API_KEY"               # shown when it is missing
 
 # A host file copied into $AEBENCH_STATE_DIR before the run (mode 600).
@@ -225,7 +224,7 @@ sources = ["${MYCLI_AUTH_FILE}", "~/.mycli/auth.json"]  # first one whose variab
 hint = "run `mycli login`"
 ```
 
-A missing required secret or file stops the run before anything starts.
+A missing secret or file stops the run before anything starts.
 Secrets reach the agent through a private file in the support directory, never
 on the `docker exec` command line.
 

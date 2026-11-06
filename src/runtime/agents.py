@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path, PurePosixPath
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from .backend import validate_env_var_name
 
@@ -34,7 +34,6 @@ BUILTIN_AGENTS_DIR = Path(__file__).resolve().parents[2] / PROJECT_AGENTS_SUBDIR
 
 _AGENT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 _ENV_REFERENCE_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
-_EXECUTABLE_RE = re.compile(r"^[A-Za-z0-9_.+-]+$")
 # Variables AEBench sets itself; a secret must not silently replace one.
 _RESERVED_ENV_NAMES = frozenset({"HOME", "PATH", "PROMPT", "AGENT_CONFIG"})
 
@@ -64,7 +63,6 @@ class AgentSecret(_Model):
 	from_env: list[str] = Field(default_factory=list)
 	# A host variable naming a file that holds the value, used when no from_env variable is set.
 	from_file_env: str | None = None
-	optional: bool = False
 	hint: str | None = None
 
 	@field_validator("name")
@@ -94,7 +92,6 @@ class AgentFile(_Model):
 	# Candidate host paths with ``~`` and ``${VAR}`` expansion. The first candidate
 	# whose variables are all set is used, and it must exist.
 	sources: list[str] = Field(min_length=1)
-	optional: bool = False
 	hint: str | None = None
 
 	@field_validator("target")
@@ -121,14 +118,6 @@ class AgentConfig(_Model):
 	secrets: list[AgentSecret] = Field(default_factory=list)
 	files: list[AgentFile] = Field(default_factory=list)
 
-	@field_validator("requires")
-	@classmethod
-	def _validate_requires(cls, value: list[str]) -> list[str]:
-		for executable in value:
-			if not _EXECUTABLE_RE.fullmatch(executable):
-				raise ValueError(f"invalid executable name in requires: {executable!r}")
-		return value
-
 	@field_validator("trace_converter")
 	@classmethod
 	def _validate_converter(cls, value: str | None) -> str | None:
@@ -139,28 +128,12 @@ class AgentConfig(_Model):
 			raise ValueError("trace_converter must be a path inside the agent directory")
 		return value
 
-	@model_validator(mode="after")
-	def _validate_unique(self) -> "AgentConfig":
-		names = [secret.name for secret in self.secrets]
-		duplicates = sorted({name for name in names if names.count(name) > 1})
-		if duplicates:
-			raise ValueError(f"secrets declared more than once: {', '.join(duplicates)}")
-		targets = [entry.target for entry in self.files]
-		duplicates = sorted({target for target in targets if targets.count(target) > 1})
-		if duplicates:
-			raise ValueError(f"files copied to the same target: {', '.join(duplicates)}")
-		return self
-
 
 @dataclass(frozen=True)
 class AgentDefinition:
 	name: str
 	directory: Path
 	config: AgentConfig
-
-	@property
-	def script_path(self) -> Path:
-		return self.directory / AGENT_SCRIPT
 
 	@property
 	def install_script(self) -> Path | None:
@@ -309,7 +282,7 @@ def resolve_secrets(
 				) from exc
 		if value is not None:
 			values[secret.name] = value
-		elif not secret.optional:
+		else:
 			missing.append(_missing_message(secret.name, secret.hint))
 	if missing:
 		raise AgentConfigError(f"agent {agent.name!r} is missing {'; '.join(missing)}")
@@ -330,7 +303,7 @@ def resolve_files(
 		)
 		if source is not None and source.is_file():
 			resolved.append((source, entry.target))
-		elif not entry.optional:
+		else:
 			where = str(source) if source is not None else " or ".join(entry.sources)
 			missing.append(_missing_message(f"{entry.target} (looked for {where})", entry.hint))
 	if missing:

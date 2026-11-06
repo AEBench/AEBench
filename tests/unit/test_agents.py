@@ -45,7 +45,7 @@ def test_builtin_agent_is_well_formed(name: str) -> None:
 	agent = load_agent(name, environ={})
 	assert agent.config.description, "describe the agent in agent.toml"
 	assert agent.config.requires, "list the executables agent.sh needs in requires"
-	for path in (agent.script_path, agent.install_script):
+	for path in (agent.directory / "agent.sh", agent.install_script):
 		if path is not None:
 			result = subprocess.run(["bash", "-n", str(path)], capture_output=True, text=True)
 			assert result.returncode == 0, result.stderr
@@ -141,11 +141,9 @@ def test_invalid_agent_name_is_reported(tmp_path: Path) -> None:
 	[
 		("unknown_key = 1\n", "unknown_key"),
 		('trace_format = "html"\n', "trace_format"),
-		('requires = ["claude; rm -rf /"]\n', "invalid executable name"),
 		('[[secrets]]\nname = "PATH"\n', "set by AEBench"),
 		('[[secrets]]\nname = "AEBENCH_MODEL"\n', "set by AEBench"),
 		('[[secrets]]\nname = "BAD-NAME"\n', "invalid environment variable"),
-		('[[secrets]]\nname = "A"\n[[secrets]]\nname = "A"\n', "more than once"),
 		('[[files]]\ntarget = "../escape"\nsources = ["~/x"]\n', "relative path"),
 		('[[files]]\ntarget = "/abs"\nsources = ["~/x"]\n', "relative path"),
 		('[[files]]\ntarget = "x"\nsources = []\n', "sources"),
@@ -188,9 +186,7 @@ def test_missing_secrets_are_all_reported_with_hints(tmp_path: Path) -> None:
 		_write_agent(
 			tmp_path,
 			"a",
-			'[[secrets]]\nname = "A"\nhint = "export A"\n'
-			'[[secrets]]\nname = "B"\n'
-			'[[secrets]]\nname = "C"\noptional = true\n',
+			'[[secrets]]\nname = "A"\nhint = "export A"\n[[secrets]]\nname = "B"\n',
 		)
 	)
 	with pytest.raises(AgentConfigError, match="missing A: export A; B"):
