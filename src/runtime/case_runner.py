@@ -688,9 +688,6 @@ def _run_result(
 		runtime=runtime_info,
 		agent_kind=agent.name,
 		trace_format=agent.config.trace_format.value,
-		trace_converter=(
-			None if agent.trace_converter_path is None else str(agent.trace_converter_path)
-		),
 		agent=agent_result,
 		command_monitor=monitor,
 		error=error,

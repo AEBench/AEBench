@@ -4,9 +4,6 @@ import json
 import os
 import re
 import shutil
-import subprocess
-import sys
-import tempfile
 from collections.abc import Mapping
 from importlib.resources import files
 from pathlib import Path
@@ -28,7 +25,6 @@ _LEGACY_TRACE_FORMATS = {
 	"codex_non_api": "codex",
 }
 _RAW_CHUNK_LINES = 200
-_CONVERTER_TIMEOUT_SECONDS = 600
 
 
 def export_trace_site(run_dir: Path, output_dir: Path) -> Path:
@@ -41,16 +37,11 @@ def export_trace_site(run_dir: Path, output_dir: Path) -> Path:
 	case_result = _read_json(run_dir / CASE_RESULT)
 	secrets = _environment_secrets()
 	trace_format = _trace_format(run_result)
-	converter = _trace_converter(run_result)
-	if converter is not None:
-		trace_format = "claude_code"
-		events, usage = _convert_trace(converter, run_dir, secrets=secrets)
-	else:
-		parser = {
-			"claude_code": parse_claude_trace,
-			"codex": parse_codex_trace,
-		}.get(trace_format, parse_raw_trace)
-		events, usage = parser(run_dir / RUNNER_LOG, secrets=secrets)
+	parser = {
+		"claude_code": parse_claude_trace,
+		"codex": parse_codex_trace,
+	}.get(trace_format, parse_raw_trace)
+	events, usage = parser(run_dir / RUNNER_LOG, secrets=secrets)
 	record = _build_record(
 		run_dir,
 		run_result,
@@ -458,55 +449,6 @@ def _trace_format(run_result: Mapping[str, Any]) -> str:
 	if isinstance(recorded, str) and recorded:
 		return recorded
 	return _LEGACY_TRACE_FORMATS.get(str(run_result.get("agent_kind", "")), "raw")
-
-
-def _trace_converter(run_result: Mapping[str, Any]) -> Path | None:
-	"""Finds the agent's trace converter: the recorded path, else the agent found by name."""
-	recorded = run_result.get("trace_converter")
-	if isinstance(recorded, str) and recorded and Path(recorded).is_file():
-		return Path(recorded)
-	if not recorded:
-		return None
-	from project_config import load_project_config
-	from runtime.agents import AgentConfigError, discover_agents
-
-	try:
-		catalog = discover_agents(load_project_config(Path.cwd()).root)
-		agent = catalog.get(str(run_result.get("agent_kind", "")))
-	except (AgentConfigError, OSError, ValueError):
-		agent = None
-	converter = None if agent is None else agent.trace_converter_path
-	if converter is None or not converter.is_file():
-		raise ValueError(
-			f"the run's trace converter {recorded} no longer exists, and no installed agent "
-			f"named {run_result.get('agent_kind')!r} provides one"
-		)
-	return converter
-
-
-def _convert_trace(
-	converter: Path, run_dir: Path, *, secrets: Mapping[str, str]
-) -> tuple[list[dict[str, Any]], dict[str, int]]:
-	"""Runs an agent-provided converter that prints Claude Code stream-json for a run."""
-	command = (
-		[sys.executable, "-I", str(converter), str(run_dir)]
-		if converter.suffix == ".py"
-		else [str(converter), str(run_dir)]
-	)
-	result = subprocess.run(
-		command,
-		capture_output=True,
-		text=True,
-		timeout=_CONVERTER_TIMEOUT_SECONDS,
-		check=False,
-	)
-	if result.returncode != 0:
-		detail = _redact(result.stderr.strip(), secrets)
-		raise ValueError(f"trace converter {converter} failed ({result.returncode}): {detail}")
-	with tempfile.TemporaryDirectory(prefix="aebench-trace-") as scratch:
-		converted = Path(scratch) / RUNNER_LOG
-		converted.write_text(result.stdout, encoding="utf-8")
-		return parse_claude_trace(converted, secrets=secrets)
 
 
 def _sessions(events: list[dict[str, Any]], fallback_model: str) -> list[dict[str, Any]]:

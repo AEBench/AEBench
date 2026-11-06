@@ -369,7 +369,6 @@ class RunResult(_Model):
 	agent_kind: str = "unknown"
 	# How `aebench trace export` reads runner_output.log, from the agent's agent.toml.
 	trace_format: str | None = None
-	trace_converter: str | None = None
 	agent: AgentResult
 	command_monitor: CommandMonitorInfo | None = None
 	error: str | None = None

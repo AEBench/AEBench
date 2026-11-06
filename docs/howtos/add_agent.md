@@ -151,7 +151,6 @@ agents/<name>/
   agent.sh      required: starts the agent CLI
   agent.toml    what AEBench must provide: credentials, required binaries, ...
   install.sh    installs the CLI into the runtime image
-  trace.py      optional: converts the CLI's output for the trace viewer
   ...           any other files agent.sh needs (config templates, helpers)
 ```
 
@@ -205,7 +204,6 @@ requires = ["mycli"]                     # checked before the agent starts
 reasoning_effort = "high"                # exported and recorded with the result
 prompt_append = "Extra instructions for this agent only."
 trace_format = "claude_code"             # claude_code | codex | raw (default)
-trace_converter = "trace.py"             # optional, see below
 
 # A credential read from the host and exported to agent.sh.
 [[secrets]]
@@ -252,10 +250,7 @@ Changes to `agent.sh` or `agent.toml` do not need a rebuild.
 `aebench trace export` reads `runner_output.log` according to `trace_format`.
 Use `claude_code` or `codex` when the CLI prints the same JSON events as Claude
 Code (`--output-format stream-json`) or Codex (`exec --json`). Otherwise the
-viewer shows the plain log, or the agent can ship a `trace_converter`: a script
-that receives the run directory as its argument and prints Claude Code
-stream-json events on stdout. AEBench runs it on the host when exporting, so
-only use converters you trust.
+viewer shows the plain log.
 
 ### Checking an agent
 

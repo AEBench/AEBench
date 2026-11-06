@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from trace_viewer import export_trace_site
 from trace_viewer.exporter import parse_claude_trace, parse_codex_trace
 
@@ -368,36 +366,3 @@ def test_unknown_agents_get_a_raw_log_view(tmp_path: Path) -> None:
 	assert len(record["events"]) == 1
 	assert record["events"][0]["ts"] == "2026-08-05T07:28:33Z"
 	assert record["events"][0]["blocks"][0]["text"].startswith("starting\ntoken ")
-
-
-def test_agent_trace_converter_produces_claude_events(tmp_path: Path) -> None:
-	converter = tmp_path / "trace.py"
-	converter.write_text(
-		"import json, pathlib, sys\n"
-		"run = pathlib.Path(sys.argv[1])\n"
-		"text = (run / 'runner_output.log').read_text().strip()\n"
-		"print(json.dumps({'type': 'assistant', 'session_id': 's',"
-		" 'message': {'content': [{'type': 'text', 'text': text}]}}))\n",
-		encoding="utf-8",
-	)
-	run_dir = tmp_path / "run"
-	_write_run(
-		run_dir,
-		"custom output\n",
-		agent_kind="some_new_agent",
-		trace_format="raw",
-		trace_converter=str(converter),
-	)
-	export_trace_site(run_dir, tmp_path / "site")
-	record = _exported_record(tmp_path / "site")
-	assert record["meta"]["trace_format"] == "claude_code"
-	assert record["events"][0]["blocks"] == [{"type": "text", "text": "custom output"}]
-
-
-def test_failing_trace_converter_is_reported(tmp_path: Path) -> None:
-	converter = tmp_path / "trace.py"
-	converter.write_text("import sys\nsys.exit('cannot parse')\n", encoding="utf-8")
-	run_dir = tmp_path / "run"
-	_write_run(run_dir, "x\n", agent_kind="a", trace_converter=str(converter))
-	with pytest.raises(ValueError, match="cannot parse"):
-		export_trace_site(run_dir, tmp_path / "site")

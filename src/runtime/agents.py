@@ -112,21 +112,8 @@ class AgentConfig(_Model):
 	# Appended to the AEBench prompt for this agent only.
 	prompt_append: str | None = None
 	trace_format: TraceFormat = TraceFormat.RAW
-	# A script in the agent directory that converts a run directory into Claude
-	# Code stream-json on stdout; used by `aebench trace export`.
-	trace_converter: str | None = None
 	secrets: list[AgentSecret] = Field(default_factory=list)
 	files: list[AgentFile] = Field(default_factory=list)
-
-	@field_validator("trace_converter")
-	@classmethod
-	def _validate_converter(cls, value: str | None) -> str | None:
-		if value is None:
-			return None
-		path = PurePosixPath(value)
-		if path.is_absolute() or ".." in path.parts:
-			raise ValueError("trace_converter must be a path inside the agent directory")
-		return value
 
 
 @dataclass(frozen=True)
@@ -139,11 +126,6 @@ class AgentDefinition:
 	def install_script(self) -> Path | None:
 		path = self.directory / INSTALL_SCRIPT
 		return path if path.is_file() else None
-
-	@property
-	def trace_converter_path(self) -> Path | None:
-		converter = self.config.trace_converter
-		return None if converter is None else self.directory / converter
 
 
 @dataclass
@@ -254,11 +236,7 @@ def load_agent_dir(directory: Path) -> AgentDefinition:
 		config = AgentConfig.model_validate(data)
 	except ValidationError as exc:
 		raise AgentConfigError(f"{config_path}: {_validation_summary(exc)}") from exc
-	agent = AgentDefinition(name=directory.name, directory=directory, config=config)
-	converter = agent.trace_converter_path
-	if converter is not None and not converter.is_file():
-		raise AgentConfigError(f"{config_path}: trace_converter {converter} does not exist")
-	return agent
+	return AgentDefinition(name=directory.name, directory=directory, config=config)
 
 
 def resolve_secrets(
