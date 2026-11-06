@@ -34,7 +34,6 @@ _RUNTIME_ENV_KEYS = ("PATH", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_A
 _PRIVATE_DIRECTORY_MODE = 0o700
 _PRIVATE_FILE_MODE = 0o600
 _RUNTIME_SETUP_TIMEOUT_SECONDS = 30
-_REQUIREMENT_CHECK_TIMEOUT_SECONDS = 30
 _AGENT_TERMINATION_GRACE_SECONDS = 30
 _HOST_PROCESS_GRACE_SECONDS = 5
 _DOCKER_HOST_SOCKET_SETUP = (
@@ -268,16 +267,15 @@ def _agent_env(
 		if include_host_runtime
 		else {}
 	)
-	support = runtime_support_dir.rstrip("/")
 	env.update(
 		{
 			"HOME": runtime_home,
 			"AEBENCH_AGENT_NAME": agent.name,
-			"AEBENCH_AGENT_SUPPORT_DIR": support,
-			"AEBENCH_AGENT_DIR": f"{support}/{AGENT_SUBDIR}",
-			"AEBENCH_STATE_DIR": f"{support}/{STATE_SUBDIR}",
-			"AEBENCH_ARTIFACTS_DIR": f"{support}/{ARTIFACTS_SUBDIR}",
-			"AEBENCH_PROMPT_FILE": f"{support}/{AEBENCH_SUBDIR}/{PROMPT_FILE}",
+			"AEBENCH_AGENT_SUPPORT_DIR": runtime_support_dir,
+			"AEBENCH_AGENT_DIR": f"{runtime_support_dir}/{AGENT_SUBDIR}",
+			"AEBENCH_STATE_DIR": f"{runtime_support_dir}/{STATE_SUBDIR}",
+			"AEBENCH_ARTIFACTS_DIR": f"{runtime_support_dir}/{ARTIFACTS_SUBDIR}",
+			"AEBENCH_PROMPT_FILE": f"{runtime_support_dir}/{AEBENCH_SUBDIR}/{PROMPT_FILE}",
 			"AEBENCH_WORKSPACE": cwd,
 			"AEBENCH_TIMEOUT_SECONDS": str(int(timeout_seconds)),
 			"AEBENCH_MODEL": model,

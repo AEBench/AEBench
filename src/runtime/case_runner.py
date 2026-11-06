@@ -120,8 +120,9 @@ class _CaseRunner:
 		if self.options.delete_image:
 			self.task.runtime.keep_committed_snapshot = False
 
-		self.agent = _agent_name(self.options)
-		self.agent_definition = load_agent(self.agent, self.context.project_state.root)
+		self.agent_definition = load_agent(
+			_agent_name(self.options), self.context.project_state.root
+		)
 		self.model = _model_name(self.options)
 
 		if self.options.interactive:

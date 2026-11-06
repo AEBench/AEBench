@@ -53,10 +53,6 @@ class PromptProfile(str, Enum):
 	ARTIFACT_EVAL_DOCKER_V1 = "artifact-eval-docker-v1"
 
 
-# The name of an agent directory (agents/<name>/); see runtime.agents for discovery.
-AgentName = str
-
-
 class LiveViewMode(str, Enum):
 	AUTO = "auto"
 	COMPACT = "compact"
@@ -404,7 +400,8 @@ class RunResult(_Model):
 
 
 class RunOptions(_Model):
-	agent_type: AgentName | None = None
+	# The name of an agents/<name>/ directory; see runtime.agents.
+	agent_type: str | None = None
 	model_name: str | None = None
 	interactive: bool = False
 	allow_unsafe_local: bool = False

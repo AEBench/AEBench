@@ -9,7 +9,6 @@ if [ -f "$secrets_file" ]; then
 	. "$secrets_file"
 	rm -f "$secrets_file"
 fi
-unset secrets_file
 
 PROMPT="$(cat "$AEBENCH_PROMPT_FILE")"
 export PROMPT

@@ -17,6 +17,8 @@ from pathlib import Path, PurePosixPath
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from .backend import validate_env_var_name
+
 if sys.version_info >= (3, 11):
 	import tomllib
 else:
@@ -31,7 +33,6 @@ PROJECT_AGENTS_SUBDIR = "agents"
 BUILTIN_AGENTS_DIR = Path(__file__).resolve().parents[2] / PROJECT_AGENTS_SUBDIR
 
 _AGENT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
-_ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _ENV_REFERENCE_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 _EXECUTABLE_RE = re.compile(r"^[A-Za-z0-9_.+-]+$")
 # Variables AEBench sets itself; a secret must not silently replace one.
@@ -50,12 +51,6 @@ class TraceFormat(str, Enum):
 	RAW = "raw"
 
 
-def _check_env_name(name: str) -> str:
-	if not _ENV_NAME_RE.fullmatch(name):
-		raise ValueError(f"invalid environment variable name: {name!r}")
-	return name
-
-
 class _Model(BaseModel):
 	model_config = ConfigDict(extra="forbid")
 
@@ -65,9 +60,9 @@ class AgentSecret(_Model):
 
 	# The variable the agent sees.
 	name: str
-	# Host variables to read, first non-empty wins. Defaults to ``[name]``.
+	# Host variables to read, first non-empty wins. Empty means ``[name]``.
 	from_env: list[str] = Field(default_factory=list)
-	# A host variable naming a file that holds the value, used when no from_env is set.
+	# A host variable naming a file that holds the value, used when no from_env variable is set.
 	from_file_env: str | None = None
 	optional: bool = False
 	hint: str | None = None
@@ -75,7 +70,7 @@ class AgentSecret(_Model):
 	@field_validator("name")
 	@classmethod
 	def _validate_name(cls, value: str) -> str:
-		_check_env_name(value)
+		validate_env_var_name(value)
 		if value in _RESERVED_ENV_NAMES or value.startswith("AEBENCH_"):
 			raise ValueError(f"{value} is set by AEBench and cannot be a secret")
 		return value
@@ -83,18 +78,12 @@ class AgentSecret(_Model):
 	@field_validator("from_env")
 	@classmethod
 	def _validate_from_env(cls, value: list[str]) -> list[str]:
-		return [_check_env_name(name) for name in value]
+		return [validate_env_var_name(name) for name in value]
 
 	@field_validator("from_file_env")
 	@classmethod
 	def _validate_from_file_env(cls, value: str | None) -> str | None:
-		return None if value is None else _check_env_name(value)
-
-	@model_validator(mode="after")
-	def _default_source(self) -> "AgentSecret":
-		if not self.from_env:
-			self.from_env = [self.name]
-		return self
+		return None if value is None else validate_env_var_name(value)
 
 
 class AgentFile(_Model):
@@ -307,7 +296,8 @@ def resolve_secrets(
 	values: dict[str, str] = {}
 	missing: list[str] = []
 	for secret in agent.config.secrets:
-		value = next((env[name] for name in secret.from_env if env.get(name)), None)
+		names = secret.from_env or [secret.name]
+		value = next((env[name] for name in names if env.get(name)), None)
 		if value is None and secret.from_file_env and env.get(secret.from_file_env):
 			path = Path(env[secret.from_file_env]).expanduser()
 			try:
@@ -370,22 +360,10 @@ def _validation_summary(exc: ValidationError) -> str:
 
 
 __all__ = [
-	"AGENT_DIRS_ENV",
-	"AGENT_CONFIG_FILE",
-	"AGENT_SCRIPT",
-	"BUILTIN_AGENTS_DIR",
-	"INSTALL_SCRIPT",
-	"AgentCatalog",
 	"AgentConfigError",
 	"AgentDefinition",
-	"AgentFile",
-	"AgentConfig",
-	"AgentSecret",
-	"TraceFormat",
-	"agent_search_dirs",
 	"discover_agents",
 	"load_agent",
-	"load_agent_dir",
 	"resolve_files",
 	"resolve_secrets",
 ]
