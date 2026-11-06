@@ -204,13 +204,12 @@ def prepare_agent_runtime(runtime: BenchRuntime) -> None:
 def collect_agent_artifacts(host_support_dir: Path, output_dir: Path) -> Path | None:
 	"""Copies $AEBENCH_ARTIFACTS_DIR into the run's output directory.
 
-	Runs after the agent exits, including after a timeout. Symlinks are copied as
-	links, never followed: the agent controls them, and following one would copy
-	a host file the agent was never allowed to read.
+	Runs after the container stops. Reject a linked source directory and preserve
+	links inside it without following them.
 	"""
 	source = host_support_dir / ARTIFACTS_SUBDIR
 	try:
-		if not source.is_dir() or not any(source.iterdir()):
+		if source.is_symlink() or not source.is_dir() or not any(source.iterdir()):
 			return None
 	except OSError:
 		logger.warning("cannot read the agent artifacts directory %s", source, exc_info=True)
@@ -228,7 +227,7 @@ def clear_agent_support_dir(runtime: BenchRuntime, runtime_support_dir: str) -> 
 		[
 			"sh",
 			"-c",
-			'test ! -d "$1" || find "$1" -mindepth 1 -delete',
+			'test ! -d "$1" || find "$1" -mindepth 1 -maxdepth 1 ! -name artifacts -exec rm -rf -- {} +',
 			"aebench-clear-support",
 			runtime_support_dir,
 		],

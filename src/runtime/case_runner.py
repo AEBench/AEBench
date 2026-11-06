@@ -323,18 +323,18 @@ class _CaseRunner:
 			finally:
 				self.agent_finished = datetime.now(timezone.utc)
 				self._finish_monitoring()
-				if self.agent_support_dir is not None:
-					collect_agent_artifacts(self.agent_support_dir, self.output_dir)
 				clear_agent_support_dir(
 					runtime,
 					session.runtime_agent_support_dir,
 				)
+				# Stop container processes before reading the agent-writable artifact directory.
+				runtime.stop(session)
+				if self.agent_support_dir is not None:
+					collect_agent_artifacts(self.agent_support_dir, self.output_dir)
 
 			if self.agent_result.exit_code != 0:
 				self.error = f"agent exited with code {self.agent_result.exit_code}"
 
-			# Stop agent process (namespace) and preserve its runtime before scoring.
-			runtime.stop(session)
 			# Check tracked files before the oracle mounts the workspace read-write.
 			# Stopping the runtime ensures the agent can no longer modify them.
 			self._check_tracked_files()
@@ -687,9 +687,6 @@ def _run_result(
 		runtime=runtime_info,
 		agent_kind=agent.name,
 		trace_format=agent.manifest.trace_format.value,
-		trace_converter=(
-			None if agent.trace_converter_path is None else str(agent.trace_converter_path)
-		),
 		agent=agent_result,
 		command_monitor=monitor,
 		error=error,

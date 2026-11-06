@@ -324,15 +324,19 @@ def test_docker_case_scores_stopped_snapshot_not_live_session(
 		"runtime.case_runner.run_agent",
 		fake_agent,
 	)
+	monkeypatch.setattr(
+		"runtime.case_runner.collect_agent_artifacts", lambda *_args: events.append("collect")
+	)
 
 	class CapturingOracleRunner:
 		def execute(self, _case_root: Path, **kwargs: Any) -> OracleResult:
 			events.append("oracle")
-			assert events[:6] == [
+			assert events[:7] == [
 				"prepare",
 				"prepare_agent_runtime",
 				"agent",
 				"stop",
+				"collect",
 				"snapshot",
 				"oracle",
 			]
@@ -356,6 +360,7 @@ def test_docker_case_scores_stopped_snapshot_not_live_session(
 		"prepare_agent_runtime",
 		"agent",
 		"stop",
+		"collect",
 		"snapshot",
 		"oracle",
 		"cleanup",

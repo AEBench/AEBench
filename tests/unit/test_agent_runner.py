@@ -406,6 +406,18 @@ def test_no_artifacts_means_no_artifacts_dir(tmp_path: Path) -> None:
 	assert not (tmp_path / "output" / "agent-artifacts").exists()
 
 
+def test_artifacts_directory_cannot_be_a_symlink(tmp_path: Path) -> None:
+	host_only = tmp_path / "host-only"
+	host_only.mkdir()
+	(host_only / "canary.txt").write_text("not an artifact", encoding="utf-8")
+	support_dir = tmp_path / "agent-support"
+	support_dir.mkdir()
+	(support_dir / "artifacts").symlink_to(host_only, target_is_directory=True)
+
+	assert collect_agent_artifacts(support_dir, tmp_path / "output") is None
+	assert not (tmp_path / "output" / "agent-artifacts").exists()
+
+
 def test_local_runtime_streams_combined_output_to_file(tmp_path: Path) -> None:
 	output_path = tmp_path / "runner_output.log"
 	result = LocalRuntime(workspace=str(tmp_path)).run_process_to_file(

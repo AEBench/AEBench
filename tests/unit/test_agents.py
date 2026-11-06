@@ -149,8 +149,6 @@ def test_invalid_agent_name_is_reported(tmp_path: Path) -> None:
 		('[[files]]\ntarget = "../escape"\nsources = ["~/x"]\n', "relative path"),
 		('[[files]]\ntarget = "/abs"\nsources = ["~/x"]\n', "relative path"),
 		('[[files]]\ntarget = "x"\nsources = []\n', "sources"),
-		('trace_converter = "missing.py"\n', "does not exist"),
-		('trace_converter = "../x.py"\n', "inside the agent directory"),
 		("description = \n", "invalid TOML"),
 	],
 )
