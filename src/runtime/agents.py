@@ -22,7 +22,7 @@ if sys.version_info >= (3, 11):
 else:
 	import tomli as tomllib
 
-AGENT_MANIFEST = "agent.toml"
+AGENT_CONFIG_FILE = "agent.toml"
 AGENT_SCRIPT = "agent.sh"
 INSTALL_SCRIPT = "install.sh"
 AGENT_DIRS_ENV = "AEBENCH_AGENT_DIRS"
@@ -56,11 +56,11 @@ def _check_env_name(name: str) -> str:
 	return name
 
 
-class _Manifest(BaseModel):
+class _Model(BaseModel):
 	model_config = ConfigDict(extra="forbid")
 
 
-class AgentSecret(_Manifest):
+class AgentSecret(_Model):
 	"""A credential copied from the host environment into the agent's environment."""
 
 	# The variable the agent sees.
@@ -97,7 +97,7 @@ class AgentSecret(_Manifest):
 		return self
 
 
-class AgentFile(_Manifest):
+class AgentFile(_Model):
 	"""A host file copied into the agent's state directory before the run."""
 
 	# Path relative to $AEBENCH_STATE_DIR.
@@ -117,7 +117,7 @@ class AgentFile(_Manifest):
 		return value
 
 
-class AgentManifest(_Manifest):
+class AgentConfig(_Model):
 	description: str = ""
 	# Executables that must be on PATH in the runtime; checked before the agent starts.
 	requires: list[str] = Field(default_factory=list)
@@ -151,7 +151,7 @@ class AgentManifest(_Manifest):
 		return value
 
 	@model_validator(mode="after")
-	def _validate_unique(self) -> "AgentManifest":
+	def _validate_unique(self) -> "AgentConfig":
 		names = [secret.name for secret in self.secrets]
 		duplicates = sorted({name for name in names if names.count(name) > 1})
 		if duplicates:
@@ -167,7 +167,7 @@ class AgentManifest(_Manifest):
 class AgentDefinition:
 	name: str
 	directory: Path
-	manifest: AgentManifest
+	config: AgentConfig
 
 	@property
 	def script_path(self) -> Path:
@@ -180,7 +180,7 @@ class AgentDefinition:
 
 	@property
 	def trace_converter_path(self) -> Path | None:
-		converter = self.manifest.trace_converter
+		converter = self.config.trace_converter
 		return None if converter is None else self.directory / converter
 
 
@@ -243,8 +243,8 @@ def discover_agents(
 	for search_dir in catalog.search_dirs:
 		for directory in sorted(path for path in search_dir.iterdir() if path.is_dir()):
 			has_script = (directory / AGENT_SCRIPT).is_file()
-			has_manifest = (directory / AGENT_MANIFEST).is_file()
-			if not has_script and not has_manifest:
+			has_config = (directory / AGENT_CONFIG_FILE).is_file()
+			if not has_script and not has_config:
 				continue
 			name = directory.name
 			found.setdefault(name, []).append(directory)
@@ -280,22 +280,22 @@ def load_agent_dir(directory: Path) -> AgentDefinition:
 	directory = directory.resolve()
 	if not (directory / AGENT_SCRIPT).is_file():
 		raise AgentConfigError(f"{directory} has no {AGENT_SCRIPT}")
-	manifest_path = directory / AGENT_MANIFEST
+	config_path = directory / AGENT_CONFIG_FILE
 	data: dict[str, object] = {}
-	if manifest_path.is_file():
+	if config_path.is_file():
 		try:
-			with manifest_path.open("rb") as handle:
+			with config_path.open("rb") as handle:
 				data = tomllib.load(handle)
 		except tomllib.TOMLDecodeError as exc:
-			raise AgentConfigError(f"{manifest_path}: invalid TOML: {exc}") from exc
+			raise AgentConfigError(f"{config_path}: invalid TOML: {exc}") from exc
 	try:
-		manifest = AgentManifest.model_validate(data)
+		config = AgentConfig.model_validate(data)
 	except ValidationError as exc:
-		raise AgentConfigError(f"{manifest_path}: {_validation_summary(exc)}") from exc
-	agent = AgentDefinition(name=directory.name, directory=directory, manifest=manifest)
+		raise AgentConfigError(f"{config_path}: {_validation_summary(exc)}") from exc
+	agent = AgentDefinition(name=directory.name, directory=directory, config=config)
 	converter = agent.trace_converter_path
 	if converter is not None and not converter.is_file():
-		raise AgentConfigError(f"{manifest_path}: trace_converter {converter} does not exist")
+		raise AgentConfigError(f"{config_path}: trace_converter {converter} does not exist")
 	return agent
 
 
@@ -306,7 +306,7 @@ def resolve_secrets(
 	env = os.environ if environ is None else environ
 	values: dict[str, str] = {}
 	missing: list[str] = []
-	for secret in agent.manifest.secrets:
+	for secret in agent.config.secrets:
 		value = next((env[name] for name in secret.from_env if env.get(name)), None)
 		if value is None and secret.from_file_env and env.get(secret.from_file_env):
 			path = Path(env[secret.from_file_env]).expanduser()
@@ -333,7 +333,7 @@ def resolve_files(
 	env = os.environ if environ is None else environ
 	resolved: list[tuple[Path, str]] = []
 	missing: list[str] = []
-	for entry in agent.manifest.files:
+	for entry in agent.config.files:
 		source = next(
 			(path for path in (_expand(candidate, env) for candidate in entry.sources) if path),
 			None,
@@ -371,7 +371,7 @@ def _validation_summary(exc: ValidationError) -> str:
 
 __all__ = [
 	"AGENT_DIRS_ENV",
-	"AGENT_MANIFEST",
+	"AGENT_CONFIG_FILE",
 	"AGENT_SCRIPT",
 	"BUILTIN_AGENTS_DIR",
 	"INSTALL_SCRIPT",
@@ -379,7 +379,7 @@ __all__ = [
 	"AgentConfigError",
 	"AgentDefinition",
 	"AgentFile",
-	"AgentManifest",
+	"AgentConfig",
 	"AgentSecret",
 	"TraceFormat",
 	"agent_search_dirs",

@@ -115,7 +115,7 @@ def run_agent(
 	output_path: Path,
 	shell_path: str = "bash",
 ) -> AgentResult:
-	reasoning_effort = agent.manifest.reasoning_effort
+	reasoning_effort = agent.config.reasoning_effort
 	check_agent_requirements(agent, runtime)
 	_write_private(
 		host_support_dir / AEBENCH_SUBDIR / PROMPT_FILE, _prompt_for_agent(agent, prompt)
@@ -157,7 +157,7 @@ def run_agent(
 def check_agent_requirements(agent: AgentDefinition, runtime: BenchRuntime) -> None:
 	"""Fails before the agent starts when an executable it requires is not installed."""
 	missing: list[str] = []
-	for executable in agent.manifest.requires:
+	for executable in agent.config.requires:
 		try:
 			resolved = runtime.resolve_executable(executable)
 		except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
@@ -242,7 +242,7 @@ def clear_agent_support_dir(runtime: BenchRuntime, runtime_support_dir: str) -> 
 
 
 def _prompt_for_agent(agent: AgentDefinition, prompt: str) -> str:
-	append = (agent.manifest.prompt_append or "").strip()
+	append = (agent.config.prompt_append or "").strip()
 	if not append:
 		return prompt
 	return f"{prompt.rstrip()}\n\n{append}"
@@ -285,8 +285,8 @@ def _agent_env(
 			"AGENT_CONFIG": model,
 		}
 	)
-	if agent.manifest.reasoning_effort is not None:
-		env["AEBENCH_REASONING_EFFORT"] = agent.manifest.reasoning_effort
+	if agent.config.reasoning_effort is not None:
+		env["AEBENCH_REASONING_EFFORT"] = agent.config.reasoning_effort
 	return env
 
 

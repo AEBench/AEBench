@@ -204,9 +204,9 @@ def test_case_runner_rejects_unisolated_local_agent(tmp_path: Path) -> None:
 def test_case_runner_rejects_incomplete_local_source(tmp_path: Path) -> None:
 	project = tmp_path / "project"
 	shutil.copytree(_FIXTURE, project)
-	manifest = project / "bundles" / "mock_apt_case" / "case.toml"
-	manifest.write_text(
-		manifest.read_text(encoding="utf-8").replace('path = "artifact"\n', ""),
+	case_toml = project / "bundles" / "mock_apt_case" / "case.toml"
+	case_toml.write_text(
+		case_toml.read_text(encoding="utf-8").replace('path = "artifact"\n', ""),
 		encoding="utf-8",
 	)
 	state = load_project_config(project)
@@ -255,9 +255,9 @@ def test_docker_case_scores_stopped_snapshot_not_live_session(
 ) -> None:
 	project = tmp_path / "project"
 	shutil.copytree(_FIXTURE, project)
-	manifest = project / "bundles" / "mock_apt_case" / "case.toml"
-	manifest.write_text(
-		manifest.read_text(encoding="utf-8").replace(
+	case_toml = project / "bundles" / "mock_apt_case" / "case.toml"
+	case_toml.write_text(
+		case_toml.read_text(encoding="utf-8").replace(
 			'mode = "local"\ntimeout_ms',
 			'mode = "docker"\nimage = "aebench-agent:latest"\ntimeout_ms',
 		),
@@ -376,9 +376,9 @@ def test_monitored_case_orders_the_broker_and_shim(
 	"""
 	project = tmp_path / "project"
 	shutil.copytree(_FIXTURE, project)
-	manifest = project / "bundles" / "mock_apt_case" / "case.toml"
-	manifest.write_text(
-		manifest.read_text(encoding="utf-8").replace(
+	case_toml = project / "bundles" / "mock_apt_case" / "case.toml"
+	case_toml.write_text(
+		case_toml.read_text(encoding="utf-8").replace(
 			'mode = "local"\ntimeout_ms',
 			'mode = "docker"\nimage = "aebench-agent:latest"\ntimeout_ms',
 		),
@@ -540,9 +540,9 @@ def test_monitoring_requires_docker(tmp_path: Path) -> None:
 def _docker_case_runner(tmp_path: Path, *cli_args: str) -> _CaseRunner:
 	project = tmp_path / "project"
 	shutil.copytree(_FIXTURE, project)
-	manifest = project / "bundles" / "mock_apt_case" / "case.toml"
-	manifest.write_text(
-		manifest.read_text(encoding="utf-8").replace(
+	case_toml = project / "bundles" / "mock_apt_case" / "case.toml"
+	case_toml.write_text(
+		case_toml.read_text(encoding="utf-8").replace(
 			'mode = "local"\ntimeout_ms',
 			'mode = "docker"\nimage = "aebench-agent:latest"\ntimeout_ms',
 		),

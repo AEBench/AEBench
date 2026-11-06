@@ -24,12 +24,12 @@ _BUILTIN_AGENTS = (
 )
 
 
-def _write_agent(root: Path, name: str, manifest: str = "", script: str = "true\n") -> Path:
+def _write_agent(root: Path, name: str, config: str = "", script: str = "true\n") -> Path:
 	directory = root / name
 	directory.mkdir(parents=True)
 	(directory / "agent.sh").write_text(script, encoding="utf-8")
-	if manifest:
-		(directory / "agent.toml").write_text(manifest, encoding="utf-8")
+	if config:
+		(directory / "agent.toml").write_text(config, encoding="utf-8")
 	return directory
 
 
@@ -43,8 +43,8 @@ def test_builtin_agents_are_valid() -> None:
 @pytest.mark.parametrize("name", _BUILTIN_AGENTS)
 def test_builtin_agent_is_well_formed(name: str) -> None:
 	agent = load_agent(name, environ={})
-	assert agent.manifest.description, "describe the agent in agent.toml"
-	assert agent.manifest.requires, "list the executables agent.sh needs in requires"
+	assert agent.config.description, "describe the agent in agent.toml"
+	assert agent.config.requires, "list the executables agent.sh needs in requires"
 	for path in (agent.script_path, agent.install_script):
 		if path is not None:
 			result = subprocess.run(["bash", "-n", str(path)], capture_output=True, text=True)
@@ -56,7 +56,7 @@ def test_builtin_agent_requirements_are_installed_by_some_agent(name: str) -> No
 	installers = "\n".join(
 		path.read_text(encoding="utf-8") for path in BUILTIN_AGENTS_DIR.glob("*/install.sh")
 	)
-	for executable in load_agent(name, environ={}).manifest.requires:
+	for executable in load_agent(name, environ={}).config.requires:
 		assert executable in installers, f"no agents/*/install.sh installs {executable}"
 
 
@@ -66,8 +66,8 @@ def test_builtin_agent_requirements_are_installed_by_some_agent(name: str) -> No
 def test_minimal_agent_is_just_a_script(tmp_path: Path) -> None:
 	_write_agent(tmp_path, "minimal")
 	agent = load_agent("minimal", environ={AGENT_DIRS_ENV: str(tmp_path)})
-	assert agent.manifest.trace_format == TraceFormat.RAW
-	assert agent.manifest.secrets == []
+	assert agent.config.trace_format == TraceFormat.RAW
+	assert agent.config.secrets == []
 	assert agent.install_script is None
 
 
@@ -119,7 +119,7 @@ def test_directories_without_agent_files_are_ignored(tmp_path: Path) -> None:
 	assert "notes" not in catalog.agents and "notes" not in catalog.problems
 
 
-def test_manifest_without_script_is_reported(tmp_path: Path) -> None:
+def test_config_without_script_is_reported(tmp_path: Path) -> None:
 	directory = tmp_path / "noscript"
 	directory.mkdir()
 	(directory / "agent.toml").write_text('description = "x"\n', encoding="utf-8")
@@ -137,7 +137,7 @@ def test_invalid_agent_name_is_reported(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-	("manifest", "message"),
+	("config", "message"),
 	[
 		("unknown_key = 1\n", "unknown_key"),
 		('trace_format = "html"\n', "trace_format"),
@@ -154,8 +154,8 @@ def test_invalid_agent_name_is_reported(tmp_path: Path) -> None:
 		("description = \n", "invalid TOML"),
 	],
 )
-def test_manifest_errors_name_the_problem(tmp_path: Path, manifest: str, message: str) -> None:
-	directory = _write_agent(tmp_path, "agent", manifest)
+def test_config_errors_name_the_problem(tmp_path: Path, config: str, message: str) -> None:
+	directory = _write_agent(tmp_path, "agent", config)
 	with pytest.raises(AgentConfigError, match=message) as caught:
 		load_agent_dir(directory)
 	assert str(directory / "agent.toml") in str(caught.value) or "agent.sh" in str(caught.value)

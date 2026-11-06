@@ -127,7 +127,7 @@ Replace the example case ID with a case ID from `cases.json`.
 The agent CLI can read its credential and can run commands without approval.
 Use a credential that you can revoke and a disposable Chameleon instance.
 
-Some case manifests set `[run.artifact_requirements] docker = true` because the
+Some `case.toml` files set `[run.artifact_requirements] docker = true` because the
 artifact must build or run its own Docker image. Add `--allow-host-docker` only
 for those cases:
 

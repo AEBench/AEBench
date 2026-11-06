@@ -8,7 +8,7 @@ The unit of work in AEBench is called a **case**. Each case is a directory (some
 
 ```plaintext
 cases/eurosys25_egwalker/
-├── case.toml          # manifest: identity, source, runtime, oracle config
+├── case.toml          # case config: identity, source, runtime, oracle config
 ├── refs/              # reference data (checksums, expected results, etc.)
 │   ├── datasets.ref.json
 │   └── timings.ref.json

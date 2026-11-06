@@ -87,11 +87,11 @@ class FakeRuntime:
 		return subprocess.CompletedProcess(cmd, 0, "", "")
 
 
-def _write_agent(directory: Path, script: str, manifest: str = "") -> AgentDefinition:
+def _write_agent(directory: Path, script: str, config: str = "") -> AgentDefinition:
 	directory.mkdir(parents=True)
 	(directory / "agent.sh").write_text(script, encoding="utf-8")
-	if manifest:
-		(directory / "agent.toml").write_text(manifest, encoding="utf-8")
+	if config:
+		(directory / "agent.toml").write_text(config, encoding="utf-8")
 	return load_agent_dir(directory)
 
 

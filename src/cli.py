@@ -233,13 +233,13 @@ def _agent_list() -> int:
 	catalog = discover_agents(load_project_config(Path.cwd()).root)
 	print("Searched: " + (", ".join(str(path) for path in catalog.search_dirs) or "none"))
 	for name, agent in sorted(catalog.agents.items()):
-		manifest = agent.manifest
-		details = [f"trace: {manifest.trace_format.value}"]
-		if manifest.requires:
-			details.append("requires: " + ", ".join(manifest.requires))
-		if manifest.secrets:
-			details.append("secrets: " + ", ".join(secret.name for secret in manifest.secrets))
-		print(f"{name:<20} {manifest.description}")
+		agent_config = agent.config
+		details = [f"trace: {agent_config.trace_format.value}"]
+		if agent_config.requires:
+			details.append("requires: " + ", ".join(agent_config.requires))
+		if agent_config.secrets:
+			details.append("secrets: " + ", ".join(secret.name for secret in agent_config.secrets))
+		print(f"{name:<20} {agent_config.description}")
 		print(f"{'':<20} {agent.directory} ({'; '.join(details)})")
 	for name, problem in sorted(catalog.problems.items()):
 		print(f"[error] {name}: {problem}", file=sys.stderr)
