@@ -26,6 +26,36 @@ RUN_PY_PATH = "src/run.py"
 # numpy breaks pandas 1.4.3's ABI, so a working env must have a compatible numpy.
 REQUIRED_PY_MODULES = ("pandas", "numpy", "matplotlib", "seaborn")
 
+# The container's default `python3` is 3.12, for which pandas==1.4.3 has no wheel
+# (pip install -r requirements.txt cannot succeed there), so agents legitimately
+# install into a Python 3.10 virtualenv. The oracle therefore resolves the
+# interpreter instead of trusting bare `python3`: the first candidate that can
+# import every required module wins; if none can, fall back to `python3` so the
+# failure message stays meaningful. Relative candidates resolve against the repo
+# root (the check cwd).
+PYTHON_CANDIDATES = (
+	"${GAIA_PYTHON:-}",
+	"${VIRTUAL_ENV:-/nonexistent}/bin/python",
+	".venv/bin/python",
+	"venv/bin/python",
+	"$HOME/gaia-venv/bin/python",
+	"$HOME/.venv/bin/python",
+	"python3",
+)
+_IMPORT_ALL = "import " + ", ".join(REQUIRED_PY_MODULES)
+
+
+def resolve_python_shell() -> str:
+	"""Shell snippet that sets $PY to the interpreter holding GAIA's deps."""
+	cands = " ".join(f'"{c}"' for c in PYTHON_CANDIDATES)
+	return (
+		'PY=python3; '
+		f'for c in {cands}; do '
+		'[ -n "$c" ] && command -v "$c" >/dev/null 2>&1 && '
+		f'"$c" -c "{_IMPORT_ALL}" >/dev/null 2>&1 && PY="$c" && break; '
+		'done; '
+	)
+
 # ---------------------------------------------------------------------------
 # Oracle 3: benchmark_prep (experiment inputs + figure scripts present)
 # Paths are relative to the repo root (the task target's working directory).

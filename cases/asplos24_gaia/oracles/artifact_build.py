@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from evaluator.oracles import CaseOracleArtifactBuildBase
 from evaluator.oracles.reporting import BaseCheck
 
-from .consts import RUN_PY_PATH
+from .consts import RUN_PY_PATH, resolve_python_shell
 
 
 class OracleArtifactBuild(CaseOracleArtifactBuildBase):
@@ -20,8 +20,9 @@ class OracleArtifactBuild(CaseOracleArtifactBuildBase):
 		return (
 			self.command_check(
 				name="entrypoint_imports",
-				cmd=("python3", RUN_PY_PATH, "-h"),
+				cmd=resolve_python_shell() + f'"$PY" {RUN_PY_PATH} -h',
 				cwd=self.runtime_path(),
 				timeout_seconds=120.0,
+				use_shell=True,
 			),
 		)
