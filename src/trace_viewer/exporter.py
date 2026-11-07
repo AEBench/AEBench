@@ -17,6 +17,14 @@ ORACLE_EVALUATIONS_DIR = "oracle-evaluations"
 EVALUATION_RECORD = "evaluation.json"
 _TIMESTAMP_PREFIX = re.compile(r"^\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)\]\s+")
 _CLAUDE_SYSTEM_EVENTS = {"init", "task_started", "task_notification"}
+# Runs recorded before trace_format was saved with the result.
+_LEGACY_TRACE_FORMATS = {
+	"claude": "claude_code",
+	"claude_non_api": "claude_code",
+	"codex": "codex",
+	"codex_non_api": "codex",
+}
+_RAW_CHUNK_LINES = 200
 
 
 def export_trace_site(run_dir: Path, output_dir: Path) -> Path:
@@ -28,8 +36,11 @@ def export_trace_site(run_dir: Path, output_dir: Path) -> Path:
 	run_result = _read_last_jsonl(run_dir / RUN_RESULT)
 	case_result = _read_json(run_dir / CASE_RESULT)
 	secrets = _environment_secrets()
-	trace_format = _trace_format(str(run_result.get("agent_kind", "")))
-	parser = parse_claude_trace if trace_format == "claude_code" else parse_codex_trace
+	trace_format = _trace_format(run_result)
+	parser = {
+		"claude_code": parse_claude_trace,
+		"codex": parse_codex_trace,
+	}.get(trace_format, parse_raw_trace)
 	events, usage = parser(run_dir / RUNNER_LOG, secrets=secrets)
 	record = _build_record(
 		run_dir,
@@ -391,10 +402,53 @@ def _current_oracle_result(
 	return _read_json_if_present(run_dir / "oracle_result.json"), False
 
 
-def _trace_format(agent_kind: str) -> str:
-	if agent_kind in {"claude", "claude_non_api"}:
-		return "claude_code"
-	return "codex"
+def parse_raw_trace(
+	path: Path, *, secrets: Mapping[str, str] | None = None
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+	"""Shows an agent's output as plain text, for agents without a trace parser."""
+	if not path.is_file():
+		raise ValueError(f"runner log does not exist: {path}")
+
+	secret_values = secrets or {}
+	events: list[dict[str, Any]] = []
+	lines: list[str] = []
+	first_timestamp: str | None = None
+
+	def flush() -> None:
+		nonlocal first_timestamp
+		if lines:
+			events.append(
+				{
+					"type": "output",
+					"ts": first_timestamp,
+					"session_id": "default",
+					"session_idx": 0,
+					"parent_tool_use_id": None,
+					"blocks": [{"type": "text", "text": _redact("\n".join(lines), secret_values)}],
+				}
+			)
+		lines.clear()
+		first_timestamp = None
+
+	for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+		line = raw_line
+		match = _TIMESTAMP_PREFIX.match(line)
+		if match:
+			if first_timestamp is None:
+				first_timestamp = match.group(1)
+			line = line[match.end() :]
+		lines.append(line)
+		if len(lines) >= _RAW_CHUNK_LINES:
+			flush()
+	flush()
+	return events, {}
+
+
+def _trace_format(run_result: Mapping[str, Any]) -> str:
+	recorded = run_result.get("trace_format")
+	if isinstance(recorded, str) and recorded:
+		return recorded
+	return _LEGACY_TRACE_FORMATS.get(str(run_result.get("agent_kind", "")), "raw")
 
 
 def _sessions(events: list[dict[str, Any]], fallback_model: str) -> list[dict[str, Any]]:

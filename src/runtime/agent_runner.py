@@ -1,4 +1,16 @@
-"""Run shell agent harnesses inside an AEBench runtime."""
+"""Run agent harnesses inside an AEBench runtime.
+
+Nothing here is specific to one agent: everything an agent needs is declared in
+its directory (``agent.sh`` and ``agent.toml``, see runtime.agents).
+
+The per-run support directory, mounted at ``$AEBENCH_AGENT_SUPPORT_DIR``:
+
+	aebench/    entry script, output timestamper, prompt, secrets (AEBench-owned)
+	agent/      a copy of the agent directory ($AEBENCH_AGENT_DIR)
+	state/      the harness's config and sessions ($AEBENCH_STATE_DIR)
+
+It is deleted after the run.
+"""
 
 from __future__ import annotations
 
@@ -6,22 +18,20 @@ import os
 import shlex
 import shutil
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping
 
-from models import AgentName, AgentResult
+from models import AgentResult
 
+from .agents import AgentDefinition, resolve_files, resolve_secrets
 from .backend import BenchRuntime, DockerRuntime, LocalRuntime
 
 _RUNTIME_ENV_KEYS = ("PATH", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TERM")
 _PRIVATE_DIRECTORY_MODE = 0o700
+_PRIVATE_FILE_MODE = 0o600
 _RUNTIME_SETUP_TIMEOUT_SECONDS = 30
 _AGENT_TERMINATION_GRACE_SECONDS = 30
 _HOST_PROCESS_GRACE_SECONDS = 5
-_CLAUDE_NONINTERACTIVE_GUIDANCE = (
-	"You cannot receive interactive input. Wait for every process that you start to "
-	"finish before you write your final response."
-)
 _DOCKER_HOST_SOCKET_SETUP = (
 	'socket="/var/run/docker.sock"; '
 	'if [ -S "$socket" ]; then '
@@ -33,58 +43,50 @@ _DOCKER_HOST_SOCKET_SETUP = (
 	'usermod -aG "$socket_group" agent; '
 	"fi"
 )
-_TIMESTAMP_SCRIPT = "timestamp_lines.py"
-_REASONING_EFFORT: dict[AgentName, str] = {
-	"codex": "high",
-	"codex_non_api": "high",
-	"claude_non_api": "high",
-}
+
+_SUPPORT_FILES_DIR = Path(__file__).with_name("agent_support")
+AEBENCH_SUBDIR = "aebench"
+AGENT_SUBDIR = "agent"
+STATE_SUBDIR = "state"
+ENTRY_SCRIPT = "entry.sh"
+TIMESTAMP_SCRIPT = "timestamp_lines.py"
+PROMPT_FILE = "prompt.txt"
+SECRETS_FILE = "secrets.sh"
+_COPY_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", ".git")
 
 
 def prepare_agent_support_dir(
-	agent: AgentName,
+	agent: AgentDefinition,
 	parent: Path,
 	*,
 	environ: Mapping[str, str] | None = None,
 ) -> Path:
-	env = os.environ if environ is None else environ
+	"""Creates the private per-run support directory, with the agent's credentials."""
 	support_dir = parent / "agent-support"
 	support_dir.mkdir(mode=_PRIVATE_DIRECTORY_MODE, parents=True)
 	try:
-		shutil.copyfile(
-			Path(__file__).with_name("agent_scripts") / _TIMESTAMP_SCRIPT,
-			support_dir / _TIMESTAMP_SCRIPT,
-		)
-		if agent == "codex_non_api":
-			default_codex_home = Path(env.get("CODEX_HOME", "~/.codex")).expanduser()
-			source = Path(
-				env.get("AEBENCH_CODEX_AUTH_FILE", str(default_codex_home / "auth.json"))
-			).expanduser()
-			if not source.is_file():
-				raise RuntimeError(
-					"Codex subscription auth not found; run `codex login` or set "
-					"AEBENCH_CODEX_AUTH_FILE"
-				)
-			target = support_dir / ".codex" / "auth.json"
-			target.parent.mkdir(mode=_PRIVATE_DIRECTORY_MODE)
-			shutil.copyfile(source, target)
-			target.chmod(0o600)
+		# Resolve first, so a missing credential fails before anything is copied.
+		secrets = resolve_secrets(agent, environ=environ)
+		files = resolve_files(agent, environ=environ)
 
-		elif agent == "claude_non_api":
-			token = env.get("CLAUDE_CODE_OAUTH_TOKEN")
-			if token is None:
-				token_path = env.get("AEBENCH_CLAUDE_OAUTH_TOKEN_FILE")
-				if token_path:
-					token = Path(token_path).expanduser().read_text(encoding="utf-8").strip()
-			if not token:
-				raise RuntimeError(
-					"Claude subscription auth not found; set CLAUDE_CODE_OAUTH_TOKEN or "
-					"AEBENCH_CLAUDE_OAUTH_TOKEN_FILE"
-				)
-			target = support_dir / "oauth_token"
-			target.write_text(token, encoding="utf-8")
-			target.chmod(0o600)
-	except Exception:
+		aebench_dir = support_dir / AEBENCH_SUBDIR
+		aebench_dir.mkdir(mode=_PRIVATE_DIRECTORY_MODE)
+		for name in (ENTRY_SCRIPT, TIMESTAMP_SCRIPT):
+			shutil.copyfile(_SUPPORT_FILES_DIR / name, aebench_dir / name)
+		if secrets:
+			_write_private(aebench_dir / SECRETS_FILE, _secrets_script(secrets))
+
+		shutil.copytree(agent.directory, support_dir / AGENT_SUBDIR, ignore=_COPY_IGNORE)
+
+		state_dir = support_dir / STATE_SUBDIR
+		state_dir.mkdir(mode=_PRIVATE_DIRECTORY_MODE)
+		for source, target in files:
+			destination = state_dir / target
+			destination.parent.mkdir(mode=_PRIVATE_DIRECTORY_MODE, parents=True, exist_ok=True)
+			shutil.copyfile(source, destination)
+			destination.chmod(_PRIVATE_FILE_MODE)
+
+	except BaseException:
 		shutil.rmtree(support_dir, ignore_errors=True)
 		raise
 
@@ -92,25 +94,26 @@ def prepare_agent_support_dir(
 
 
 def run_agent(
-	agent: AgentName,
+	agent: AgentDefinition,
 	*,
 	model: str,
 	prompt: str,
 	runtime: BenchRuntime,
 	cwd: str,
 	runtime_home: str,
+	host_support_dir: Path,
 	runtime_support_dir: str,
 	timeout_seconds: float,
 	output_path: Path,
 	shell_path: str = "bash",
 ) -> AgentResult:
-	script = _solve_script(agent)
-	prompt = _prompt_for_agent(agent, prompt)
-	reasoning_effort = _REASONING_EFFORT.get(agent)
+	reasoning_effort = agent.config.reasoning_effort
+	_write_private(
+		host_support_dir / AEBENCH_SUBDIR / PROMPT_FILE, _prompt_for_agent(agent, prompt)
+	)
 	env = _agent_env(
 		agent,
 		model=model,
-		prompt=prompt,
 		runtime_home=runtime_home,
 		runtime_support_dir=runtime_support_dir,
 		include_host_runtime=isinstance(runtime, LocalRuntime),
@@ -125,7 +128,8 @@ def run_agent(
 			output_path=output_path,
 			cwd=cwd,
 			env=env,
-			stdin_text=script,
+			# Closes stdin; the agent never reads from the terminal that started AEBench.
+			stdin_text="",
 			timeout=(
 				timeout_seconds + _AGENT_TERMINATION_GRACE_SECONDS + _HOST_PROCESS_GRACE_SECONDS
 			),
@@ -136,6 +140,37 @@ def run_agent(
 		model=model,
 		exit_code=process.returncode,
 		reasoning_effort=reasoning_effort,
+	)
+
+
+def check_agent_requirements(agent: AgentDefinition, runtime: BenchRuntime) -> None:
+	"""Fails when an executable the agent requires is not installed in the runtime.
+
+	The case runner calls this while preparing the run, so a missing CLI is a setup
+	error and no agent time is recorded.
+	"""
+	missing: list[str] = []
+	for executable in agent.config.requires:
+		try:
+			resolved = runtime.resolve_executable(executable)
+		except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+			raise RuntimeError(
+				f"failed to look up {executable!r} for agent {agent.name!r}: {exc}"
+			) from exc
+		if resolved is None:
+			missing.append(executable)
+	if not missing:
+		return
+	where = (
+		"the runtime image; rebuild it (docker build -t aebench-agent:latest .)"
+		if isinstance(runtime, DockerRuntime)
+		else "this machine's PATH"
+	)
+	install = agent.install_script
+	hint = f"; see {install}" if install is not None else ""
+	raise RuntimeError(
+		f"agent {agent.name!r} requires {', '.join(missing)}, which is not installed in "
+		f"{where}{hint}"
 	)
 
 
@@ -159,18 +194,6 @@ def prepare_agent_runtime(runtime: BenchRuntime) -> None:
 		)
 
 
-def _solve_script(agent: AgentName) -> str:
-	return (Path(__file__).with_name("agent_scripts") / agent / "solve.sh").read_text(
-		encoding="utf-8"
-	)
-
-
-def _prompt_for_agent(agent: AgentName, prompt: str) -> str:
-	if agent not in {"claude", "claude_non_api"}:
-		return prompt
-	return f"{prompt.rstrip()}\n\n{_CLAUDE_NONINTERACTIVE_GUIDANCE}"
-
-
 def clear_agent_support_dir(runtime: BenchRuntime, runtime_support_dir: str) -> None:
 	result = runtime.run_process(
 		[
@@ -189,39 +212,54 @@ def clear_agent_support_dir(runtime: BenchRuntime, runtime_support_dir: str) -> 
 		)
 
 
+def _prompt_for_agent(agent: AgentDefinition, prompt: str) -> str:
+	append = (agent.config.prompt_append or "").strip()
+	if not append:
+		return prompt
+	return f"{prompt.rstrip()}\n\n{append}"
+
+
 def _agent_env(
-	agent: AgentName,
+	agent: AgentDefinition,
 	*,
 	model: str,
-	prompt: str,
 	runtime_home: str,
 	runtime_support_dir: str,
 	include_host_runtime: bool,
 ) -> dict[str, str]:
+	"""The agent's environment, minus secrets and the prompt.
+
+	Docker passes these as ``docker exec -e`` arguments, which other host users
+	can read, so secrets and the prompt travel as files in the support directory.
+	"""
 	env = (
 		{key: os.environ[key] for key in _RUNTIME_ENV_KEYS if key in os.environ}
 		if include_host_runtime
 		else {}
 	)
-	env["HOME"] = runtime_home
-	env["AEBENCH_AGENT_SUPPORT_DIR"] = runtime_support_dir
-	reasoning_effort = _REASONING_EFFORT.get(agent)
-	if reasoning_effort is not None:
-		env["AEBENCH_REASONING_EFFORT"] = reasoning_effort
-	if agent == "codex":
-		key = os.environ.get("OPENAI_API_KEY") or os.environ.get("CODEX_API_KEY")
-		if not key:
-			raise RuntimeError("Codex API harness requires CODEX_API_KEY or OPENAI_API_KEY")
-		env["OPENAI_API_KEY"] = key
-		env["CODEX_API_KEY"] = key
-	elif agent == "claude":
-		key = os.environ.get("ANTHROPIC_API_KEY")
-		if not key:
-			raise RuntimeError("Claude API harness requires ANTHROPIC_API_KEY")
-		env["ANTHROPIC_API_KEY"] = key
-	env["PROMPT"] = prompt
-	env["AGENT_CONFIG"] = model
+	env.update(
+		{
+			"HOME": runtime_home,
+			"AEBENCH_AGENT_SUPPORT_DIR": runtime_support_dir,
+			"AEBENCH_AGENT_DIR": f"{runtime_support_dir}/{AGENT_SUBDIR}",
+			"AEBENCH_STATE_DIR": f"{runtime_support_dir}/{STATE_SUBDIR}",
+			"AEBENCH_MODEL": model,
+		}
+	)
+	if agent.config.reasoning_effort is not None:
+		env["AEBENCH_REASONING_EFFORT"] = agent.config.reasoning_effort
 	return env
+
+
+def _secrets_script(secrets: Mapping[str, str]) -> str:
+	return "".join(f"export {name}={shlex.quote(value)}\n" for name, value in secrets.items())
+
+
+def _write_private(path: Path, text: str) -> None:
+	descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, _PRIVATE_FILE_MODE)
+	with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+		handle.write(text)
+	path.chmod(_PRIVATE_FILE_MODE)
 
 
 def _timeout_command(runtime: BenchRuntime, timeout_seconds: float) -> list[str]:
@@ -244,27 +282,21 @@ def _timeout_command(runtime: BenchRuntime, timeout_seconds: float) -> list[str]
 
 def _agent_shell_command(runtime: BenchRuntime, *, shell_path: str = "bash") -> list[str]:
 	if isinstance(runtime, DockerRuntime):
-		agent_command = [
-			"runuser",
-			"--user",
-			"agent",
-			"--preserve-environment",
-			"--",
-			shell_path,
-			"-s",
-		]
+		prefix = ["runuser", "--user", "agent", "--preserve-environment", "--", shell_path]
 	else:
-		agent_command = [shell_path, "-s"]
+		prefix = [shell_path]
+	support = '"$AEBENCH_AGENT_SUPPORT_DIR"'
 	pipeline = (
-		f"{shlex.join(agent_command)} 2>&1 | "
-		f'python3 "$AEBENCH_AGENT_SUPPORT_DIR/{_TIMESTAMP_SCRIPT}"'
+		f"{shlex.join(prefix)} {support}/{AEBENCH_SUBDIR}/{ENTRY_SCRIPT} </dev/null 2>&1 | "
+		f"python3 {support}/{AEBENCH_SUBDIR}/{TIMESTAMP_SCRIPT}"
 	)
 	return [shell_path, "-o", "pipefail", "-c", pipeline]
 
 
 __all__ = [
+	"check_agent_requirements",
 	"clear_agent_support_dir",
-	"prepare_agent_support_dir",
 	"prepare_agent_runtime",
+	"prepare_agent_support_dir",
 	"run_agent",
 ]

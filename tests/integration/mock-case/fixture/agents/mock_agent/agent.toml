@@ -1,0 +1,6 @@
+# A throwaway agent for the case runner tests. It declares an API key so the
+# secret handling runs too; most tests replace the agent process with a fake.
+description = "test agent"
+
+[[secrets]]
+name = "MOCK_API_KEY"

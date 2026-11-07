@@ -316,3 +316,78 @@ def test_export_trace_site_detects_claude_runs(tmp_path: Path) -> None:
 	assert record["summary"]["duration_ms"] == 1_000
 	assert record["summary"]["final_result_text"] == "complete"
 	assert record["events"][1]["blocks"][0]["text"] == "complete"
+
+
+def _write_run(run_dir: Path, log: str, **run_fields: object) -> None:
+	run_dir.mkdir()
+	(run_dir / "runner_output.log").write_text(log, encoding="utf-8")
+	run_result = {
+		"id": "case-one",
+		"status": "success",
+		"started_at": "2026-08-05T07:28:32Z",
+		"runtime": {"mode": "docker"},
+		"agent": {"model": "model-x", "exit_code": 0},
+		**run_fields,
+	}
+	(run_dir / "result.jsonl").write_text(json.dumps(run_result) + "\n", encoding="utf-8")
+	(run_dir / "case_result.json").write_text(json.dumps({"status": "success"}), encoding="utf-8")
+
+
+def _exported_record(site_dir: Path) -> dict:
+	index = json.loads((site_dir / "data" / "index.json").read_text(encoding="utf-8"))
+	run_id = index["runs"][0]["run_id"]
+	return json.loads((site_dir / "data" / f"{run_id}.json").read_text(encoding="utf-8"))
+
+
+def test_recorded_trace_format_wins_over_the_agent_name(tmp_path: Path) -> None:
+	run_dir = tmp_path / "run"
+	_write_run(
+		run_dir,
+		'{"type":"result","num_turns":2,"result":"done"}\n',
+		agent_kind="some_new_agent",
+		trace_format="claude_code",
+	)
+	export_trace_site(run_dir, tmp_path / "site")
+	record = _exported_record(tmp_path / "site")
+	assert record["meta"]["trace_format"] == "claude_code"
+	assert record["summary"]["final_result_text"] == "done"
+
+
+def test_unknown_agents_get_a_raw_log_view(tmp_path: Path) -> None:
+	run_dir = tmp_path / "run"
+	_write_run(
+		run_dir,
+		"[2026-08-05T07:28:33Z] starting\n[2026-08-05T07:28:34Z] token secret-value\n",
+		agent_kind="some_new_agent",
+	)
+	export_trace_site(run_dir, tmp_path / "site")
+	record = _exported_record(tmp_path / "site")
+	assert record["meta"]["trace_format"] == "raw"
+	assert len(record["events"]) == 1
+	assert record["events"][0]["ts"] == "2026-08-05T07:28:33Z"
+	assert record["events"][0]["blocks"][0]["text"].startswith("starting\ntoken ")
+
+
+def test_export_never_runs_a_converter_named_in_the_run_record(tmp_path: Path) -> None:
+	# run_result.json sits in a directory the agent could write to, so a program it
+	# names must never run on the host.
+	ran = tmp_path / "converter-ran"
+	converter = tmp_path / "trace.py"
+	converter.write_text(
+		f"import pathlib\npathlib.Path({str(ran)!r}).touch()\nraise RuntimeError('must not run')\n",
+		encoding="utf-8",
+	)
+	converter.chmod(0o755)
+	run_dir = tmp_path / "run"
+	_write_run(
+		run_dir,
+		"custom output\n",
+		agent_kind="some_new_agent",
+		trace_format="raw",
+		trace_converter=str(converter),
+	)
+	export_trace_site(run_dir, tmp_path / "site")
+	record = _exported_record(tmp_path / "site")
+	assert not ran.exists()
+	assert record["meta"]["trace_format"] == "raw"
+	assert record["events"][0]["blocks"] == [{"type": "text", "text": "custom output"}]

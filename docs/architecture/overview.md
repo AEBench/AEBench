@@ -8,7 +8,7 @@ The unit of work in AEBench is called a **case**. Each case is a directory (some
 
 ```plaintext
 cases/eurosys25_egwalker/
-├── case.toml          # manifest: identity, source, runtime, oracle config
+├── case.toml          # case config: identity, source, runtime, oracle config
 ├── refs/              # reference data (checksums, expected results, etc.)
 │   ├── datasets.ref.json
 │   └── timings.ref.json
@@ -77,7 +77,8 @@ src/
 ├── runtime/                # task execution layer
 │   ├── case_runner.py      # prepares and runs one case, then starts the oracle
 │   ├── agent_runner.py     # prepares credentials and runs a shell harness
-│   ├── agent_scripts/      # Codex and Claude Code shell harnesses
+│   ├── agents.py           # agent discovery and agent.toml validation
+│   ├── agent_support/      # entry script and output timestamper shared by all agents
 │   ├── oracle_runner.py    # in-process and subprocess oracle runners
 │   ├── backend.py          # Docker and local runtime backends
 │   ├── session.py          # RunSession: shared state for one task run

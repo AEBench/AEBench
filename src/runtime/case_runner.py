@@ -17,7 +17,6 @@ from evaluator import artifact_dir_for
 from evaluator.loader import load_case_spec
 from evaluator.oracles.discovery import discover_oracle_classes
 from models import (
-	AgentName,
 	AgentResult,
 	CaseRunResult,
 	CaseStatus,
@@ -41,11 +40,13 @@ from trajectory_audit.service import AuditService
 from utils import safe_name
 
 from .agent_runner import (
+	check_agent_requirements,
 	clear_agent_support_dir,
 	prepare_agent_runtime,
 	prepare_agent_support_dir,
 	run_agent,
 )
+from .agents import AgentDefinition, load_agent
 from .backend import BenchRuntime, get_runtime
 from .cases import task_from_case
 from .monitoring import (
@@ -119,7 +120,9 @@ class _CaseRunner:
 		if self.options.delete_image:
 			self.task.runtime.keep_committed_snapshot = False
 
-		self.agent = _agent_name(self.options)
+		self.agent_definition = load_agent(
+			_agent_name(self.options), self.context.project_state.root
+		)
 		self.model = _model_name(self.options)
 
 		if self.options.interactive:
@@ -173,7 +176,7 @@ class _CaseRunner:
 				self.workspace_root,
 			)
 			self.agent_support_dir = prepare_agent_support_dir(
-				self.agent,
+				self.agent_definition,
 				self.workspace_root.parent,
 			)
 
@@ -274,6 +277,7 @@ class _CaseRunner:
 
 			self.runtime.prepare(self.session)
 			prepare_agent_runtime(self.runtime)
+			check_agent_requirements(self.agent_definition, self.runtime)
 			if self.monitor is not None:
 				install_shim(self.runtime)
 				# Verifies monitoring before starting the agent; a broken shell shim,
@@ -304,7 +308,7 @@ class _CaseRunner:
 			self.agent_started = datetime.now(timezone.utc)
 			try:
 				self.agent_result = run_agent(
-					self.agent,
+					self.agent_definition,
 					model=self.model,
 					prompt=(
 						f"{session.prompt.system_prompt}\n\n{session.prompt.initial_prompt}"
@@ -312,6 +316,7 @@ class _CaseRunner:
 					runtime=runtime,
 					cwd=session.runtime_workspace,
 					runtime_home=session.runtime_agent_home,
+					host_support_dir=session.host_agent_support_dir,
 					runtime_support_dir=session.runtime_agent_support_dir,
 					timeout_seconds=self.task.runtime.timeout_ms / 1000,
 					output_path=self.paths.runner_log_path,
@@ -374,7 +379,7 @@ class _CaseRunner:
 				session.summary_path,
 				session.prompt.profile,
 				scored_runtime_info,
-				self.agent,
+				self.agent_definition,
 				self.agent_result,
 				self.started,
 				self.prepare_finished,
@@ -461,7 +466,7 @@ class _CaseRunner:
 			summary_path,
 			self.prompt_profile,
 			runtime_info,
-			self.agent,
+			self.agent_definition,
 			self.agent_result,
 			self.started,
 			self.prepare_finished,
@@ -636,7 +641,7 @@ def run_case(
 		runner._cleanup()
 
 
-def _agent_name(options: RunOptions) -> AgentName:
+def _agent_name(options: RunOptions) -> str:
 	if options.agent_type is None:
 		raise ValueError("choose an agent harness with --agent")
 	return options.agent_type
@@ -655,7 +660,7 @@ def _run_result(
 	summary_path: Path,
 	prompt_profile: PromptProfile,
 	runtime_info: RuntimeInfo,
-	agent: AgentName,
+	agent: AgentDefinition,
 	agent_result: AgentResult,
 	started: datetime,
 	prepare_finished: datetime,
@@ -680,7 +685,8 @@ def _run_result(
 		summary_path=str(summary_path),
 		prompt_profile=prompt_profile,
 		runtime=runtime_info,
-		agent_kind=agent,
+		agent_kind=agent.name,
+		trace_format=agent.config.trace_format.value,
 		agent=agent_result,
 		command_monitor=monitor,
 		error=error,

@@ -8,7 +8,7 @@ from config import AppState, resolve_settings
 from evaluator.loader import load_case_spec
 from evaluator.registry import resolve_case_dir
 from log import configure_logging
-from models import AGENT_NAMES, OracleFailureMode, RunOptions
+from models import OracleFailureMode, RunOptions
 from project_config import load_project_config
 from runtime.oracle_runner import DirectOracleRunner
 
@@ -84,6 +84,12 @@ def _build_parser() -> argparse.ArgumentParser:
 	runtime_run.add_argument("--input-file", required=True)
 	runtime_run.add_argument("--output-dir", default=None)
 
+	agent_p = sub.add_parser("agent", help="Agent harness workflows.")
+	agent_sub = agent_p.add_subparsers(dest="agent_command")
+	agent_sub.add_parser(
+		"list", help="List the agent harnesses found and check their agent.toml files."
+	)
+
 	trace_p = sub.add_parser("trace", help="Export and view agent traces.")
 	trace_sub = trace_p.add_subparsers(dest="trace_command")
 	trace_export = trace_sub.add_parser("export", help="Export a run as a trace website.")
@@ -107,9 +113,8 @@ def _build_parser() -> argparse.ArgumentParser:
 def _add_run_options(parser: argparse.ArgumentParser) -> None:
 	parser.add_argument(
 		"--agent",
-		choices=AGENT_NAMES,
 		default=None,
-		help="Agent harness to run.",
+		help="Agent harness to run (an agents/<name> directory; see `aebench agent list`).",
 	)
 	parser.add_argument("--model", default=None, help="Model name passed to the agent CLI.")
 	parser.add_argument("--interactive", action="store_true")
@@ -175,6 +180,7 @@ def cli_main(argv: list[str] | None = None) -> int:
 			"run": _run_benchmark,
 			"case": _handle_case,
 			"runtime": _handle_runtime,
+			"agent": _handle_agent,
 			"trace": _handle_trace,
 			"audit-trace": _audit_trace,
 		}[args.command](args)
@@ -212,6 +218,32 @@ def _handle_runtime(args: argparse.Namespace) -> int:
 		return _runtime_run(args)
 	print("usage: aebench runtime {run}", file=sys.stderr)
 	return 1
+
+
+def _handle_agent(args: argparse.Namespace) -> int:
+	if getattr(args, "agent_command", None) == "list":
+		return _agent_list()
+	print("usage: aebench agent {list}", file=sys.stderr)
+	return 1
+
+
+def _agent_list() -> int:
+	from runtime.agents import discover_agents
+
+	catalog = discover_agents(load_project_config(Path.cwd()).root)
+	print("Searched: " + (", ".join(str(path) for path in catalog.search_dirs) or "none"))
+	for name, agent in sorted(catalog.agents.items()):
+		agent_config = agent.config
+		details = [f"trace: {agent_config.trace_format.value}"]
+		if agent_config.requires:
+			details.append("requires: " + ", ".join(agent_config.requires))
+		if agent_config.secrets:
+			details.append("secrets: " + ", ".join(secret.name for secret in agent_config.secrets))
+		print(f"{name:<20} {agent_config.description}")
+		print(f"{'':<20} {agent.directory} ({'; '.join(details)})")
+	for name, problem in sorted(catalog.problems.items()):
+		print(f"[error] {name}: {problem}", file=sys.stderr)
+	return 1 if catalog.problems else 0
 
 
 def _handle_trace(args: argparse.Namespace) -> int:
