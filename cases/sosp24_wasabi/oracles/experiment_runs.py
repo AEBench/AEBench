@@ -5,16 +5,34 @@ import io
 from collections.abc import Sequence
 from pathlib import Path
 
-from evaluator.oracles import (
-	CaseOracleExperimentRunsBase,
-	ElementwiseSimilarityThresholdCheck,
-	PathCheck,
-	PathKind,
-)
-from evaluator.oracles import reporting
+from evaluator.oracles import CaseOracleExperimentRunsBase, PathCheck, PathKind, reporting
 from evaluator.oracles.oracle_checks_runtime import RuntimeCheckExecutor, RuntimePath
 from evaluator.oracles.reporting import BaseCheck
 from models import OracleInput
+
+from .common import find_eval_dir, missing_dir_check, run_in_runtime
+
+_Buckets = dict[tuple[str, str], set[str]]
+
+# The min percentege of bugs we expect to reproduce
+_COVERAGE_THRESHOLD = 0.75
+# Ignore benchmarks built with gradle -- they require manual intervention
+_UNSCORED_BENCHMARKS = frozenset({"cassandra", "elasticsearch"})
+
+
+# Search "[Injection] ... | Retry location ---<location>--- |" line in a test log.
+def _find_injected_locations(results_root: str, *wanted: str) -> list[str]:
+	import pathlib
+	import re
+
+	location = re.compile(rb"Retry location ---(.*?)---")
+	found = set()
+	for log in pathlib.Path(results_root).glob("**/test-reports/*-output.txt"):
+		with open(log, "rb") as f:
+			for line in f:
+				if b"[Injection]" in line and (match := location.search(line)):
+					found.add(match.group(1).decode(errors="replace"))
+	return sorted(found & set(wanted))
 
 
 def _load_ground_truth(
@@ -70,13 +88,36 @@ def _load_observed(
 	return observed
 
 
-def oracle_experiment_runs(context: OracleInput) -> Sequence[BaseCheck]:
-	repo_root = context.workspace_dir
-	results_root = repo_root / "results"
-	truth_path = context.case_dir / "refs" / "bugs_ground_truth.csv"
+def _injected_locations(
+	results_root: RuntimePath, locations: set[str], *, executor: RuntimeCheckExecutor
+) -> set[str]:
+	"""Returns the ``locations`` that a raw WASABI test log shows faults injected at."""
+	if not locations:
+		return set()
+	try:
+		found = run_in_runtime(
+			executor,
+			_find_injected_locations,
+			str(executor.resolve_path(results_root)),
+			*sorted(locations),
+			timeout_seconds=900.0,
+		)
+	except RuntimeError as exc:
+		raise ValueError(f"failed to scan test logs under {results_root}: {exc}") from exc
+	return set(found)
 
-	def _check_ground_truth_coverage(executor: RuntimeCheckExecutor) -> reporting.CheckResult:
-		try:
+
+def oracle_experiment_runs(
+	context: OracleInput, executor: RuntimeCheckExecutor
+) -> Sequence[BaseCheck]:
+	truth_path = context.case_dir / "refs" / "bugs_ground_truth.csv"
+	results_root, searched = find_eval_dir(executor, context.workspace_dir, "results")
+	if results_root is None:
+		return (missing_dir_check("results_root_exists", searched),)
+	cache: dict[str, tuple[_Buckets, _Buckets, set[str]]] = {}
+
+	def _load(executor: RuntimeCheckExecutor) -> tuple[_Buckets, _Buckets, set[str]]:
+		if "results" not in cache:
 			truth = _load_ground_truth(truth_path, executor=executor)
 			location_to_benchmark = {
 				(bug_type, location): benchmark
@@ -88,25 +129,46 @@ def oracle_experiment_runs(context: OracleInput) -> Sequence[BaseCheck]:
 				location_to_benchmark=location_to_benchmark,
 				executor=executor,
 			)
-		except ValueError as exc:
-			return reporting.CheckResult.failure(str(exc))
+			claimed = set().union(*observed.values())
+			injected = _injected_locations(results_root, claimed, executor=executor)
+			cache["results"] = (truth, observed, claimed - injected)
+		return cache["results"]
 
-		buckets = sorted(truth)
-		reference_counts = [float(len(truth[bucket])) for bucket in buckets]
-		observed_counts = [
-			float(len(observed.get(bucket, set()) & truth[bucket])) for bucket in buckets
-		]
-		result = ElementwiseSimilarityThresholdCheck(
-			name="ground_truth_coverage_by_bucket",
-			observed=observed_counts,
-			reference=reference_counts,
-			threshold=0.75,
-		).check(executor)
-		if result.ok:
-			matched = int(sum(observed_counts))
-			total = int(sum(reference_counts))
-			return reporting.CheckResult.success(f"matched {matched}/{total} benchmark bug signatures")
-		return result
+	def _make_coverage_check(name: str, *, scored: bool) -> reporting.Check:
+		def _check(executor: RuntimeCheckExecutor) -> reporting.CheckResult:
+			try:
+				truth, observed, unbacked = _load(executor)
+			except ValueError as exc:
+				return reporting.CheckResult.failure(str(exc))
+
+			buckets = sorted(
+				(bucket for bucket in truth if (bucket[1] not in _UNSCORED_BENCHMARKS) == scored),
+				key=lambda bucket: (bucket[1], bucket[0]),
+			)
+			lines = []
+			matched = total = 0
+			ignored: set[str] = set()
+			for bug_type, benchmark in buckets:
+				claimed = observed.get((bug_type, benchmark), set()) & truth[bug_type, benchmark]
+				found = claimed - unbacked
+				ignored |= claimed & unbacked
+				matched += len(found)
+				total += len(truth[bug_type, benchmark])
+				lines.append(
+					f"{benchmark}/{bug_type}: {len(found)}/{len(truth[bug_type, benchmark])}"
+				)
+			if ignored:
+				lines.append(
+					"ignored, no [Injection] line in test-reports: " + ", ".join(sorted(ignored))
+				)
+			message = f"matched {matched}/{total} benchmark bug signatures\n" + "\n".join(lines)
+			if matched >= _COVERAGE_THRESHOLD * total:
+				return reporting.CheckResult.success(message)
+			return reporting.CheckResult.failure(
+				f"coverage below {_COVERAGE_THRESHOLD:.0%}: {message}"
+			)
+
+		return reporting.Check(name=name, optional=not scored, fn=_check)
 
 	return (
 		PathCheck(
@@ -119,13 +181,11 @@ def oracle_experiment_runs(context: OracleInput) -> Sequence[BaseCheck]:
 			path=truth_path,
 			kind=PathKind.FILE,
 		),
-		reporting.Check(
-			name="ground_truth_coverage_by_bucket",
-			fn=_check_ground_truth_coverage,
-		),
+		_make_coverage_check("ground_truth_coverage", scored=True),
+		_make_coverage_check("unscored_benchmark_coverage", scored=False),
 	)
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	def requirements(self) -> Sequence[BaseCheck]:
-		return oracle_experiment_runs(self.context)
+		return oracle_experiment_runs(self.context, self.executor)
