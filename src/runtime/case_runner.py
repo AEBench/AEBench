@@ -316,7 +316,7 @@ class _CaseRunner:
 					runtime=runtime,
 					cwd=session.runtime_workspace,
 					runtime_home=session.runtime_agent_home,
-					host_support_dir=cast(Path, self.agent_support_dir),
+					host_support_dir=session.host_agent_support_dir,
 					runtime_support_dir=session.runtime_agent_support_dir,
 					timeout_seconds=self.task.runtime.timeout_ms / 1000,
 					output_path=self.paths.runner_log_path,
