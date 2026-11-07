@@ -366,3 +366,28 @@ def test_unknown_agents_get_a_raw_log_view(tmp_path: Path) -> None:
 	assert len(record["events"]) == 1
 	assert record["events"][0]["ts"] == "2026-08-05T07:28:33Z"
 	assert record["events"][0]["blocks"][0]["text"].startswith("starting\ntoken ")
+
+
+def test_export_never_runs_a_converter_named_in_the_run_record(tmp_path: Path) -> None:
+	# run_result.json sits in a directory the agent could write to, so a program it
+	# names must never run on the host.
+	ran = tmp_path / "converter-ran"
+	converter = tmp_path / "trace.py"
+	converter.write_text(
+		f"import pathlib\npathlib.Path({str(ran)!r}).touch()\nraise RuntimeError('must not run')\n",
+		encoding="utf-8",
+	)
+	converter.chmod(0o755)
+	run_dir = tmp_path / "run"
+	_write_run(
+		run_dir,
+		"custom output\n",
+		agent_kind="some_new_agent",
+		trace_format="raw",
+		trace_converter=str(converter),
+	)
+	export_trace_site(run_dir, tmp_path / "site")
+	record = _exported_record(tmp_path / "site")
+	assert not ran.exists()
+	assert record["meta"]["trace_format"] == "raw"
+	assert record["events"][0]["blocks"] == [{"type": "text", "text": "custom output"}]
