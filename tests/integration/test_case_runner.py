@@ -83,6 +83,34 @@ def test_project_agent_runs_without_code_changes(
 	assert (output_dir / "agent-artifacts" / "note.txt").read_text(encoding="utf-8") == "note\n"
 
 
+def test_missing_agent_cli_fails_setup_before_the_agent_starts(tmp_path: Path) -> None:
+	project = tmp_path / "project"
+	shutil.copytree(_FIXTURE, project)
+	agent_dir = project / "agents" / "needs_cli"
+	agent_dir.mkdir(parents=True)
+	(agent_dir / "agent.toml").write_text('requires = ["aebench-no-such-cli"]\n', encoding="utf-8")
+	(agent_dir / "agent.sh").write_text("echo started\n", encoding="utf-8")
+	state = load_project_config(project)
+	context = AppState(project_state=state, settings=resolve_settings(state))
+	output_dir = tmp_path / "output"
+
+	result = run_case(
+		context,
+		project / "bundles" / "mock_apt_case",
+		options=RunOptions(agent_type="needs_cli", model_name="m1", allow_unsafe_local=True),
+		save_path=output_dir,
+	)
+
+	error = result.runtime_result.error or ""
+	assert "requires aebench-no-such-cli, which is not installed" in error
+	assert "requires aebench-no-such-cli" in (output_dir / "infra.log").read_text(encoding="utf-8")
+	# The check fails during setup, so the agent step never begins: its start
+	# and finish timestamps were never recorded, and agent.sh never ran.
+	assert result.runtime_result.finished_at == result.runtime_result.started_at
+	runner_log = output_dir / "runner_output.log"
+	assert not runner_log.exists() or "started" not in runner_log.read_text(encoding="utf-8")
+
+
 def test_trajectory_audit_failure_is_advisory(
 	tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:

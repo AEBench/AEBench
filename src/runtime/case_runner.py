@@ -40,6 +40,7 @@ from trajectory_audit.service import AuditService
 from utils import safe_name
 
 from .agent_runner import (
+	check_agent_requirements,
 	clear_agent_support_dir,
 	collect_agent_artifacts,
 	prepare_agent_runtime,
@@ -277,6 +278,7 @@ class _CaseRunner:
 
 			self.runtime.prepare(self.session)
 			prepare_agent_runtime(self.runtime)
+			check_agent_requirements(self.agent_definition, self.runtime)
 			if self.monitor is not None:
 				install_shim(self.runtime)
 				# Verifies monitoring before starting the agent; a broken shell shim,

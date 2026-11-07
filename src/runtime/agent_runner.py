@@ -115,7 +115,6 @@ def run_agent(
 	shell_path: str = "bash",
 ) -> AgentResult:
 	reasoning_effort = agent.config.reasoning_effort
-	check_agent_requirements(agent, runtime)
 	_write_private(
 		host_support_dir / AEBENCH_SUBDIR / PROMPT_FILE, _prompt_for_agent(agent, prompt)
 	)
@@ -152,7 +151,11 @@ def run_agent(
 
 
 def check_agent_requirements(agent: AgentDefinition, runtime: BenchRuntime) -> None:
-	"""Fails before the agent starts when an executable it requires is not installed."""
+	"""Fails when an executable the agent requires is not installed in the runtime.
+
+	The case runner calls this while preparing the run, so a missing CLI is a setup
+	error and no agent time is recorded.
+	"""
 	missing: list[str] = []
 	for executable in agent.config.requires:
 		try:
