@@ -62,7 +62,7 @@ def test_project_agent_runs_without_code_changes(
 		'description = "test agent"\nrequires = ["bash"]\n', encoding="utf-8"
 	)
 	(agent_dir / "agent.sh").write_text(
-		'echo "model=$AEBENCH_MODEL"\necho note > "$AEBENCH_ARTIFACTS_DIR/note.txt"\n',
+		'echo "model=$AEBENCH_MODEL"\n',
 		encoding="utf-8",
 	)
 	state = load_project_config(project)
@@ -80,7 +80,6 @@ def test_project_agent_runs_without_code_changes(
 	assert result.runtime_result.agent.exit_code == 0
 	assert result.runtime_result.trace_format == "raw"
 	assert "model=m1" in (output_dir / "runner_output.log").read_text(encoding="utf-8")
-	assert (output_dir / "agent-artifacts" / "note.txt").read_text(encoding="utf-8") == "note\n"
 
 
 def test_missing_agent_cli_fails_setup_before_the_agent_starts(tmp_path: Path) -> None:

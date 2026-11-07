@@ -22,7 +22,6 @@ from runtime.agent_runner import (
 	_prompt_for_agent,
 	_timeout_command,
 	check_agent_requirements,
-	collect_agent_artifacts,
 	prepare_agent_runtime,
 	prepare_agent_support_dir,
 	run_agent,
@@ -210,7 +209,6 @@ def test_runner_passes_harness_contract_and_saves_output(tmp_path: Path) -> None
 		"AEBENCH_AGENT_SUPPORT_DIR": "/run/aebench-agent",
 		"AEBENCH_AGENT_DIR": "/run/aebench-agent/agent",
 		"AEBENCH_STATE_DIR": "/run/aebench-agent/state",
-		"AEBENCH_ARTIFACTS_DIR": "/run/aebench-agent/artifacts",
 		"AEBENCH_PROMPT_FILE": "/run/aebench-agent/aebench/prompt.txt",
 		"AEBENCH_MODEL": "model-test",
 		"AEBENCH_REASONING_EFFORT": "high",
@@ -250,7 +248,6 @@ def test_support_dir_holds_agent_copy_and_aebench_files(tmp_path: Path) -> None:
 	assert (support_dir / "aebench" / "timestamp_lines.py").is_file()
 	assert (support_dir / "agent" / "agent.sh").read_text(encoding="utf-8") == "true\n"
 	assert (support_dir / "state").is_dir()
-	assert (support_dir / "artifacts").is_dir()
 	secrets = support_dir / "aebench" / "secrets.sh"
 	assert secrets.stat().st_mode & 0o777 == 0o600
 
@@ -313,7 +310,7 @@ def test_docker_agent_environment_does_not_copy_host_runtime(
 
 
 def test_local_agent_runs_through_the_whole_contract(tmp_path: Path) -> None:
-	"""A throwaway agent, run for real: environment, secrets, stdin, artifacts, exit code."""
+	"""A throwaway agent, run for real: environment, secrets, stdin, exit code."""
 	agent = _write_agent(
 		tmp_path / "agents" / "probe",
 		r"""#!/bin/bash
@@ -324,7 +321,6 @@ printf 'cwd=%s\n' "$(pwd)"
 if read -r line; then echo "stdin=open"; else echo "stdin=empty"; fi
 test -f "$AEBENCH_AGENT_SUPPORT_DIR/aebench/secrets.sh" && echo "secrets-file=present" || echo "secrets-file=removed"
 cat "$AEBENCH_AGENT_DIR/notes.txt"
-echo 'saved' > "$AEBENCH_ARTIFACTS_DIR/session.jsonl"
 echo 'to stderr' >&2
 exit 7
 """,
@@ -371,31 +367,6 @@ from_env = ["HOST_PROBE_TOKEN"]
 	assert "secrets-file=removed" in text
 	assert "helper file" in text
 	assert "to stderr" in text
-
-	output_dir = tmp_path / "output"
-	saved = collect_agent_artifacts(support_dir, output_dir)
-	assert saved == output_dir / "agent-artifacts"
-	assert (saved / "session.jsonl").read_text(encoding="utf-8") == "saved\n"
-
-
-def test_artifact_symlinks_are_copied_as_links(tmp_path: Path) -> None:
-	host_secret = tmp_path / "host-secret"
-	host_secret.write_text("do not copy", encoding="utf-8")
-	support_dir = tmp_path / "agent-support"
-	(support_dir / "artifacts").mkdir(parents=True)
-	(support_dir / "artifacts" / "link").symlink_to(host_secret)
-
-	saved = collect_agent_artifacts(support_dir, tmp_path / "output")
-
-	assert saved is not None
-	assert (saved / "link").is_symlink()
-
-
-def test_no_artifacts_means_no_artifacts_dir(tmp_path: Path) -> None:
-	support_dir = tmp_path / "agent-support"
-	(support_dir / "artifacts").mkdir(parents=True)
-	assert collect_agent_artifacts(support_dir, tmp_path / "output") is None
-	assert not (tmp_path / "output" / "agent-artifacts").exists()
 
 
 def test_local_runtime_streams_combined_output_to_file(tmp_path: Path) -> None:

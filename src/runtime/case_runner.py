@@ -42,7 +42,6 @@ from utils import safe_name
 from .agent_runner import (
 	check_agent_requirements,
 	clear_agent_support_dir,
-	collect_agent_artifacts,
 	prepare_agent_runtime,
 	prepare_agent_support_dir,
 	run_agent,
@@ -326,8 +325,6 @@ class _CaseRunner:
 			finally:
 				self.agent_finished = datetime.now(timezone.utc)
 				self._finish_monitoring()
-				if self.agent_support_dir is not None:
-					collect_agent_artifacts(self.agent_support_dir, self.output_dir)
 				clear_agent_support_dir(
 					runtime,
 					session.runtime_agent_support_dir,

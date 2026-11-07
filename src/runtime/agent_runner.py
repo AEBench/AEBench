@@ -8,14 +8,12 @@ The per-run support directory, mounted at ``$AEBENCH_AGENT_SUPPORT_DIR``:
 	aebench/    entry script, output timestamper, prompt, secrets (AEBench-owned)
 	agent/      a copy of the agent directory ($AEBENCH_AGENT_DIR)
 	state/      the harness's config and sessions ($AEBENCH_STATE_DIR)
-	artifacts/  files saved to <run>/agent-artifacts after the run ($AEBENCH_ARTIFACTS_DIR)
 
 It is deleted after the run.
 """
 
 from __future__ import annotations
 
-import logging
 import os
 import shlex
 import shutil
@@ -27,8 +25,6 @@ from models import AgentResult
 
 from .agents import AgentDefinition, resolve_files, resolve_secrets
 from .backend import BenchRuntime, DockerRuntime, LocalRuntime
-
-logger = logging.getLogger(__name__)
 
 _RUNTIME_ENV_KEYS = ("PATH", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TERM")
 _PRIVATE_DIRECTORY_MODE = 0o700
@@ -52,12 +48,10 @@ _SUPPORT_FILES_DIR = Path(__file__).with_name("agent_support")
 AEBENCH_SUBDIR = "aebench"
 AGENT_SUBDIR = "agent"
 STATE_SUBDIR = "state"
-ARTIFACTS_SUBDIR = "artifacts"
 ENTRY_SCRIPT = "entry.sh"
 TIMESTAMP_SCRIPT = "timestamp_lines.py"
 PROMPT_FILE = "prompt.txt"
 SECRETS_FILE = "secrets.sh"
-AGENT_ARTIFACTS_DIRNAME = "agent-artifacts"
 _COPY_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", ".git")
 
 
@@ -92,7 +86,6 @@ def prepare_agent_support_dir(
 			shutil.copyfile(source, destination)
 			destination.chmod(_PRIVATE_FILE_MODE)
 
-		(support_dir / ARTIFACTS_SUBDIR).mkdir(mode=_PRIVATE_DIRECTORY_MODE)
 	except BaseException:
 		shutil.rmtree(support_dir, ignore_errors=True)
 		raise
@@ -201,28 +194,6 @@ def prepare_agent_runtime(runtime: BenchRuntime) -> None:
 		)
 
 
-def collect_agent_artifacts(host_support_dir: Path, output_dir: Path) -> Path | None:
-	"""Copies $AEBENCH_ARTIFACTS_DIR into the run's output directory.
-
-	Runs after the agent exits, including after a timeout. Symlinks are copied as
-	links, never followed: the agent controls them, and following one would copy
-	a host file the agent was never allowed to read.
-	"""
-	source = host_support_dir / ARTIFACTS_SUBDIR
-	try:
-		if not source.is_dir() or not any(source.iterdir()):
-			return None
-	except OSError:
-		logger.warning("cannot read the agent artifacts directory %s", source, exc_info=True)
-		return None
-	destination = output_dir / AGENT_ARTIFACTS_DIRNAME
-	try:
-		shutil.copytree(source, destination, symlinks=True, dirs_exist_ok=True)
-	except (OSError, shutil.Error):
-		logger.warning("some agent artifacts could not be saved to %s", destination, exc_info=True)
-	return destination
-
-
 def clear_agent_support_dir(runtime: BenchRuntime, runtime_support_dir: str) -> None:
 	result = runtime.run_process(
 		[
@@ -272,7 +243,6 @@ def _agent_env(
 			"AEBENCH_AGENT_SUPPORT_DIR": runtime_support_dir,
 			"AEBENCH_AGENT_DIR": f"{runtime_support_dir}/{AGENT_SUBDIR}",
 			"AEBENCH_STATE_DIR": f"{runtime_support_dir}/{STATE_SUBDIR}",
-			"AEBENCH_ARTIFACTS_DIR": f"{runtime_support_dir}/{ARTIFACTS_SUBDIR}",
 			"AEBENCH_PROMPT_FILE": f"{runtime_support_dir}/{AEBENCH_SUBDIR}/{PROMPT_FILE}",
 			"AEBENCH_MODEL": model,
 		}
@@ -327,7 +297,6 @@ def _agent_shell_command(runtime: BenchRuntime, *, shell_path: str = "bash") -> 
 __all__ = [
 	"check_agent_requirements",
 	"clear_agent_support_dir",
-	"collect_agent_artifacts",
 	"prepare_agent_runtime",
 	"prepare_agent_support_dir",
 	"run_agent",

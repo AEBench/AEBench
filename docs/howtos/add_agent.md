@@ -171,7 +171,6 @@ the agent's exit code (0 means success).
 | `AEBENCH_REASONING_EFFORT` | `reasoning_effort` from `agent.toml`, if set |
 | `AEBENCH_AGENT_DIR` | the run's copy of the agent directory, for templates and helpers |
 | `AEBENCH_STATE_DIR` | where the CLI keeps its config, sessions and caches; deleted after the run |
-| `AEBENCH_ARTIFACTS_DIR` | files written here are saved to `<run>/agent-artifacts/`, even after a timeout |
 | `HOME` | `/home/agent` in Docker; your own home directory for `mode = "local"` cases |
 | declared secrets | each `[[secrets]]` entry, as an ordinary environment variable |
 
@@ -185,8 +184,7 @@ Rules for the script:
   real home directory, so this keeps the run from reading or changing your own
   CLI configuration.
 - Print the CLI's machine-readable output (JSON lines) on stdout. That output is
-  the only record AEBench keeps of what the agent did; copy anything else worth
-  keeping, such as session files, into `$AEBENCH_ARTIFACTS_DIR`.
+  the only record AEBench keeps of what the agent did.
 - Turn off telemetry and uploads the CLI does by default.
 - Let long commands finish: raise the CLI's per-command timeout. The prompt tells
   agents not to set their own timeouts.
