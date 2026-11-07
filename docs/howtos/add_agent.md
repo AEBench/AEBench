@@ -166,7 +166,7 @@ the agent's exit code (0 means success).
 
 | Variable | Value |
 | --- | --- |
-| `PROMPT` | the complete AEBench prompt (also in the file `$AEBENCH_PROMPT_FILE`) |
+| `PROMPT` | the complete AEBench prompt |
 | `AEBENCH_MODEL` | the `--model` value |
 | `AEBENCH_REASONING_EFFORT` | `reasoning_effort` from `agent.toml`, if set |
 | `AEBENCH_AGENT_DIR` | the run's copy of the agent directory, for templates and helpers |

@@ -209,7 +209,6 @@ def test_runner_passes_harness_contract_and_saves_output(tmp_path: Path) -> None
 		"AEBENCH_AGENT_SUPPORT_DIR": "/run/aebench-agent",
 		"AEBENCH_AGENT_DIR": "/run/aebench-agent/agent",
 		"AEBENCH_STATE_DIR": "/run/aebench-agent/state",
-		"AEBENCH_PROMPT_FILE": "/run/aebench-agent/aebench/prompt.txt",
 		"AEBENCH_MODEL": "model-test",
 		"AEBENCH_REASONING_EFFORT": "high",
 	}

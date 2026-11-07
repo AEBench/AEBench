@@ -10,7 +10,7 @@ if [ -f "$secrets_file" ]; then
 	rm -f "$secrets_file"
 fi
 
-PROMPT="$(cat "$AEBENCH_PROMPT_FILE")"
+PROMPT="$(cat "$AEBENCH_AGENT_SUPPORT_DIR/aebench/prompt.txt")"
 export PROMPT
 
 # $BASH is this shell; under command monitoring it is the real bash, so the

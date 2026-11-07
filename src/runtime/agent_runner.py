@@ -243,7 +243,6 @@ def _agent_env(
 			"AEBENCH_AGENT_SUPPORT_DIR": runtime_support_dir,
 			"AEBENCH_AGENT_DIR": f"{runtime_support_dir}/{AGENT_SUBDIR}",
 			"AEBENCH_STATE_DIR": f"{runtime_support_dir}/{STATE_SUBDIR}",
-			"AEBENCH_PROMPT_FILE": f"{runtime_support_dir}/{AEBENCH_SUBDIR}/{PROMPT_FILE}",
 			"AEBENCH_MODEL": model,
 		}
 	)
