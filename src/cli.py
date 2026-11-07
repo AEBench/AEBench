@@ -86,6 +86,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
 	trace_p = sub.add_parser("trace", help="Export and view agent traces.")
 	trace_sub = trace_p.add_subparsers(dest="trace_command")
+	trace_redact = trace_sub.add_parser(
+		"redact", help="Create a redacted copy before sharing traces."
+	)
+	trace_redact.add_argument("directory")
+	trace_redact.add_argument("--output-dir", required=True)
+	trace_redact.add_argument(
+		"--secret-file", help="Private file with additional secret values, one per line."
+	)
 	trace_export = trace_sub.add_parser("export", help="Export a run as a trace website.")
 	trace_export.add_argument("run_dir")
 	trace_export.add_argument("--output-dir", required=True)
@@ -216,6 +224,20 @@ def _handle_runtime(args: argparse.Namespace) -> int:
 
 def _handle_trace(args: argparse.Namespace) -> int:
 	trace_command = getattr(args, "trace_command", None)
+	if trace_command == "redact":
+		from trace_viewer.redaction import redact_directory
+
+		try:
+			output = redact_directory(
+				Path(args.directory),
+				Path(args.output_dir),
+				secret_file=_optional_path(args.secret_file),
+			)
+		except (OSError, ValueError) as exc:
+			print(f"Could not redact traces: {exc}", file=sys.stderr)
+			return 1
+		print(f"Redacted copy: {output}")
+		return 0
 	if trace_command == "export":
 		from trace_viewer import export_trace_site
 
@@ -227,7 +249,7 @@ def _handle_trace(args: argparse.Namespace) -> int:
 
 		serve_trace_site(Path(args.site_dir), host=args.host, port=args.port)
 		return 0
-	print("usage: aebench trace {export,serve}", file=sys.stderr)
+	print("usage: aebench trace {redact,export,serve}", file=sys.stderr)
 	return 1
 
 
