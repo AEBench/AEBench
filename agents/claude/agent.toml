@@ -1,0 +1,10 @@
+description = "Claude Code with an Anthropic API key"
+requires = ["claude"]
+trace_format = "claude_code"
+prompt_append = """
+You cannot receive interactive input. Wait for every process that you start to \
+finish before you write your final response."""
+
+[[secrets]]
+name = "ANTHROPIC_API_KEY"
+hint = "set ANTHROPIC_API_KEY"

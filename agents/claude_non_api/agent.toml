@@ -1,0 +1,13 @@
+description = "Claude Code with a Claude subscription OAuth token"
+# Installed by agents/claude/install.sh.
+requires = ["claude"]
+reasoning_effort = "high"
+trace_format = "claude_code"
+prompt_append = """
+You cannot receive interactive input. Wait for every process that you start to \
+finish before you write your final response."""
+
+[[secrets]]
+name = "CLAUDE_CODE_OAUTH_TOKEN"
+from_file_env = "AEBENCH_CLAUDE_OAUTH_TOKEN_FILE"
+hint = "set CLAUDE_CODE_OAUTH_TOKEN or AEBENCH_CLAUDE_OAUTH_TOKEN_FILE"
