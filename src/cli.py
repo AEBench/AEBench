@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -98,6 +99,7 @@ def _build_parser() -> argparse.ArgumentParser:
 	audit_p.add_argument("trace_path")
 	audit_p.add_argument("--instructions", default=None)
 	audit_p.add_argument("--output", default=None)
+	audit_p.add_argument("--judge-provider", choices=("openai", "codex"), default="openai")
 	audit_p.add_argument("--model", default=None)
 	audit_p.add_argument("--escalation-model", default=None)
 	audit_p.add_argument("--no-escalation", action="store_true")
@@ -386,7 +388,7 @@ def _runtime_run(args: argparse.Namespace) -> int:
 
 
 def _audit_trace(args: argparse.Namespace) -> int:
-	from trajectory_audit.judge import OpenAIResponsesJudge
+	from trajectory_audit.judge import CodexCLIJudge, OpenAIResponsesJudge
 	from trajectory_audit.sanitize import MAX_TASK_CONTEXT_CHARS
 	from trajectory_audit.service import (
 		DEFAULT_ESCALATION_MODEL,
@@ -398,24 +400,58 @@ def _audit_trace(args: argparse.Namespace) -> int:
 	if not trace_path.is_file():
 		print(f"Trace does not exist: {trace_path}", file=sys.stderr)
 		return 2
+	if args.judge_provider == "codex" and not args.model:
+		print(
+			"The Codex judge requires --model with a model available to your CLI login.",
+			file=sys.stderr,
+		)
+		return 2
 	escalation_model = (
-		None if args.no_escalation else (args.escalation_model or DEFAULT_ESCALATION_MODEL)
+		None
+		if args.no_escalation
+		else (
+			args.escalation_model
+			or (DEFAULT_ESCALATION_MODEL if args.judge_provider == "openai" else None)
+		)
 	)
 	service = AuditService(
-		OpenAIResponsesJudge(),
+		CodexCLIJudge() if args.judge_provider == "codex" else OpenAIResponsesJudge(),
 		primary_model=args.model or DEFAULT_PRIMARY_MODEL,
 		escalation_model=escalation_model,
 	)
+	inputs_path = None
 	try:
+		if args.output:
+			output_path = Path(args.output).expanduser().resolve()
+			candidate = output_path.with_suffix(".inputs.json")
+			if output_path.exists() or candidate.exists() or output_path == candidate:
+				raise ValueError("audit outputs must be fresh files; choose a new output path")
+			output_path.parent.mkdir(parents=True, exist_ok=True)
+			inputs_path = candidate
 		task_context = ""
 		if args.instructions:
 			instructions_path = Path(args.instructions).expanduser().resolve()
 			with instructions_path.open(encoding="utf-8") as instructions_file:
 				task_context = instructions_file.read(MAX_TASK_CONTEXT_CHARS + 1)
+			if len(task_context) + task_context.count("\n") > MAX_TASK_CONTEXT_CHARS:
+				raise ValueError(
+					"instructions exceed the context limit; provide a shorter requirements file"
+				)
 		report = service.audit_jsonl(trace_path, task_context=task_context)
 	except (OSError, ValueError, RuntimeError) as exc:
+		if service.judge_inputs:
+			service.judge_inputs[-1]["error"] = str(exc)
 		print(f"Audit failed: {exc}", file=sys.stderr)
 		return 2
+	finally:
+		if inputs_path is not None:
+			try:
+				inputs_path.write_text(
+					json.dumps(service.judge_inputs, indent=2) + "\n", encoding="utf-8"
+				)
+			except OSError:
+				print("Could not save judge inputs.", file=sys.stderr)
+				return 2
 
 	serialized = report.model_dump_json(indent=2)
 	if args.output:
