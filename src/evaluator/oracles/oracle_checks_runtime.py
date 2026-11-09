@@ -110,6 +110,18 @@ def _resolved_path(path: HostPath) -> pathlib.Path:
 	return pathlib.Path(path).expanduser().resolve(strict=False)
 
 
+def _resolved_parent_path(path: HostPath) -> pathlib.Path:
+	"""Returns an absolute host path with its parent resolved and its final component kept.
+
+	Unlike ``_resolved_path``, a symlink in the final component is not followed.
+	"""
+	absolute = pathlib.Path(os.path.abspath(pathlib.Path(path).expanduser()))
+	if absolute.parent == absolute:
+		return absolute
+
+	return absolute.parent.resolve(strict=False) / absolute.name
+
+
 class RuntimeCheckExecutor(abc.ABC):
 	"""Executes oracle checks in a configured runtime."""
 
@@ -124,6 +136,14 @@ class RuntimeCheckExecutor(abc.ABC):
 			return candidate.resolve(strict=False)
 
 		return (self._default_cwd / candidate).resolve(strict=False)
+
+	def _absolute_host_path(self, path: HostPath) -> pathlib.Path:
+		"""Returns an absolute evaluator-host path without following symlinks."""
+		candidate = pathlib.Path(path).expanduser()
+		if not candidate.is_absolute():
+			candidate = self._default_cwd / candidate
+
+		return pathlib.Path(os.path.abspath(candidate))
 
 	@abc.abstractmethod
 	def resolve_path(
@@ -222,6 +242,16 @@ def _translate_host_path(
 		translated = mount.translate(resolved)
 		if translated is not None:
 			return translated
+
+	# A mounted symlink can point to a target that exists only inside the
+	# runtime, e.g. a virtualenv's bin/python -> /usr/local/bin/python3.
+	# Translate the link itself so the runtime follows it.
+	link = _resolved_parent_path(path)
+	if link != resolved:
+		for mount in path_mounts:
+			translated = mount.translate(link)
+			if translated is not None:
+				return translated
 
 	raise ValueError(f"host path is not mounted in the oracle runtime: {resolved}")
 
@@ -440,7 +470,7 @@ class SessionRuntimeCheckExecutor(RuntimeCheckExecutor):
 			return self._runtime_cwd.joinpath(path.value)
 
 		return _translate_host_path(
-			self._resolve_host_path(path),
+			self._absolute_host_path(path),
 			path_mounts=self._path_mounts,
 		)
 
@@ -679,7 +709,7 @@ class DockerRuntimeCheckExecutor(RuntimeCheckExecutor):
 			return self._runtime_cwd.joinpath(path.value)
 
 		return _translate_host_path(
-			self._resolve_host_path(path),
+			self._absolute_host_path(path),
 			path_mounts=self._path_mounts,
 		)
 

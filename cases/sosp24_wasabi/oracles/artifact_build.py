@@ -6,8 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from evaluator.oracles import CaseOracleArtifactBuildBase
-from evaluator.oracles import reporting
+from evaluator.oracles import CaseOracleArtifactBuildBase, reporting
 from evaluator.oracles.oracle_checks_runtime import OraclePath, RuntimeCheckExecutor, RuntimePath
 from evaluator.oracles.reporting import BaseCheck
 from models import OracleInput
@@ -128,8 +127,7 @@ def _parse_pom(
 def _find_poms(base: Path, *, executor: RuntimeCheckExecutor) -> list[Path]:
 	runtime_base = Path(executor.resolve_path(base))
 	return sorted(
-		base / path.relative_to(runtime_base)
-		for path in executor.glob(base, "**/pom.xml")
+		base / path.relative_to(runtime_base) for path in executor.glob(base, "**/pom.xml")
 	)
 
 
@@ -143,7 +141,8 @@ def _repo_path(
 
 
 def oracle_artifact_build(context: OracleInput) -> Sequence[BaseCheck]:
-	repo_root = context.workspace_dir
+	# Only WASABI's own module; benchmark clones may sit inside the workspace.
+	repo_root = context.workspace_dir / "wasabi-testing"
 	cache: dict[str, list[dict[str, Any]]] = {}
 
 	def _load_modules(executor: RuntimeCheckExecutor) -> list[dict[str, Any]]:
@@ -238,9 +237,7 @@ def oracle_artifact_build(context: OracleInput) -> Sequence[BaseCheck]:
 		version = str(chosen["version"]).strip()
 		module_dir = Path(chosen["dir"])
 
-		built = _pick_primary_jar(
-			module_dir / "target", artifact_id, version, executor=executor
-		)
+		built = _pick_primary_jar(module_dir / "target", artifact_id, version, executor=executor)
 		installed = _pick_primary_jar(
 			_repo_path(group_id, artifact_id, version, executor=executor),
 			artifact_id,

@@ -12,7 +12,7 @@ from .consts import (
 	FIGURE_FILES,
 	FIGURES_DIR,
 	OUTPUT_DIR,
-	PICKLE_FILES,
+	PKL_FILES,
 	SRC_DIFF_PAIRS,
 	TABLE_FILES,
 	TABLE_MIN_MATCH_FRACTION,
@@ -40,7 +40,7 @@ class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 
 		# Intermediate data: the pickles the table and figure cells load, and the
 		# per-version dumps (only counted; output/inline alone is close to 1 GB).
-		for filename in PICKLE_FILES:
+		for filename in PKL_FILES:
 			checks.append(
 				self.path_check(
 					name=f"pickle_{filename.removesuffix('.pkl')}",

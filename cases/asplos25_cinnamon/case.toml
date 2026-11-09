@@ -25,9 +25,6 @@ compose = false
 
 [run.prompt]
 profile = "artifact-eval-v1"
-append = """
-Evaluator requirement: Do not execute the final 'docker stop cinnamon' instruction. After all builds, simulations, output validation, and other work are complete, leave the container named 'cinnamon' running. Do not stop, kill, remove, rename, or replace it. The post-run evaluator must inspect that running container, its output mount, scripts, and built libcinnamon.so.
-"""
 
 [oracle]
 expected_score = 4
