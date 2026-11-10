@@ -28,8 +28,12 @@ AGENT_CONFIG_FILE = "agent.toml"
 AGENT_SCRIPT = "agent.sh"
 INSTALL_SCRIPT = "install.sh"
 PROJECT_AGENTS_SUBDIR = "agents"
-# The agents shipped with AEBench, at the root of the source checkout.
-BUILTIN_AGENTS_DIR = Path(__file__).resolve().parents[2] / PROJECT_AGENTS_SUBDIR
+# The agents shipped with AEBench: next to this module when AEBench is an
+# installed Python package (pip or uv install; see pyproject.toml), else at the
+# root of the source checkout.
+BUILTIN_AGENTS_DIR = Path(__file__).resolve().with_name("builtin_agents")
+if not BUILTIN_AGENTS_DIR.is_dir():
+	BUILTIN_AGENTS_DIR = Path(__file__).resolve().parents[2] / PROJECT_AGENTS_SUBDIR
 
 _AGENT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 _ENV_REFERENCE_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")

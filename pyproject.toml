@@ -53,9 +53,7 @@ py-modules = [
 
 [tool.setuptools.package-dir]
 "" = "src"
-
-[tool.setuptools.packages.find]
-where = ["src"]
+"runtime.builtin_agents" = "agents"
 
 [tool.setuptools.package-data]
 runtime = [
@@ -63,6 +61,7 @@ runtime = [
   "agent_support/timestamp_lines.py",
   "shim/src/monitor.py",
 ]
+"runtime.builtin_agents" = ["**/*"]
 trace_viewer = ["assets/*"]
 
 [tool.ruff]
