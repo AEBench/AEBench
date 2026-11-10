@@ -211,16 +211,19 @@ ref = "deadbeef..."
 
 ## Agent Harnesses
 
-`aebench case run` supports Codex and Claude Code through four shell harnesses:
+Each agent harness is a directory under [`agents/`](agents/): an `agent.sh`
+that starts the agent CLI, an `agent.toml` declaring what it needs, and an
+`install.sh` that installs the CLI into the runtime image. AEBench ships four:
 
 - `codex`
 - `codex_non_api`
 - `claude`
 - `claude_non_api`
 
-Select the harness and model for each run with `--agent` and `--model`. See
+Select the harness and model for each run with `--agent` and `--model`, and
+list the harnesses found with `aebench agent list`. See
 [docs/howtos/add_agent.md](docs/howtos/add_agent.md) for authentication and
-instructions for adding another harness.
+for adding another harness, which needs no change to AEBench's code.
 
 
 ## Runtime Backends

@@ -28,6 +28,88 @@ from runtime.case_runner import _CaseRunner, run_case
 _FIXTURE = Path(__file__).parent / "mock-case" / "fixture"
 
 
+@pytest.fixture(autouse=True)
+def _mock_agent_key(monkeypatch: pytest.MonkeyPatch) -> None:
+	# The fixture project ships agents/mock_agent, which declares this key.
+	monkeypatch.setenv("MOCK_API_KEY", "test-key")
+
+
+def test_unknown_agent_fails_before_preparing_the_case(tmp_path: Path) -> None:
+	project = tmp_path / "project"
+	shutil.copytree(_FIXTURE, project)
+	state = load_project_config(project)
+	context = AppState(project_state=state, settings=resolve_settings(state))
+
+	with pytest.raises(ValueError, match="unknown agent 'nope'"):
+		run_case(
+			context,
+			project / "bundles" / "mock_apt_case",
+			options=RunOptions(agent_type="nope", model_name="m", allow_unsafe_local=True),
+			save_path=tmp_path / "output",
+		)
+	assert not (tmp_path / "output").exists()
+
+
+def test_project_agent_runs_without_code_changes(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	"""An agent added as agents/<name>/ in the project runs end to end."""
+	project = tmp_path / "project"
+	shutil.copytree(_FIXTURE, project)
+	agent_dir = project / "agents" / "echo_agent"
+	agent_dir.mkdir(parents=True)
+	(agent_dir / "agent.toml").write_text(
+		'description = "test agent"\nrequires = ["bash"]\n', encoding="utf-8"
+	)
+	(agent_dir / "agent.sh").write_text(
+		'echo "model=$AEBENCH_MODEL"\n',
+		encoding="utf-8",
+	)
+	state = load_project_config(project)
+	context = AppState(project_state=state, settings=resolve_settings(state))
+	output_dir = tmp_path / "output"
+
+	result = run_case(
+		context,
+		project / "bundles" / "mock_apt_case",
+		options=RunOptions(agent_type="echo_agent", model_name="m1", allow_unsafe_local=True),
+		save_path=output_dir,
+	)
+
+	assert result.runtime_result.agent_kind == "echo_agent"
+	assert result.runtime_result.agent.exit_code == 0
+	assert result.runtime_result.trace_format == "raw"
+	assert "model=m1" in (output_dir / "runner_output.log").read_text(encoding="utf-8")
+
+
+def test_missing_agent_cli_fails_setup_before_the_agent_starts(tmp_path: Path) -> None:
+	project = tmp_path / "project"
+	shutil.copytree(_FIXTURE, project)
+	agent_dir = project / "agents" / "needs_cli"
+	agent_dir.mkdir(parents=True)
+	(agent_dir / "agent.toml").write_text('requires = ["aebench-no-such-cli"]\n', encoding="utf-8")
+	(agent_dir / "agent.sh").write_text("echo started\n", encoding="utf-8")
+	state = load_project_config(project)
+	context = AppState(project_state=state, settings=resolve_settings(state))
+	output_dir = tmp_path / "output"
+
+	result = run_case(
+		context,
+		project / "bundles" / "mock_apt_case",
+		options=RunOptions(agent_type="needs_cli", model_name="m1", allow_unsafe_local=True),
+		save_path=output_dir,
+	)
+
+	error = result.runtime_result.error or ""
+	assert "requires aebench-no-such-cli, which is not installed" in error
+	assert "requires aebench-no-such-cli" in (output_dir / "infra.log").read_text(encoding="utf-8")
+	# The check fails during setup, so the agent step never begins: its start
+	# and finish timestamps were never recorded, and agent.sh never ran.
+	assert result.runtime_result.finished_at == result.runtime_result.started_at
+	runner_log = output_dir / "runner_output.log"
+	assert not runner_log.exists() or "started" not in runner_log.read_text(encoding="utf-8")
+
+
 def test_trajectory_audit_failure_is_advisory(
 	tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -100,7 +182,7 @@ def test_case_runner_executes_agent_then_oracle(
 	result = run_case(
 		context,
 		project / "bundles" / "mock_apt_case",
-		options=RunOptions(agent_type="codex", model_name="gpt-test", allow_unsafe_local=True),
+		options=RunOptions(agent_type="mock_agent", model_name="gpt-test", allow_unsafe_local=True),
 		save_path=output_dir,
 		on_output_dir=record_output_dir,
 	)
@@ -108,7 +190,7 @@ def test_case_runner_executes_agent_then_oracle(
 	assert events == [f"output:{output_dir}", "agent"]
 	assert result.status == CaseStatus.SUCCESS
 	assert result.oracle_result.score == 4
-	assert result.runtime_result.agent_kind == "codex"
+	assert result.runtime_result.agent_kind == "mock_agent"
 	assert result.runtime_result.agent.reasoning_effort == "high"
 	assert result.runtime_result.duration_ms == 2_000
 	assert runtime_paths["home"] == str(Path.home())
@@ -134,16 +216,16 @@ def test_case_runner_rejects_unisolated_local_agent(tmp_path: Path) -> None:
 		run_case(
 			context,
 			project / "bundles" / "mock_apt_case",
-			options=RunOptions(agent_type="codex", model_name="gpt-test"),
+			options=RunOptions(agent_type="mock_agent", model_name="gpt-test"),
 		)
 
 
 def test_case_runner_rejects_incomplete_local_source(tmp_path: Path) -> None:
 	project = tmp_path / "project"
 	shutil.copytree(_FIXTURE, project)
-	manifest = project / "bundles" / "mock_apt_case" / "case.toml"
-	manifest.write_text(
-		manifest.read_text(encoding="utf-8").replace('path = "artifact"\n', ""),
+	case_toml = project / "bundles" / "mock_apt_case" / "case.toml"
+	case_toml.write_text(
+		case_toml.read_text(encoding="utf-8").replace('path = "artifact"\n', ""),
 		encoding="utf-8",
 	)
 	state = load_project_config(project)
@@ -154,7 +236,7 @@ def test_case_runner_rejects_incomplete_local_source(tmp_path: Path) -> None:
 			context,
 			project / "bundles" / "mock_apt_case",
 			options=RunOptions(
-				agent_type="codex",
+				agent_type="mock_agent",
 				model_name="gpt-test",
 				allow_unsafe_local=True,
 			),
@@ -177,7 +259,7 @@ def test_case_runner_scores_workspace_after_agent_timeout(
 	result = run_case(
 		context,
 		project / "bundles" / "mock_apt_case",
-		options=RunOptions(agent_type="codex", model_name="gpt-test", allow_unsafe_local=True),
+		options=RunOptions(agent_type="mock_agent", model_name="gpt-test", allow_unsafe_local=True),
 		save_path=tmp_path / "output",
 	)
 
@@ -192,9 +274,9 @@ def test_docker_case_scores_stopped_snapshot_not_live_session(
 ) -> None:
 	project = tmp_path / "project"
 	shutil.copytree(_FIXTURE, project)
-	manifest = project / "bundles" / "mock_apt_case" / "case.toml"
-	manifest.write_text(
-		manifest.read_text(encoding="utf-8").replace(
+	case_toml = project / "bundles" / "mock_apt_case" / "case.toml"
+	case_toml.write_text(
+		case_toml.read_text(encoding="utf-8").replace(
 			'mode = "local"\ntimeout_ms',
 			'mode = "docker"\nimage = "aebench-agent:latest"\ntimeout_ms',
 		),
@@ -283,7 +365,7 @@ def test_docker_case_scores_stopped_snapshot_not_live_session(
 	result = run_case(
 		context,
 		project / "bundles" / "mock_apt_case",
-		options=RunOptions(agent_type="codex", model_name="gpt-test"),
+		options=RunOptions(agent_type="mock_agent", model_name="gpt-test"),
 		save_path=tmp_path / "output",
 	)
 
@@ -313,9 +395,9 @@ def test_monitored_case_orders_the_broker_and_shim(
 	"""
 	project = tmp_path / "project"
 	shutil.copytree(_FIXTURE, project)
-	manifest = project / "bundles" / "mock_apt_case" / "case.toml"
-	manifest.write_text(
-		manifest.read_text(encoding="utf-8").replace(
+	case_toml = project / "bundles" / "mock_apt_case" / "case.toml"
+	case_toml.write_text(
+		case_toml.read_text(encoding="utf-8").replace(
 			'mode = "local"\ntimeout_ms',
 			'mode = "docker"\nimage = "aebench-agent:latest"\ntimeout_ms',
 		),
@@ -415,7 +497,7 @@ def test_monitored_case_orders_the_broker_and_shim(
 		context,
 		project / "bundles" / "mock_apt_case",
 		options=RunOptions(
-			agent_type="codex",
+			agent_type="mock_agent",
 			model_name="gpt-test",
 			trajectory_audit=True,
 		),
@@ -465,7 +547,7 @@ def test_monitoring_requires_docker(tmp_path: Path) -> None:
 			context,
 			project / "bundles" / "mock_apt_case",
 			options=RunOptions(
-				agent_type="codex",
+				agent_type="mock_agent",
 				model_name="gpt-test",
 				monitor_commands=True,
 				allow_unsafe_local=True,
@@ -477,9 +559,9 @@ def test_monitoring_requires_docker(tmp_path: Path) -> None:
 def _docker_case_runner(tmp_path: Path, *cli_args: str) -> _CaseRunner:
 	project = tmp_path / "project"
 	shutil.copytree(_FIXTURE, project)
-	manifest = project / "bundles" / "mock_apt_case" / "case.toml"
-	manifest.write_text(
-		manifest.read_text(encoding="utf-8").replace(
+	case_toml = project / "bundles" / "mock_apt_case" / "case.toml"
+	case_toml.write_text(
+		case_toml.read_text(encoding="utf-8").replace(
 			'mode = "local"\ntimeout_ms',
 			'mode = "docker"\nimage = "aebench-agent:latest"\ntimeout_ms',
 		),
@@ -487,7 +569,7 @@ def _docker_case_runner(tmp_path: Path, *cli_args: str) -> _CaseRunner:
 	)
 	state = load_project_config(project)
 	args = _build_parser().parse_args(
-		["case", "run", "mock_apt_case", "--agent", "codex", "--model", "gpt-test", *cli_args]
+		["case", "run", "mock_apt_case", "--agent", "mock_agent", "--model", "gpt-test", *cli_args]
 	)
 	return _CaseRunner(
 		AppState(project_state=state, settings=resolve_settings(state)),
