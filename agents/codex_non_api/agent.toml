@@ -1,0 +1,14 @@
+description = "Codex CLI with a ChatGPT subscription (~/.codex/auth.json)"
+# Installed by agents/codex/install.sh.
+requires = ["codex"]
+reasoning_effort = "high"
+trace_format = "codex"
+
+[[files]]
+target = ".codex/auth.json"
+sources = [
+  "${AEBENCH_CODEX_AUTH_FILE}",
+  "${CODEX_HOME}/auth.json",
+  "~/.codex/auth.json",
+]
+hint = "run `codex login` or set AEBENCH_CODEX_AUTH_FILE"
