@@ -1,0 +1,8 @@
+description = "GLM-5.3-Flash with ZCode and a Z.AI Coding Plan"
+requires = ["zcode", "node"]
+reasoning_effort = "high"
+
+[[secrets]]
+name = "ZAI_CODING_PLAN_KEY"
+from_file_env = "AEBENCH_ZAI_CODING_PLAN_KEY_FILE"
+hint = "set ZAI_CODING_PLAN_KEY or AEBENCH_ZAI_CODING_PLAN_KEY_FILE"

@@ -1,0 +1,8 @@
+description = "DeepSeek Flash with the official DSH CLI"
+requires = ["dsh"]
+reasoning_effort = "high"
+
+[[secrets]]
+name = "DEEPSEEK_API_KEY"
+from_file_env = "AEBENCH_DEEPSEEK_API_KEY_FILE"
+hint = "set DEEPSEEK_API_KEY or AEBENCH_DEEPSEEK_API_KEY_FILE"

@@ -1,0 +1,9 @@
+- id: agent-default-model
+  config:
+    provider: deepseek-official
+    model: deepseek-flash
+    reasoningEffort: high
+- id: session-telemetry-otel
+  disabled: true
+- id: session-log-deepseek
+  disabled: true
