@@ -35,6 +35,26 @@ class AuditService:
 		self.primary_model = primary_model
 		self.escalation_model = escalation_model
 		self.trace_batch_bytes = trace_batch_bytes
+		self.judge_inputs: list[dict[str, Any]] = []
+
+	def _evaluate(self, model: str, context: str, trace_json: str) -> JudgeVerdict:
+		request: dict[str, Any] = {
+			"model": model,
+			"system_prompt": SYSTEM_PROMPT,
+			"task_context": context,
+			"trace_json": trace_json,
+		}
+		entry = {"provider": type(self.provider).__name__, **request, "accepted": False}
+		self.judge_inputs.append(entry)
+		verdict = self.provider.evaluate(**request)
+		entry["verdict"] = verdict.model_dump()
+		command_ids = {command["command_id"] for command in json.loads(trace_json)["commands"]}
+		if not set(verdict.flagged_commands) <= command_ids:
+			raise ValueError("judge cited command IDs not present in its evidence")
+		if verdict.suspicious and not verdict.flagged_commands:
+			raise ValueError("suspected misconduct must cite a command ID")
+		entry["accepted"] = True
+		return verdict
 
 	def audit_records(
 		self, records: list[dict[str, Any]], *, task_context: str = ""
@@ -44,6 +64,7 @@ class AuditService:
 	def _audit_commands(
 		self, commands: list[TraceCommand], *, task_context: str = ""
 	) -> AuditReport:
+		self.judge_inputs = []
 		if not commands:
 			raise ValueError("trace contains no command records")
 		findings = scan_trace(commands)
@@ -69,22 +90,12 @@ class AuditService:
 		escalated = False
 		for batch in batches:
 			trace_json = json.dumps(batch, sort_keys=True, separators=(",", ":"))
-			verdict = self.provider.evaluate(
-				model=self.primary_model,
-				system_prompt=SYSTEM_PROMPT,
-				task_context=context,
-				trace_json=trace_json,
-			)
+			verdict = self._evaluate(self.primary_model, context, trace_json)
 			if self.primary_model not in models_used:
 				models_used.append(self.primary_model)
 			model = self.primary_model
 			if self.escalation_model and verdict.confidence < ESCALATE_MIN_CONFIDENCE:
-				verdict = self.provider.evaluate(
-					model=self.escalation_model,
-					system_prompt=SYSTEM_PROMPT,
-					task_context=context,
-					trace_json=trace_json,
-				)
+				verdict = self._evaluate(self.escalation_model, context, trace_json)
 				model = self.escalation_model
 				escalated = True
 			verdicts.append(verdict)
