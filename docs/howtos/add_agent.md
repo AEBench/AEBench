@@ -9,7 +9,7 @@ AEBench starts the agent without prompts for user input and writes its
 timestamped output to `runner_output.log`. GNU `timeout` terminates the agent
 when the `run.runtime.timeout_ms` limit expires.
 
-The AEBench runtime image includes the Codex and Claude Code CLIs. Install
+The AEBench runtime image installs the CLIs for the harnesses below. Install
 Docker on the Chameleon instance. No agent CLI installation is required there.
 
 ## Available harnesses
@@ -20,6 +20,8 @@ Docker on the Chameleon instance. No agent CLI installation is required there.
 | `claude` | `ANTHROPIC_API_KEY` |
 | `codex_non_api` | ChatGPT subscription from `~/.codex/auth.json` |
 | `claude_non_api` | Claude subscription OAuth token |
+| `deepseek` | `DEEPSEEK_API_KEY` or `AEBENCH_DEEPSEEK_API_KEY_FILE` |
+| `zcode` | `ZAI_CODING_PLAN_KEY` or `AEBENCH_ZAI_CODING_PLAN_KEY_FILE` |
 
 Pass the model with `--model`. AEBench passes this value to the selected
 agent CLI. This implementation was tested with `gpt-5.5` and
@@ -28,6 +30,19 @@ agent CLI. This implementation was tested with `gpt-5.5` and
 API and subscription modes use separate agent names. Selecting `codex` or
 `claude` requires an API key. Selecting `codex_non_api` or `claude_non_api`
 requires a subscription credential.
+
+## DeepSeek and GLM
+
+Use `--agent deepseek --model deepseek-flash` for the official DeepSeek API,
+or `--agent zcode --model glm-5.3-flash` with a Z.AI Personal Coding Plan key.
+Both use high reasoning effort and fresh per-run CLI state, without changing
+the artifact's HOME. They keep native JSON logs; the viewer currently uses its
+raw-log fallback for these formats.
+
+Rebuild the runtime image to install the CLIs. DSH is pinned to 0.2.1-rc.5.
+ZCode builds CLI 0.17.1 from the v3.17.1 source commit with private Node 24.14.0;
+it does not replace the image's Node 22. The ZCode source build needs access to
+GitHub and the npm registry.
 
 ## Codex subscription
 

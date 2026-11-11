@@ -213,12 +213,14 @@ ref = "deadbeef..."
 
 Each agent harness is a directory under [`agents/`](agents/): an `agent.sh`
 that starts the agent CLI, an `agent.toml` declaring what it needs, and an
-`install.sh` that installs the CLI into the runtime image. AEBench ships four:
+`install.sh` that installs the CLI into the runtime image. Available harnesses:
 
 - `codex`
 - `codex_non_api`
 - `claude`
 - `claude_non_api`
+- `deepseek` (DeepSeek Flash through DSH)
+- `zcode` (GLM-5.3-Flash through Z.AI Coding Plan)
 
 Select the harness and model for each run with `--agent` and `--model`, and
 list the harnesses found with `aebench agent list`. See
