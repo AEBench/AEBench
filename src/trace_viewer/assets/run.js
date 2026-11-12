@@ -2,7 +2,7 @@
 // https://github.com/aisa-group/posttrainbench-website/tree/main/traces
 
 const params = new URLSearchParams(window.location.search);
-const RUN_ID = params.get('id');
+const RUN_ID = params.get('id') || params.get('run');
 const CATALOG = window.AEBENCH_TraceCatalog;
 const { prettyAgent, prettyCase, prettyHarness, prettyModel } = CATALOG;
 const DATA_BASE = (typeof window !== 'undefined' && window.AEBENCH_TRACE_DATA_BASE) || './data/';
@@ -49,6 +49,11 @@ const els = {
   jumpTurn: document.getElementById('jump-turn'),
   traceViewFocus: document.getElementById('trace-view-focus'),
   traceViewAll: document.getElementById('trace-view-all'),
+  summarySourceEventBlock: document.getElementById('summary-source-event-block'),
+  sourceEventClearBtn: document.getElementById('source-event-clear-btn'),
+  sourceEventTotalCount: document.getElementById('source-event-total-count'),
+  sourceEventBar: document.getElementById('source-event-bar'),
+  sourceEventLegend: document.getElementById('source-event-legend'),
 };
 
 let RECORD = null;
@@ -57,6 +62,7 @@ let RAIL_CHARTS = [];
 let MODAL_CHARTS = [];
 let TRACE_START_MS = null;
 let TRACE_VIEW = params.get('view') === 'focus' ? 'focus' : 'all';
+const SELECTED_SOURCE_EVENTS = new Set();
 const DATA_REQUEST_TIMEOUT_MS = 30000;
 const CHART_LOAD_TIMEOUT_MS = 8000;
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -80,6 +86,7 @@ async function load() {
     renderMiniCharts();
     renderMiniTokens();
     setupTabs();
+    setupGraphView();
     setupCopyId();
     setupSummaryDetails();
     setupTraceControls();
@@ -256,6 +263,128 @@ function renderSummary() {
     els.linkRaw.setAttribute('download', `${RUN_ID}.json`);
     els.linkRaw.innerHTML = `${downloadIcon}<span>Download trace</span>`;
   }
+
+  renderSourceEventSummary(s.event_summary);
+}
+
+const CANONICAL_SOURCE_EVENTS = ['setup', 'build', 'think', 'run', 'verify', 'modify', 'misc'];
+
+function renderSourceEventSummary(eventSum) {
+  if (!eventSum || !els.summarySourceEventBlock) return;
+  els.summarySourceEventBlock.classList.remove('hidden');
+  const counts = eventSum.counts || {};
+  const pcts = eventSum.percentages || {};
+  const meta = eventSum.metadata || {};
+
+  if (els.sourceEventTotalCount) {
+    const totalEvents = eventSum.total_events != null
+      ? eventSum.total_events
+      : (RECORD && Array.isArray(RECORD.events) ? RECORD.events.length : 0);
+    els.sourceEventTotalCount.textContent = Number(totalEvents).toLocaleString();
+  }
+
+  if (els.sourceEventBar) {
+    const segments = [];
+    const activeKeys = CANONICAL_SOURCE_EVENTS.filter(k => (counts[k] || 0) > 0);
+    const barKeys = activeKeys.length > 0 ? activeKeys : Object.keys(counts).filter(k => (counts[k] || 0) > 0);
+    for (const sourceEventKey of barKeys) {
+      const count = counts[sourceEventKey] || 0;
+      const pct = pcts[sourceEventKey] || 0;
+      const eMeta = meta[sourceEventKey] || { label: sourceEventKey, color: `var(--source-event-${sourceEventKey})` };
+      const label = eMeta.label || sourceEventKey;
+      segments.push(`<div class="source-event-bar-seg source-event-bar-${sourceEventKey}" style="width: ${pct}%; background-color: ${eMeta.color};" data-source-event="${sourceEventKey}" data-tip="${escapeHtml(label)}: ${count} source events (${pct}%)" aria-label="${escapeHtml(label)}: ${pct}%"></div>`);
+    }
+    els.sourceEventBar.innerHTML = segments.join('');
+    els.sourceEventBar.querySelectorAll('.source-event-bar-seg').forEach(seg => {
+      seg.addEventListener('click', () => {
+        const target = seg.getAttribute('data-source-event');
+        if (target) toggleSourceEventFilter(target);
+      });
+    });
+  }
+
+  if (els.sourceEventLegend) {
+    const items = [];
+    const legendKeys = CANONICAL_SOURCE_EVENTS.every(k => k in meta || k in counts)
+      ? CANONICAL_SOURCE_EVENTS
+      : (Object.keys(meta).length > 0 ? Object.keys(meta) : Object.keys(counts));
+
+    for (const sourceEventKey of legendKeys) {
+      const count = counts[sourceEventKey] || 0;
+      const pct = pcts[sourceEventKey] || 0;
+      const eMeta = meta[sourceEventKey] || { label: sourceEventKey, color: `var(--source-event-${sourceEventKey})` };
+      const label = eMeta.label || sourceEventKey;
+      const isActive = SELECTED_SOURCE_EVENTS.has(sourceEventKey) ? ' active' : '';
+      items.push(`<button type="button" class="source-event-rail-item source-event-rail-${sourceEventKey}${isActive}" data-source-event="${sourceEventKey}" title="${escapeHtml(label)}">
+        <div class="source-event-rail-head">
+          <span class="source-event-dot" style="background-color: ${eMeta.color}"></span>
+          <span class="source-event-rail-title">${escapeHtml(label)}</span>
+        </div>
+        <div class="source-event-rail-stat">
+          <span class="source-event-rail-pct">${pct}%</span>
+          <span class="source-event-rail-count">${count}</span>
+        </div>
+      </button>`);
+    }
+    els.sourceEventLegend.innerHTML = items.join('');
+    els.sourceEventLegend.querySelectorAll('.source-event-rail-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.getAttribute('data-source-event');
+        if (target) toggleSourceEventFilter(target);
+      });
+    });
+  }
+
+  updateSourceEventFilterUI();
+}
+
+function toggleSourceEventFilter(sourceEventKey) {
+  if (SELECTED_SOURCE_EVENTS.has(sourceEventKey)) {
+    SELECTED_SOURCE_EVENTS.delete(sourceEventKey);
+  } else {
+    SELECTED_SOURCE_EVENTS.add(sourceEventKey);
+  }
+  updateSourceEventFilterUI();
+  renderTrace();
+}
+
+function updateSourceEventFilterUI() {
+  if (els.sourceEventLegend) {
+    els.sourceEventLegend.querySelectorAll('.source-event-rail-item').forEach(btn => {
+      const key = btn.getAttribute('data-source-event');
+      btn.classList.toggle('active', SELECTED_SOURCE_EVENTS.has(key));
+    });
+  }
+  if (els.sourceEventBar) {
+    els.sourceEventBar.querySelectorAll('.source-event-bar-seg').forEach(seg => {
+      const key = seg.getAttribute('data-source-event');
+      seg.classList.toggle('active', SELECTED_SOURCE_EVENTS.has(key));
+    });
+  }
+  if (els.sourceEventClearBtn) {
+    els.sourceEventClearBtn.classList.toggle('hidden', SELECTED_SOURCE_EVENTS.size === 0);
+  }
+  updateGraphSourceEventHighlight();
+}
+
+function updateGraphSourceEventHighlight() {
+  const svg = document.getElementById('graph-svg');
+  if (!svg) return;
+  const nodes = svg.querySelectorAll('.graph-node');
+  const hasFilter = SELECTED_SOURCE_EVENTS.size > 0;
+  nodes.forEach(el => {
+    if (!hasFilter) {
+      el.classList.remove('filter-dimmed', 'filter-highlighted');
+      return;
+    }
+    const phasesAttr = el.getAttribute('data-phases');
+    const phases = phasesAttr
+      ? phasesAttr.split(',').filter(Boolean)
+      : [[...el.classList].find(c => c.startsWith('node-'))?.replace('node-', '') || ''];
+    const match = phases.some(p => SELECTED_SOURCE_EVENTS.has(p));
+    el.classList.toggle('filter-highlighted', match);
+    el.classList.toggle('filter-dimmed', !match);
+  });
 }
 
 function safeReturnUrl() {
@@ -324,6 +453,14 @@ function setupTraceControls() {
   };
   els.traceViewFocus.addEventListener('click', () => setTraceView('focus'));
   els.traceViewAll.addEventListener('click', () => setTraceView('all'));
+
+  if (els.sourceEventClearBtn) {
+    els.sourceEventClearBtn.addEventListener('click', () => {
+      SELECTED_SOURCE_EVENTS.clear();
+      updateSourceEventFilterUI();
+      renderTrace();
+    });
+  }
 
   els.trace.addEventListener('click', e => {
     const head = e.target.closest('.tool-result-head');
@@ -470,8 +607,6 @@ function renderTrace({ preservePosition = false } = {}) {
 
   const sessionCount = RECORD.summary.session_count || 1;
   const displayTurns = RECORD.index_row.num_turns ?? turnCounter;
-  els.eventCount.innerHTML = `<span>${Number(displayTurns).toLocaleString()} turn${Number(displayTurns) === 1 ? '' : 's'} · ${sessionCount} session${sessionCount === 1 ? '' : 's'}</span><span class="trace-raw-count">${events.length.toLocaleString()} source events</span>`;
-  els.eventCount.title = `${events.length.toLocaleString()} source events`;
   els.traceViewFocus.classList.toggle('active', TRACE_VIEW === 'focus');
   els.traceViewAll.classList.toggle('active', TRACE_VIEW === 'all');
   els.traceViewFocus.setAttribute('aria-pressed', String(TRACE_VIEW === 'focus'));
@@ -483,6 +618,7 @@ function renderTrace({ preservePosition = false } = {}) {
     const ev = events[eventIndex];
     if (ev.type === 'system' && !wantSys && ev.subtype !== 'init') continue;
     if (skipUserEv.has(ev)) continue;
+    if (SELECTED_SOURCE_EVENTS.size > 0 && !SELECTED_SOURCE_EVENTS.has(ev.event)) continue;
 
     if (ev.session_idx !== lastSession && lastSession >= 0) {
       out.push(renderSessionBanner(ev));
@@ -491,7 +627,15 @@ function renderTrace({ preservePosition = false } = {}) {
 
     out.push(renderEvent(ev, resultByUseId, expandResults, turnNumByUuid.get(ev), eventIndex));
   }
-  els.trace.innerHTML = out.join('');
+
+  els.eventCount.innerHTML = `<span>${Number(displayTurns).toLocaleString()} turn${Number(displayTurns) === 1 ? '' : 's'} · ${sessionCount} session${sessionCount === 1 ? '' : 's'}</span><span class="trace-raw-count">${events.length.toLocaleString()} source events</span>`;
+  els.eventCount.title = `${events.length.toLocaleString()} source events`;
+
+  if (out.length === 0) {
+    els.trace.innerHTML = '<div class="empty-state"><p class="muted">No source events match the selected filter.</p></div>';
+  } else {
+    els.trace.innerHTML = out.join('');
+  }
   if (anchor) restoreTraceAnchor(anchor);
   markClippedOutputs();
 }
@@ -580,7 +724,10 @@ function renderEvent(ev, resultByUseId, expandResults, turnNum, eventIndex) {
   } else {
     markerLabel = '<div class="turn-role">·</div>';
   }
-  const cls = `event session-${(ev.session_idx ?? 0) % 5}${roleClass ? ' ' + roleClass : ''}`;
+  const sourceEventKey = ev.event;
+  const sourceEventLabel = ev.event_label || sourceEventKey;
+  const sourceEventCls = sourceEventKey ? ` source-event-${sourceEventKey}` : '';
+  const cls = `event session-${(ev.session_idx ?? 0) % 5}${roleClass ? ' ' + roleClass : ''}${sourceEventCls}`;
   const tsParts = ev.ts ? formatEventTime(ev.ts) : null;
   const anchorId = turnNum != null
     ? `turn-${turnNum}`
@@ -588,8 +735,10 @@ function renderEvent(ev, resultByUseId, expandResults, turnNum, eventIndex) {
   const tsTitle = tsParts
     ? `${tsParts.wall || ''}${tsParts.date ? ' · ' + tsParts.date : ''} (wall-clock)`
     : '';
+  const sourceEventChip = sourceEventKey ? `<div class="turn-source-event-marker"><span class="source-event-badge source-event-${sourceEventKey}" title="${escapeHtml(sourceEventLabel)}">${escapeHtml(sourceEventLabel)}</span></div>` : '';
   const marker = `<aside class="event-marker" data-anchor="${anchorId}" title="Copy link to this event">
     ${markerNum}${markerLabel}
+    ${sourceEventChip}
     ${tsParts ? `<div class="ev-time" title="${escapeHtml(tsTitle)}"><span class="ev-time-full">${escapeHtml(tsParts.time || '')}</span><span class="ev-time-short">${escapeHtml((tsParts.time || '').slice(0, 5))}</span></div>` : ''}
     ${ev.parent_tool_use_id ? `<div class="ev-sub-tag">sub-agent</div>` : ''}
   </aside>`;
@@ -642,9 +791,9 @@ function renderEvent(ev, resultByUseId, expandResults, turnNum, eventIndex) {
       ${ev.result_text ? `<div class="block-text">${escapeHtml(ev.result_text)}</div>` : ''}
     `;
   } else if (ev.type === 'codex_item') {
-    body = renderCodexItem(ev.item, expandResults);
+    body = renderCodexItem(ev.item, expandResults, ev);
   } else if (Array.isArray(ev.blocks)) {
-    body = ev.blocks.map(b => renderBlock(b, resultByUseId, expandResults)).join('');
+    body = ev.blocks.map(b => renderBlock(b, resultByUseId, expandResults, ev)).join('');
   }
 
   if (!body.trim()) {
@@ -662,7 +811,7 @@ const ICON = {
   text: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
 };
 
-function renderBlock(block, resultByUseId, expandResults) {
+function renderBlock(block, resultByUseId, expandResults, ev) {
   if (!block || typeof block !== 'object') return '';
   switch (block.type) {
     case 'text':
@@ -671,7 +820,7 @@ function renderBlock(block, resultByUseId, expandResults) {
       return `<details class="block-card agent-thinking" ${TRACE_VIEW === 'all' ? 'open' : ''}><summary>${ICON.thought} <span>Thought</span></summary><div class="thinking-body">${mdLite(block.thinking || '')}</div></details>`;
     case 'tool_use': {
       const pair = resultByUseId.get(block.id);
-      return renderToolCall(block, pair, expandResults);
+      return renderToolCall(block, pair, expandResults, ev);
     }
     case 'tool_result':
       return `<div class="standalone-output"><div class="block-label">${ICON.output} Output${block.is_error ? ' · error' : ''}</div>${renderToolResultBody(block)}</div>`;
@@ -682,7 +831,7 @@ function renderBlock(block, resultByUseId, expandResults) {
   }
 }
 
-function renderToolCall(block, pair, expandResults) {
+function renderToolCall(block, pair, expandResults, ev) {
   const name = block.name || 'tool';
   let argsHtml = '';
   if (name === 'TodoWrite' && block.input && Array.isArray(block.input.todos)) {
@@ -708,7 +857,10 @@ function renderToolCall(block, pair, expandResults) {
   }
 
   const idLabel = block.id ? `<span class="tool-id">${escapeHtml(block.id.slice(-8))}</span>` : '';
-  const summary = `<button type="button" class="tool-call-head" aria-expanded="true">${ICON.tool} <span class="block-label-inline">Tool</span> <span class="tool-name">${escapeHtml(name)}</span>${idLabel}</button>`;
+  const sourceEventKey = ev?.event;
+  const sourceEventLabel = ev?.event_label || sourceEventKey;
+  const sourceEventTag = sourceEventKey ? `<span class="source-event-badge source-event-${sourceEventKey}">${escapeHtml(sourceEventLabel)}</span>` : '';
+  const summary = `<button type="button" class="tool-call-head" aria-expanded="true">${ICON.tool} <span class="block-label-inline">Tool</span> <span class="tool-name">${escapeHtml(name)}</span>${sourceEventTag}${idLabel}</button>`;
   const result = pair ? renderToolResult(pair.block, expandResults) : '';
   const expanded = expandResults ? 'expanded' : '';
   const variant = name === 'Bash' ? 'tool-bash' : '';
@@ -740,7 +892,7 @@ function renderToolResultBody(block) {
   return `<div class="tool-result-body ${block.is_error ? 'error' : ''}">${body}</div>`;
 }
 
-function renderCodexItem(item, expandResults) {
+function renderCodexItem(item, expandResults, ev) {
   if (!item || typeof item !== 'object') return '';
   switch (item.type) {
     case 'reasoning':
@@ -755,7 +907,10 @@ function renderCodexItem(item, expandResults) {
       const out = item.aggregated_output || '';
       const truncated = out.length > 16384;
       const exitMeta = item.exit_code != null ? `<span class="tool-exit">exit ${item.exit_code}</span>` : '';
-      const head = `<button type="button" class="tool-call-head" aria-expanded="true">${ICON.tool} <span class="block-label-inline">Tool</span> <span class="tool-name">${escapeHtml(item.shell || 'command')}</span>${exitMeta}</button>`;
+      const sourceEventKey = ev?.event;
+      const sourceEventLabel = ev?.event_label || sourceEventKey;
+      const sourceEventTag = sourceEventKey ? `<span class="source-event-badge source-event-${sourceEventKey}">${escapeHtml(sourceEventLabel)}</span>` : '';
+      const head = `<button type="button" class="tool-call-head" aria-expanded="true">${ICON.tool} <span class="block-label-inline">Tool</span> <span class="tool-name">${escapeHtml(item.shell || 'command')}</span>${sourceEventTag}${exitMeta}</button>`;
       const args = `<div class="tool-args"><div class="bash-cmd">${escapeHtml(item.command || '')}</div></div>`;
       const body = `<div class="tool-result"><div class="tool-result-head"><span class="tool-result-label">${ICON.output} Output</span>${item.status ? `<span class="muted">${escapeHtml(item.status)}</span>` : ''}${truncated ? '<span class="muted">truncated</span>' : ''}</div><div class="tool-result-body ${item.exit_code && item.exit_code !== 0 ? 'error' : ''}">${escapeHtml(out.slice(0, 16384))}${truncated ? '\n\n[... truncated]' : ''}</div></div>`;
       return `<div class="tool-call tool-bash ${expandResults ? 'expanded' : ''}">${head}${args}${body}</div>`;
@@ -763,7 +918,10 @@ function renderCodexItem(item, expandResults) {
     case 'file_change': {
       const rows = (item.changes || []).map(c =>
         `<div class="todo-item"><span class="check">${c.kind === 'add' ? '＋' : c.kind === 'delete' ? '－' : '✎'}</span><span>${escapeHtml(c.path)}</span></div>`).join('');
-      return `<div class="standalone-output"><div class="block-label">File change · ${escapeHtml(item.status || '')}</div>${rows}</div>`;
+      const sourceEventKey = ev?.event;
+      const sourceEventLabel = ev?.event_label || sourceEventKey;
+      const sourceEventTag = sourceEventKey ? `<span class="source-event-badge source-event-${sourceEventKey}">${escapeHtml(sourceEventLabel)}</span>` : '';
+      return `<div class="standalone-output"><div class="block-label">File change · ${escapeHtml(item.status || '')}${sourceEventTag}</div>${rows}</div>`;
     }
     case 'web_search':
       return `<div class="standalone-output"><div class="block-label">Web search</div><div>${escapeHtml(item.query || '')}</div></div>`;
@@ -842,6 +1000,10 @@ function renderMiniCharts() {
   els.showAllBtn.classList.remove('hidden');
 }
 
+function prettyPhase(value) {
+  return String(value || '').replaceAll('_', ' ');
+}
+
 function oraclePhaseHtml(phase) {
   const status = phase.status || 'unknown';
   const icon = status === 'success' ? '✓' : status === 'failure' ? '!' : '·';
@@ -849,10 +1011,6 @@ function oraclePhaseHtml(phase) {
     <div class="oracle-phase-head"><span class="oracle-phase-icon">${icon}</span><span>${escapeHtml(prettyPhase(phase.phase))}</span></div>
     <p>${escapeHtml(phase.summary || status)}</p>
   </div>`;
-}
-
-function prettyPhase(value) {
-  return String(value || '').replaceAll('_', ' ');
 }
 
 function setMetricsAvailable() {
@@ -1128,8 +1286,38 @@ function setupTabs() {
     }
     if (name === 'prompt') loadPrompt();
     if (name === 'trace') markClippedOutputs();
+    if (name === 'visualize') {
+      if (window.GraphView) {
+        window.GraphView.renderGraph();
+        requestAnimationFrame(() => window.GraphView.fitToScreen());
+      }
+    }
   }
 }
+
+function setupGraphView() {
+  if (RECORD && RECORD.graph && window.GraphView) {
+    window.GraphView.init(RECORD.graph, RECORD.events);
+  }
+}
+
+window.jumpToTraceTurn = function (turnNum) {
+  if (!document.getElementById(`turn-${turnNum}`) && SELECTED_SOURCE_EVENTS.size > 0) {
+    SELECTED_SOURCE_EVENTS.clear();
+    updateSourceEventFilterUI();
+    renderTrace();
+  }
+  const traceBtn = els.tabNav ? els.tabNav.querySelector('.tab-btn[data-tab="trace"]') : null;
+  if (traceBtn) traceBtn.click();
+  requestAnimationFrame(() => {
+    const target = document.getElementById(`turn-${turnNum}`);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('flash-highlight');
+      setTimeout(() => target.classList.remove('flash-highlight'), 2200);
+    }
+  });
+};
 
 function scrollSectionBelowTabs(element) {
   if (!element) return;
