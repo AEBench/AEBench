@@ -1,97 +1,30 @@
 from __future__ import annotations
 
-import os
 from collections.abc import Sequence
-from dataclasses import dataclass
 
 from evaluator.oracles.bases import CaseOracleArtifactBuildBase
-from evaluator.oracles.checks import CommandCheck
-from evaluator.oracles.oracle_checks_runtime import (
-	OraclePath,
-	RuntimeCheckExecutor,
-	RuntimePath,
-	resolve_check_executable,
-)
-from evaluator.oracles.reporting import BaseCheck, CheckResult
-
-_BUILD_COMMAND: tuple[str, ...] = ("make", "install")
-_BUILD_TIMEOUT_SECONDS = 3600.0
-_BUILD_MODE_ENV = "AE_HERBIE_BUILD_MODE"
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class HerbieBinaryLocatedCheck(BaseCheck):
-	"""Fail if herbie binary or Racket entry point is unavailable."""
-
-	repo_root: OraclePath
-
-	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
-		from pathlib import Path
-
-		resolved = resolve_check_executable("herbie", executor=executor)
-		if resolved is not None:
-			return CheckResult.success()
-
-		rkt_paths = (
-			Path(self.repo_root) / "src" / "herbie.rkt",
-			# arith25 tag uses src/main.rkt instead of src/herbie.rkt.
-			Path(self.repo_root) / "src" / "main.rkt",
-		)
-		if any(executor.path_is_file(rkt_path) for rkt_path in rkt_paths):
-			return CheckResult.success()
-
-		home = executor.read_env_var("HOME")
-		if home and executor.glob(RuntimePath.from_parts(home), ".racket/*/bin/herbie"):
-			return CheckResult.success()
-
-		return CheckResult.failure(
-			"herbie binary not found on PATH, in ~/.racket/*/bin/, "
-			"and neither src/herbie.rkt nor src/main.rkt found in repo"
-		)
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class InvalidBuildModeCheck(BaseCheck):
-	mode: str
-
-	def check(self, _executor: RuntimeCheckExecutor) -> CheckResult:
-		return CheckResult.failure(
-			f"invalid {_BUILD_MODE_ENV}={self.mode!r}; expected 'verify' or 'command'"
-		)
+from evaluator.oracles.reporting import BaseCheck
 
 
 class OracleArtifactBuild(CaseOracleArtifactBuildBase):
-	@staticmethod
-	def _build_mode() -> str:
-		raw = os.environ.get(_BUILD_MODE_ENV, "verify").strip().lower()
-		return raw or "verify"
-
 	def requirements(self) -> Sequence[BaseCheck]:
-		repo_root = self._workspace_dir
-
-		mode = self._build_mode()
-
-		if mode == "command":
-			return (
-				CommandCheck(
-					name="herbie_make_install",
-					cwd=repo_root,
-					cmd=_BUILD_COMMAND,
-					timeout_seconds=_BUILD_TIMEOUT_SECONDS,
-				),
-			)
-
-		if mode == "verify":
-			return (
-				HerbieBinaryLocatedCheck(
-					name="herbie_binary_located",
-					repo_root=repo_root,
-				),
-			)
-
 		return (
-			InvalidBuildModeCheck(
-				name="build_mode_valid",
-				mode=mode,
+			self.command_check(
+				name="chassis_revision",
+				cmd=("git", "rev-parse", "HEAD"),
+				cwd=self.runtime_path(),
+				signature="97c216c931dfc7590a0efd792583fe106d80756e",
+				timeout_seconds=30,
+			),
+			self.command_check(
+				name="chassis_evaluation_server",
+				cmd=(
+					"sh",
+					"-c",
+					"case $(uname -m) in aarch64|arm64) export NO_AVX=1;; esac; "
+					"printf '(exit)\\n' | racket infra/platforms/server.rkt --platform c",
+				),
+				cwd=self.runtime_path(),
+				timeout_seconds=120,
 			),
 		)
