@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.trace_viewer.action_mapper import SemanticAction
+from src.trace_viewer.event_mapper import SemanticEvent
 from src.trace_viewer.graph_builder import (
 	build_trajectory_graph,
 	canonical_node_signature,
@@ -76,7 +76,7 @@ def test_claude_events_deduplication_and_option_a_thinking() -> None:
 		# Event 0: Assistant thinks, then runs make -j8
 		{
 			"type": "assistant",
-			"action": SemanticAction.BUILD.value,
+			"event": SemanticEvent.BUILD.value,
 			"ts": "2026-10-19T01:00:00Z",
 			"blocks": [
 				{"type": "thinking", "thinking": "Let us compile the artifact first."},
@@ -91,7 +91,7 @@ def test_claude_events_deduplication_and_option_a_thinking() -> None:
 		# Event 1: Tool result for make -j8 (error)
 		{
 			"type": "user",
-			"action": SemanticAction.BUILD.value,
+			"event": SemanticEvent.BUILD.value,
 			"blocks": [
 				{
 					"type": "tool_result",
@@ -104,7 +104,7 @@ def test_claude_events_deduplication_and_option_a_thinking() -> None:
 		# Event 2: Assistant edits a file
 		{
 			"type": "assistant",
-			"action": SemanticAction.MODIFY.value,
+			"event": SemanticEvent.MODIFY.value,
 			"ts": "2026-10-19T01:01:00Z",
 			"blocks": [
 				{"type": "thinking", "thinking": "Fixing the missing include."},
@@ -119,7 +119,7 @@ def test_claude_events_deduplication_and_option_a_thinking() -> None:
 		# Event 3: Tool result for edit
 		{
 			"type": "user",
-			"action": SemanticAction.MODIFY.value,
+			"event": SemanticEvent.MODIFY.value,
 			"blocks": [
 				{
 					"type": "tool_result",
@@ -131,7 +131,7 @@ def test_claude_events_deduplication_and_option_a_thinking() -> None:
 		# Event 4: Assistant runs make -j8 AGAIN (repeated command!)
 		{
 			"type": "assistant",
-			"action": SemanticAction.BUILD.value,
+			"event": SemanticEvent.BUILD.value,
 			"ts": "2026-10-19T01:02:00Z",
 			"blocks": [
 				{"type": "thinking", "thinking": "Re-running compilation."},
@@ -146,7 +146,7 @@ def test_claude_events_deduplication_and_option_a_thinking() -> None:
 		# Event 5: Tool result for make -j8 (success)
 		{
 			"type": "user",
-			"action": SemanticAction.BUILD.value,
+			"event": SemanticEvent.BUILD.value,
 			"blocks": [
 				{
 					"type": "tool_result",
@@ -158,7 +158,7 @@ def test_claude_events_deduplication_and_option_a_thinking() -> None:
 		# Event 6: Terminal thinking block (Option A: should become a Conclusion node)
 		{
 			"type": "assistant",
-			"action": SemanticAction.THINK.value,
+			"event": SemanticEvent.THINK.value,
 			"ts": "2026-10-19T01:03:00Z",
 			"blocks": [
 				{"type": "text", "text": "The build succeeded and the evaluation is complete."}
@@ -208,10 +208,10 @@ def test_claude_events_deduplication_and_option_a_thinking() -> None:
 
 def test_codex_events_and_backtracking_detection() -> None:
 	events: list[dict[str, Any]] = [
-		# Step 1: Run benchmark (action: run)
+		# Step 1: Run benchmark (event: run)
 		{
 			"type": "codex_item",
-			"action": SemanticAction.RUN.value,
+			"event": SemanticEvent.RUN.value,
 			"item": {
 				"type": "command_execution",
 				"command": "./run_benchmarks.sh",
@@ -219,10 +219,10 @@ def test_codex_events_and_backtracking_detection() -> None:
 				"exit_code": 139,
 			},
 		},
-		# Step 2: Reasoning followed by Edit (action: modify) -> BACKTRACK from RUN to MODIFY!
+		# Step 2: Reasoning followed by Edit (event: modify) -> BACKTRACK from RUN to MODIFY!
 		{
 			"type": "codex_item",
-			"action": SemanticAction.THINK.value,
+			"event": SemanticEvent.THINK.value,
 			"item": {
 				"type": "reasoning",
 				"text": "Crash detected. Fixing null pointer in driver.",
@@ -230,7 +230,7 @@ def test_codex_events_and_backtracking_detection() -> None:
 		},
 		{
 			"type": "codex_item",
-			"action": SemanticAction.MODIFY.value,
+			"event": SemanticEvent.MODIFY.value,
 			"item": {
 				"type": "file_change",
 				"changes": [{"path": "driver.c", "kind": "modify"}],
@@ -252,7 +252,7 @@ def test_passive_read_after_run_not_flagged_as_backtrack() -> None:
 	events: list[dict[str, Any]] = [
 		{
 			"type": "assistant",
-			"action": SemanticAction.RUN.value,
+			"event": SemanticEvent.RUN.value,
 			"blocks": [
 				{
 					"type": "tool_use",
@@ -264,7 +264,7 @@ def test_passive_read_after_run_not_flagged_as_backtrack() -> None:
 		},
 		{
 			"type": "assistant",
-			"action": SemanticAction.SETUP.value,
+			"event": SemanticEvent.SETUP.value,
 			"blocks": [
 				{
 					"type": "tool_use",
@@ -285,7 +285,7 @@ def test_cross_phase_node_deduplication_and_multi_file_codex() -> None:
 	events: list[dict[str, Any]] = [
 		{
 			"type": "codex_item",
-			"action": SemanticAction.SETUP.value,
+			"event": SemanticEvent.SETUP.value,
 			"item": {
 				"type": "command_execution",
 				"command": "cat /tmp/status.log",
@@ -295,7 +295,7 @@ def test_cross_phase_node_deduplication_and_multi_file_codex() -> None:
 		},
 		{
 			"type": "codex_item",
-			"action": SemanticAction.VERIFY.value,
+			"event": SemanticEvent.VERIFY.value,
 			"item": {
 				"type": "command_execution",
 				"command": "cat /tmp/status.log",
@@ -305,7 +305,7 @@ def test_cross_phase_node_deduplication_and_multi_file_codex() -> None:
 		},
 		{
 			"type": "codex_item",
-			"action": SemanticAction.MODIFY.value,
+			"event": SemanticEvent.MODIFY.value,
 			"item": {
 				"type": "file_change",
 				"changes": [
@@ -320,21 +320,21 @@ def test_cross_phase_node_deduplication_and_multi_file_codex() -> None:
 	assert len(graph.nodes) == 3
 	cat_node = next(n for n in graph.nodes if "status.log" in n.command)
 	assert cat_node.visit_count == 2
-	assert cat_node.phases == [SemanticAction.SETUP.value, SemanticAction.VERIFY.value]
+	assert cat_node.phases == [SemanticEvent.SETUP.value, SemanticEvent.VERIFY.value]
 
 
 def test_self_loop_detection() -> None:
 	events: list[dict[str, Any]] = [
 		{
 			"type": "assistant",
-			"action": SemanticAction.SETUP.value,
+			"event": SemanticEvent.SETUP.value,
 			"blocks": [
 				{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "sleep 1"}}
 			],
 		},
 		{
 			"type": "assistant",
-			"action": SemanticAction.SETUP.value,
+			"event": SemanticEvent.SETUP.value,
 			"blocks": [
 				{"type": "tool_use", "id": "t2", "name": "Bash", "input": {"command": "sleep 1"}}
 			],

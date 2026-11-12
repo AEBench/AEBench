@@ -49,11 +49,11 @@ const els = {
   jumpTurn: document.getElementById('jump-turn'),
   traceViewFocus: document.getElementById('trace-view-focus'),
   traceViewAll: document.getElementById('trace-view-all'),
-  summaryActionBlock: document.getElementById('summary-action-block'),
-  actionClearBtn: document.getElementById('action-clear-btn'),
-  actionTotalCount: document.getElementById('action-total-count'),
-  actionBar: document.getElementById('action-bar'),
-  actionLegend: document.getElementById('action-legend'),
+  summarySourceEventBlock: document.getElementById('summary-source-event-block'),
+  sourceEventClearBtn: document.getElementById('source-event-clear-btn'),
+  sourceEventTotalCount: document.getElementById('source-event-total-count'),
+  sourceEventBar: document.getElementById('source-event-bar'),
+  sourceEventLegend: document.getElementById('source-event-legend'),
 };
 
 let RECORD = null;
@@ -62,7 +62,7 @@ let RAIL_CHARTS = [];
 let MODAL_CHARTS = [];
 let TRACE_START_MS = null;
 let TRACE_VIEW = params.get('view') === 'focus' ? 'focus' : 'all';
-const SELECTED_ACTIONS = new Set();
+const SELECTED_SOURCE_EVENTS = new Set();
 const DATA_REQUEST_TIMEOUT_MS = 30000;
 const CHART_LOAD_TIMEOUT_MS = 8000;
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -264,114 +264,114 @@ function renderSummary() {
     els.linkRaw.innerHTML = `${downloadIcon}<span>Download trace</span>`;
   }
 
-  renderActionSummary(s.action_summary);
+  renderSourceEventSummary(s.event_summary);
 }
 
-const CANONICAL_ACTIONS = ['setup', 'build', 'think', 'run', 'verify', 'modify', 'misc'];
+const CANONICAL_SOURCE_EVENTS = ['setup', 'build', 'think', 'run', 'verify', 'modify', 'misc'];
 
-function renderActionSummary(actionSum) {
-  if (!actionSum || !els.summaryActionBlock) return;
-  els.summaryActionBlock.classList.remove('hidden');
-  const counts = actionSum.counts || {};
-  const pcts = actionSum.percentages || {};
-  const meta = actionSum.metadata || {};
+function renderSourceEventSummary(eventSum) {
+  if (!eventSum || !els.summarySourceEventBlock) return;
+  els.summarySourceEventBlock.classList.remove('hidden');
+  const counts = eventSum.counts || {};
+  const pcts = eventSum.percentages || {};
+  const meta = eventSum.metadata || {};
 
-  if (els.actionTotalCount) {
-    const totalEvents = actionSum.total_events != null
-      ? actionSum.total_events
+  if (els.sourceEventTotalCount) {
+    const totalEvents = eventSum.total_events != null
+      ? eventSum.total_events
       : (RECORD && Array.isArray(RECORD.events) ? RECORD.events.length : 0);
-    els.actionTotalCount.textContent = Number(totalEvents).toLocaleString();
+    els.sourceEventTotalCount.textContent = Number(totalEvents).toLocaleString();
   }
 
-  if (els.actionBar) {
+  if (els.sourceEventBar) {
     const segments = [];
-    const activeKeys = CANONICAL_ACTIONS.filter(k => (counts[k] || 0) > 0);
+    const activeKeys = CANONICAL_SOURCE_EVENTS.filter(k => (counts[k] || 0) > 0);
     const barKeys = activeKeys.length > 0 ? activeKeys : Object.keys(counts).filter(k => (counts[k] || 0) > 0);
-    for (const actionKey of barKeys) {
-      const count = counts[actionKey] || 0;
-      const pct = pcts[actionKey] || 0;
-      const aMeta = meta[actionKey] || { label: actionKey, color: `var(--action-${actionKey})` };
-      const label = aMeta.label || actionKey;
-      segments.push(`<div class="action-bar-seg action-bar-${actionKey}" style="width: ${pct}%; background-color: ${aMeta.color};" data-action="${actionKey}" data-tip="${escapeHtml(label)}: ${count} actions (${pct}%)" aria-label="${escapeHtml(label)}: ${pct}%"></div>`);
+    for (const sourceEventKey of barKeys) {
+      const count = counts[sourceEventKey] || 0;
+      const pct = pcts[sourceEventKey] || 0;
+      const eMeta = meta[sourceEventKey] || { label: sourceEventKey, color: `var(--source-event-${sourceEventKey})` };
+      const label = eMeta.label || sourceEventKey;
+      segments.push(`<div class="source-event-bar-seg source-event-bar-${sourceEventKey}" style="width: ${pct}%; background-color: ${eMeta.color};" data-source-event="${sourceEventKey}" data-tip="${escapeHtml(label)}: ${count} source events (${pct}%)" aria-label="${escapeHtml(label)}: ${pct}%"></div>`);
     }
-    els.actionBar.innerHTML = segments.join('');
-    els.actionBar.querySelectorAll('.action-bar-seg').forEach(seg => {
+    els.sourceEventBar.innerHTML = segments.join('');
+    els.sourceEventBar.querySelectorAll('.source-event-bar-seg').forEach(seg => {
       seg.addEventListener('click', () => {
-        const target = seg.getAttribute('data-action');
-        if (target) toggleActionFilter(target);
+        const target = seg.getAttribute('data-source-event');
+        if (target) toggleSourceEventFilter(target);
       });
     });
   }
 
-  if (els.actionLegend) {
+  if (els.sourceEventLegend) {
     const items = [];
-    const legendKeys = CANONICAL_ACTIONS.every(k => k in meta || k in counts)
-      ? CANONICAL_ACTIONS
+    const legendKeys = CANONICAL_SOURCE_EVENTS.every(k => k in meta || k in counts)
+      ? CANONICAL_SOURCE_EVENTS
       : (Object.keys(meta).length > 0 ? Object.keys(meta) : Object.keys(counts));
 
-    for (const actionKey of legendKeys) {
-      const count = counts[actionKey] || 0;
-      const pct = pcts[actionKey] || 0;
-      const aMeta = meta[actionKey] || { label: actionKey, color: `var(--action-${actionKey})` };
-      const label = aMeta.label || actionKey;
-      const isActive = SELECTED_ACTIONS.has(actionKey) ? ' active' : '';
-      items.push(`<button type="button" class="action-rail-item action-rail-${actionKey}${isActive}" data-action="${actionKey}" title="${escapeHtml(label)}">
-        <div class="action-rail-head">
-          <span class="action-dot" style="background-color: ${aMeta.color}"></span>
-          <span class="action-rail-title">${escapeHtml(label)}</span>
+    for (const sourceEventKey of legendKeys) {
+      const count = counts[sourceEventKey] || 0;
+      const pct = pcts[sourceEventKey] || 0;
+      const eMeta = meta[sourceEventKey] || { label: sourceEventKey, color: `var(--source-event-${sourceEventKey})` };
+      const label = eMeta.label || sourceEventKey;
+      const isActive = SELECTED_SOURCE_EVENTS.has(sourceEventKey) ? ' active' : '';
+      items.push(`<button type="button" class="source-event-rail-item source-event-rail-${sourceEventKey}${isActive}" data-source-event="${sourceEventKey}" title="${escapeHtml(label)}">
+        <div class="source-event-rail-head">
+          <span class="source-event-dot" style="background-color: ${eMeta.color}"></span>
+          <span class="source-event-rail-title">${escapeHtml(label)}</span>
         </div>
-        <div class="action-rail-stat">
-          <span class="action-rail-pct">${pct}%</span>
-          <span class="action-rail-count">${count}</span>
+        <div class="source-event-rail-stat">
+          <span class="source-event-rail-pct">${pct}%</span>
+          <span class="source-event-rail-count">${count}</span>
         </div>
       </button>`);
     }
-    els.actionLegend.innerHTML = items.join('');
-    els.actionLegend.querySelectorAll('.action-rail-item').forEach(btn => {
+    els.sourceEventLegend.innerHTML = items.join('');
+    els.sourceEventLegend.querySelectorAll('.source-event-rail-item').forEach(btn => {
       btn.addEventListener('click', () => {
-        const target = btn.getAttribute('data-action');
-        if (target) toggleActionFilter(target);
+        const target = btn.getAttribute('data-source-event');
+        if (target) toggleSourceEventFilter(target);
       });
     });
   }
 
-  updateActionFilterUI();
+  updateSourceEventFilterUI();
 }
 
-function toggleActionFilter(actionKey) {
-  if (SELECTED_ACTIONS.has(actionKey)) {
-    SELECTED_ACTIONS.delete(actionKey);
+function toggleSourceEventFilter(sourceEventKey) {
+  if (SELECTED_SOURCE_EVENTS.has(sourceEventKey)) {
+    SELECTED_SOURCE_EVENTS.delete(sourceEventKey);
   } else {
-    SELECTED_ACTIONS.add(actionKey);
+    SELECTED_SOURCE_EVENTS.add(sourceEventKey);
   }
-  updateActionFilterUI();
+  updateSourceEventFilterUI();
   renderTrace();
 }
 
-function updateActionFilterUI() {
-  if (els.actionLegend) {
-    els.actionLegend.querySelectorAll('.action-rail-item').forEach(btn => {
-      const key = btn.getAttribute('data-action');
-      btn.classList.toggle('active', SELECTED_ACTIONS.has(key));
+function updateSourceEventFilterUI() {
+  if (els.sourceEventLegend) {
+    els.sourceEventLegend.querySelectorAll('.source-event-rail-item').forEach(btn => {
+      const key = btn.getAttribute('data-source-event');
+      btn.classList.toggle('active', SELECTED_SOURCE_EVENTS.has(key));
     });
   }
-  if (els.actionBar) {
-    els.actionBar.querySelectorAll('.action-bar-seg').forEach(seg => {
-      const key = seg.getAttribute('data-action');
-      seg.classList.toggle('active', SELECTED_ACTIONS.has(key));
+  if (els.sourceEventBar) {
+    els.sourceEventBar.querySelectorAll('.source-event-bar-seg').forEach(seg => {
+      const key = seg.getAttribute('data-source-event');
+      seg.classList.toggle('active', SELECTED_SOURCE_EVENTS.has(key));
     });
   }
-  if (els.actionClearBtn) {
-    els.actionClearBtn.classList.toggle('hidden', SELECTED_ACTIONS.size === 0);
+  if (els.sourceEventClearBtn) {
+    els.sourceEventClearBtn.classList.toggle('hidden', SELECTED_SOURCE_EVENTS.size === 0);
   }
-  updateGraphActionHighlight();
+  updateGraphSourceEventHighlight();
 }
 
-function updateGraphActionHighlight() {
+function updateGraphSourceEventHighlight() {
   const svg = document.getElementById('graph-svg');
   if (!svg) return;
   const nodes = svg.querySelectorAll('.graph-node');
-  const hasFilter = SELECTED_ACTIONS.size > 0;
+  const hasFilter = SELECTED_SOURCE_EVENTS.size > 0;
   nodes.forEach(el => {
     if (!hasFilter) {
       el.classList.remove('filter-dimmed', 'filter-highlighted');
@@ -381,7 +381,7 @@ function updateGraphActionHighlight() {
     const phases = phasesAttr
       ? phasesAttr.split(',').filter(Boolean)
       : [[...el.classList].find(c => c.startsWith('node-'))?.replace('node-', '') || ''];
-    const match = phases.some(p => SELECTED_ACTIONS.has(p));
+    const match = phases.some(p => SELECTED_SOURCE_EVENTS.has(p));
     el.classList.toggle('filter-highlighted', match);
     el.classList.toggle('filter-dimmed', !match);
   });
@@ -454,10 +454,10 @@ function setupTraceControls() {
   els.traceViewFocus.addEventListener('click', () => setTraceView('focus'));
   els.traceViewAll.addEventListener('click', () => setTraceView('all'));
 
-  if (els.actionClearBtn) {
-    els.actionClearBtn.addEventListener('click', () => {
-      SELECTED_ACTIONS.clear();
-      updateActionFilterUI();
+  if (els.sourceEventClearBtn) {
+    els.sourceEventClearBtn.addEventListener('click', () => {
+      SELECTED_SOURCE_EVENTS.clear();
+      updateSourceEventFilterUI();
       renderTrace();
     });
   }
@@ -618,7 +618,7 @@ function renderTrace({ preservePosition = false } = {}) {
     const ev = events[eventIndex];
     if (ev.type === 'system' && !wantSys && ev.subtype !== 'init') continue;
     if (skipUserEv.has(ev)) continue;
-    if (SELECTED_ACTIONS.size > 0 && !SELECTED_ACTIONS.has(ev.action)) continue;
+    if (SELECTED_SOURCE_EVENTS.size > 0 && !SELECTED_SOURCE_EVENTS.has(ev.event)) continue;
 
     if (ev.session_idx !== lastSession && lastSession >= 0) {
       out.push(renderSessionBanner(ev));
@@ -632,7 +632,7 @@ function renderTrace({ preservePosition = false } = {}) {
   els.eventCount.title = `${events.length.toLocaleString()} source events`;
 
   if (out.length === 0) {
-    els.trace.innerHTML = '<div class="empty-state"><p class="muted">No events match the selected action filter.</p></div>';
+    els.trace.innerHTML = '<div class="empty-state"><p class="muted">No source events match the selected filter.</p></div>';
   } else {
     els.trace.innerHTML = out.join('');
   }
@@ -724,10 +724,10 @@ function renderEvent(ev, resultByUseId, expandResults, turnNum, eventIndex) {
   } else {
     markerLabel = '<div class="turn-role">·</div>';
   }
-  const actionKey = ev.action;
-  const actionLabel = ev.action_label || actionKey;
-  const actionCls = actionKey ? ` action-${actionKey}` : '';
-  const cls = `event session-${(ev.session_idx ?? 0) % 5}${roleClass ? ' ' + roleClass : ''}${actionCls}`;
+  const sourceEventKey = ev.event;
+  const sourceEventLabel = ev.event_label || sourceEventKey;
+  const sourceEventCls = sourceEventKey ? ` source-event-${sourceEventKey}` : '';
+  const cls = `event session-${(ev.session_idx ?? 0) % 5}${roleClass ? ' ' + roleClass : ''}${sourceEventCls}`;
   const tsParts = ev.ts ? formatEventTime(ev.ts) : null;
   const anchorId = turnNum != null
     ? `turn-${turnNum}`
@@ -735,10 +735,10 @@ function renderEvent(ev, resultByUseId, expandResults, turnNum, eventIndex) {
   const tsTitle = tsParts
     ? `${tsParts.wall || ''}${tsParts.date ? ' · ' + tsParts.date : ''} (wall-clock)`
     : '';
-  const actionChip = actionKey ? `<div class="turn-action-marker"><span class="action-badge action-${actionKey}" title="${escapeHtml(actionLabel)}">${escapeHtml(actionLabel)}</span></div>` : '';
+  const sourceEventChip = sourceEventKey ? `<div class="turn-source-event-marker"><span class="source-event-badge source-event-${sourceEventKey}" title="${escapeHtml(sourceEventLabel)}">${escapeHtml(sourceEventLabel)}</span></div>` : '';
   const marker = `<aside class="event-marker" data-anchor="${anchorId}" title="Copy link to this event">
     ${markerNum}${markerLabel}
-    ${actionChip}
+    ${sourceEventChip}
     ${tsParts ? `<div class="ev-time" title="${escapeHtml(tsTitle)}"><span class="ev-time-full">${escapeHtml(tsParts.time || '')}</span><span class="ev-time-short">${escapeHtml((tsParts.time || '').slice(0, 5))}</span></div>` : ''}
     ${ev.parent_tool_use_id ? `<div class="ev-sub-tag">sub-agent</div>` : ''}
   </aside>`;
@@ -857,10 +857,10 @@ function renderToolCall(block, pair, expandResults, ev) {
   }
 
   const idLabel = block.id ? `<span class="tool-id">${escapeHtml(block.id.slice(-8))}</span>` : '';
-  const actionKey = ev?.action;
-  const actionLabel = ev?.action_label || actionKey;
-  const actionTag = actionKey ? `<span class="action-badge action-${actionKey}">${escapeHtml(actionLabel)}</span>` : '';
-  const summary = `<button type="button" class="tool-call-head" aria-expanded="true">${ICON.tool} <span class="block-label-inline">Tool</span> <span class="tool-name">${escapeHtml(name)}</span>${actionTag}${idLabel}</button>`;
+  const sourceEventKey = ev?.event;
+  const sourceEventLabel = ev?.event_label || sourceEventKey;
+  const sourceEventTag = sourceEventKey ? `<span class="source-event-badge source-event-${sourceEventKey}">${escapeHtml(sourceEventLabel)}</span>` : '';
+  const summary = `<button type="button" class="tool-call-head" aria-expanded="true">${ICON.tool} <span class="block-label-inline">Tool</span> <span class="tool-name">${escapeHtml(name)}</span>${sourceEventTag}${idLabel}</button>`;
   const result = pair ? renderToolResult(pair.block, expandResults) : '';
   const expanded = expandResults ? 'expanded' : '';
   const variant = name === 'Bash' ? 'tool-bash' : '';
@@ -907,10 +907,10 @@ function renderCodexItem(item, expandResults, ev) {
       const out = item.aggregated_output || '';
       const truncated = out.length > 16384;
       const exitMeta = item.exit_code != null ? `<span class="tool-exit">exit ${item.exit_code}</span>` : '';
-      const actionKey = ev?.action;
-      const actionLabel = ev?.action_label || actionKey;
-      const actionTag = actionKey ? `<span class="action-badge action-${actionKey}">${escapeHtml(actionLabel)}</span>` : '';
-      const head = `<button type="button" class="tool-call-head" aria-expanded="true">${ICON.tool} <span class="block-label-inline">Tool</span> <span class="tool-name">${escapeHtml(item.shell || 'command')}</span>${actionTag}${exitMeta}</button>`;
+      const sourceEventKey = ev?.event;
+      const sourceEventLabel = ev?.event_label || sourceEventKey;
+      const sourceEventTag = sourceEventKey ? `<span class="source-event-badge source-event-${sourceEventKey}">${escapeHtml(sourceEventLabel)}</span>` : '';
+      const head = `<button type="button" class="tool-call-head" aria-expanded="true">${ICON.tool} <span class="block-label-inline">Tool</span> <span class="tool-name">${escapeHtml(item.shell || 'command')}</span>${sourceEventTag}${exitMeta}</button>`;
       const args = `<div class="tool-args"><div class="bash-cmd">${escapeHtml(item.command || '')}</div></div>`;
       const body = `<div class="tool-result"><div class="tool-result-head"><span class="tool-result-label">${ICON.output} Output</span>${item.status ? `<span class="muted">${escapeHtml(item.status)}</span>` : ''}${truncated ? '<span class="muted">truncated</span>' : ''}</div><div class="tool-result-body ${item.exit_code && item.exit_code !== 0 ? 'error' : ''}">${escapeHtml(out.slice(0, 16384))}${truncated ? '\n\n[... truncated]' : ''}</div></div>`;
       return `<div class="tool-call tool-bash ${expandResults ? 'expanded' : ''}">${head}${args}${body}</div>`;
@@ -918,10 +918,10 @@ function renderCodexItem(item, expandResults, ev) {
     case 'file_change': {
       const rows = (item.changes || []).map(c =>
         `<div class="todo-item"><span class="check">${c.kind === 'add' ? '＋' : c.kind === 'delete' ? '－' : '✎'}</span><span>${escapeHtml(c.path)}</span></div>`).join('');
-      const actionKey = ev?.action;
-      const actionLabel = ev?.action_label || actionKey;
-      const actionTag = actionKey ? `<span class="action-badge action-${actionKey}">${escapeHtml(actionLabel)}</span>` : '';
-      return `<div class="standalone-output"><div class="block-label">File change · ${escapeHtml(item.status || '')}${actionTag}</div>${rows}</div>`;
+      const sourceEventKey = ev?.event;
+      const sourceEventLabel = ev?.event_label || sourceEventKey;
+      const sourceEventTag = sourceEventKey ? `<span class="source-event-badge source-event-${sourceEventKey}">${escapeHtml(sourceEventLabel)}</span>` : '';
+      return `<div class="standalone-output"><div class="block-label">File change · ${escapeHtml(item.status || '')}${sourceEventTag}</div>${rows}</div>`;
     }
     case 'web_search':
       return `<div class="standalone-output"><div class="block-label">Web search</div><div>${escapeHtml(item.query || '')}</div></div>`;
@@ -1302,9 +1302,9 @@ function setupGraphView() {
 }
 
 window.jumpToTraceTurn = function (turnNum) {
-  if (!document.getElementById(`turn-${turnNum}`) && SELECTED_ACTIONS.size > 0) {
-    SELECTED_ACTIONS.clear();
-    updateActionFilterUI();
+  if (!document.getElementById(`turn-${turnNum}`) && SELECTED_SOURCE_EVENTS.size > 0) {
+    SELECTED_SOURCE_EVENTS.clear();
+    updateSourceEventFilterUI();
     renderTrace();
   }
   const traceBtn = els.tabNav ? els.tabNav.querySelector('.tab-btn[data-tab="trace"]') : null;

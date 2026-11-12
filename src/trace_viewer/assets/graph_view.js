@@ -255,16 +255,16 @@
       const isSelected = SELECTED_NODE_ID === node.id;
       const x = pos.x - pos.width / 2;
       const y = pos.y - pos.height / 2;
-      const action = node.action || 'misc';
-      const phases = Array.isArray(node.phases) && node.phases.length > 0 ? node.phases : [action];
-      const actionDisplay = phases.length > 1 ? phases.join(' / ') : action;
+      const sourceEvent = node.event || 'misc';
+      const phases = Array.isArray(node.phases) && node.phases.length > 0 ? node.phases : [sourceEvent];
+      const sourceEventDisplay = phases.length > 1 ? phases.join(' / ') : sourceEvent;
       const isLoop = node.visit_count > 1;
 
       const hasFailure = node.occurrences && node.occurrences.some(o => o.outcome === 'failure');
       const allPassed = node.occurrences && node.occurrences.every(o => o.outcome === 'success');
 
       nodesHtml += `
-        <g class="graph-node node-${action} ${isLoop ? 'is-loop' : ''} ${isSelected ? 'selected' : ''}"
+        <g class="graph-node node-${sourceEvent} ${isLoop ? 'is-loop' : ''} ${isSelected ? 'selected' : ''}"
            data-node-id="${node.id}"
            data-phases="${escapeHtml(phases.join(','))}"
            transform="translate(${x}, ${y})"
@@ -276,7 +276,7 @@
           
           <g class="node-content" transform="translate(12, 16)">
             <text class="node-tool-tag">${escapeHtml(node.tool)}</text>
-            <text class="node-action-tag action-badge action-${action}" x="${pos.width - 24}" text-anchor="end">${escapeHtml(actionDisplay)}</text>
+            <text class="node-source-event-tag source-event-badge source-event-${sourceEvent}" x="${pos.width - 24}" text-anchor="end">${escapeHtml(sourceEventDisplay)}</text>
             <text class="node-label" y="24" title="${escapeHtml(node.command || node.label)}">${escapeHtml(truncate(node.label, 26))}</text>
           </g>
 
@@ -369,8 +369,8 @@
     }
 
     const firstOcc = occurrences[0] || {};
-    const nodePhases = Array.isArray(node.phases) && node.phases.length > 0 ? node.phases : [node.action];
-    const phaseBadges = nodePhases.map(p => `<span class="action-badge action-${p}">${escapeHtml(p)}</span>`).join(' ');
+    const nodePhases = Array.isArray(node.phases) && node.phases.length > 0 ? node.phases : [node.event];
+    const phaseBadges = nodePhases.map(p => `<span class="source-event-badge source-event-${p}">${escapeHtml(p)}</span>`).join(' ');
     const inspectorContent = `
       <div class="inspector-header">
         <div class="inspector-title-row">
@@ -497,7 +497,7 @@
 
     const s = GRAPH_DATA.stats;
     const nodesCount = s.unique_nodes || 0;
-    const actionsCount = Array.isArray(ALL_EVENTS) ? ALL_EVENTS.length : (s.total_events || 0);
+    const sourceEventsCount = Array.isArray(ALL_EVENTS) ? ALL_EVENTS.length : (s.total_events || 0);
     const stepsCount = s.total_steps || 0;
     const compPct = s.compression_ratio || 0;
     const subItems = [];
@@ -508,7 +508,7 @@
       subItems.push(`<span class="badge-backtrack-stat">${s.backtrack_edge_count} backtracks</span>`);
     }
     statsEl.innerHTML = `
-      <div class="visualize-summary-line">${nodesCount} nodes from ${actionsCount} actions compressed from ${stepsCount} steps (${compPct}% compression)</div>
+      <div class="visualize-summary-line">${nodesCount} nodes from ${sourceEventsCount} source events compressed from ${stepsCount} steps (${compPct}% compression)</div>
       ${subItems.length ? `<div class="visualize-summary-subline">${subItems.join('<span class="stat-separator">·</span>')}</div>` : ''}
     `;
   }

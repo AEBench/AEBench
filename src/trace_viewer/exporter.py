@@ -9,7 +9,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
-from .action_mapper import classify_event, compute_action_summary
+from .event_mapper import classify_event, compute_event_summary
 from .graph_builder import build_trajectory_graph
 
 RUNNER_LOG = "runner_output.log"
@@ -113,7 +113,7 @@ def parse_claude_trace(
 	usage: dict[str, int] = {}
 	session_indexes: dict[str, int] = {}
 	task_types: dict[tuple[str, str], str] = {}
-	tool_action_map: dict[str, str] = {}
+	tool_event_map: dict[str, str] = {}
 
 	for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
 		line = raw_line.strip()
@@ -145,7 +145,7 @@ def parse_claude_trace(
 			session_id,
 			session_idx,
 			secret_values,
-			tool_action_map=tool_action_map,
+			tool_event_map=tool_event_map,
 		)
 		if event_type == "system":
 			task_id = payload.get("task_id")
@@ -176,7 +176,7 @@ def _claude_event(
 	session_id: str,
 	session_idx: int,
 	secrets: Mapping[str, str],
-	tool_action_map: dict[str, str] | None = None,
+	tool_event_map: dict[str, str] | None = None,
 ) -> dict[str, Any]:
 	event_type = str(payload["type"])
 	event: dict[str, Any] = {
@@ -209,21 +209,21 @@ def _claude_event(
 			usage=_redact_value(payload.get("usage", {}), secrets),
 			result_text=_redact(str(payload.get("result") or ""), secrets),
 		)
-	action, action_label = classify_event(
-		event, trace_format="claude_code", tool_action_map=tool_action_map
+	sem_event, event_label = classify_event(
+		event, trace_format="claude_code", tool_event_map=tool_event_map
 	)
-	event["action"] = action
-	event["action_label"] = action_label
+	event["event"] = sem_event
+	event["event_label"] = event_label
 
-	# Record tool_use actions into tool_action_map so paired tool_results can inherit them
-	if event_type == "assistant" and tool_action_map is not None:
+	# Record tool_use events into tool_event_map so paired tool_results can inherit them
+	if event_type == "assistant" and tool_event_map is not None:
 		blocks = event.get("blocks")
 		if isinstance(blocks, list):
 			for b in blocks:
 				if isinstance(b, dict) and b.get("type") == "tool_use":
 					tool_id = b.get("id")
 					if tool_id:
-						tool_action_map[str(tool_id)] = action
+						tool_event_map[str(tool_id)] = sem_event
 
 	return event
 
@@ -248,9 +248,9 @@ def _codex_event(
 		if event_type == "thread.started":
 			event["subtype"] = "init"
 			event["raw"] = {"thread_id": _redact(session_id, secrets)}
-		action, action_label = classify_event(event, trace_format="codex")
-		event["action"] = action
-		event["action_label"] = action_label
+		sem_event, event_label = classify_event(event, trace_format="codex")
+		event["event"] = sem_event
+		event["event_label"] = event_label
 		return event
 
 	item_type = str(item.get("type", "item"))
@@ -260,9 +260,9 @@ def _codex_event(
 		item_phase=event_type.removeprefix("item."),
 	)
 	event["item"] = _redact_value(item, secrets)
-	action, action_label = classify_event(event, trace_format="codex")
-	event["action"] = action
-	event["action_label"] = action_label
+	sem_event, event_label = classify_event(event, trace_format="codex")
+	event["event"] = sem_event
+	event["event_label"] = event_label
 	return event
 
 
@@ -307,7 +307,7 @@ def _build_record(
 	total_cost = result_event.get("total_cost_usd")
 	total_cost = float(total_cost) if isinstance(total_cost, (int, float)) else None
 	sessions = _sessions(events, model)
-	action_summary = compute_action_summary(events)
+	event_summary = compute_event_summary(events)
 	trajectory_graph = build_trajectory_graph(events, trace_format=trace_format)
 	meta = {
 		"run_id": run_id,
@@ -369,7 +369,7 @@ def _build_record(
 		"session_count": len(sessions),
 		"session_ids": [session["session_id"] for session in sessions],
 		"num_turns": turn_count,
-		"action_summary": action_summary,
+		"event_summary": event_summary,
 		"graph_summary": trajectory_graph.stats,
 	}
 	if trace_format == "claude_code":

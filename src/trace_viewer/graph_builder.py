@@ -4,16 +4,16 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from .action_mapper import SemanticAction, is_readonly_shell_command, unwrap_command
+from .event_mapper import SemanticEvent, is_readonly_shell_command, unwrap_command
 
 PHASE_ORDER: dict[str, int] = {
-	SemanticAction.SETUP.value: 1,
-	SemanticAction.BUILD.value: 2,
-	SemanticAction.THINK.value: 2,
-	SemanticAction.MODIFY.value: 3,
-	SemanticAction.RUN.value: 4,
-	SemanticAction.VERIFY.value: 5,
-	SemanticAction.MISC.value: 99,
+	SemanticEvent.SETUP.value: 1,
+	SemanticEvent.BUILD.value: 2,
+	SemanticEvent.THINK.value: 2,
+	SemanticEvent.MODIFY.value: 3,
+	SemanticEvent.RUN.value: 4,
+	SemanticEvent.VERIFY.value: 5,
+	SemanticEvent.MISC.value: 99,
 }
 
 _FAILURE_INDICATORS = (
@@ -44,7 +44,7 @@ class StepOccurrence:
 	output_text: str
 	outcome: str
 	duration_ms: int | None = None
-	action: str = "misc"
+	event: str = "misc"
 	turn_idx: int | None = None
 
 	def to_dict(self) -> dict[str, Any]:
@@ -58,7 +58,7 @@ class GraphNode:
 	label: str
 	tool: str
 	command: str
-	action: str
+	event: str
 	phases: list[str] = field(default_factory=list)
 	occurrences: list[StepOccurrence] = field(default_factory=list)
 
@@ -77,7 +77,7 @@ class GraphNode:
 			"label": self.label,
 			"tool": self.tool,
 			"command": self.command,
-			"action": self.action,
+			"event": self.event,
 			"phases": list(dict.fromkeys(self.phases)),
 			"visit_count": self.visit_count,
 			"is_loop_hub": self.is_loop_hub,
@@ -181,7 +181,7 @@ def normalize_bash_for_signature(canonical_cmd: str) -> str:
 	return " ".join(s.strip().split())
 
 
-def canonical_node_signature(tool: str, raw_input: str, action: str = "") -> tuple[str, str, str]:
+def canonical_node_signature(tool: str, raw_input: str, event: str = "") -> tuple[str, str, str]:
 	norm_tool = tool.strip()
 	clean_inp = raw_input.strip()
 
@@ -217,8 +217,8 @@ def _is_passive_inspection(tool: str, raw_cmd: str) -> bool:
 
 
 def _is_backtrack_transition(
-	src_action: str,
-	tgt_action: str,
+	src_event: str,
+	tgt_event: str,
 	tgt_tool: str,
 	tgt_cmd: str,
 	has_executed: bool,
@@ -226,8 +226,8 @@ def _is_backtrack_transition(
 ) -> bool:
 	if is_self_loop or not has_executed:
 		return False
-	src_rank = PHASE_ORDER.get(src_action, 99)
-	tgt_rank = PHASE_ORDER.get(tgt_action, 99)
+	src_rank = PHASE_ORDER.get(src_event, 99)
+	tgt_rank = PHASE_ORDER.get(tgt_event, 99)
 	if src_rank not in (4, 5) or tgt_rank not in (1, 2, 3):
 		return False
 	if _is_passive_inspection(tgt_tool, tgt_cmd):
@@ -239,7 +239,7 @@ def _record_step(
 	*,
 	tool_name: str,
 	raw_cmd: str,
-	ev_action: str,
+	ev_event: str,
 	res_out: str,
 	outcome: str,
 	step_counter: int,
@@ -253,10 +253,10 @@ def _record_step(
 	edges_by_pair: dict[tuple[str, str], GraphEdge],
 	edge_order: list[GraphEdge],
 	prev_node_id: str | None,
-	prev_action: str | None,
+	prev_event: str | None,
 	has_executed: bool,
 ) -> tuple[str, str, bool]:
-	sig, label, canonical_cmd = canonical_node_signature(tool_name, raw_cmd, ev_action)
+	sig, label, canonical_cmd = canonical_node_signature(tool_name, raw_cmd, ev_event)
 	thought_str = "\n\n".join(pending_thoughts)
 	pending_thoughts.clear()
 
@@ -268,15 +268,15 @@ def _record_step(
 			label=label,
 			tool=tool_name,
 			command=canonical_cmd,
-			action=ev_action,
-			phases=[ev_action],
+			event=ev_event,
+			phases=[ev_event],
 			occurrences=[],
 		)
 		nodes_by_sig[sig] = node
 		nodes_order.append(node)
 	else:
 		node = nodes_by_sig[sig]
-		node.phases.append(ev_action)
+		node.phases.append(ev_event)
 
 	occ = StepOccurrence(
 		step_idx=step_counter,
@@ -287,17 +287,17 @@ def _record_step(
 		output_text=res_out[:4096],
 		outcome=outcome,
 		duration_ms=duration_ms,
-		action=ev_action,
+		event=ev_event,
 		turn_idx=turn_counter,
 	)
 	node.occurrences.append(occ)
 
-	if prev_node_id is not None and prev_action is not None:
+	if prev_node_id is not None and prev_event is not None:
 		edge_key = (prev_node_id, node.id)
 		is_self = prev_node_id == node.id
 		is_backtrack = _is_backtrack_transition(
-			prev_action,
-			ev_action,
+			prev_event,
+			ev_event,
 			tool_name,
 			raw_cmd,
 			has_executed,
@@ -322,10 +322,10 @@ def _record_step(
 				edge.is_backtrack = True
 			edge.steps.append((step_counter - 1, step_counter))
 
-	if ev_action in (SemanticAction.BUILD.value, SemanticAction.RUN.value):
+	if ev_event in (SemanticEvent.BUILD.value, SemanticEvent.RUN.value):
 		has_executed = True
 
-	return node.id, ev_action, has_executed
+	return node.id, ev_event, has_executed
 
 
 def build_trajectory_graph(
@@ -364,14 +364,14 @@ def build_trajectory_graph(
 
 	pending_thoughts: list[str] = []
 	prev_node_id: str | None = None
-	prev_action: str | None = None
+	prev_event: str | None = None
 	has_executed = False
 	step_counter = 0
 	turn_counter = 0
 
 	for ev_idx, ev in enumerate(events):
 		ev_type = str(ev.get("type", ""))
-		ev_action = str(ev.get("action", SemanticAction.MISC.value))
+		ev_event = str(ev.get("event", SemanticEvent.MISC.value))
 		ts = ev.get("ts")
 		duration_ms = ev.get("duration_ms")
 
@@ -412,10 +412,10 @@ def build_trajectory_graph(
 						res_out, is_error=is_err, tool=tool_name, command=raw_cmd
 					)
 
-					prev_node_id, prev_action, has_executed = _record_step(
+					prev_node_id, prev_event, has_executed = _record_step(
 						tool_name=tool_name,
 						raw_cmd=raw_cmd,
-						ev_action=ev_action,
+						ev_event=ev_event,
 						res_out=res_out,
 						outcome=outcome,
 						step_counter=step_counter,
@@ -429,7 +429,7 @@ def build_trajectory_graph(
 						edges_by_pair=edges_by_pair,
 						edge_order=edge_order,
 						prev_node_id=prev_node_id,
-						prev_action=prev_action,
+						prev_event=prev_event,
 						has_executed=has_executed,
 					)
 
@@ -459,10 +459,10 @@ def build_trajectory_graph(
 						res_out, exit_code=exit_code, tool="Bash", command=raw_cmd
 					)
 
-					prev_node_id, prev_action, has_executed = _record_step(
+					prev_node_id, prev_event, has_executed = _record_step(
 						tool_name="Bash",
 						raw_cmd=raw_cmd,
-						ev_action=ev_action,
+						ev_event=ev_event,
 						res_out=res_out,
 						outcome=outcome,
 						step_counter=step_counter,
@@ -476,7 +476,7 @@ def build_trajectory_graph(
 						edges_by_pair=edges_by_pair,
 						edge_order=edge_order,
 						prev_node_id=prev_node_id,
-						prev_action=prev_action,
+						prev_event=prev_event,
 						has_executed=has_executed,
 					)
 
@@ -492,10 +492,10 @@ def build_trajectory_graph(
 						file_path = (
 							str(change.get("path", "file")) if isinstance(change, dict) else "file"
 						)
-						prev_node_id, prev_action, has_executed = _record_step(
+						prev_node_id, prev_event, has_executed = _record_step(
 							tool_name="Edit",
 							raw_cmd=file_path,
-							ev_action=ev_action,
+							ev_event=ev_event,
 							res_out="File modified",
 							outcome="success",
 							step_counter=step_counter,
@@ -509,7 +509,7 @@ def build_trajectory_graph(
 							edges_by_pair=edges_by_pair,
 							edge_order=edge_order,
 							prev_node_id=prev_node_id,
-							prev_action=prev_action,
+							prev_event=prev_event,
 							has_executed=has_executed,
 						)
 
@@ -517,7 +517,7 @@ def build_trajectory_graph(
 		step_counter += 1
 		terminal_thought = "\n\n".join(pending_thoughts)
 		sig, _, _ = canonical_node_signature(
-			"Think", terminal_thought[:50], SemanticAction.THINK.value
+			"Think", terminal_thought[:50], SemanticEvent.THINK.value
 		)
 		node_id = f"node_{len(nodes_by_sig)}"
 		term_node = GraphNode(
@@ -526,8 +526,8 @@ def build_trajectory_graph(
 			label="Conclusion",
 			tool="Think",
 			command="Think (conclusion)",
-			action=SemanticAction.THINK.value,
-			phases=[SemanticAction.THINK.value],
+			event=SemanticEvent.THINK.value,
+			phases=[SemanticEvent.THINK.value],
 			occurrences=[
 				StepOccurrence(
 					step_idx=step_counter,
@@ -537,7 +537,7 @@ def build_trajectory_graph(
 					input_text="",
 					output_text="",
 					outcome="neutral",
-					action=SemanticAction.THINK.value,
+					event=SemanticEvent.THINK.value,
 					turn_idx=turn_counter if turn_counter > 0 else step_counter,
 				)
 			],
@@ -576,7 +576,7 @@ def build_trajectory_graph(
 		"loop_edge_count": len(loop_edges),
 		"backtrack_edge_count": len(backtracks),
 		"most_visited": [
-			{"label": n.label, "count": n.visit_count, "action": n.action}
+			{"label": n.label, "count": n.visit_count, "event": n.event}
 			for n in sorted(nodes_order, key=lambda x: x.visit_count, reverse=True)[:5]
 			if n.visit_count > 1
 		],
