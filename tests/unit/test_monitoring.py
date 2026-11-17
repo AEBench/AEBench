@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import signal
 import subprocess
 import tempfile
 from pathlib import Path
@@ -117,27 +118,58 @@ def test_a_start_that_fails_to_spawn_leaves_nothing_behind(
 		assert broker.socket_dir is None
 
 
-def test_stop_reaps_the_broker_process(tmp_path: Path) -> None:
-	class FakeProcess:
-		def __init__(self) -> None:
-			self.killed = False
-			self.waited = False
+class FakeProcess:
+	def __init__(self, *, status: int = 0, hangs: bool = False) -> None:
+		self.status = status
+		self.hangs = hangs
+		self.signals: list[int] = []
+		self.killed = False
+		self.waited = False
 
-		def kill(self) -> None:
-			self.killed = True
+	def send_signal(self, signum: int) -> None:
+		self.signals.append(signum)
 
-		def wait(self) -> int:
-			self.waited = True
-			return 0
+	def kill(self) -> None:
+		self.killed = True
 
-	process = FakeProcess()
+	def wait(self, timeout: float | None = None) -> int:
+		if self.hangs and not self.killed:
+			raise subprocess.TimeoutExpired("monitor.py", timeout or 0)
+		self.waited = True
+		return -9 if self.killed else self.status
+
+
+def _stopped(tmp_path: Path, process: FakeProcess) -> BrokerProcess:
 	broker = BrokerProcess(trace_dir=tmp_path, workspace_dir=tmp_path, socket_root=tmp_path)
 	broker._process = process  # type: ignore[assignment]
-
 	broker.stop()
+	return broker
+
+
+def test_stop_terminates_the_broker_and_reaps_it(tmp_path: Path) -> None:
+	# SIGTERM, not SIGKILL: a snapshotting broker takes its final snapshot on the way out.
+	process = FakeProcess()
+	broker = _stopped(tmp_path, process)
+
+	assert process.signals == [signal.SIGTERM]
+	assert process.waited is True
+	assert process.killed is False
+	assert broker.stop_error is None
+
+
+def test_stop_kills_a_broker_that_ignores_sigterm(tmp_path: Path) -> None:
+	process = FakeProcess(hangs=True)
+	broker = _stopped(tmp_path, process)
 
 	assert process.killed is True
 	assert process.waited is True
+	assert broker.stop_error is not None and "did not exit" in broker.stop_error
+
+
+def test_stop_reports_a_failed_final_snapshot(tmp_path: Path) -> None:
+	broker = _stopped(tmp_path, FakeProcess(status=3))
+
+	assert broker.stop_error is not None and "final workdir snapshot failed" in broker.stop_error
 
 
 def test_verify_probes_as_the_agent_user(tmp_path: Path) -> None:

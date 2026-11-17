@@ -12,15 +12,18 @@ import json
 import logging
 import os
 import shutil
+import signal
 import socket
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
-from models import SystemFilesCheck, TrackedFilesCheck
+from models import SystemFilesCheck, TrackedFilesCheck, WorkdirSnapshotsInfo
 
 from .backend import BenchRuntime
 
@@ -62,8 +65,20 @@ MAX_SOCKET_PATH_BYTES = 107
 
 PROBE_SENTINEL = "AEBENCH_SHIM_PROBE_OK"
 
+# Workdir snapshots (`case monitor --workdir-snapshots`). The frame types and the
+# index basename mirror monitor.py's WORKDIR_SNAPSHOT, WORKDIR_SNAPSHOT_DONE and
+# WORKDIR_SNAPSHOTS_BASENAME; EXIT_FINAL_SNAPSHOT_FAILED mirrors its exit status.
+WORKDIR_SNAPSHOT_FRAME = 5
+WORKDIR_SNAPSHOT_DONE_FRAME = 6
+WORKDIR_SNAPSHOTS_BASENAME = "workdir_snapshots.jsonl"
+_EXIT_FINAL_SNAPSHOT_FAILED = 3
+_FRAME_HEADER = struct.Struct(">IB")
+_SNAPSHOT_REQUEST_TIMEOUT_SECONDS = 60.0
+
 _SOCKET_BACKLOG = 128
-_BROKER_STOP_TIMEOUT_SECONDS = 10.0
+# The broker takes the final workdir snapshot after SIGTERM; a snapshot under
+# heavy writes can take a while, and one that never finishes ends in SIGKILL.
+_BROKER_STOP_TIMEOUT_SECONDS = 60.0
 _SHIM_INSTALL_TIMEOUT_SECONDS = 60.0
 _PROBE_TIMEOUT_SECONDS = 30.0
 _PROBE_RECORD_TIMEOUT_SECONDS = 10.0
@@ -97,19 +112,42 @@ def install_shim(runtime: BenchRuntime) -> None:
 		raise RuntimeError(f"failed to install the command shim: {detail or result.returncode}")
 
 
+@dataclass(frozen=True, slots=True)
+class WorkdirSnapshotTarget:
+	"""What the broker snapshots, and where to: both on the same btrfs filesystem."""
+
+	# The subvolume holding the workspace (the workspace may be a directory inside it).
+	subvolume: Path
+	snapshot_dir: Path
+
+
 class BrokerProcess:
 	"""One broker, owning its socket directory for the life of a run."""
 
-	def __init__(self, *, trace_dir: Path, workspace_dir: Path, socket_root: Path) -> None:
+	def __init__(
+		self,
+		*,
+		trace_dir: Path,
+		workspace_dir: Path,
+		socket_root: Path,
+		workdir_snapshots: WorkdirSnapshotTarget | None = None,
+	) -> None:
 		self.trace_dir = trace_dir
 		self.workspace_dir = workspace_dir
+		self.workdir_snapshots = workdir_snapshots
 		self.socket_dir: Path | None = None
 		self._socket_root = socket_root
 		self._process: subprocess.Popen[bytes] | None = None
+		# Why the last stop() did not end cleanly (e.g. the final snapshot failed).
+		self.stop_error: str | None = None
 
 	@property
 	def trace_path(self) -> Path:
 		return self.trace_dir / COMMAND_TRACE_BASENAME
+
+	@property
+	def snapshot_index_path(self) -> Path:
+		return self.trace_dir / WORKDIR_SNAPSHOTS_BASENAME
 
 	@property
 	def socket_path(self) -> Path | None:
@@ -147,16 +185,24 @@ class BrokerProcess:
 
 				# The child keeps its own dup of the log, so the parent's copy closes
 				# with the block.
+				command = [
+					sys.executable,
+					str(BROKER_SCRIPT),
+					str(self.trace_dir),
+					str(self.workspace_dir),
+					str(socket_path),
+					str(listener.fileno()),
+				]
+				if self.workdir_snapshots is not None:
+					command += [
+						"--snapshot-subvolume",
+						str(self.workdir_snapshots.subvolume),
+						"--snapshot-dir",
+						str(self.workdir_snapshots.snapshot_dir),
+					]
 				with (self.trace_dir / BROKER_LOG_BASENAME).open("wb") as log:
 					self._process = subprocess.Popen(
-						[
-							sys.executable,
-							str(BROKER_SCRIPT),
-							str(self.trace_dir),
-							str(self.workspace_dir),
-							str(socket_path),
-							str(listener.fileno()),
-						],
+						command,
 						stdin=subprocess.DEVNULL,
 						stdout=log,
 						stderr=subprocess.STDOUT,
@@ -176,16 +222,85 @@ class BrokerProcess:
 		except FileNotFoundError:
 			return 0
 
+	def request_workdir_snapshot(self, kind: str) -> dict[str, object]:
+		"""Asks the broker for a workdir snapshot, as the agent's hook does, and waits for it."""
+		socket_path = self.socket_path
+		if socket_path is None or self._process is None:
+			raise RuntimeError("the command broker is not running")
+		payload = json.dumps({"kind": kind}).encode("utf-8")
+		with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+			client.settimeout(_SNAPSHOT_REQUEST_TIMEOUT_SECONDS)
+			client.connect(str(socket_path))
+			client.sendall(_FRAME_HEADER.pack(len(payload), WORKDIR_SNAPSHOT_FRAME) + payload)
+			length, frame_type = _FRAME_HEADER.unpack(_recv_exactly(client, _FRAME_HEADER.size))
+			reply = json.loads(_recv_exactly(client, length))
+		if frame_type != WORKDIR_SNAPSHOT_DONE_FRAME or not isinstance(reply, dict):
+			raise RuntimeError(f"unexpected reply to a workdir snapshot request: {reply!r}")
+		if not reply.get("ok"):
+			raise RuntimeError(f"workdir snapshot failed: {reply.get('error')}")
+		return reply
+
 	def stop(self) -> None:
-		"""Stop the broker and remove its socket directory. Idempotent."""
+		"""Stop the broker and remove its socket directory. Idempotent.
+
+		SIGTERM first: a snapshotting broker takes its final snapshot before it
+		exits. One that does not exit in time is killed, and stop_error says so.
+		"""
 		process, self._process = self._process, None
 		if process is not None:
-			process.kill()
-			process.wait()
+			self.stop_error = None
+			process.send_signal(signal.SIGTERM)
+			try:
+				status = process.wait(timeout=_BROKER_STOP_TIMEOUT_SECONDS)
+			except subprocess.TimeoutExpired:
+				process.kill()
+				process.wait()
+				self.stop_error = (
+					f"the command broker did not exit within "
+					f"{_BROKER_STOP_TIMEOUT_SECONDS:g}s of SIGTERM"
+				)
+			else:
+				if status == _EXIT_FINAL_SNAPSHOT_FAILED:
+					self.stop_error = "the final workdir snapshot failed; see the broker log"
+				elif status not in (0, -signal.SIGTERM):
+					self.stop_error = f"the command broker exited with status {status}"
+			if self.stop_error is not None:
+				logger.warning("%s (%s)", self.stop_error, self.trace_dir / BROKER_LOG_BASENAME)
 
 		socket_dir, self.socket_dir = self.socket_dir, None
 		if socket_dir is not None:
 			shutil.rmtree(socket_dir, ignore_errors=True)
+
+	def workdir_snapshots_info(self) -> WorkdirSnapshotsInfo | None:
+		"""Summarizes the snapshot index; None unless this broker took snapshots."""
+		target = self.workdir_snapshots
+		if target is None:
+			return None
+		entries: list[dict[str, object]] = []
+		try:
+			with self.snapshot_index_path.open("r", encoding="utf-8") as handle:
+				entries = [json.loads(line) for line in handle if line.strip()]
+		except FileNotFoundError:
+			pass
+		final = next((entry for entry in reversed(entries) if entry.get("kind") == "final"), None)
+		return WorkdirSnapshotsInfo(
+			index_path=str(self.snapshot_index_path),
+			snapshot_dir=str(target.snapshot_dir),
+			count=sum(1 for entry in entries if entry.get("ok")),
+			tool_count=sum(1 for entry in entries if entry.get("kind") == "tool"),
+			failed_count=sum(1 for entry in entries if not entry.get("ok")),
+			final_ok=bool(final and final.get("ok")),
+		)
+
+
+def _recv_exactly(client: socket.socket, size: int) -> bytes:
+	data = bytearray()
+	while len(data) < size:
+		chunk = client.recv(size - len(data))
+		if not chunk:
+			raise RuntimeError("the command broker closed the connection")
+		data += chunk
+	return bytes(data)
 
 
 def verify_monitoring(runtime: BenchRuntime, broker: BrokerProcess) -> None:
