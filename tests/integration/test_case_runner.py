@@ -432,11 +432,20 @@ def test_monitored_case_orders_the_broker_and_shim(
 			return subprocess.CompletedProcess(cmd, 0, "", "")
 
 	class FakeBroker:
-		def __init__(self, *, trace_dir: Path, workspace_dir: Path, socket_root: Path) -> None:
+		def __init__(
+			self,
+			*,
+			trace_dir: Path,
+			workspace_dir: Path,
+			socket_root: Path,
+			workdir_snapshots: object = None,
+		) -> None:
 			self.trace_dir = trace_dir
 			self.trace_path = trace_dir / "commands.jsonl"
 			self.socket_dir = socket_root / "mon-test"
 			self.workspace_dir = workspace_dir
+			self.workdir_snapshots = workdir_snapshots
+			self.stop_error = None
 
 		def start(self) -> None:
 			events.append("broker-start")
@@ -446,6 +455,9 @@ def test_monitored_case_orders_the_broker_and_shim(
 
 		def command_count(self) -> int:
 			return 7
+
+		def workdir_snapshots_info(self) -> None:
+			return None
 
 	runtime = FakeDockerRuntime()
 	monkeypatch.setattr("runtime.case_runner.get_runtime", lambda *_a, **_k: runtime)

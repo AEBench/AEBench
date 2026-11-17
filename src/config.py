@@ -27,6 +27,8 @@ class Config:
 	preserve_failed_workspace: bool
 	log_level: LogLevel
 	log_renderer: LogRenderer
+	# Where `case monitor --workdir-snapshots` creates workspace subvolumes; must be on btrfs.
+	btrfs_workspace_root: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +56,11 @@ def resolve_settings(
 		base=project_state.root,
 	)
 
+	btrfs_root = env.get("AEBENCH_BTRFS_WORKSPACE_ROOT")
+	btrfs_workspace_root = (
+		_resolve_path(btrfs_root, base=project_state.root) if btrfs_root else None
+	)
+
 	return Config(
 		default_timeout_ms=int(env.get("AEBENCH_DEFAULT_TIMEOUT_MS", DEFAULT_TIMEOUT_MS)),
 		default_docker_image=env.get("AEBENCH_DEFAULT_DOCKER_IMAGE", DEFAULT_DOCKER_IMAGE),
@@ -68,6 +75,7 @@ def resolve_settings(
 		log_renderer=LogRenderer(
 			env.get("AEBENCH_LOG_RENDERER", (config.logging.renderer or LogRenderer.CONSOLE).value)
 		),
+		btrfs_workspace_root=btrfs_workspace_root,
 	)
 
 

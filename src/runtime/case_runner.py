@@ -42,6 +42,7 @@ from utils import safe_name
 from .agent_runner import (
 	check_agent_requirements,
 	clear_agent_support_dir,
+	install_workdir_snapshot_hook,
 	prepare_agent_runtime,
 	prepare_agent_support_dir,
 	run_agent,
@@ -50,9 +51,11 @@ from .agents import AgentDefinition, load_agent
 from .backend import BenchRuntime, get_runtime
 from .cases import task_from_case
 from .monitoring import (
+	COMMAND_SOCKET_BASENAME,
 	REAL_SHELL_PATH,
 	RUNTIME_SOCKET_DIR,
 	BrokerProcess,
+	WorkdirSnapshotTarget,
 	check_system_files,
 	check_tracked_files,
 	install_shim,
@@ -70,7 +73,7 @@ from .reporting import (
 	write_task_report,
 )
 from .session import RunSession
-from .workspace import cleanup_workspace, create_workspace
+from .workspace import SNAPSHOTS_DIRNAME, cleanup_workspace, create_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +92,7 @@ class _CaseRunner:
 		self.case_dir = case_dir
 		self.options = options
 		self.monitor_commands = options.monitor_commands or options.trajectory_audit
+		self.workdir_snapshots = options.workdir_snapshots
 		self.save_path = save_path
 		self.on_output_dir = on_output_dir
 
@@ -144,6 +148,14 @@ class _CaseRunner:
 				"command monitoring requires runtime.mode = docker; monitoring a local "
 				"run would mean replacing the shell on this machine"
 			)
+		if self.workdir_snapshots:
+			if self.agent_definition.config.tool_hooks is None:
+				raise ValueError(
+					f"agent {self.agent_definition.name!r} has no tool hooks (tool_hooks in "
+					"agent.toml), so it cannot take workdir snapshots"
+				)
+			# Fails here when unset; a root that is not on btrfs fails at create_workspace.
+			self._btrfs_workspace_root()
 
 		self.case_runs_root = self.context.project_state.config.resolve_case_runs_dir(
 			self.context.project_state.root
@@ -166,9 +178,11 @@ class _CaseRunner:
 		self.prompt_profile = self.options.prompt_profile or self.task.prompt.profile
 
 		try:
-			self.workspace_root = create_workspace(
-				self.case.id,
-				self.context.settings.tmp_workspace_root,
+			self.workspace_root = (
+				# A btrfs subvolume, so the broker can snapshot it.
+				create_workspace(self.case.id, self._btrfs_workspace_root(), subvolume=True)
+				if self.workdir_snapshots
+				else create_workspace(self.case.id, self.context.settings.tmp_workspace_root)
 			)
 			self.workspace = prepare_workspace(
 				self.task,
@@ -244,6 +258,14 @@ class _CaseRunner:
 					),
 					workspace_dir=self.workspace,
 					socket_root=self._monitor_socket_root(),
+					workdir_snapshots=(
+						WorkdirSnapshotTarget(
+							subvolume=self.workspace_root,
+							snapshot_dir=self.workspace_root.parent / SNAPSHOTS_DIRNAME,
+						)
+						if self.workdir_snapshots
+						else None
+					),
 				)
 				self.monitor.start()
 
@@ -284,6 +306,16 @@ class _CaseRunner:
 				# socket mount, or permission setup could otherwise go unnoticed,
 				# leaving the run with an empty trace.
 				verify_monitoring(self.runtime, self.monitor)
+				if self.workdir_snapshots:
+					install_workdir_snapshot_hook(
+						self.agent_definition,
+						self.agent_support_dir,
+						runtime_agent_support_dir,
+						runtime_socket_path=f"{RUNTIME_SOCKET_DIR}/{COMMAND_SOCKET_BASENAME}",
+					)
+					# Snapshot 0: the workspace before the agent touches it. Also proves
+					# the broker can snapshot before any agent time is spent.
+					self.monitor.request_workdir_snapshot("initial")
 			self.prepare_finished = datetime.now(timezone.utc)
 		except (KeyboardInterrupt, SystemExit) as exc:
 			self.interrupted = exc
@@ -321,6 +353,7 @@ class _CaseRunner:
 					timeout_seconds=self.task.runtime.timeout_ms / 1000,
 					output_path=self.paths.runner_log_path,
 					shell_path=(REAL_SHELL_PATH if self.monitor is not None else "bash"),
+					tool_hooks=self.workdir_snapshots,
 				)
 			finally:
 				self.agent_finished = datetime.now(timezone.utc)
@@ -497,8 +530,10 @@ class _CaseRunner:
 			cleanup_workspace(
 				self.workspace_root,
 				keep=(
+					# The workdir snapshots live next to the workspace and are kept.
+					self.workdir_snapshots
 					# Without a snapshot, the host workspace is the only copy of the agent's work.
-					runtime_info.snapshot_failed
+					or runtime_info.snapshot_failed
 					or (
 						case_result.status != CaseStatus.SUCCESS
 						and self.context.settings.preserve_failed_workspace
@@ -507,6 +542,16 @@ class _CaseRunner:
 			)
 
 		return case_result
+
+	def _btrfs_workspace_root(self) -> Path:
+		"""Where workdir-snapshot workspaces go: $AEBENCH_BTRFS_WORKSPACE_ROOT."""
+		root = self.context.settings.btrfs_workspace_root
+		if root is None:
+			raise ValueError(
+				"workdir snapshots need a btrfs directory: set AEBENCH_BTRFS_WORKSPACE_ROOT "
+				"(see scripts/setup_btrfs_workspace_root.sh)"
+			)
+		return root
 
 	def _monitor_socket_root(self) -> Path:
 		"""Returns where the per-run command socket directory is allocated."""
@@ -524,12 +569,24 @@ class _CaseRunner:
 				monitor.stop()
 			except Exception:
 				logger.warning("failed to stop the command broker", exc_info=True)
+			snapshots = monitor.workdir_snapshots_info()
 			self.monitor_info = CommandMonitorInfo(
 				# The trace directory is keyed by the token.
 				run_token=monitor.trace_dir.name,
 				trace_path=str(monitor.trace_path),
 				command_count=monitor.command_count(),
+				workdir_snapshots=snapshots,
 			)
+			if snapshots is not None:
+				# Snapshots fail closed: the hook stops the agent rather than let a
+				# tool run unsnapshotted, so a gap means the run is incomplete.
+				if monitor.stop_error is not None:
+					self._record_error(monitor.stop_error)
+				if snapshots.failed_count:
+					self._record_error(
+						f"{snapshots.failed_count} workdir snapshot(s) failed; see "
+						f"{snapshots.index_path}"
+					)
 		except BaseException as exc:
 			self._record_error(f"{type(exc).__name__} tearing down command monitoring: {exc}")
 		finally:
