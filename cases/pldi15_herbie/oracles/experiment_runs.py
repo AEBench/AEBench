@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
 from evaluator.oracles.checks import ListSimilarityCheck, PathCheck, PathKind, SimilarityMetric
-from evaluator.oracles.oracle_checks_runtime import OraclePath, RuntimeCheckExecutor, RuntimePath
+from evaluator.oracles.oracle_checks_runtime import OraclePath, RuntimeCheckExecutor
 from evaluator.oracles.reporting import BaseCheck, CheckResult
 
 _START_ERROR_SIMILARITY = 0.90
@@ -21,46 +21,35 @@ def _load_results_json(path: OraclePath, *, executor: RuntimeCheckExecutor) -> d
 	data = json.loads(text)
 	if not isinstance(data, dict) or "tests" not in data:
 		raise ValueError("results.json must be an object with a 'tests' array")
-	if not isinstance(data["tests"], list):
-		raise ValueError("'tests' must be a list")
+	if not isinstance(data["tests"], list) or not data["tests"]:
+		raise ValueError("'tests' must be a non-empty list")
+	names: set[str] = set()
+	for i, test in enumerate(data["tests"]):
+		if not isinstance(test, dict):
+			raise ValueError(f"tests[{i}] is not an object")
+		status = test.get("status")
+		if not isinstance(status, str) or status not in {
+			"imp-start",
+			"ex-start",
+			"eq-start",
+			"eq-target",
+			"gt-target",
+			"gt-start",
+			"uni-start",
+			"lt-target",
+			"lt-start",
+			"apx-start",
+		}:
+			raise ValueError(f"tests[{i}] did not complete successfully")
+		name = test.get("name")
+		if not isinstance(name, str) or not name.strip() or name in names:
+			raise ValueError(f"tests[{i}] has a missing or duplicate benchmark name")
+		names.add(name)
+		for field in ("start", "end", "time"):
+			value = test.get(field)
+			if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
+				raise ValueError(f"tests[{i}].{field} must be a finite non-negative number")
 	return data
-
-
-def _discover_herbie_report(
-	repo_root: Path, *, executor: RuntimeCheckExecutor
-) -> tuple[OraclePath, OraclePath] | None:
-	"""Find the best Herbie report directory under the workspace root."""
-	best: tuple[int, OraclePath, OraclePath] | None = None
-	for results_path in executor.glob(repo_root, "*/results.json"):
-		report_dir = results_path.parent
-		if report_dir.name.startswith("."):
-			continue
-
-		html_path: OraclePath | None = None
-		for html_name in ("report.html", "index.html"):
-			candidate_html = RuntimePath.from_parts((report_dir / html_name).as_posix())
-			if executor.path_is_file(candidate_html):
-				html_path = candidate_html
-				break
-		if html_path is None:
-			continue
-
-		try:
-			runtime_results_path = RuntimePath.from_parts(results_path.as_posix())
-			data = _load_results_json(runtime_results_path, executor=executor)
-		except (OSError, json.JSONDecodeError, ValueError):
-			continue
-
-		tests = data["tests"]
-		if not tests:
-			continue
-
-		if best is None or len(tests) > best[0]:
-			best = (len(tests), html_path, runtime_results_path)
-
-	if best is None:
-		return None
-	return best[1], best[2]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -72,22 +61,16 @@ class ResultsJSONStructureCheck(BaseCheck):
 	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
 			data = _load_results_json(self.results_path, executor=executor)
-		except (OSError, json.JSONDecodeError, ValueError) as exc:
+		except (OSError, json.JSONDecodeError, ValueError, OverflowError) as exc:
 			return CheckResult.failure(f"cannot read or parse {self.results_path}: {exc}")
 
-		tests = data["tests"]
-		if not tests:
-			return CheckResult.failure("results.json contains no tests")
+		iterations = data.get("iterations")
+		if type(iterations) is not int or iterations != 4:
+			return CheckResult.failure("results.json must record four optimization iterations")
+		if data.get("seed") != "286210900":
+			return CheckResult.failure("results.json must record seed 286210900")
 
-		required_fields = {"start", "end", "status", "time", "name"}
-		for i, test in enumerate(tests):
-			if not isinstance(test, dict):
-				return CheckResult.failure(f"tests[{i}] is not an object")
-			missing = required_fields - test.keys()
-			if missing:
-				return CheckResult.failure(
-					f"tests[{i}] ({test.get('name', '?')}) missing fields: {sorted(missing)}"
-				)
+		tests = data["tests"]
 
 		return CheckResult.success(
 			message=f"results.json has {len(tests)} tests with valid structure"
@@ -96,22 +79,20 @@ class ResultsJSONStructureCheck(BaseCheck):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class HerbieNoRegressionCheck(BaseCheck):
-	"""Fail if any test has end > start (accuracy regression)."""
+	"""Require no regressions and at least one strict accuracy improvement."""
 
 	results_path: OraclePath
 
 	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
 			data = _load_results_json(self.results_path, executor=executor)
-		except (OSError, json.JSONDecodeError, ValueError) as exc:
+		except (OSError, json.JSONDecodeError, ValueError, OverflowError) as exc:
 			return CheckResult.failure(f"cannot load results: {exc}")
 
 		violations: list[str] = []
 		for test in data["tests"]:
 			start = test.get("start")
 			end = test.get("end")
-			if not isinstance(start, (int, float)) or not isinstance(end, (int, float)):
-				continue
 			if end > start:
 				violations.append(f"{test.get('name', '?')}: end={end:.4f} > start={start:.4f}")
 
@@ -122,14 +103,17 @@ class HerbieNoRegressionCheck(BaseCheck):
 				f"{len(violations)} test(s) regressed (end > start):\n{detail}{more}"
 			)
 
+		if not any(test["end"] < test["start"] for test in data["tests"]):
+			return CheckResult.failure("no benchmark improved accuracy (all end == start)")
+
 		return CheckResult.success(
-			message=f"all {len(data['tests'])} tests satisfy end <= start"
+			message=f"all {len(data['tests'])} tests satisfy end <= start, with strict improvement"
 		)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class BenchmarkCountCheck(BaseCheck):
-	"""Fail if the results have fewer tests than the reference."""
+	"""Require exactly the reference benchmark names, each present once."""
 
 	results_path: OraclePath
 	reference_path: OraclePath
@@ -138,20 +122,21 @@ class BenchmarkCountCheck(BaseCheck):
 		try:
 			results = _load_results_json(self.results_path, executor=executor)
 			reference = _load_results_json(self.reference_path, executor=executor)
-		except (OSError, json.JSONDecodeError, ValueError) as exc:
+		except (OSError, json.JSONDecodeError, ValueError, OverflowError) as exc:
 			return CheckResult.failure(f"cannot load results: {exc}")
 
 		actual = len(results["tests"])
 		expected = len(reference["tests"])
 
-		if actual < expected:
+		actual_names = {test["name"] for test in results["tests"]}
+		expected_names = {test["name"] for test in reference["tests"]}
+		if actual_names != expected_names:
 			return CheckResult.failure(
-				f"results have {actual} tests, reference has {expected}"
+				f"benchmark mismatch: missing={sorted(expected_names - actual_names)}, "
+				f"unexpected={sorted(actual_names - expected_names)}"
 			)
 
-		return CheckResult.success(
-			message=f"results have {actual} tests (reference: {expected})"
-		)
+		return CheckResult.success(message=f"results have {actual} tests (reference: {expected})")
 
 
 def _extract_values(
@@ -200,7 +185,7 @@ class HerbieValueSimilarityCheck(BaseCheck):
 				self.field,
 				executor=executor,
 			)
-		except (OSError, json.JSONDecodeError, ValueError) as exc:
+		except (OSError, json.JSONDecodeError, ValueError, OverflowError) as exc:
 			return CheckResult.failure(f"cannot extract {self.field}: {exc}")
 
 		if len(observed) < 2:
@@ -223,22 +208,13 @@ class HerbieValueSimilarityCheck(BaseCheck):
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	def requirements(self) -> Sequence[BaseCheck]:
 		repo_root = self._workspace_dir
-		report = _discover_herbie_report(repo_root, executor=self.executor)
 		reference_path = self.ref_path("results.ref.json")
 
+		# The upstream www/ directory contains a bundled report, not this run's output.
+		html_path = repo_root / "graphs" / "index.html"
+		results_path = repo_root / "graphs" / "results.json"
+
 		checks: list[BaseCheck] = []
-
-		if report is None:
-			checks.append(
-				PathCheck(
-					name="results_json",
-					path=repo_root / "graphs" / "results.json",
-					kind=PathKind.FILE,
-				)
-			)
-			return tuple(checks)
-
-		html_path, results_path = report
 		checks.append(
 			PathCheck(
 				name="herbie_report_html",
