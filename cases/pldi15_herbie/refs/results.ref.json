@@ -1,0 +1,2224 @@
+{
+  "branch": "HEAD",
+  "commit": "bc2ffceea037e01fbff58f5895849dbf3bbdbf9e",
+  "date": 1794901377,
+  "flags": [
+    "rules:arithmetic",
+    "rules:polynomials",
+    "rules:fractions",
+    "rules:exponents",
+    "rules:trigonometry",
+    "rules:hyperbolic",
+    "rules:numerics",
+    "rules:special",
+    "rules:bools",
+    "rules:branches",
+    "generate:rr",
+    "generate:taylor",
+    "generate:simplify",
+    "generate:proofs",
+    "localize:costs",
+    "localize:errors",
+    "reduce:regimes",
+    "reduce:binary-search",
+    "reduce:branch-expressions",
+    "setup:simplify",
+    "setup:search"
+  ],
+  "hostname": "reference-run",
+  "iterations": 4,
+  "merged-cost-accuracy": [
+    [
+      1.0,
+      0.3396092063744589
+    ],
+    [
+      [
+        2.0833501365411236,
+        0.9621223032809603
+      ],
+      [
+        2.171146291891733,
+        0.9619827943523889
+      ],
+      [
+        2.202776919810457,
+        0.9618432854238175
+      ],
+      [
+        2.5544582784612877,
+        0.9542733914352105
+      ],
+      [
+        2.6649877095041834,
+        0.9519183323625262
+      ],
+      [
+        2.67970207715684,
+        0.9515266812852302
+      ],
+      [
+        2.691970237423623,
+        0.9511081544995159
+      ],
+      [
+        2.952380472032474,
+        0.9424586009280874
+      ],
+      [
+        2.9610937031537854,
+        0.9420979755792145
+      ],
+      [
+        3.1761685597169564,
+        0.9336610617181209
+      ],
+      [
+        3.42493378514493,
+        0.9250833224092313
+      ],
+      [
+        3.6207144157832936,
+        0.9109291799156943
+      ],
+      [
+        3.837643649816908,
+        0.8932769918466198
+      ],
+      [
+        4.254117841670467,
+        0.8600086207219438
+      ],
+      [
+        4.28557286580817,
+        0.8570396328456107
+      ],
+      [
+        4.393372240253728,
+        0.8470814763896504
+      ],
+      [
+        4.781424808395313,
+        0.8121956741399632
+      ],
+      [
+        4.984987520346059,
+        0.795716311973127
+      ],
+      [
+        5.010845701805563,
+        0.793634919391607
+      ],
+      [
+        5.448055250755733,
+        0.758476636287031
+      ],
+      [
+        5.756510319415961,
+        0.7323841218169675
+      ],
+      [
+        5.98197972921315,
+        0.7140710540016015
+      ],
+      [
+        6.194125456772319,
+        0.6966479645841772
+      ],
+      [
+        6.407291088229386,
+        0.6793177200478651
+      ],
+      [
+        6.873315797838678,
+        0.6443022062692858
+      ],
+      [
+        7.061737984360823,
+        0.6271287006001667
+      ],
+      [
+        7.154050329626987,
+        0.6151345497719287
+      ],
+      [
+        7.248944474385421,
+        0.5992112698050692
+      ],
+      [
+        7.2853912630257565,
+        0.5926904508679527
+      ],
+      [
+        7.383684171610596,
+        0.570447221278312
+      ],
+      [
+        7.419584478605751,
+        0.5619350276483733
+      ],
+      [
+        7.4290946226969625,
+        0.5596334756917941
+      ],
+      [
+        7.564843261330526,
+        0.5252115930716718
+      ],
+      [
+        7.611892221813061,
+        0.5130149833721956
+      ],
+      [
+        7.647728457731612,
+        0.4999633802950344
+      ],
+      [
+        7.737275341531146,
+        0.4661485265335955
+      ],
+      [
+        7.799748218927064,
+        0.4355314548064142
+      ],
+      [
+        7.852584816960243,
+        0.40444782255854084
+      ],
+      [
+        7.895165487726941,
+        0.3706186604983711
+      ]
+    ]
+  ],
+  "note": "Generated in Linux arm64 Docker with Racket 8.7, Rust 1.77.2, and GNU Make 4.3 from arith25 (QD submodule f1b6c46efb7919066d51293f0ac8f523613dedd4): racket src/main.rkt report --seed 286210900 --num-iters 4 bench/hamming/ graphs/. Accuracy trend reproduction with newer code, not exact PLDI 2015 results. This is the reference for the configured Docker runtime; macOS error distributions differ.",
+  "points": 256,
+  "seed": "286210900",
+  "tests": [
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          13760,
+          29.50609124104874
+        ],
+        [
+          6784,
+          0
+        ],
+        [
+          [
+            2177,
+            31.64532615653231,
+            "(if (<=.f64 x #s(literal 3602879701896397/1125899906842624 binary64)) #s(approx (/ (- 1 (cos x)) (sin x)) (*.f64 (fma.f64 (fma.f64 #s(literal 1/240 binary64) (*.f64 x x) #s(literal 1/24 binary64)) (*.f64 x x) #s(literal 1/2 binary64)) x)) #s(literal 1 binary64))"
+          ],
+          [
+            1473,
+            31.64532615653231,
+            "(if (<=.f64 x #s(literal 3602879701896397/1125899906842624 binary64)) #s(approx (/ (- 1 (cos x)) (sin x)) (*.f64 (fma.f64 (*.f64 x x) #s(literal 1/24 binary64) #s(literal 1/2 binary64)) x)) #s(literal 1 binary64))"
+          ],
+          [
+            769,
+            31.632721019781762,
+            "(if (<=.f64 x #s(literal 290 binary64)) #s(approx (/ (- 1 (cos x)) (sin x)) (*.f64 x #s(literal 1/2 binary64))) #s(literal 1 binary64))"
+          ],
+          [
+            64,
+            60.16723872039426,
+            "#s(literal 1 binary64)"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0,
+      "identifier": "#f",
+      "input": "(/ (- 1.0 (cos x)) (sin x))",
+      "link": "0-tanhfexample34",
+      "name": "tanhf (example 3.4)",
+      "output": "(tan.f64 (*.f64 x #s(literal 1/2 binary64)))",
+      "pre": "(TRUE)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(/ (- 1.0 (cos x)) (sin x))",
+      "start": 29.50609124104874,
+      "start-est": 34.0182979966358,
+      "status": "eq-target",
+      "target": [
+        [
+          7168,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (tan (/ x 2))) . #t))",
+      "time": 1624.44091796875,
+      "vars": [
+        "x"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          14912,
+          32.0
+        ],
+        [
+          7296,
+          0
+        ],
+        [
+          [
+            704,
+            25.364223348418196,
+            "(sqrt.f64 #s(approx (/ (- (exp (* 2 x)) 1) (- (exp x) 1)) #s(literal 2 binary64)))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.0078125,
+      "identifier": "#f",
+      "input": "(sqrt (/ (- (exp (* 2.0 x)) 1.0) (- (exp x) 1.0)))",
+      "link": "1-sqrtexpproblem344",
+      "name": "sqrtexp (problem 3.4.4)",
+      "output": "(sqrt.f64 (-.f64 (exp.f64 x) #s(literal -1 binary64)))",
+      "pre": "(TRUE)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(sqrt (/ (- (exp (* 2.0 x)) 1.0) (- (exp x) 1.0)))",
+      "start": 32.0,
+      "start-est": 38.93944257642092,
+      "status": "imp-start",
+      "target": [],
+      "target-prog": "()",
+      "time": 2391.175048828125,
+      "vars": [
+        "x"
+      ],
+      "warnings": [
+        "ground-truth"
+      ]
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          13952,
+          64.0
+        ],
+        [
+          2176,
+          0
+        ],
+        [
+          [
+            1472,
+            0,
+            "#s(approx (/ (- eps (sin eps)) (- eps (tan eps))) (fma.f64 (fma.f64 #s(literal -27/2800 binary64) (*.f64 eps eps) #s(literal 9/40 binary64)) (*.f64 eps eps) #s(literal -1/2 binary64)))"
+          ],
+          [
+            768,
+            0,
+            "#s(approx (/ (- eps (sin eps)) (- eps (tan eps))) (fma.f64 (*.f64 eps eps) #s(literal 9/40 binary64) #s(literal -1/2 binary64)))"
+          ],
+          [
+            64,
+            0,
+            "#s(approx (/ (- eps (sin eps)) (- eps (tan eps))) #s(literal -1/2 binary64))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.11649865405857474,
+      "identifier": "#f",
+      "input": "(/ (- eps (sin eps)) (- eps (tan eps)))",
+      "link": "2-sintanproblem345",
+      "name": "sintan (problem 3.4.5)",
+      "output": "#s(approx (/ (- eps (sin eps)) (- eps (tan eps))) (fma.f64 (fma.f64 (fma.f64 #s(literal 27/112000 binary64) (*.f64 eps eps) #s(literal -27/2800 binary64)) (*.f64 eps eps) #s(literal 9/40 binary64)) (*.f64 eps eps) #s(literal -1/2 binary64)))",
+      "pre": "(and (<= -0.4 eps) (<= eps 0.4))",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(/ (- eps (sin eps)) (- eps (tan eps)))",
+      "start": 64.0,
+      "start-est": 62.95241830662689,
+      "status": "eq-target",
+      "target": [
+        [
+          896,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (- (* 9/40 eps eps) 1/2)) . #t))",
+      "time": 4672.89990234375,
+      "vars": [
+        "eps"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          3200,
+          32.669525103651125
+        ],
+        [
+          3778,
+          15.604385081738158
+        ],
+        [
+          [
+            3714,
+            15.604385081738158,
+            "(if (<=.f64 b #s(literal -39999999999999998662599995773095036732966060379453713978351013136915008209099764787281528313961070698780444622057373696 binary64)) #s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (-.f64 (/.f64 c b) (/.f64 b a))) (if (<=.f64 b #s(literal 8454639274818441/1725436586697640946858688965569256363112777243042596638790631055949824 binary64)) (/.f64 (-.f64 (sqrt.f64 (fma.f64 (*.f64 #s(literal -4 binary64) a) c (*.f64 b b))) b) (*.f64 #s(literal 2 binary64) a)) #s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (/.f64 (neg.f64 c) b))))"
+          ],
+          [
+            3714,
+            15.604385081738158,
+            "(if (<=.f64 b #s(literal -949999999999999916014911815063082266330659399464392494432063427444110651118631627979627780922898033344276867657264521919530475347558880765940257450360832 binary64)) #s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (-.f64 (/.f64 c b) (/.f64 b a))) (if (<=.f64 b #s(literal 6402987333448277/6739986666787659948666753771754907668409286105635143120275902562304 binary64)) (*.f64 (-.f64 (sqrt.f64 (fma.f64 #s(literal -4 binary64) (*.f64 c a) (*.f64 b b))) b) (/.f64 #s(literal 1/2 binary64) a)) #s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (/.f64 (neg.f64 c) b))))"
+          ],
+          [
+            3330,
+            15.604385081738158,
+            "(if (<=.f64 b #s(literal -8684406692798715/904625697166532776746648320380374280103671755200316906558262375061821325312 binary64)) #s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (-.f64 (/.f64 c b) (/.f64 b a))) (if (<=.f64 b #s(literal 8454639274818441/1725436586697640946858688965569256363112777243042596638790631055949824 binary64)) (/.f64 (-.f64 (sqrt.f64 #s(approx (+ (* (* -4 a) c) (* b b)) (*.f64 (*.f64 c a) #s(literal -4 binary64)))) b) (*.f64 #s(literal 2 binary64) a)) #s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (/.f64 (neg.f64 c) b))))"
+          ],
+          [
+            3330,
+            15.604385081738158,
+            "(if (<=.f64 b #s(literal -8684406692798715/904625697166532776746648320380374280103671755200316906558262375061821325312 binary64)) #s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (-.f64 (/.f64 c b) (/.f64 b a))) (if (<=.f64 b #s(literal 6402987333448277/6739986666787659948666753771754907668409286105635143120275902562304 binary64)) (*.f64 (-.f64 (sqrt.f64 #s(approx (+ (* -4 (* c a)) (* b b)) (*.f64 (*.f64 c a) #s(literal -4 binary64)))) b) (/.f64 #s(literal 1/2 binary64) a)) #s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (/.f64 (neg.f64 c) b))))"
+          ],
+          [
+            2049,
+            30.975693923268224,
+            "(if (<=.f64 b #s(literal -202402253307311/202402253307310618352495346718917307049556649764142118356901358027430339567995346891960383701437124495187077864316811911389808737385793476867013399940738509921517424276566361364466907742093216341239767678472745068562007483424692698618103355649159556340810056512358769552333414615230502532186327508646006263307707741093494784 binary64)) #s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (-.f64 (/.f64 c b) (/.f64 b a))) #s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (/.f64 (neg.f64 c) b)))"
+          ],
+          [
+            1281,
+            30.975693923268224,
+            "(if (<=.f64 b #s(literal -202402253307311/202402253307310618352495346718917307049556649764142118356901358027430339567995346891960383701437124495187077864316811911389808737385793476867013399940738509921517424276566361364466907742093216341239767678472745068562007483424692698618103355649159556340810056512358769552333414615230502532186327508646006263307707741093494784 binary64)) #s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (/.f64 (neg.f64 b) a)) #s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (/.f64 (neg.f64 c) b)))"
+          ],
+          [
+            1281,
+            47.944275453653546,
+            "(if (<=.f64 b #s(literal 130000000000000001177626345472 binary64)) #s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (/.f64 (neg.f64 b) a)) #s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) #s(approx (+ (* (/ (/ c b) b) b) (/ (neg b) a)) (/.f64 c b))))"
+          ],
+          [
+            768,
+            48.82071029234899,
+            "#s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) #s(approx (+ (* (/ (/ c b) b) b) (/ (neg b) a)) (/.f64 c b)))"
+          ]
+        ]
+      ],
+      "end": 15.604385081738158,
+      "end-est": 6.9174946296372894,
+      "identifier": "#f",
+      "input": "(/ (+ (- b) (sqrt (- (* b b) (* 4.0 (* a c))))) (* 2.0 a))",
+      "link": "3-quadpp42positive",
+      "name": "quadp (p42, positive)",
+      "output": "(if (<=.f64 b #s(literal -39999999999999998662599995773095036732966060379453713978351013136915008209099764787281528313961070698780444622057373696 binary64)) #s(approx (/ (+ (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (-.f64 (/.f64 c b) (/.f64 b a))) (if (<=.f64 b #s(literal 6402987333448277/6739986666787659948666753771754907668409286105635143120275902562304 binary64)) (/.f64 (-.f64 (sqrt.f64 (fma.f64 (*.f64 #s(literal -4 binary64) a) c (*.f64 b b))) b) (*.f64 #s(literal 2 binary64) a)) #s(approx (* (/ 1/2 a) (- (sqrt (+ (* -4 (* c a)) (* b b))) b)) (/.f64 (fma.f64 (*.f64 (/.f64 c b) a) (/.f64 c b) c) (neg.f64 b)))))",
+      "pre": "(TRUE)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(/ (+ (- b) (sqrt (- (* b b) (* 4.0 (* a c))))) (* 2.0 a))",
+      "start": 32.669525103651125,
+      "start-est": 28.101185383742536,
+      "status": "lt-target",
+      "target": [
+        [
+          18050,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (let ((sqtD (let ((x (* (sqrt (fabs a)) (sqrt (fabs c))))) (if (== (copysign a c) a) (* (sqrt (- (fabs (/ b 2)) x)) (sqrt (+ (fabs (/ b 2)) x))) (hypot (/ b 2) x))))) (if (< b 0) (/ (- sqtD (/ b 2)) a) (/ (- c) (+ (/ b 2) sqtD))))) . #t))",
+      "time": 3417.883056640625,
+      "vars": [
+        "a",
+        "b",
+        "c"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          3200,
+          31.023460363610408
+        ],
+        [
+          3714,
+          15.604385081738158
+        ],
+        [
+          [
+            3330,
+            15.604385081738158,
+            "(if (<=.f64 b #s(literal -4052723123306067/3618502788666131106986593281521497120414687020801267626233049500247285301248 binary64)) #s(approx (/ (- (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (/.f64 c (neg.f64 b))) (if (<=.f64 b #s(literal 6845298958456217/26328072917139296674479506920917608079723773850137277813577744384 binary64)) (/.f64 (+.f64 (sqrt.f64 #s(approx (+ (* (* a c) -4) (* b b)) (*.f64 (*.f64 c a) #s(literal -4 binary64)))) b) (*.f64 #s(literal -2 binary64) a)) #s(approx (/ (- (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (-.f64 (/.f64 c b) (/.f64 b a)))))"
+          ],
+          [
+            2049,
+            30.975693923268224,
+            "(if (<=.f64 b #s(literal -202402253307311/202402253307310618352495346718917307049556649764142118356901358027430339567995346891960383701437124495187077864316811911389808737385793476867013399940738509921517424276566361364466907742093216341239767678472745068562007483424692698618103355649159556340810056512358769552333414615230502532186327508646006263307707741093494784 binary64)) #s(approx (/ (- (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (/.f64 c (neg.f64 b))) #s(approx (/ (- (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (-.f64 (/.f64 c b) (/.f64 b a))))"
+          ],
+          [
+            1281,
+            30.72333472081788,
+            "(if (<=.f64 b #s(literal -202402253307311/202402253307310618352495346718917307049556649764142118356901358027430339567995346891960383701437124495187077864316811911389808737385793476867013399940738509921517424276566361364466907742093216341239767678472745068562007483424692698618103355649159556340810056512358769552333414615230502532186327508646006263307707741093494784 binary64)) #s(approx (/ (- (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (/.f64 c (neg.f64 b))) #s(approx (/ (- (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (/.f64 (neg.f64 b) a)))"
+          ],
+          [
+            896,
+            62.939691880854184,
+            "#s(approx (/ (- (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (/.f64 c (neg.f64 b)))"
+          ],
+          [
+            768,
+            61.94551095684237,
+            "#s(approx (/ (- (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) #s(approx (/ (+ (* (/ c b) a) (neg b)) a) (/.f64 c b)))"
+          ]
+        ]
+      ],
+      "end": 15.604385081738158,
+      "end-est": 7.892731160360103,
+      "identifier": "#f",
+      "input": "(/ (- (- b) (sqrt (- (* b b) (* 4.0 (* a c))))) (* 2.0 a))",
+      "link": "4-quadmp42negative",
+      "name": "quadm (p42, negative)",
+      "output": "(if (<=.f64 b #s(literal -4052723123306067/3618502788666131106986593281521497120414687020801267626233049500247285301248 binary64)) #s(approx (/ (- (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (/.f64 c (neg.f64 b))) (if (<=.f64 b #s(literal 76000000000000004759276622263432531574737070662882069264859595889362223220391936 binary64)) (/.f64 (+.f64 (sqrt.f64 (fma.f64 (*.f64 #s(literal -4 binary64) c) a (*.f64 b b))) b) (*.f64 #s(literal -2 binary64) a)) #s(approx (/ (- (neg b) (sqrt (- (* b b) (* 4 (* a c))))) (* 2 a)) (-.f64 (/.f64 c b) (/.f64 b a)))))",
+      "pre": "(TRUE)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(/ (- (- b) (sqrt (- (* b b) (* 4.0 (* a c))))) (* 2.0 a))",
+      "start": 31.023460363610408,
+      "start-est": 29.07212564293817,
+      "status": "lt-target",
+      "target": [
+        [
+          18050,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (let ((sqtD (let ((x (* (sqrt (fabs a)) (sqrt (fabs c))))) (if (== (copysign a c) a) (* (sqrt (- (fabs (/ b 2)) x)) (sqrt (+ (fabs (/ b 2)) x))) (hypot (/ b 2) x))))) (if (< b 0) (/ c (- sqtD (/ b 2))) (/ (+ (/ b 2) sqtD) (- a))))) . #t))",
+      "time": 3247.62548828125,
+      "vars": [
+        "a",
+        "b",
+        "c"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          2560,
+          46.685727699603284
+        ],
+        [
+          3202,
+          15.604385081738158
+        ],
+        [
+          [
+            2818,
+            15.604385081738158,
+            "(if (<=.f64 b_2 #s(literal -4113761393303015/6427752177035961102167848369364650410088811975131171341205504 binary64)) #s(approx (/ (+ (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (*.f64 (/.f64 b_2 a) #s(literal -2 binary64))) (if (<=.f64 b_2 #s(literal 4113761393303015/411376139330301510538742295639337626245683966408394965837152256 binary64)) (/.f64 (-.f64 (sqrt.f64 #s(approx (- (* b_2 b_2) (* a c)) (*.f64 (neg.f64 a) c))) b_2) a) #s(approx (/ (+ (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (/.f64 #s(approx (+ (* (/ -1/8 b_2) (/ (* (* c c) a) b_2)) (* -1/2 c)) (*.f64 #s(literal -1/2 binary64) c)) b_2))))"
+          ],
+          [
+            1473,
+            15.604385081738158,
+            "(if (<=.f64 b_2 #s(literal 6578073232487595/101201126653655309176247673359458653524778324882071059178450679013715169783997673445980191850718562247593538932158405955694904368692896738433506699970369254960758712138283180682233453871046608170619883839236372534281003741712346349309051677824579778170405028256179384776166707307615251266093163754323003131653853870546747392 binary64)) #s(approx (/ (+ (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (*.f64 (/.f64 b_2 a) #s(literal -2 binary64))) #s(approx (/ (+ (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (/.f64 #s(approx (+ (* (/ -1/8 b_2) (/ (* (* c c) a) b_2)) (* -1/2 c)) (*.f64 #s(literal -1/2 binary64) c)) b_2)))"
+          ],
+          [
+            1473,
+            15.854385081738158,
+            "(if (<=.f64 b_2 #s(literal 6578073232487595/101201126653655309176247673359458653524778324882071059178450679013715169783997673445980191850718562247593538932158405955694904368692896738433506699970369254960758712138283180682233453871046608170619883839236372534281003741712346349309051677824579778170405028256179384776166707307615251266093163754323003131653853870546747392 binary64)) #s(approx (/ (+ (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (*.f64 (/.f64 b_2 a) #s(literal -2 binary64))) #s(approx (/ (+ (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (*.f64 (/.f64 c b_2) #s(literal -1/2 binary64))))"
+          ],
+          [
+            1088,
+            46.66018329080945,
+            "#s(approx (/ (+ (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (*.f64 (/.f64 b_2 a) #s(literal -2 binary64)))"
+          ]
+        ]
+      ],
+      "end": 15.604385081738158,
+      "end-est": 7.520711811438651,
+      "identifier": "#f",
+      "input": "(/ (+ (- b_2) (sqrt (- (* b_2 b_2) (* a c)))) a)",
+      "link": "5-quad2pproblem321positive",
+      "name": "quad2p (problem 3.2.1, positive)",
+      "output": "(if (<=.f64 b_2 #s(literal -999999999999999983359180223191721714560372275017470536367007614460468417501012554531477876945938741751237388344363105067534507348164573733465510370326085632 binary64)) #s(approx (/ (+ (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (*.f64 (/.f64 b_2 a) #s(literal -2 binary64))) (if (<=.f64 b_2 #s(literal 4113761393303015/411376139330301510538742295639337626245683966408394965837152256 binary64)) (/.f64 (-.f64 (sqrt.f64 (-.f64 (*.f64 b_2 b_2) (*.f64 c a))) b_2) a) #s(approx (/ (+ (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (/.f64 #s(approx (+ (* (/ -1/8 b_2) (/ (* (* c c) a) b_2)) (* -1/2 c)) (*.f64 #s(literal -1/2 binary64) c)) b_2))))",
+      "pre": "(TRUE)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(/ (+ (- b_2) (sqrt (- (* b_2 b_2) (* a c)))) a)",
+      "start": 46.685727699603284,
+      "start-est": 27.279125562131814,
+      "status": "lt-target",
+      "target": [
+        [
+          16642,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (let ((sqtD (let ((x (* (sqrt (fabs a)) (sqrt (fabs c))))) (if (== (copysign a c) a) (* (sqrt (- (fabs b_2) x)) (sqrt (+ (fabs b_2) x))) (hypot b_2 x))))) (if (< b_2 0) (/ (- sqtD b_2) a) (/ (- c) (+ b_2 sqtD))))) . #t))",
+      "time": 2701.7509765625,
+      "vars": [
+        "a",
+        "b_2",
+        "c"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          2560,
+          46.772843124446766
+        ],
+        [
+          3330,
+          15.604385081738158
+        ],
+        [
+          [
+            2946,
+            15.604385081738158,
+            "(if (<=.f64 b_2 #s(literal -7463162001623895/226156424291633194186662080095093570025917938800079226639565593765455331328 binary64)) #s(approx (/ (- (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (/.f64 (*.f64 #s(literal -1/2 binary64) c) b_2)) (if (<=.f64 b_2 #s(literal 933864470215151/23945242826029513411849172299223580994042798784118784 binary64)) (/.f64 (+.f64 (sqrt.f64 #s(approx (- (* b_2 b_2) (* a c)) (*.f64 (neg.f64 a) c))) b_2) (neg.f64 a)) #s(approx (/ (- (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (fma.f64 (/.f64 #s(literal 1/2 binary64) b_2) c (*.f64 #s(literal -2 binary64) (/.f64 b_2 a))))))"
+          ],
+          [
+            2561,
+            15.604385081738158,
+            "(if (<=.f64 b_2 #s(literal -101201126653655/202402253307310618352495346718917307049556649764142118356901358027430339567995346891960383701437124495187077864316811911389808737385793476867013399940738509921517424276566361364466907742093216341239767678472745068562007483424692698618103355649159556340810056512358769552333414615230502532186327508646006263307707741093494784 binary64)) #s(approx (/ (- (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (/.f64 (*.f64 #s(literal -1/2 binary64) c) b_2)) #s(approx (/ (- (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (fma.f64 (/.f64 #s(literal 1/2 binary64) b_2) c (*.f64 #s(literal -2 binary64) (/.f64 b_2 a)))))"
+          ],
+          [
+            1473,
+            15.351974133196599,
+            "(if (<=.f64 b_2 #s(literal -101201126653655/202402253307310618352495346718917307049556649764142118356901358027430339567995346891960383701437124495187077864316811911389808737385793476867013399940738509921517424276566361364466907742093216341239767678472745068562007483424692698618103355649159556340810056512358769552333414615230502532186327508646006263307707741093494784 binary64)) #s(approx (/ (- (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (/.f64 (*.f64 #s(literal -1/2 binary64) c) b_2)) (/.f64 #s(approx (- (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) (*.f64 #s(literal -2 binary64) b_2)) a))"
+          ],
+          [
+            1473,
+            46.35993621679435,
+            "(if (<=.f64 b_2 #s(literal -101201126653655/202402253307310618352495346718917307049556649764142118356901358027430339567995346891960383701437124495187077864316811911389808737385793476867013399940738509921517424276566361364466907742093216341239767678472745068562007483424692698618103355649159556340810056512358769552333414615230502532186327508646006263307707741093494784 binary64)) #s(approx (/ (- (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (/.f64 (*.f64 #s(literal -1/2 binary64) c) b_2)) #s(approx (/ (/ (- (* b_2 b_2) (- (* b_2 b_2) (* a c))) (+ (* -1 b_2) (sqrt (- (* b_2 b_2) (* a c))))) a) (/.f64 c #s(literal 0 binary64))))"
+          ],
+          [
+            1473,
+            46.35993621679435,
+            "(if (<=.f64 b_2 #s(literal -101201126653655/202402253307310618352495346718917307049556649764142118356901358027430339567995346891960383701437124495187077864316811911389808737385793476867013399940738509921517424276566361364466907742093216341239767678472745068562007483424692698618103355649159556340810056512358769552333414615230502532186327508646006263307707741093494784 binary64)) #s(approx (/ (- (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (*.f64 (/.f64 c b_2) #s(literal -1/2 binary64))) #s(approx (/ (/ (- (* b_2 b_2) (- (* b_2 b_2) (* a c))) (+ (* -1 b_2) (sqrt (- (* b_2 b_2) (* a c))))) a) (/.f64 c #s(literal 0 binary64))))"
+          ],
+          [
+            768,
+            62.1097600635502,
+            "#s(approx (/ (/ (- (* b_2 b_2) (- (* b_2 b_2) (* a c))) (+ (* -1 b_2) (sqrt (- (* b_2 b_2) (* a c))))) a) (/.f64 c #s(literal 0 binary64)))"
+          ]
+        ]
+      ],
+      "end": 15.604385081738158,
+      "end-est": 8.894877850014593,
+      "identifier": "#f",
+      "input": "(/ (- (- b_2) (sqrt (- (* b_2 b_2) (* a c)))) a)",
+      "link": "6-quad2mproblem321negative",
+      "name": "quad2m (problem 3.2.1, negative)",
+      "output": "(if (<=.f64 b_2 #s(literal -8480865910936245/7067388259113537318333190002971674063309935587502475832486424805170479104 binary64)) #s(approx (/ (- (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (/.f64 (*.f64 #s(literal -1/2 binary64) c) b_2)) (if (<=.f64 b_2 #s(literal 49999999999999999737683287595902466157897305225341087810970847365954154269153922568421376 binary64)) (/.f64 (+.f64 (sqrt.f64 (-.f64 (*.f64 b_2 b_2) (*.f64 c a))) b_2) (neg.f64 a)) #s(approx (/ (- (neg b_2) (sqrt (- (* b_2 b_2) (* a c)))) a) (fma.f64 (/.f64 #s(literal 1/2 binary64) b_2) c (*.f64 #s(literal -2 binary64) (/.f64 b_2 a))))))",
+      "pre": "(TRUE)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(/ (- (- b_2) (sqrt (- (* b_2 b_2) (* a c)))) a)",
+      "start": 46.772843124446766,
+      "start-est": 32.90073158218031,
+      "status": "lt-target",
+      "target": [
+        [
+          16642,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (let ((sqtD (let ((x (* (sqrt (fabs a)) (sqrt (fabs c))))) (if (== (copysign a c) a) (* (sqrt (- (fabs b_2) x)) (sqrt (+ (fabs b_2) x))) (hypot b_2 x))))) (if (< b_2 0) (/ c (- sqtD b_2)) (/ (+ b_2 sqtD) (- a))))) . #t))",
+      "time": 2663.269775390625,
+      "vars": [
+        "a",
+        "b_2",
+        "c"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          13952,
+          64.0
+        ],
+        [
+          27712,
+          0
+        ],
+        [
+          [
+            13696,
+            0,
+            "(/.f64 (log1p.f64 (neg.f64 x)) (log1p.f64 x))"
+          ],
+          [
+            3712,
+            0,
+            "(/.f64 #s(approx (log (- 1 x)) (*.f64 (fma.f64 (fma.f64 (fma.f64 #s(literal -1/4 binary64) x #s(literal -1/3 binary64)) x #s(literal -1/2 binary64)) x #s(literal -1 binary64)) x)) #s(approx (log (+ 1 x)) (*.f64 (fma.f64 (fma.f64 (fma.f64 #s(literal -1/4 binary64) x #s(literal 1/3 binary64)) x #s(literal -1/2 binary64)) x #s(literal 1 binary64)) x)))"
+          ],
+          [
+            1216,
+            0,
+            "#s(approx (/ (log (- 1 x)) (log (+ 1 x))) (fma.f64 (fma.f64 (fma.f64 #s(literal -5/12 binary64) x #s(literal -1/2 binary64)) x #s(literal -1 binary64)) x #s(literal -1 binary64)))"
+          ],
+          [
+            832,
+            0,
+            "#s(approx (/ (log (- 1 x)) (log (+ 1 x))) (fma.f64 (fma.f64 #s(literal -1/2 binary64) x #s(literal -1 binary64)) x #s(literal -1 binary64)))"
+          ],
+          [
+            256,
+            0,
+            "#s(approx (/ (log (- 1 x)) (log (+ 1 x))) (-.f64 #s(literal -1 binary64) x))"
+          ],
+          [
+            64,
+            0,
+            "#s(approx (/ (log (- 1 x)) (log (+ 1 x))) #s(literal -1 binary64))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0,
+      "identifier": "#f",
+      "input": "(/ (log (- 1.0 x)) (log (+ 1.0 x)))",
+      "link": "7-qlogexample310",
+      "name": "qlog (example 3.10)",
+      "output": "(-.f64 (/.f64 (log1p.f64 (*.f64 (neg.f64 x) x)) (log1p.f64 x)) (/.f64 (log1p.f64 x) (log1p.f64 x)))",
+      "pre": "(<= (fabs x) 1.0)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(/ (log (- 1.0 x)) (log (+ 1.0 x)))",
+      "start": 64.0,
+      "start-est": 61.96015263222732,
+      "status": "eq-target",
+      "target": [
+        [
+          13696,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (/ (log1p (- x)) (log1p x))) . #t))",
+      "time": 2630.670654296875,
+      "vars": [
+        "x"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          14272,
+          63.00364332340019
+        ],
+        [
+          6464,
+          0
+        ],
+        [
+          [
+            768,
+            59.81926490438061,
+            "#s(approx (- (- (* (+ n 1) (log (+ n 1))) (* n (log n))) 1) #s(approx (+ (/ 1/2 n) (log n)) (/.f64 #s(literal 1/2 binary64) n)))"
+          ],
+          [
+            64,
+            63.00364332340019,
+            "#s(approx (- (- (* (+ n 1) (log (+ n 1))) (* n (log n))) 1) #s(literal -1 binary64))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0,
+      "identifier": "#f",
+      "input": "(- (- (* (+ n 1.0) (log (+ n 1.0))) (* n (log n))) 1.0)",
+      "link": "8-logsexample38",
+      "name": "logs (example 3.8)",
+      "output": "#s(approx (- (- (* (+ n 1) (log (+ n 1))) (* n (log n))) 1) (log.f64 n))",
+      "pre": "(> n 6.8e+15)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(- (- (* (+ n 1.0) (log (+ n 1.0))) (* n (log n))) 1.0)",
+      "start": 63.00364332340019,
+      "start-est": 63.012156787946296,
+      "status": "eq-target",
+      "target": [
+        [
+          16768,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (- (log (+ n 1)) (- (/ 1 (* 2 n)) (- (/ 1 (* 3 (* n n))) (/ 4 (pow n 3)))))) . #t))",
+      "time": 2394.12255859375,
+      "vars": [
+        "n"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          7552,
+          60.59621794049864
+        ],
+        [
+          2496,
+          0
+        ],
+        [
+          [
+            2112,
+            0,
+            "#s(approx (log (/ (- 1 eps) (+ 1 eps))) (fma.f64 (*.f64 (*.f64 (fma.f64 #s(literal -2/5 binary64) (*.f64 eps eps) #s(literal -2/3 binary64)) eps) eps) eps (*.f64 #s(literal -2 binary64) eps)))"
+          ],
+          [
+            1792,
+            0,
+            "#s(approx (log (/ (- 1 eps) (+ 1 eps))) (*.f64 (fma.f64 (fma.f64 #s(literal -2/5 binary64) (*.f64 eps eps) #s(literal -2/3 binary64)) (*.f64 eps eps) #s(literal -2 binary64)) eps))"
+          ],
+          [
+            1408,
+            0,
+            "#s(approx (log (/ (- 1 eps) (+ 1 eps))) (fma.f64 (*.f64 #s(literal -2/3 binary64) (*.f64 eps eps)) eps (*.f64 #s(literal -2 binary64) eps)))"
+          ],
+          [
+            1088,
+            0,
+            "#s(approx (log (/ (- 1 eps) (+ 1 eps))) (*.f64 (fma.f64 (*.f64 eps eps) #s(literal -2/3 binary64) #s(literal -2 binary64)) eps))"
+          ],
+          [
+            384,
+            0,
+            "#s(approx (log (/ (- 1 eps) (+ 1 eps))) (*.f64 #s(literal -2 binary64) eps))"
+          ],
+          [
+            64,
+            60.59621794049864,
+            "#s(literal 0 binary64)"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.23906663461639288,
+      "identifier": "#f",
+      "input": "(log (/ (- 1.0 eps) (+ 1.0 eps)))",
+      "link": "9-logqproblem343",
+      "name": "logq (problem 3.4.3)",
+      "output": "#s(approx (log (/ (- 1 eps) (+ 1 eps))) (*.f64 (fma.f64 (fma.f64 (fma.f64 #s(literal -2/7 binary64) (*.f64 eps eps) #s(literal -2/5 binary64)) (*.f64 eps eps) #s(literal -2/3 binary64)) (*.f64 eps eps) #s(literal -2 binary64)) eps))",
+      "pre": "(< (fabs eps) 1.0)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(log (/ (- 1.0 eps) (+ 1.0 eps)))",
+      "start": 60.59621794049864,
+      "start-est": 58.53400581340255,
+      "status": "eq-target",
+      "target": [
+        [
+          13184,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (- (log1p (- eps)) (log1p eps))) . #t))",
+      "time": 2118.830322265625,
+      "vars": [
+        "eps"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          8064,
+          61.01169874390081
+        ],
+        [
+          1472,
+          0
+        ],
+        [
+          [
+            768,
+            0,
+            "#s(approx (- (/ 1 x) (/ 1 (tan x))) (/.f64 x #s(approx (/ 1 (+ (* 1/45 (* x x)) 1/3)) #s(literal 3 binary64))))"
+          ],
+          [
+            384,
+            0.75,
+            "#s(approx (- (/ 1 x) (/ 1 (tan x))) (*.f64 #s(literal 1/3 binary64) x))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.009070031620653759,
+      "identifier": "#f",
+      "input": "(- (/ 1.0 x) (/ 1.0 (tan x)))",
+      "link": "10-invcotexample39",
+      "name": "invcot (example 3.9)",
+      "output": "#s(approx (- (/ 1 x) (/ 1 (tan x))) (/.f64 x #s(approx (/ 1 (+ (* 1/45 (* x x)) 1/3)) (fma.f64 #s(literal -1/5 binary64) (*.f64 x x) #s(literal 3 binary64)))))",
+      "pre": "(and (< -0.026 x) (< x 0.026))",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(- (/ 1.0 x) (/ 1.0 (tan x)))",
+      "start": 61.01169874390081,
+      "start-est": 60.14706648533563,
+      "status": "eq-target",
+      "target": [
+        [
+          8577,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (if (< (fabs x) 13/500) (* (/ x 3) (+ 1 (/ (* x x) 15))) (- (/ 1 x) (/ 1 (tan x))))) . #t))",
+      "time": 3608.786865234375,
+      "vars": [
+        "x"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          22336,
+          64.0
+        ],
+        [
+          1664,
+          0
+        ],
+        [
+          [
+            1153,
+            21.85632458146125,
+            "(if (<=.f64 b #s(literal 245231183197193/1140610154405548804660292901425072831223307126812139982644798129474818791802169346626478202829342849944660577393398601827672176180343859499563165329930553547062998668590066237520718548061650944 binary64)) #s(approx (/ (* eps (- (exp (* (+ a b) eps)) 1)) (* (- (exp (* a eps)) 1) (- (exp (* b eps)) 1))) (/.f64 #s(literal 1 binary64) b)) #s(approx (/ (* eps (- (exp (* (+ a b) eps)) 1)) (* (- (exp (* a eps)) 1) (- (exp (* b eps)) 1))) (/.f64 #s(literal 1 binary64) a)))"
+          ],
+          [
+            768,
+            45.24479729573417,
+            "#s(approx (/ (* eps (- (exp (* (+ a b) eps)) 1)) (* (- (exp (* a eps)) 1) (- (exp (* b eps)) 1))) (/.f64 #s(literal 1 binary64) a))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.15234375,
+      "identifier": "#f",
+      "input": "(/ (* eps (- (exp (* (+ a b) eps)) 1.0)) (* (- (exp (* a eps)) 1.0) (- (exp (* b eps)) 1.0)))",
+      "link": "11-expq3problem342",
+      "name": "expq3 (problem 3.4.2)",
+      "output": "#s(approx (/ (* eps (- (exp (* (+ a b) eps)) 1)) (* (- (exp (* a eps)) 1) (- (exp (* b eps)) 1))) (/.f64 #s(approx (/ (+ b a) b) (+.f64 (/.f64 a b) #s(literal 1 binary64))) a))",
+      "pre": "(and (and (<= (fabs a) 710.0) (<= (fabs b) 710.0)) (and (<= (* 1e-27 (fmin (fabs a) (fabs b))) eps) (<= eps (fmin (fabs a) (fabs b)))))",
+      "prec": "binary64",
+      "preprocess": "((sort a b))",
+      "spec": "(/ (* eps (- (exp (* (+ a b) eps)) 1.0)) (* (- (exp (* a eps)) 1.0) (- (exp (* b eps)) 1.0)))",
+      "start": 64.0,
+      "start-est": 64.0,
+      "status": "eq-target",
+      "target": [
+        [
+          1664,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (+ (/ 1 a) (/ 1 b))) . #t))",
+      "time": 2762.982177734375,
+      "vars": [
+        "a",
+        "b",
+        "eps"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          13760,
+          35.629510775264805
+        ],
+        [
+          7296,
+          0
+        ],
+        [
+          [
+            8193,
+            0,
+            "(if (<=.f64 (exp.f64 x) #s(literal 0 binary64)) (/.f64 #s(literal -1 binary64) #s(approx (- (exp (neg x)) 1) (*.f64 #s(approx (+ (* 1/2 x) -1) (*.f64 #s(literal 1/2 binary64) x)) x))) #s(approx (/ (exp x) (- (exp x) 1)) (fma.f64 #s(literal 1/12 binary64) x (+.f64 (/.f64 #s(literal 1 binary64) x) #s(literal 1/2 binary64)))))"
+          ],
+          [
+            3264,
+            0,
+            "(/.f64 #s(literal -1 binary64) #s(approx (- (exp (neg x)) 1) (*.f64 (fma.f64 (fma.f64 (/.f64 (fma.f64 #s(literal 1/576 binary64) (*.f64 x x) #s(literal -1/36 binary64)) #s(approx (+ (* 1/24 x) 1/6) #s(literal 1/6 binary64))) x #s(literal 1/2 binary64)) x #s(literal -1 binary64)) x)))"
+          ],
+          [
+            2497,
+            0,
+            "(if (<=.f64 x #s(literal -4165829655317709/1125899906842624 binary64)) (/.f64 #s(literal -1 binary64) #s(approx (- (exp (neg x)) 1) (*.f64 #s(approx (+ (* (+ (* (+ (* 1/24 x) -1/6) x) 1/2) x) -1) (*.f64 (fma.f64 #s(literal 1/24 binary64) x #s(literal -1/6 binary64)) (*.f64 x x))) x))) #s(approx (/ (exp x) (- (exp x) 1)) (fma.f64 (fma.f64 (*.f64 x x) #s(literal -1/720 binary64) #s(literal 1/12 binary64)) x (+.f64 (/.f64 #s(literal 1 binary64) x) #s(literal 1/2 binary64)))))"
+          ],
+          [
+            2240,
+            0,
+            "(/.f64 #s(literal -1 binary64) #s(approx (- (exp (neg x)) 1) (*.f64 (fma.f64 (fma.f64 (fma.f64 #s(literal 1/24 binary64) x #s(literal -1/6 binary64)) x #s(literal 1/2 binary64)) x #s(literal -1 binary64)) x)))"
+          ],
+          [
+            2112,
+            6.999999997312771,
+            "(/.f64 #s(literal -1 binary64) #s(approx (- (exp (neg x)) 1) (*.f64 (fma.f64 #s(approx (+ (* (+ (* 1/24 x) -1/6) x) 1/2) (*.f64 (*.f64 #s(literal 1/24 binary64) x) x)) x #s(literal -1 binary64)) x)))"
+          ],
+          [
+            1856,
+            0,
+            "(/.f64 #s(literal -1 binary64) #s(approx (- (exp (neg x)) 1) (*.f64 (fma.f64 (fma.f64 #s(literal -1/6 binary64) x #s(literal 1/2 binary64)) x #s(literal -1 binary64)) x)))"
+          ],
+          [
+            1600,
+            0.646240625180289,
+            "(/.f64 #s(literal -1 binary64) #s(approx (- (exp (neg x)) 1) (-.f64 (*.f64 (*.f64 #s(literal 1/2 binary64) x) x) x)))"
+          ],
+          [
+            1472,
+            0.646240625180289,
+            "(/.f64 #s(literal -1 binary64) #s(approx (- (exp (neg x)) 1) (*.f64 (fma.f64 #s(literal 1/2 binary64) x #s(literal -1 binary64)) x)))"
+          ],
+          [
+            768,
+            22.139758909382596,
+            "#s(approx (/ (exp x) (- (exp x) 1)) (/.f64 #s(literal 1 binary64) x))"
+          ],
+          [
+            64,
+            61.99962633401874,
+            "#s(approx (/ (exp x) (- (exp x) 1)) #s(approx (+ 1/2 (/ 1 x)) #s(literal 1/2 binary64)))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.0078125,
+      "identifier": "#f",
+      "input": "(/ (exp x) (- (exp x) 1.0))",
+      "link": "12-expq2section311",
+      "name": "expq2 (section 3.11)",
+      "output": "(/.f64 #s(literal -1 binary64) (expm1.f64 (neg.f64 x)))",
+      "pre": "(> 710.0 x)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(/ (exp x) (- (exp x) 1.0))",
+      "start": 35.629510775264805,
+      "start-est": 38.432094524247375,
+      "status": "eq-target",
+      "target": [
+        [
+          7424,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (/ (- 1) (expm1 (- x)))) . #t))",
+      "time": 2207.842041015625,
+      "vars": [
+        "x"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          6656,
+          57.188100609305174
+        ],
+        [
+          6464,
+          0
+        ],
+        [
+          [
+            1536,
+            0,
+            "#s(approx (- (exp x) 1) (*.f64 (fma.f64 (fma.f64 (fma.f64 #s(literal 1/24 binary64) x #s(literal 1/6 binary64)) x #s(literal 1/2 binary64)) x #s(literal 1 binary64)) x))"
+          ],
+          [
+            1152,
+            0,
+            "#s(approx (- (exp x) 1) (*.f64 (fma.f64 (fma.f64 #s(literal 1/6 binary64) x #s(literal 1/2 binary64)) x #s(literal 1 binary64)) x))"
+          ],
+          [
+            768,
+            0,
+            "#s(approx (- (exp x) 1) (*.f64 (fma.f64 #s(literal 1/2 binary64) x #s(literal 1 binary64)) x))"
+          ],
+          [
+            384,
+            0.701838730514401,
+            "#s(approx (- (exp x) 1) (*.f64 #s(approx (+ (* 1/2 x) 1) #s(literal 1 binary64)) x))"
+          ],
+          [
+            256,
+            61.323697142338546,
+            "(-.f64 #s(approx (exp x) #s(literal 1 binary64)) #s(literal 1 binary64))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0,
+      "identifier": "#f",
+      "input": "(- (exp x) 1.0)",
+      "link": "13-expm1example37",
+      "name": "expm1 (example 3.7)",
+      "output": "(expm1.f64 x)",
+      "pre": "(<= (fabs x) 1.0)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(- (exp x) 1.0)",
+      "start": 57.188100609305174,
+      "start-est": 59.7982396441,
+      "status": "eq-target",
+      "target": [
+        [
+          6464,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (expm1 x)) . #t))",
+      "time": 1204.125732421875,
+      "vars": [
+        "x"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          6976,
+          15.254203377413738
+        ],
+        [
+          6784,
+          0
+        ],
+        [
+          [
+            2817,
+            13.0,
+            "(if (<=.f64 (*.f64 a x) #s(literal -50 binary64)) (/.f64 #s(literal 1 binary64) #s(approx (/ 1 (- (exp (* a x)) 1)) #s(approx (/ (+ (* -1/2 x) (/ 1 a)) x) #s(literal -1/2 binary64)))) #s(approx (- (exp (* a x)) 1) (*.f64 (fma.f64 (*.f64 (*.f64 a x) x) (fma.f64 (*.f64 #s(literal 1/6 binary64) x) a #s(literal 1/2 binary64)) x) a)))"
+          ],
+          [
+            2817,
+            13.0,
+            "(if (<=.f64 (*.f64 a x) #s(literal -50 binary64)) (/.f64 #s(literal 1 binary64) #s(approx (/ 1 (- (exp (* a x)) 1)) #s(approx (/ (+ (* -1/2 x) (/ 1 a)) x) #s(literal -1/2 binary64)))) #s(approx (- (exp (* a x)) 1) (*.f64 (*.f64 (fma.f64 (*.f64 (fma.f64 (*.f64 #s(literal 1/6 binary64) x) a #s(literal 1/2 binary64)) a) x #s(literal 1 binary64)) x) a)))"
+          ],
+          [
+            2817,
+            13.0,
+            "(if (<=.f64 (*.f64 a x) #s(literal -50 binary64)) (/.f64 #s(literal 1 binary64) #s(approx (/ 1 (- (exp (* a x)) 1)) #s(approx (/ (+ (* -1/2 x) (/ 1 a)) x) #s(literal -1/2 binary64)))) #s(approx (- (exp (* a x)) 1) (*.f64 (*.f64 (fma.f64 (*.f64 (fma.f64 (*.f64 #s(literal 1/6 binary64) x) a #s(literal 1/2 binary64)) a) x #s(literal 1 binary64)) a) x)))"
+          ],
+          [
+            2368,
+            13.0,
+            "(/.f64 #s(literal 1 binary64) #s(approx (/ 1 (- (exp (* a x)) 1)) #s(approx (/ (+ (* -1/2 x) (/ 1 a)) x) (-.f64 #s(literal -1/2 binary64) (/.f64 (/.f64 #s(literal -1 binary64) a) x)))))"
+          ],
+          [
+            2113,
+            13.0,
+            "(if (<=.f64 (*.f64 a x) #s(literal -50 binary64)) (/.f64 #s(literal 1 binary64) #s(approx (/ 1 (- (exp (* a x)) 1)) #s(approx (/ (+ (* -1/2 x) (/ 1 a)) x) #s(literal -1/2 binary64)))) #s(approx (- (exp (* x a)) 1) (*.f64 #s(approx (+ (* (* (* a a) x) 1/2) a) (*.f64 (fma.f64 #s(literal 1/2 binary64) (*.f64 a x) #s(literal 1 binary64)) a)) x)))"
+          ],
+          [
+            2113,
+            13.0,
+            "(if (<=.f64 (*.f64 a x) #s(literal -50 binary64)) (/.f64 #s(literal 1 binary64) #s(approx (/ 1 (- (exp (* a x)) 1)) #s(approx (/ (+ (* -1/2 x) (/ 1 a)) x) #s(literal -1/2 binary64)))) #s(approx (- (exp (* a x)) 1) (*.f64 (fma.f64 (*.f64 #s(approx (+ (* (* 1/6 x) a) 1/2) #s(literal 1/2 binary64)) a) x #s(literal 1 binary64)) (*.f64 a x))))"
+          ],
+          [
+            1473,
+            13.0,
+            "(if (<=.f64 (*.f64 a x) #s(literal -50 binary64)) (/.f64 #s(literal 1 binary64) #s(approx (/ 1 (- (exp (* a x)) 1)) #s(approx (/ (+ (* -1/2 x) (/ 1 a)) x) #s(literal -1/2 binary64)))) #s(approx (- (exp (* a x)) 1) (*.f64 a x)))"
+          ],
+          [
+            384,
+            15.500000000000002,
+            "#s(approx (- (exp (* a x)) 1) (*.f64 a x))"
+          ],
+          [
+            256,
+            30.753850984850068,
+            "(-.f64 #s(approx (exp (* a x)) #s(literal 1 binary64)) #s(literal 1 binary64))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.006191259768442017,
+      "identifier": "#f",
+      "input": "(- (exp (* a x)) 1.0)",
+      "link": "14-expaxsection35",
+      "name": "expax (section 3.5)",
+      "output": "(expm1.f64 (*.f64 a x))",
+      "pre": "(> 710.0 (* a x))",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(- (exp (* a x)) 1.0)",
+      "start": 15.254203377413738,
+      "start-est": 30.86157662655821,
+      "status": "eq-target",
+      "target": [
+        [
+          6784,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (expm1 (* a x))) . #t))",
+      "time": 2415.80322265625,
+      "vars": [
+        "a",
+        "x"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          13376,
+          44.92003931856557
+        ],
+        [
+          7936,
+          0
+        ],
+        [
+          [
+            1728,
+            0,
+            "#s(approx (+ (- (exp x) 2) (exp (neg x))) (fma.f64 (*.f64 (*.f64 x x) (*.f64 x x)) #s(literal 1/12 binary64) (*.f64 x x)))"
+          ],
+          [
+            384,
+            0,
+            "#s(approx (+ (- (exp x) 2) (exp (neg x))) (*.f64 x x))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.2178064457365757,
+      "identifier": "#f",
+      "input": "(+ (- (exp x) 2.0) (exp (- x)))",
+      "link": "15-exp2problem337",
+      "name": "exp2 (problem 3.3.7)",
+      "output": "#s(approx (+ (- (exp x) 2) (exp (neg x))) (fma.f64 (pow.f64 x #s(literal 4 binary64)) (fma.f64 #s(literal 1/360 binary64) (*.f64 x x) #s(literal 1/12 binary64)) (*.f64 x x)))",
+      "pre": "(<= (fabs x) 710.0)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(+ (- (exp x) 2.0) (exp (- x)))",
+      "start": 44.92003931856557,
+      "start-est": 26.237541078198543,
+      "status": "eq-target",
+      "target": [
+        [
+          14912,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (* 4 (* (sinh (/ x 2)) (sinh (/ x 2))))) . #t))",
+      "time": 2562.018798828125,
+      "vars": [
+        "x"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          7680,
+          15.499294870234406
+        ],
+        [
+          14912,
+          0
+        ],
+        [
+          [
+            8449,
+            31.749647693511704,
+            "(if (<=.f64 x #s(literal 3422735716801577/36028797018963968 binary64)) #s(approx (/ (- 1 (cos x)) (* x x)) (fma.f64 (fma.f64 (fma.f64 #s(literal -1/40320 binary64) (*.f64 x x) #s(literal 1/720 binary64)) (*.f64 x x) #s(literal -1/24 binary64)) (*.f64 x x) #s(literal 1/2 binary64))) (/.f64 (/.f64 (-.f64 #s(literal 1 binary64) (cos.f64 x)) x) x))"
+          ],
+          [
+            8065,
+            31.499647693511704,
+            "(if (<=.f64 x #s(literal 3422735716801577/36028797018963968 binary64)) #s(approx (/ (- 1 (cos x)) (* x x)) (fma.f64 (fma.f64 (fma.f64 #s(literal -1/40320 binary64) (*.f64 x x) #s(literal 1/720 binary64)) (*.f64 x x) #s(literal -1/24 binary64)) (*.f64 x x) #s(literal 1/2 binary64))) (/.f64 (-.f64 #s(literal 1 binary64) (cos.f64 x)) (*.f64 x x)))"
+          ],
+          [
+            1857,
+            46.53234191580982,
+            "(if (<=.f64 x #s(literal 780000000000000046664900789984240336896 binary64)) #s(approx (/ (- 1 (cos x)) (* x x)) (fma.f64 (fma.f64 #s(literal 1/720 binary64) (*.f64 x x) #s(literal -1/24 binary64)) (*.f64 x x) #s(literal 1/2 binary64))) (/.f64 (-.f64 #s(literal 1 binary64) #s(approx (cos x) #s(literal 1 binary64))) (*.f64 x x)))"
+          ],
+          [
+            1665,
+            46.031283962766935,
+            "(if (<=.f64 x #s(literal 119999999999999992791711785436734146363018478165098748993720564156436311965696 binary64)) #s(approx (/ (- 1 (cos x)) (* x x)) #s(literal 1/2 binary64)) (/.f64 (-.f64 #s(literal 1 binary64) #s(approx (cos x) #s(literal 1 binary64))) (*.f64 x x)))"
+          ],
+          [
+            1472,
+            13.565250027583579,
+            "(/.f64 #s(literal 1 binary64) #s(approx (* (/ x (- 1 (cos x))) x) (fma.f64 #s(literal 1/6 binary64) (*.f64 x x) #s(literal 2 binary64))))"
+          ],
+          [
+            64,
+            46.3822675527196,
+            "#s(approx (/ (- 1 (cos x)) (* x x)) #s(literal 1/2 binary64))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.16701127930532603,
+      "identifier": "#f",
+      "input": "(/ (- 1.0 (cos x)) (* x x))",
+      "link": "16-cos2problem341",
+      "name": "cos2 (problem 3.4.1)",
+      "output": "(*.f64 (/.f64 (tan.f64 (*.f64 #s(literal 1/2 binary64) x)) x) (/.f64 (sin.f64 x) x))",
+      "pre": "(TRUE)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(/ (- 1.0 (cos x)) (* x x))",
+      "start": 15.499294870234406,
+      "start-est": 29.375042036231342,
+      "status": "imp-start",
+      "target": [],
+      "target-prog": "()",
+      "time": 2949.60595703125,
+      "vars": [
+        "x"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          2944,
+          14.688295265320864
+        ],
+        [
+          15424,
+          0
+        ],
+        [
+          [
+            10368,
+            0.25,
+            "#s(approx (+ (- (/ 1 (+ x 1)) (/ 2 x)) (/ 1 (- x 1))) (-.f64 (/.f64 (-.f64 (/.f64 #s(literal 2 binary64) (*.f64 x x)) #s(literal -2 binary64)) (pow.f64 x #s(literal 5 binary64))) (/.f64 (/.f64 #s(literal -2 binary64) (*.f64 x x)) x)))"
+          ],
+          [
+            3392,
+            0,
+            "(/.f64 #s(approx (/ (+ (* (/ (- x (* 2 (+ x 1))) (+ x 1)) (- x 1)) x) (- x 1)) (/.f64 (/.f64 (-.f64 (/.f64 #s(literal 2 binary64) (*.f64 x x)) #s(literal -2 binary64)) x) x)) x)"
+          ],
+          [
+            1792,
+            0.25,
+            "(/.f64 #s(approx (/ (+ (* (/ (- x (* 2 (+ x 1))) (+ x 1)) (- x 1)) x) (- x 1)) (/.f64 #s(literal 2 binary64) (*.f64 x x))) x)"
+          ],
+          [
+            1088,
+            29.781017002970405,
+            "(/.f64 #s(approx (+ (* (/ (- x (* 2 (+ x 1))) (+ x 1)) (- x 1)) x) #s(literal 2 binary64)) #s(approx (* x (- x 1)) (*.f64 x x)))"
+          ],
+          [
+            768,
+            60.555939162031834,
+            "#s(approx (+ (- (/ 1 (+ x 1)) (/ 2 x)) (/ 1 (- x 1))) (/.f64 #s(literal -2 binary64) x))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.24052182990478846,
+      "identifier": "#f",
+      "input": "(+ (- (/ 1.0 (+ x 1.0)) (/ 2.0 x)) (/ 1.0 (- x 1.0)))",
+      "link": "17-3fracproblem333",
+      "name": "3frac (problem 3.3.3)",
+      "output": "#s(approx (+ (- (/ 1 (+ x 1)) (/ 2 x)) (/ 1 (- x 1))) (-.f64 (/.f64 (-.f64 (/.f64 #s(literal 2 binary64) (*.f64 x x)) #s(literal -2 binary64)) (pow.f64 x #s(literal 5 binary64))) (*.f64 (pow.f64 x #s(literal -3 binary64)) #s(literal -2 binary64))))",
+      "pre": "(> (fabs x) 1.0)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(+ (- (/ 1.0 (+ x 1.0)) (/ 2.0 x)) (/ 1.0 (- x 1.0)))",
+      "start": 14.688295265320864,
+      "start-est": 18.35257125338803,
+      "status": "eq-target",
+      "target": [
+        [
+          1600,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (/ 2 (* x (- (* x x) 1)))) . #t))",
+      "time": 3177.97119140625,
+      "vars": [
+        "x"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          13248,
+          23.644934549680144
+        ],
+        [
+          174976,
+          0
+        ],
+        [
+          [
+            20864,
+            0,
+            "(/.f64 (/.f64 #s(approx (sin (- (+ eps x) x)) (sin.f64 eps)) (cos.f64 (+.f64 eps x))) (cos.f64 x))"
+          ],
+          [
+            20480,
+            0,
+            "(/.f64 (sin.f64 eps) (*.f64 (cos.f64 (+.f64 eps x)) (cos.f64 x)))"
+          ],
+          [
+            13248,
+            0,
+            "#s(approx (/ (/ (sin (- (+ eps x) x)) (cos (+ eps x))) (cos x)) (*.f64 (pow.f64 (cos.f64 x) #s(literal -2 binary64)) eps))"
+          ],
+          [
+            8000,
+            0,
+            "#s(approx (/ (/ (sin (- (+ eps x) x)) (cos (+ eps x))) (cos x)) (/.f64 eps (+.f64 (*.f64 (cos.f64 (*.f64 #s(literal 2 binary64) x)) #s(literal 1/2 binary64)) #s(literal 1/2 binary64))))"
+          ],
+          [
+            2752,
+            0,
+            "#s(approx (- (tan (+ x eps)) (tan x)) (fma.f64 #s(approx (+ (* (+ (* (- -1/6 (- (+ (* (/ (pow (sin x) 2) (pow (cos x) 2)) 1/6) (+ (* (/ (pow (sin x) 2) (pow (cos x) 2)) -1/2) -1/2)) (/ (+ (* (sin x) (sin x)) (/ (pow (sin x) 4) (pow (cos x) 2))) (pow (cos x) 2)))) eps) (/ (+ (/ (pow (sin x) 3) (pow (cos x) 2)) (sin x)) (cos x))) eps) (/ (pow (sin x) 2) (pow (cos x) 2))) (fma.f64 (*.f64 #s(literal 1/3 binary64) eps) eps (*.f64 (fma.f64 (fma.f64 #s(literal 4/3 binary64) (*.f64 (+.f64 eps x) eps) #s(literal 1 binary64)) x eps) x))) eps eps))"
+          ],
+          [
+            2560,
+            0,
+            "#s(approx (- (tan (+ x eps)) (tan x)) (fma.f64 #s(approx (+ (* (+ (* (- -1/6 (- (+ (* (/ (pow (sin x) 2) (pow (cos x) 2)) 1/6) (+ (* (/ (pow (sin x) 2) (pow (cos x) 2)) -1/2) -1/2)) (/ (+ (* (sin x) (sin x)) (/ (pow (sin x) 4) (pow (cos x) 2))) (pow (cos x) 2)))) eps) (/ (+ (/ (pow (sin x) 3) (pow (cos x) 2)) (sin x)) (cos x))) eps) (/ (pow (sin x) 2) (pow (cos x) 2))) (fma.f64 (*.f64 #s(literal 1/3 binary64) eps) eps (*.f64 #s(approx (+ (* (+ (* (* (+ x eps) eps) 4/3) 1) x) eps) (fma.f64 (fma.f64 (*.f64 x x) #s(literal 4/3 binary64) #s(literal 1 binary64)) eps x)) x))) eps eps))"
+          ],
+          [
+            1664,
+            0,
+            "#s(approx (- (tan (+ x eps)) (tan x)) (fma.f64 #s(approx (+ (* (+ (* (- -1/6 (- (+ (* (/ (pow (sin x) 2) (pow (cos x) 2)) 1/6) (+ (* (/ (pow (sin x) 2) (pow (cos x) 2)) -1/2) -1/2)) (/ (+ (* (sin x) (sin x)) (/ (pow (sin x) 4) (pow (cos x) 2))) (pow (cos x) 2)))) eps) (/ (+ (/ (pow (sin x) 3) (pow (cos x) 2)) (sin x)) (cos x))) eps) (/ (pow (sin x) 2) (pow (cos x) 2))) (fma.f64 #s(approx (+ (* (+ (* (* eps eps) 4/3) 1) x) eps) (+.f64 eps x)) x (*.f64 (*.f64 eps eps) #s(literal 1/3 binary64)))) eps eps))"
+          ],
+          [
+            960,
+            0,
+            "#s(approx (- (tan (+ x eps)) (tan x)) (fma.f64 #s(approx (+ (* (+ (* (- -1/6 (- (+ (* (/ (pow (sin x) 2) (pow (cos x) 2)) 1/6) (+ (* (/ (pow (sin x) 2) (pow (cos x) 2)) -1/2) -1/2)) (/ (+ (* (sin x) (sin x)) (/ (pow (sin x) 4) (pow (cos x) 2))) (pow (cos x) 2)))) eps) (/ (+ (/ (pow (sin x) 3) (pow (cos x) 2)) (sin x)) (cos x))) eps) (/ (pow (sin x) 2) (pow (cos x) 2))) #s(approx (+ (* (+ (* (+ (* (* eps eps) 4/3) 1) x) eps) x) (* (* eps eps) 1/3)) (*.f64 (+.f64 eps x) x))) eps eps))"
+          ],
+          [
+            768,
+            0,
+            "#s(approx (- (tan (+ x eps)) (tan x)) (fma.f64 #s(approx (+ (* (+ (* (- -1/6 (- (+ (* (/ (pow (sin x) 2) (pow (cos x) 2)) 1/6) (+ (* (/ (pow (sin x) 2) (pow (cos x) 2)) -1/2) -1/2)) (/ (+ (* (sin x) (sin x)) (/ (pow (sin x) 4) (pow (cos x) 2))) (pow (cos x) 2)))) eps) (/ (+ (/ (pow (sin x) 3) (pow (cos x) 2)) (sin x)) (cos x))) eps) (/ (pow (sin x) 2) (pow (cos x) 2))) #s(approx (+ (* (+ (* (+ (* (* eps eps) 4/3) 1) x) eps) x) (* (* eps eps) 1/3)) (*.f64 x x))) eps eps))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.05776205595527976,
+      "identifier": "#f",
+      "input": "(- (tan (+ x eps)) (tan x))",
+      "link": "18-2tanproblem332",
+      "name": "2tan (problem 3.3.2)",
+      "output": "#s(approx (- (tan (+ x eps)) (tan x)) (fma.f64 (fma.f64 (fma.f64 (-.f64 #s(literal -1/6 binary64) (-.f64 (fma.f64 (/.f64 (pow.f64 (sin.f64 x) #s(literal 2 binary64)) (pow.f64 (cos.f64 x) #s(literal 2 binary64))) #s(literal 1/6 binary64) (fma.f64 (/.f64 (pow.f64 (sin.f64 x) #s(literal 2 binary64)) (pow.f64 (cos.f64 x) #s(literal 2 binary64))) #s(literal -1/2 binary64) #s(literal -1/2 binary64))) (/.f64 (fma.f64 (sin.f64 x) (sin.f64 x) (/.f64 (pow.f64 (sin.f64 x) #s(literal 4 binary64)) (pow.f64 (cos.f64 x) #s(literal 2 binary64)))) (pow.f64 (cos.f64 x) #s(literal 2 binary64))))) eps (/.f64 (+.f64 (/.f64 (pow.f64 (sin.f64 x) #s(literal 3 binary64)) (pow.f64 (cos.f64 x) #s(literal 2 binary64))) (sin.f64 x)) (cos.f64 x))) eps (/.f64 (pow.f64 (sin.f64 x) #s(literal 2 binary64)) (pow.f64 (cos.f64 x) #s(literal 2 binary64)))) eps eps))",
+      "pre": "(and (and (and (<= -10000.0 x) (<= x 10000.0)) (< (* 1e-16 (fabs x)) eps)) (< eps (fabs x)))",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(- (tan (+ x eps)) (tan x))",
+      "start": 23.644934549680144,
+      "start-est": 25.43606368154766,
+      "status": "eq-target",
+      "target": [
+        [
+          13696,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (+ eps (* eps (tan x) (tan x)))) . #t))",
+      "time": 3116.815673828125,
+      "vars": [
+        "x",
+        "eps"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          1728,
+          61.669861962384815
+        ],
+        [
+          4865,
+          0
+        ],
+        [
+          [
+            5952,
+            0.75,
+            "#s(approx (- (sqrt (+ x 1)) (sqrt x)) (/.f64 (fma.f64 (sqrt.f64 (/.f64 #s(literal -1 binary64) (*.f64 (*.f64 (neg.f64 x) x) x))) #s(literal 1/16 binary64) (fma.f64 (sqrt.f64 (/.f64 #s(literal 1 binary64) x)) #s(literal -1/8 binary64) (*.f64 (sqrt.f64 x) #s(literal 1/2 binary64)))) x))"
+          ],
+          [
+            3136,
+            0.75,
+            "#s(approx (- (sqrt (+ x 1)) (sqrt x)) (/.f64 (fma.f64 (sqrt.f64 x) #s(literal 1/2 binary64) (/.f64 #s(literal -1/8 binary64) (sqrt.f64 x))) x))"
+          ],
+          [
+            1728,
+            0,
+            "#s(approx (- (sqrt (+ x 1)) (sqrt x)) (*.f64 #s(literal 1/2 binary64) (sqrt.f64 (/.f64 #s(literal 1 binary64) x))))"
+          ],
+          [
+            1408,
+            0.25,
+            "#s(approx (- (sqrt (+ x 1)) (sqrt x)) (/.f64 #s(literal 1/2 binary64) (sqrt.f64 x)))"
+          ],
+          [
+            1216,
+            61.013133057184326,
+            "(-.f64 #s(approx (sqrt (+ x 1)) #s(approx (+ (* 1/2 x) 1) (*.f64 #s(literal 1/2 binary64) x))) (sqrt.f64 x))"
+          ],
+          [
+            896,
+            62.99780069121416,
+            "(-.f64 #s(approx (sqrt (+ x 1)) #s(literal 1 binary64)) (sqrt.f64 x))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.109375,
+      "identifier": "#f",
+      "input": "(- (sqrt (+ x 1.0)) (sqrt x))",
+      "link": "19-2sqrtexample31",
+      "name": "2sqrt (example 3.1)",
+      "output": "(if (<=.f64 (-.f64 (sqrt.f64 (+.f64 #s(literal 1 binary64) x)) (sqrt.f64 x)) #s(literal 0 binary64)) #s(approx (- (sqrt (+ x 1)) (sqrt x)) (*.f64 #s(literal 1/2 binary64) (sqrt.f64 (/.f64 #s(literal 1 binary64) x)))) (/.f64 (-.f64 (+.f64 #s(literal 1 binary64) x) x) (+.f64 (sqrt.f64 (+.f64 #s(literal 1 binary64) x)) (sqrt.f64 x))))",
+      "pre": "(and (> x 1.0) (< x 1e+308))",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(- (sqrt (+ x 1.0)) (sqrt x))",
+      "start": 61.669861962384815,
+      "start-est": 59.838819950265396,
+      "status": "eq-target",
+      "target": [
+        [
+          6848,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (* 1/2 (pow x -1/2))) . #t))",
+      "time": 2647.8232421875,
+      "vars": [
+        "x"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          13248,
+          23.644934549680144
+        ],
+        [
+          14208,
+          0
+        ],
+        [
+          [
+            9216,
+            0,
+            "(*.f64 (cos.f64 (/.f64 (fma.f64 #s(literal 2 binary64) x eps) #s(literal -2 binary64))) (*.f64 #s(approx (sin (* 1/2 (+ 0 eps))) (*.f64 (fma.f64 #s(literal -1/48 binary64) (*.f64 eps eps) #s(literal 1/2 binary64)) eps)) #s(literal 2 binary64)))"
+          ],
+          [
+            8512,
+            0,
+            "(*.f64 (*.f64 #s(approx (sin (* 1/2 (+ 0 eps))) (*.f64 eps #s(literal 1/2 binary64))) #s(literal 2 binary64)) (cos.f64 (/.f64 (fma.f64 #s(literal 2 binary64) x eps) #s(literal -2 binary64))))"
+          ],
+          [
+            7808,
+            0,
+            "#s(approx (- (sin (+ x eps)) (sin x)) (fma.f64 #s(approx (* (* (sin x) -1/2) eps) (*.f64 (*.f64 x eps) #s(literal -1/2 binary64))) eps (*.f64 (cos.f64 x) eps)))"
+          ],
+          [
+            7488,
+            0,
+            "#s(approx (- (sin (+ x eps)) (sin x)) (*.f64 (fma.f64 #s(approx (* (sin x) -1/2) (*.f64 #s(literal -1/2 binary64) x)) eps (cos.f64 x)) eps))"
+          ],
+          [
+            6784,
+            0,
+            "#s(approx (- (sin (+ x eps)) (sin x)) (*.f64 (cos.f64 x) eps))"
+          ],
+          [
+            2496,
+            0,
+            "#s(approx (- (sin (+ x eps)) (sin x)) (*.f64 #s(approx (cos x) (fma.f64 (fma.f64 (fma.f64 #s(literal -1/720 binary64) (*.f64 x x) #s(literal 1/24 binary64)) (*.f64 x x) #s(literal -1/2 binary64)) (*.f64 x x) #s(literal 1 binary64))) eps))"
+          ],
+          [
+            1792,
+            0,
+            "#s(approx (- (sin (+ x eps)) (sin x)) #s(approx (* (cos x) eps) (fma.f64 (*.f64 (*.f64 x x) eps) (fma.f64 #s(literal 1/24 binary64) (*.f64 x x) #s(literal -1/2 binary64)) eps)))"
+          ],
+          [
+            1280,
+            0,
+            "#s(approx (- (sin (+ x eps)) (sin x)) #s(approx (* (+ (* (* (sin x) -1/2) eps) (cos x)) eps) (fma.f64 (*.f64 #s(literal -1/2 binary64) x) (*.f64 (+.f64 x eps) eps) eps)))"
+          ],
+          [
+            1088,
+            0,
+            "#s(approx (- (sin (+ x eps)) (sin x)) (*.f64 #s(approx (cos x) (fma.f64 (*.f64 #s(literal -1/2 binary64) x) x #s(literal 1 binary64))) eps))"
+          ],
+          [
+            384,
+            0,
+            "#s(approx (- (sin (+ x eps)) (sin x)) (*.f64 #s(approx (cos x) #s(literal 1 binary64)) eps))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.0693595118105364,
+      "identifier": "#f",
+      "input": "(- (sin (+ x eps)) (sin x))",
+      "link": "20-2sinexample33",
+      "name": "2sin (example 3.3)",
+      "output": "#s(approx (* (* (sin (* 1/2 (+ 0 eps))) 2) (cos (/ (+ (* 2 x) eps) -2))) (*.f64 (sin.f64 (*.f64 eps #s(literal 1/2 binary64))) (*.f64 #s(approx (cos (+ (* -1/2 eps) (neg x))) (cos.f64 (fma.f64 #s(literal 1/2 binary64) eps x))) #s(literal 2 binary64))))",
+      "pre": "(and (and (and (<= -10000.0 x) (<= x 10000.0)) (< (* 1e-16 (fabs x)) eps)) (< eps (fabs x)))",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(- (sin (+ x eps)) (sin x))",
+      "start": 23.644934549680144,
+      "start-est": 25.448334328993308,
+      "status": "eq-target",
+      "target": [
+        [
+          14656,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (* (cos (* 1/2 (- eps (* -2 x)))) (sin (* 1/2 eps)) 2)) . #t))",
+      "time": 2803.122314453125,
+      "vars": [
+        "x",
+        "eps"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          14784,
+          43.95539599585543
+        ],
+        [
+          32259,
+          34.4597349617065
+        ],
+        [
+          [
+            17795,
+            34.4597349617065,
+            "(if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal -7136238463529799/1427247692705959881058285969449495136382746624 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (/.f64 #s(literal -1 binary64) n) (*.f64 (pow.f64 x (/.f64 #s(literal -1 binary64) n)) (neg.f64 x)))) (if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 2348542582773833/1174271291386916613944740298394668513687841274454159935353645485766104512557304221731849499192384351515967488 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (-.f64 (log1p.f64 x) (log.f64 x)) n)) (if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 50 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (fma.f64 #s(approx (/ (pow x (/ 1 n)) x) (/.f64 #s(literal 1 binary64) x)) (-.f64 (/.f64 #s(literal 1/2 binary64) (*.f64 n n)) (/.f64 #s(literal 1/2 binary64) n)) (/.f64 (pow.f64 x (/.f64 #s(literal 1 binary64) n)) n)) x)) (-.f64 (exp.f64 #s(approx (/ (log (+ 1 x)) n) (/.f64 x n))) (pow.f64 x (/.f64 #s(literal 1 binary64) n))))))"
+          ],
+          [
+            15938,
+            34.4597349617065,
+            "(if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal -7136238463529799/1427247692705959881058285969449495136382746624 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (/.f64 #s(literal -1 binary64) n) (*.f64 (pow.f64 x (/.f64 #s(literal -1 binary64) n)) (neg.f64 x)))) (if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 2348542582773833/1174271291386916613944740298394668513687841274454159935353645485766104512557304221731849499192384351515967488 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (-.f64 (log1p.f64 x) (log.f64 x)) n)) (if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 50 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (fma.f64 #s(approx (/ (pow x (/ 1 n)) x) (/.f64 #s(literal 1 binary64) x)) (-.f64 (/.f64 #s(literal 1/2 binary64) (*.f64 n n)) (/.f64 #s(literal 1/2 binary64) n)) (/.f64 (pow.f64 x (/.f64 #s(literal 1 binary64) n)) n)) x)) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) (fma.f64 (fma.f64 (-.f64 (/.f64 #s(literal 1/2 binary64) (*.f64 n n)) (/.f64 #s(literal 1/2 binary64) n)) x (/.f64 #s(literal 1 binary64) n)) x #s(literal 1 binary64))) (pow.f64 x (/.f64 #s(literal 1 binary64) n))))))"
+          ],
+          [
+            12931,
+            8.931969000332984,
+            "(if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 50 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (/.f64 #s(literal -1 binary64) n) (*.f64 (pow.f64 x (/.f64 #s(literal -1 binary64) n)) (neg.f64 x)))) (if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 199999999999999982405111001914463627825705729939051460364922737117355163153802565541919878198424069508213948681199740222346696327168 binary64)) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) (+.f64 (/.f64 x n) #s(literal 1 binary64))) (pow.f64 x (/.f64 #s(literal 1 binary64) n))) (if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 99999999999999997374062707399103193390970327051935144057886852787877127050853725394623645022622268104986814019040754458979257737456796162759919727807229498567311142603806310797883499542489243201826933949562808949044795771481474727936 binary64)) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) #s(approx (+ (* (+ (* (- (/ 1/2 (* n n)) (/ 1/2 n)) x) (/ 1 n)) x) 1) (*.f64 (/.f64 (-.f64 (/.f64 #s(literal 1/2 binary64) n) #s(literal 1/2 binary64)) n) (*.f64 x x)))) (pow.f64 x (/.f64 #s(literal 1 binary64) n))) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 #s(literal 1 binary64) #s(approx (/ n (/ (pow x (/ 1 n)) x)) (*.f64 x n)))))))"
+          ],
+          [
+            12355,
+            8.931969000332984,
+            "(if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 50 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (/.f64 #s(literal -1 binary64) n) (*.f64 (pow.f64 x (/.f64 #s(literal -1 binary64) n)) (neg.f64 x)))) (if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 199999999999999982405111001914463627825705729939051460364922737117355163153802565541919878198424069508213948681199740222346696327168 binary64)) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) (+.f64 (/.f64 x n) #s(literal 1 binary64))) (pow.f64 x (/.f64 #s(literal 1 binary64) n))) (if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 99999999999999997374062707399103193390970327051935144057886852787877127050853725394623645022622268104986814019040754458979257737456796162759919727807229498567311142603806310797883499542489243201826933949562808949044795771481474727936 binary64)) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) #s(approx (+ (* (+ (* (- (/ 1/2 (* n n)) (/ 1/2 n)) x) (/ 1 n)) x) 1) (*.f64 (/.f64 (*.f64 x x) (*.f64 n n)) #s(literal 1/2 binary64)))) (pow.f64 x (/.f64 #s(literal 1 binary64) n))) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 #s(literal 1 binary64) #s(approx (/ n (/ (pow x (/ 1 n)) x)) (*.f64 x n)))))))"
+          ],
+          [
+            12354,
+            8.931969000332984,
+            "(if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 50 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (/.f64 #s(literal -1 binary64) n) (*.f64 (pow.f64 x (/.f64 #s(literal -1 binary64) n)) (neg.f64 x)))) (if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 199999999999999982405111001914463627825705729939051460364922737117355163153802565541919878198424069508213948681199740222346696327168 binary64)) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) (+.f64 (/.f64 x n) #s(literal 1 binary64))) (pow.f64 x (/.f64 #s(literal 1 binary64) n))) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) #s(approx (/ (+ (* (/ (pow x (/ 1 n)) x) (- (/ 1/2 (* n n)) (/ 1/2 n))) (/ (pow x (/ 1 n)) n)) x) #s(approx (/ (- (/ (- (/ 1/2 x) 1) x) (/ (+ (* (/ -1/2 x) (/ (log x) x)) (+ (/ (log x) x) (/ 1/2 (* x x)))) n)) (neg n)) (/.f64 (/.f64 (-.f64 (fma.f64 #s(literal -1/2 binary64) (/.f64 (log.f64 x) n) (/.f64 #s(literal 1/2 binary64) n)) #s(literal 1/2 binary64)) (*.f64 x x)) n))))))"
+          ],
+          [
+            11905,
+            8.931969000332984,
+            "(if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 50 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (/.f64 #s(literal -1 binary64) n) (*.f64 (pow.f64 x (/.f64 #s(literal -1 binary64) n)) (neg.f64 x)))) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) (fma.f64 (fma.f64 (-.f64 (/.f64 #s(literal 1/2 binary64) (*.f64 n n)) (/.f64 #s(literal 1/2 binary64) n)) x (/.f64 #s(literal 1 binary64) n)) x #s(literal 1 binary64))) (pow.f64 x (/.f64 #s(literal 1 binary64) n))))"
+          ],
+          [
+            11650,
+            8.931969000332984,
+            "(if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 50 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (/.f64 #s(literal -1 binary64) n) (*.f64 (pow.f64 x (/.f64 #s(literal -1 binary64) n)) (neg.f64 x)))) (if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 50000000000000003226559936361919779827105376205144584884917978916367904662510143278135754996687257850822691394447592090096097397546144525317852447661395664561828975608881910401466368 binary64)) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) (+.f64 (/.f64 x n) #s(literal 1 binary64))) (pow.f64 x (/.f64 #s(literal 1 binary64) n))) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) #s(approx (+ (* (+ (* (- (/ 1/2 (* n n)) (/ 1/2 n)) x) (/ 1 n)) x) 1) (*.f64 (*.f64 (/.f64 (/.f64 x n) n) x) #s(literal 1/2 binary64)))) (pow.f64 x (/.f64 #s(literal 1 binary64) n)))))"
+          ],
+          [
+            9473,
+            8.931969000332984,
+            "(if (<=.f64 x #s(literal 1531270651144223/85070591730234615865843651857942052864 binary64)) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) (+.f64 (/.f64 x n) #s(literal 1 binary64))) (pow.f64 x (/.f64 #s(literal 1 binary64) n))) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (/.f64 #s(literal -1 binary64) n) (*.f64 (pow.f64 x (/.f64 #s(literal -1 binary64) n)) (neg.f64 x)))))"
+          ],
+          [
+            9345,
+            8.931969000358336,
+            "(if (<=.f64 x #s(literal 1531270651144223/85070591730234615865843651857942052864 binary64)) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) (+.f64 (/.f64 x n) #s(literal 1 binary64))) (pow.f64 x (/.f64 #s(literal 1 binary64) n))) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (/.f64 #s(literal 1 binary64) (*.f64 (pow.f64 x (/.f64 #s(literal -1 binary64) n)) x)) n)))"
+          ],
+          [
+            9025,
+            8.931969000358336,
+            "(if (<=.f64 x #s(literal 1531270651144223/85070591730234615865843651857942052864 binary64)) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) (+.f64 (/.f64 x n) #s(literal 1 binary64))) (pow.f64 x (/.f64 #s(literal 1 binary64) n))) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (/.f64 (pow.f64 x (/.f64 #s(literal 1 binary64) n)) x) n)))"
+          ],
+          [
+            8705,
+            8.931969000358336,
+            "(if (<=.f64 x #s(literal 1531270651144223/85070591730234615865843651857942052864 binary64)) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) (+.f64 (/.f64 x n) #s(literal 1 binary64))) (pow.f64 x (/.f64 #s(literal 1 binary64) n))) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (pow.f64 x (-.f64 #s(literal -1 binary64) (/.f64 #s(literal -1 binary64) n))) n)))"
+          ],
+          [
+            8513,
+            8.931969000358336,
+            "(if (<=.f64 x #s(literal 767620341034077/8343699359066055009355553539724812947666814540455674882605631280555545803830627148527195652096 binary64)) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) #s(literal 1 binary64)) (pow.f64 x (/.f64 #s(literal 1 binary64) n))) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (pow.f64 x (-.f64 #s(literal -1 binary64) (/.f64 #s(literal -1 binary64) n))) n)))"
+          ],
+          [
+            8322,
+            4.461703142108085,
+            "(if (<=.f64 x #s(literal 1 binary64)) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) #s(literal 1 binary64)) (pow.f64 x (/.f64 #s(literal 1 binary64) n))) (if (<=.f64 x #s(literal 699999999999999998996429275794402911836504141812324377062230730279641020627755780354709643545328987164367672990530032275069470617944987975645710118133554242658924330597849246543860984888112225189888 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 #s(approx (+ (* (/ (pow x (/ 1 n)) x) (- (/ 1/2 (* n n)) (/ 1/2 n))) (/ (pow x (/ 1 n)) n)) (/.f64 (-.f64 #s(literal 1 binary64) (/.f64 #s(literal 1/2 binary64) x)) n)) x)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 #s(approx (/ (pow x (/ 1 n)) x) (pow.f64 (*.f64 x x) #s(literal -1/2 binary64))) n))))"
+          ],
+          [
+            7809,
+            4.461703142108085,
+            "(if (<=.f64 x #s(literal 1 binary64)) (-.f64 #s(approx (pow (+ x 1) (/ 1 n)) #s(literal 1 binary64)) (pow.f64 x (/.f64 #s(literal 1 binary64) n))) (if (<=.f64 x #s(literal 15000000000000000797490294939894735534050841862867651460035459480565837283438248391892506437023957363538582522718768140944425667707080480809753824463530605815048755596001335270174626025644249846853195675293722100816855395855538707234816 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 #s(approx (+ (* (/ (pow x (/ 1 n)) x) (- (/ 1/2 (* n n)) (/ 1/2 n))) (/ (pow x (/ 1 n)) n)) (/.f64 (-.f64 #s(literal 1 binary64) (/.f64 #s(literal 1/2 binary64) x)) n)) x)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 #s(approx (+ (* (/ (pow x (/ 1 n)) x) (- (/ 1/2 (* n n)) (/ 1/2 n))) (/ (pow x (/ 1 n)) n)) #s(approx (/ (- 1 (/ 1/2 x)) n) (/.f64 (/.f64 #s(literal -1/2 binary64) n) x))) x))))"
+          ],
+          [
+            2561,
+            8.931969000332984,
+            "(if (<=.f64 x #s(literal 15000000000000000797490294939894735534050841862867651460035459480565837283438248391892506437023957363538582522718768140944425667707080480809753824463530605815048755596001335270174626025644249846853195675293722100816855395855538707234816 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 #s(approx (+ (* (/ (pow x (/ 1 n)) x) (- (/ 1/2 (* n n)) (/ 1/2 n))) (/ (pow x (/ 1 n)) n)) #s(approx (/ (- 1 (/ 1/2 x)) n) (/.f64 #s(literal 1 binary64) n))) x)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 #s(approx (+ (* (/ (pow x (/ 1 n)) x) (- (/ 1/2 (* n n)) (/ 1/2 n))) (/ (pow x (/ 1 n)) n)) #s(approx (/ (- 1 (/ 1/2 x)) n) (/.f64 (/.f64 #s(literal -1/2 binary64) n) x))) x)))"
+          ],
+          [
+            1472,
+            8.931969000332984,
+            "#s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 #s(approx (+ (* (/ (pow x (/ 1 n)) x) (- (/ 1/2 (* n n)) (/ 1/2 n))) (/ (pow x (/ 1 n)) n)) #s(approx (/ (- 1 (/ 1/2 x)) n) (/.f64 #s(literal 1 binary64) n))) x))"
+          ],
+          [
+            1088,
+            8.681969000358336,
+            "#s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 #s(literal 1 binary64) #s(approx (/ n (/ (pow x (/ 1 n)) x)) (*.f64 x n))))"
+          ]
+        ]
+      ],
+      "end": 34.4597349617065,
+      "end-est": 5.322372995471499,
+      "identifier": "#f",
+      "input": "(- (pow (+ x 1.0) (/ 1.0 n)) (pow x (/ 1.0 n)))",
+      "link": "21-2nthrtproblem346",
+      "name": "2nthrt (problem 3.4.6)",
+      "output": "(if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal -7136238463529799/1427247692705959881058285969449495136382746624 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (/.f64 #s(literal -1 binary64) n) (*.f64 (pow.f64 x (/.f64 #s(literal -1 binary64) n)) (neg.f64 x)))) (if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 2348542582773833/1174271291386916613944740298394668513687841274454159935353645485766104512557304221731849499192384351515967488 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (-.f64 (log1p.f64 x) (log.f64 x)) n)) (if (<=.f64 (/.f64 #s(literal 1 binary64) n) #s(literal 50 binary64)) #s(approx (- (pow (+ x 1) (/ 1 n)) (pow x (/ 1 n))) (/.f64 (fma.f64 (/.f64 (pow.f64 x (/.f64 #s(literal 1 binary64) n)) x) (+.f64 (-.f64 (/.f64 #s(literal 1/2 binary64) (*.f64 n n)) (/.f64 #s(literal 1/2 binary64) n)) (/.f64 (-.f64 (+.f64 (/.f64 #s(literal 1/6 binary64) (pow.f64 n #s(literal 3 binary64))) (/.f64 #s(literal 1/3 binary64) n)) (/.f64 #s(literal 1/2 binary64) (*.f64 n n))) x)) (/.f64 (pow.f64 x (/.f64 #s(literal 1 binary64) n)) n)) x)) (-.f64 (exp.f64 #s(approx (/ (log (+ 1 x)) n) (/.f64 x n))) (pow.f64 x (/.f64 #s(literal 1 binary64) n))))))",
+      "pre": "(TRUE)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(- (pow (+ x 1.0) (/ 1.0 n)) (pow x (/ 1.0 n)))",
+      "start": 43.95539599585543,
+      "start-est": 28.972238971851645,
+      "status": "imp-start",
+      "target": [],
+      "target-prog": "()",
+      "time": 4365.615234375,
+      "vars": [
+        "x",
+        "n"
+      ],
+      "warnings": [
+        "ground-truth"
+      ]
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          13248,
+          38.183987312926625
+        ],
+        [
+          21057,
+          0.25
+        ],
+        [
+          [
+            20929,
+            0.25,
+            "(if (<=.f64 (-.f64 (log.f64 (+.f64 #s(literal 1 binary64) N)) (log.f64 N)) #s(literal 1152921504606847/2305843009213693952 binary64)) #s(approx (- (log (+ N 1)) (log N)) (/.f64 #s(literal 1 binary64) (/.f64 N (-.f64 (/.f64 (-.f64 #s(literal -1/2 binary64) (/.f64 (-.f64 (/.f64 #s(literal 1/4 binary64) N) #s(literal 1/3 binary64)) N)) N) #s(literal -1 binary64))))) (log.f64 (/.f64 (+.f64 #s(literal 1 binary64) N) N)))"
+          ],
+          [
+            3776,
+            0.25,
+            "#s(approx (- (log (+ N 1)) (log N)) (/.f64 #s(literal 1 binary64) #s(approx (/ N (- (/ (- -1/2 (/ (- (/ 1/4 N) 1/3) N)) N) -1)) (*.f64 (-.f64 (/.f64 (-.f64 #s(literal 1/2 binary64) (/.f64 (-.f64 #s(literal 1/12 binary64) (/.f64 #s(literal 1/24 binary64) N)) N)) N) #s(literal -1 binary64)) N))))"
+          ],
+          [
+            3136,
+            0.25,
+            "#s(approx (- (log (+ N 1)) (log N)) (/.f64 #s(literal 1 binary64) #s(approx (/ N (- (/ (- -1/2 (/ (- (/ 1/4 N) 1/3) N)) N) -1)) #s(approx (* (- -1 (/ (- 1/2 (/ (- 1/12 (/ 1/24 N)) N)) N)) (neg N)) (/.f64 (/.f64 (fma.f64 (fma.f64 (+.f64 #s(literal 1/2 binary64) N) N #s(literal -1/12 binary64)) N #s(literal 1/24 binary64)) N) N)))))"
+          ],
+          [
+            3072,
+            0.25,
+            "#s(approx (- (log (+ N 1)) (log N)) (/.f64 (+.f64 (-.f64 #s(literal -1/2 binary64) (/.f64 (-.f64 (/.f64 #s(literal 1/4 binary64) N) #s(literal 1/3 binary64)) N)) N) (*.f64 N N)))"
+          ],
+          [
+            2880,
+            0.25,
+            "#s(approx (- (log (+ N 1)) (log N)) (/.f64 #s(literal 1 binary64) #s(approx (/ N (- (/ (- -1/2 (/ (- (/ 1/4 N) 1/3) N)) N) -1)) #s(approx (* (- -1 (/ (- 1/2 (/ (- 1/12 (/ 1/24 N)) N)) N)) (neg N)) (+.f64 (*.f64 (/.f64 (-.f64 #s(literal 1/2 binary64) (/.f64 #s(literal 1/12 binary64) N)) N) N) N)))))"
+          ],
+          [
+            2560,
+            0.25,
+            "#s(approx (- (log (+ N 1)) (log N)) (/.f64 (-.f64 (/.f64 (-.f64 (/.f64 #s(literal 1/3 binary64) N) #s(literal 1/2 binary64)) N) #s(literal -1 binary64)) N))"
+          ],
+          [
+            2176,
+            0.25,
+            "#s(approx (- (log (+ N 1)) (log N)) (/.f64 (+.f64 #s(approx (* (- -1/2 (/ (- (/ 1/4 N) 1/3) N)) 1) (-.f64 (/.f64 #s(literal 1/3 binary64) N) #s(literal 1/2 binary64))) N) (*.f64 N N)))"
+          ],
+          [
+            960,
+            0.25,
+            "#s(approx (- (log (+ N 1)) (log N)) (/.f64 #s(literal 1 binary64) #s(approx (/ N (- (/ (- -1/2 (/ (- (/ 1/4 N) 1/3) N)) N) -1)) (+.f64 #s(literal 1/2 binary64) N))))"
+          ],
+          [
+            768,
+            17.33503103480963,
+            "#s(approx (- (log (+ N 1)) (log N)) (/.f64 #s(literal 1 binary64) N))"
+          ],
+          [
+            64,
+            61.93401365525924,
+            "#s(approx (/ (+ (* (/ (pow (log (+ 1 N)) 2) (+ (log N) (log (+ 1 N)))) (neg (+ (log N) (log (+ 1 N))))) (pow (log N) 2)) (neg (+ (log N) (log (+ 1 N))))) #s(literal 0 binary64))"
+          ]
+        ]
+      ],
+      "end": 0.25,
+      "end-est": 0.20838715483015466,
+      "identifier": "#f",
+      "input": "(- (log (+ N 1.0)) (log N))",
+      "link": "22-2logproblem336",
+      "name": "2log (problem 3.3.6)",
+      "output": "(if (<=.f64 (-.f64 (log.f64 (+.f64 #s(literal 1 binary64) N)) (log.f64 N)) #s(literal 1152921504606847/2305843009213693952 binary64)) #s(approx (- (log (+ N 1)) (log N)) (/.f64 #s(literal 1 binary64) (/.f64 N (-.f64 (/.f64 (-.f64 #s(literal -1/2 binary64) (/.f64 (-.f64 (/.f64 #s(literal 1/4 binary64) N) #s(literal 1/3 binary64)) N)) N) #s(literal -1 binary64))))) (neg.f64 (log.f64 (/.f64 N (+.f64 #s(literal 1 binary64) N)))))",
+      "pre": "(and (> N 1.0) (< N 1e+40))",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(- (log (+ N 1.0)) (log N))",
+      "start": 38.183987312926625,
+      "start-est": 50.02716658697504,
+      "status": "eq-target",
+      "target": [
+        [
+          23808,
+          0.25
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (+ (/ 1 N) (/ -1 (* 2 (pow N 2))) (/ 1 (* 3 (pow N 3))) (/ -1 (* 4 (pow N 4))))) . #t))",
+      "time": 2976.56201171875,
+      "vars": [
+        "N"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          3136,
+          60.36692105541919
+        ],
+        [
+          4096,
+          0.75
+        ],
+        [
+          [
+            3520,
+            0.75,
+            "(/.f64 #s(approx (/ (- (sqrt (+ x 1)) (sqrt x)) (sqrt x)) (*.f64 (/.f64 #s(literal -1 binary64) x) (+.f64 (/.f64 #s(literal 1/8 binary64) x) #s(literal -1/2 binary64)))) (sqrt.f64 (+.f64 #s(literal 1 binary64) x)))"
+          ],
+          [
+            3200,
+            0.75,
+            "(/.f64 #s(approx (/ (- (sqrt (+ x 1)) (sqrt x)) (sqrt x)) (/.f64 (-.f64 #s(literal 1/2 binary64) (/.f64 #s(literal 1/8 binary64) x)) x)) (sqrt.f64 (+.f64 #s(literal 1 binary64) x)))"
+          ],
+          [
+            2624,
+            1.0,
+            "(/.f64 (neg.f64 #s(approx (- (sqrt (+ x 1)) (sqrt x)) (/.f64 #s(literal 1/2 binary64) (sqrt.f64 x)))) #s(approx (* (sqrt (+ 1 x)) (neg (sqrt x))) (fma.f64 #s(literal -1 binary64) x #s(literal -1/2 binary64))))"
+          ],
+          [
+            2304,
+            0.75,
+            "(/.f64 #s(approx (/ (- (sqrt (+ x 1)) (sqrt x)) (sqrt x)) (/.f64 #s(literal 1/2 binary64) x)) (sqrt.f64 (+.f64 #s(literal 1 binary64) x)))"
+          ],
+          [
+            2048,
+            29.719750406921154,
+            "#s(approx (- (/ 1 (sqrt x)) (/ 1 (sqrt (+ x 1)))) (/.f64 #s(approx (+ (* (+ (* (+ (* 1/4 x) 1) (sqrt (/ 1 (pow x 3)))) (sqrt x)) 1/2) (* -1/2 (sqrt (/ 1 x)))) (*.f64 (sqrt.f64 x) #s(literal 1/2 binary64))) (*.f64 x x)))"
+          ],
+          [
+            1856,
+            60.36692105541919,
+            "(/.f64 (-.f64 #s(approx (sqrt (/ (+ x 1) x)) (+.f64 (/.f64 #s(literal 1/2 binary64) x) #s(literal 1 binary64))) #s(literal 1 binary64)) #s(approx (sqrt (+ x 1)) #s(literal 1 binary64)))"
+          ],
+          [
+            64,
+            60.36692105541919,
+            "#s(approx (/ (/ (- (sqrt (* (+ x 1) x)) x) x) (sqrt (+ x 1))) #s(literal 0 binary64))"
+          ]
+        ]
+      ],
+      "end": 0.75,
+      "end-est": 0.5249438002346533,
+      "identifier": "#f",
+      "input": "(- (/ 1.0 (sqrt x)) (/ 1.0 (sqrt (+ x 1.0))))",
+      "link": "23-2isqrtexample36",
+      "name": "2isqrt (example 3.6)",
+      "output": "(/.f64 #s(approx (/ (- (sqrt (* (+ x 1) x)) x) x) (/.f64 (+.f64 #s(literal 1/2 binary64) (/.f64 (+.f64 #s(literal -1/8 binary64) (/.f64 #s(literal 1/16 binary64) x)) x)) x)) (sqrt.f64 (+.f64 #s(literal 1 binary64) x)))",
+      "pre": "(and (> x 1.0) (< x 1e+308))",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(- (/ 1.0 (sqrt x)) (/ 1.0 (sqrt (+ x 1.0))))",
+      "start": 60.36692105541919,
+      "start-est": 42.5250890651916,
+      "status": "gt-target",
+      "target": [
+        [
+          13376,
+          60.36692105541919
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (- (pow x -1/2) (pow (+ x 1) -1/2))) . #t))",
+      "time": 2903.75390625,
+      "vars": [
+        "x"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          1856,
+          15.03545580423604
+        ],
+        [
+          1664,
+          0
+        ],
+        [
+          [
+            5506,
+            0,
+            "(if (<=.f64 (-.f64 (/.f64 #s(literal 1 binary64) (+.f64 x #s(literal 1 binary64))) (/.f64 #s(literal 1 binary64) x)) #s(literal -2 binary64)) (-.f64 #s(approx (/ 1 (+ x 1)) (-.f64 #s(literal 1 binary64) x)) (/.f64 #s(literal 1 binary64) x)) (if (<=.f64 (-.f64 (/.f64 #s(literal 1 binary64) (+.f64 x #s(literal 1 binary64))) (/.f64 #s(literal 1 binary64) x)) #s(literal 0 binary64)) #s(approx (/ (neg (/ (- (- x x) 1) (- -1 x))) x) (/.f64 #s(literal -1 binary64) (*.f64 x x))) (-.f64 #s(approx (/ 1 (+ x 1)) (-.f64 #s(literal 1 binary64) x)) (/.f64 #s(literal 1 binary64) x))))"
+          ],
+          [
+            5442,
+            0,
+            "(if (<=.f64 (-.f64 (/.f64 #s(literal 1 binary64) (+.f64 x #s(literal 1 binary64))) (/.f64 #s(literal 1 binary64) x)) #s(literal -2 binary64)) #s(approx (- (/ 1 (+ x 1)) (/ 1 x)) (/.f64 (-.f64 x #s(literal 1 binary64)) x)) (if (<=.f64 (-.f64 (/.f64 #s(literal 1 binary64) (+.f64 x #s(literal 1 binary64))) (/.f64 #s(literal 1 binary64) x)) #s(literal 0 binary64)) #s(approx (/ (neg (/ (- (- x x) 1) (- -1 x))) x) (/.f64 #s(literal -1 binary64) (*.f64 x x))) (-.f64 #s(approx (/ 1 (+ x 1)) #s(literal 1 binary64)) (/.f64 #s(literal 1 binary64) x))))"
+          ],
+          [
+            1280,
+            0,
+            "(/.f64 #s(approx (- (- x x) 1) #s(literal -1 binary64)) (+.f64 (*.f64 x x) x))"
+          ],
+          [
+            1152,
+            0,
+            "(/.f64 #s(approx (- (- x x) 1) #s(literal -1 binary64)) (fma.f64 x x x))"
+          ],
+          [
+            768,
+            43.991039066779756,
+            "#s(approx (- (/ 1 (+ x 1)) (/ 1 x)) (/.f64 #s(literal -1 binary64) x))"
+          ],
+          [
+            192,
+            62.51535763143959,
+            "#s(approx (- (/ 1 (+ x 1)) (/ 1 x)) #s(approx (* (- (/ -1 x) x) (- 1 x)) #s(approx (* (- x 1) x) (neg.f64 x))))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.09765625,
+      "identifier": "#f",
+      "input": "(- (/ 1.0 (+ x 1.0)) (/ 1.0 x))",
+      "link": "24-2fracproblem331",
+      "name": "2frac (problem 3.3.1)",
+      "output": "(/.f64 (/.f64 #s(literal 1 binary64) (-.f64 #s(literal -1 binary64) x)) x)",
+      "pre": "(TRUE)",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(- (/ 1.0 (+ x 1.0)) (/ 1.0 x))",
+      "start": 15.03545580423604,
+      "start-est": 16.771231389642896,
+      "status": "eq-target",
+      "target": [
+        [
+          1280,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (/ 1 (* x (- -1 x)))) . #t))",
+      "time": 2144.416015625,
+      "vars": [
+        "x"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          13248,
+          15.415163041396466
+        ],
+        [
+          8512,
+          0
+        ],
+        [
+          [
+            8320,
+            0,
+            "#s(approx (- (cos (+ x eps)) (cos x)) (fma.f64 #s(approx (* (* (cos x) -1/2) eps) (*.f64 (fma.f64 (*.f64 x x) #s(literal 1/4 binary64) #s(literal -1/2 binary64)) eps)) eps (*.f64 (neg.f64 eps) (sin.f64 x))))"
+          ],
+          [
+            8000,
+            0,
+            "#s(approx (- (cos (+ x eps)) (cos x)) (*.f64 (-.f64 #s(approx (* (* (cos x) -1/2) eps) (*.f64 (fma.f64 #s(literal 1/4 binary64) (*.f64 x x) #s(literal -1/2 binary64)) eps)) (sin.f64 x)) eps))"
+          ],
+          [
+            2624,
+            0,
+            "#s(approx (- (cos (+ x eps)) (cos x)) #s(approx (* (- (* (* (cos x) -1/2) eps) (sin x)) eps) (fma.f64 (fma.f64 (*.f64 (fma.f64 #s(literal 1/6 binary64) x (*.f64 #s(literal 1/4 binary64) eps)) eps) x (neg.f64 eps)) x (*.f64 (*.f64 eps eps) #s(literal -1/2 binary64)))))"
+          ],
+          [
+            2624,
+            0,
+            "#s(approx (- (cos (+ x eps)) (cos x)) #s(approx (* (- (* (* (cos x) -1/2) eps) (sin x)) eps) (fma.f64 (*.f64 #s(literal -1/2 binary64) eps) eps (*.f64 (fma.f64 (*.f64 (fma.f64 #s(literal 1/4 binary64) eps (*.f64 #s(literal 1/6 binary64) x)) eps) x (neg.f64 eps)) x))))"
+          ],
+          [
+            2176,
+            0,
+            "#s(approx (- (cos (+ x eps)) (cos x)) (*.f64 #s(approx (- (* (* (cos x) -1/2) eps) (sin x)) (fma.f64 (fma.f64 (fma.f64 #s(literal 1/4 binary64) eps (*.f64 #s(literal 1/6 binary64) x)) x #s(literal -1 binary64)) x (*.f64 #s(literal -1/2 binary64) eps))) eps))"
+          ],
+          [
+            2112,
+            0,
+            "#s(approx (- (cos (+ x eps)) (cos x)) #s(approx (* (- (* (* (cos x) -1/2) eps) (sin x)) eps) (fma.f64 #s(approx (+ (* (* (* eps eps) x) 1/4) (neg eps)) (*.f64 (fma.f64 (*.f64 eps x) #s(literal 1/4 binary64) #s(literal -1 binary64)) eps)) x (*.f64 (*.f64 eps eps) #s(literal -1/2 binary64)))))"
+          ],
+          [
+            1600,
+            0,
+            "#s(approx (- (cos (+ x eps)) (cos x)) (*.f64 #s(approx (- (* (* (cos x) -1/2) eps) (sin x)) (fma.f64 eps (fma.f64 #s(literal 1/4 binary64) (*.f64 x x) #s(literal -1/2 binary64)) (neg.f64 x))) eps))"
+          ],
+          [
+            896,
+            0,
+            "#s(approx (- (cos (+ x eps)) (cos x)) (*.f64 #s(approx (- (* (* (cos x) -1/2) eps) (sin x)) (fma.f64 #s(literal -1/2 binary64) eps (neg.f64 x))) eps))"
+          ],
+          [
+            512,
+            3.729855506083763,
+            "#s(approx (- (cos (+ x eps)) (cos x)) #s(approx (* (neg eps) (sin x)) (*.f64 (neg.f64 x) eps)))"
+          ],
+          [
+            256,
+            15.415163041396466,
+            "#s(approx (- (cos (+ x eps)) (cos x)) (-.f64 #s(approx (cos eps) #s(literal 1 binary64)) #s(literal 1 binary64)))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.19140625,
+      "identifier": "#f",
+      "input": "(- (cos (+ x eps)) (cos x))",
+      "link": "25-2cosproblem335",
+      "name": "2cos (problem 3.3.5)",
+      "output": "(*.f64 #s(literal -2 binary64) (*.f64 #s(approx (sin (* 1/2 (+ 0 eps))) (*.f64 (fma.f64 (*.f64 #s(literal -1/48 binary64) eps) eps #s(literal 1/2 binary64)) eps)) (sin.f64 #s(approx (* 1/2 (+ (* 2 x) eps)) (fma.f64 #s(literal 1/2 binary64) eps x)))))",
+      "pre": "(and (and (and (<= -10000.0 x) (<= x 10000.0)) (< (* 1e-16 (fabs x)) eps)) (< eps (fabs x)))",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(- (cos (+ x eps)) (cos x))",
+      "start": 15.415163041396466,
+      "start-est": 29.686006880059068,
+      "status": "gt-target",
+      "target": [
+        [
+          27392,
+          0.5
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (pow (cbrt (* -2 (sin (* 1/2 (fma 2 x eps))) (sin (* 1/2 eps)))) 3)) . #t))",
+      "time": 3657.4736328125,
+      "vars": [
+        "x",
+        "eps"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          13248,
+          61.53525927793552
+        ],
+        [
+          47809,
+          0.25
+        ],
+        [
+          [
+            7488,
+            0.25,
+            "#s(approx (- (cbrt (+ x 1)) (cbrt x)) (*.f64 #s(literal 1/3 binary64) (/.f64 (cbrt.f64 x) x)))"
+          ],
+          [
+            6848,
+            5.570426274389088,
+            "#s(approx (- (cbrt (+ x 1)) (cbrt x)) (*.f64 (pow.f64 x #s(literal -2/3 binary64)) #s(literal 1/3 binary64)))"
+          ],
+          [
+            6464,
+            60.436218809497916,
+            "#s(approx (- (pow (exp (neg (log (+ 1 x)))) -1/3) (cbrt x)) (cbrt.f64 x))"
+          ]
+        ]
+      ],
+      "end": 0.25,
+      "end-est": 0.6536652657644338,
+      "identifier": "#f",
+      "input": "(- (cbrt (+ x 1.0)) (cbrt x))",
+      "link": "26-2cbrtproblem334",
+      "name": "2cbrt (problem 3.3.4)",
+      "output": "(if (<=.f64 (-.f64 (cbrt.f64 (+.f64 #s(literal 1 binary64) x)) (cbrt.f64 x)) #s(literal 7737125245533627/154742504910672534362390528 binary64)) #s(approx (- (cbrt (+ x 1)) (cbrt x)) (*.f64 #s(literal 1/3 binary64) (/.f64 (cbrt.f64 x) x))) (/.f64 (-.f64 (+.f64 #s(literal 1 binary64) x) x) (fma.f64 (cbrt.f64 x) (+.f64 (cbrt.f64 x) (cbrt.f64 (+.f64 #s(literal 1 binary64) x))) (exp.f64 (*.f64 #s(literal 2/3 binary64) (log1p.f64 x))))))",
+      "pre": "(and (> x 1.0) (< x 1e+308))",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(- (cbrt (+ x 1.0)) (cbrt x))",
+      "start": 61.53525927793552,
+      "start-est": 59.69282168685272,
+      "status": "gt-target",
+      "target": [
+        [
+          41088,
+          1.042481250360578
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (/ 1 (+ (* (cbrt (+ x 1)) (cbrt (+ x 1))) (* (cbrt x) (cbrt (+ x 1))) (* (cbrt x) (cbrt x))))) . #t))",
+      "time": 2642.572509765625,
+      "vars": [
+        "x"
+      ],
+      "warnings": []
+    },
+    {
+      "bits": 64,
+      "conversions": [],
+      "cost-accuracy": [
+        [
+          13248,
+          61.51973687119078
+        ],
+        [
+          7104,
+          0
+        ],
+        [
+          [
+            7104,
+            0,
+            "(atan2.f64 #s(literal 1 binary64) (+.f64 (fma.f64 N N #s(literal 1 binary64)) N))"
+          ],
+          [
+            6912,
+            0,
+            "(atan2.f64 #s(literal 1 binary64) #s(approx (+ (* (+ 1 N) N) 1) (fma.f64 N N N)))"
+          ],
+          [
+            6848,
+            4.124381106189995,
+            "(atan2.f64 #s(literal 1 binary64) #s(approx (+ (* (+ 1 N) N) 1) (*.f64 N N)))"
+          ],
+          [
+            6720,
+            58.82953461260648,
+            "(atan2.f64 #s(literal 1 binary64) #s(approx (+ (* (+ 1 N) N) 1) (-.f64 N #s(literal -1 binary64))))"
+          ],
+          [
+            6528,
+            59.826250094379,
+            "(atan2.f64 #s(literal 1 binary64) #s(approx (+ (* (+ 1 N) N) 1) #s(literal 1 binary64)))"
+          ]
+        ]
+      ],
+      "end": 0,
+      "end-est": 0.27962875976844204,
+      "identifier": "#f",
+      "input": "(- (atan (+ N 1.0)) (atan N))",
+      "link": "27-2atanexample35",
+      "name": "2atan (example 3.5)",
+      "output": "(atan2.f64 #s(literal 1 binary64) (fma.f64 (+.f64 N #s(literal 1 binary64)) N #s(literal 1 binary64)))",
+      "pre": "(and (> N 1.0) (< N 1e+100))",
+      "prec": "binary64",
+      "preprocess": "()",
+      "spec": "(- (atan (+ N 1.0)) (atan N))",
+      "start": 61.51973687119078,
+      "start-est": 59.05194972954686,
+      "status": "eq-target",
+      "target": [
+        [
+          7104,
+          0
+        ]
+      ],
+      "target-prog": "(((! :herbie-platform default (atan2 1 (fma N (+ 1 N) 1))) . #t))",
+      "time": 1859.025634765625,
+      "vars": [
+        "N"
+      ],
+      "warnings": []
+    }
+  ]
+}

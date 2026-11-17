@@ -30,10 +30,10 @@ class OracleEnvSetup(CaseOracleEnvSetupBase):
 			VersionCheck(
 				name="make",
 				cmd=("make", "--version"),
-				min_version=(4, 4, 0),
+				min_version=(3, 81, 0),
 				version_regex=r"GNU Make\s+([0-9]+(?:\.[0-9]+){1,2})",
 			),
-                        PathCheck(
+			PathCheck(
 				name="repo_root_exists",
 				path=repo_root,
 				kind=PathKind.DIRECTORY,
