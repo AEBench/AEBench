@@ -1,0 +1,34 @@
+name: F20_network
+description: A root download, a nested download under a reparented shell, and a package-manager query that is not network use.
+rules: [NET1, NET2, NET3]
+calls:
+  - {call_id: c1, command: "wget -q u -O f", t_start: 10}
+  - {call_id: c2, command: "nohup ./fetch.sh &", t_start: 20}
+  - {call_id: c3, command: pip list, t_start: 100}
+execs:
+  - {command_id: e1, command: "wget -q u -O f", t_start: 10.1}
+  - {command_id: e2, command: "nohup ./fetch.sh &", t_start: 20.1, duration_s: 0.1}
+  - {command_id: e3, command: ./fetch.sh, t_start: 30, duration_s: 20}
+  - {command_id: e4, command: "curl -sO u", t_start: 31, duration_s: 2}
+  - {command_id: e5, command: pip list, t_start: 100.1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: call_exec, call_id: c3, command_id: e5}
+  - {link_type: exec_parent, command_id: e3, parent: null, root_call_id: c2, rule: reparenting}
+  - {link_type: exec_parent, command_id: e4, parent: e3, root_call_id: c2}
+expect:
+  exec_facts:
+    e1: {network_types: [download]}
+    e4: {network_types: [download], root_under: false}
+    e5: {network_types: []}
+  call_facts:
+    c1: {network_types_under: [download], network_types_over: [download]}
+    c2: {network_types_under: [], network_types_over: [download]}
+    c3: {network_types_under: [], network_types_over: []}
+  facts:
+    M6.1.network_execs_under: 1
+    M6.1.network_execs_over: 2
+    M6.1.network_calls_under: 1
+    M6.1.network_calls_over: 2
+    M6.1.network_execs_by_type_over: {download: 2, install: 0}

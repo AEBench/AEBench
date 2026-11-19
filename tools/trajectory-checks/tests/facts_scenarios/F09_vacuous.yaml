@@ -1,0 +1,21 @@
+name: F09_vacuous
+description: Final diff present and empty, no snapshot lists a change; C6 and C7 hold vacuously and M4.1 counts are 0, not null.
+rules: [PRE2]
+calls:
+  - {call_id: c1, command: "cat README", t_start: 10}
+execs:
+  - {command_id: e1, command: "cat README", t_start: 10.1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+coverage:
+  rates.final_diff_attributed_rate_under: null
+  rates.final_diff_attributed_rate_over: null
+  rates.listed_path_rate: null
+expect:
+  facts:
+    preconditions.C7_under: vacuous
+    preconditions.C6: vacuous
+    M4.1.files_changed: 0
+    M4.1.changed_unattributed: 0
+    M4.1.changed_by_final_writer_under: {edit_call: 0, nested_exec: 0, root_exec: 0}
+    M4.1.changed_any_shell_writer_over: 0

@@ -1,0 +1,23 @@
+name: F31_timing_fallback
+description: F30 without exact_timing - intervals are [t_start, t_start + duration_s], snapshot time included.
+rules: [TIM5, TIM1, TIM2, TIM3, CAP1]
+calls:
+  - {call_id: c1, command: make, t_start: 10}
+  - {call_id: c2, command: ls, t_start: 20}
+execs:
+  - {command_id: e1, command: make, t_start: 10.0, duration_s: 4.0}
+  - {command_id: e2, command: ls, t_start: 20.0, duration_s: 2.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+expect:
+  call_facts:
+    c1: {t_start: 10.0, t_end: 14.0, duration_s: 4.0, span_under_s: 4.0, span_over_s: 4.0}
+    c2: {t_start: 20.0, t_end: 22.0, duration_s: 2.0}
+  facts:
+    bases.timing: fallback
+    M1.1.command_time_under_s: 6.0
+    M1.1.command_time_over_s: 6.0
+    M1.1.duration_p50_under_s: 2.0
+    M1.1.duration_p90_under_s: 4.0
+    M1.1.longest_span_under_s: 4.0

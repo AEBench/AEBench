@@ -1,0 +1,23 @@
+name: F17_env_unconfirmed
+description: An export never seen in a descendant is assigned but not confirmed; a lone assignment is a shell variable.
+rules: [ENV1, ENV4]
+calls:
+  - {call_id: c1, command: "export B=1; ls", t_start: 10}
+  - {call_id: c2, command: "x=1", t_start: 20}
+execs:
+  - {command_id: e1, command: "export B=1; ls", t_start: 10.1}
+  - {command_id: e2, command: "x=1", t_start: 20.1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+env_keys:
+  e1: [HOME]
+  e2: [HOME]
+expect:
+  call_facts:
+    c1: {env_assigned: [B], env_confirmed: []}
+    c2: {env_assigned: [], env_confirmed: []}
+  facts:
+    M5.2.env_names_assigned_over: 1
+    M5.2.env_names_assigned_under: 0
+    M5.2.env_names_observed: 0

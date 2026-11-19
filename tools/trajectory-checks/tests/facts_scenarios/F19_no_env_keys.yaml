@@ -1,0 +1,20 @@
+name: F19_no_env_keys
+description: Without env_keys M5.2 is null and the trace-based per-item fields are null; syntax is still recorded.
+rules: [PRE5]
+calls:
+  - {call_id: c1, command: "A=1 ./x", t_start: 10}
+execs:
+  - {command_id: e1, command: "A=1 ./x", t_start: 10.1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+expect:
+  call_facts:
+    c1: {env_assigned: [A], env_confirmed: null}
+  exec_facts:
+    e1: {env_added: null}
+  facts:
+    preconditions.env_keys: fails
+    M5.2.env_names_assigned_over: null
+    M5.2.names_observed: null
+  warnings:
+    - "input env_keys missing: M5.2 null"

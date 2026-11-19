@@ -1,0 +1,24 @@
+name: F08_c2_fails
+description: C2 under below threshold voids only M1.4; per-command descendant fields are still written.
+rules: [PRE4]
+calls:
+  - {call_id: c1, command: ./build.sh, t_start: 0}
+execs:
+  - {command_id: e1, command: ./build.sh, t_start: 0.1, duration_s: 4}
+  - {command_id: e2, command: "make all", t_start: 1, duration_s: 1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: exec_parent, command_id: e2, parent: e1, root_call_id: c1}
+coverage:
+  rates.exec_explained_rate_under: 0.5
+expect:
+  call_facts:
+    c1: {descendants_under: 1, descendants_over: 1, depth_max_over: 1}
+  facts:
+    preconditions.C2_under: fails
+    preconditions.C1_under: holds
+    M1.4.descendants_total_over: null
+    M1.4.depth_max_over: null
+    M1.1.command_time_under_s: 4.0
+  warnings:
+    - "precondition C2_under >= 0.9 failed (0.50): M1.4 null"

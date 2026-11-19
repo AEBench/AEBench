@@ -1,0 +1,26 @@
+name: F33_depth_fallback
+description: F32 without parent_links - depth follows J2's containment chain, an upper bound, and depth_max_under is null.
+rules: [NST2, NST3, CAP1]
+calls:
+  - {call_id: c1, command: "make -j3", t_start: 0}
+execs:
+  - {command_id: e1, command: "make -j3", t_start: 0.1, duration_s: 10}
+  - {command_id: e2, command: "sh -c a", t_start: 1, duration_s: 8}
+  - {command_id: e3, command: "sh -c b", t_start: 2, duration_s: 6}
+  - {command_id: e4, command: "sh -c c", t_start: 3, duration_s: 4}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: exec_parent, command_id: e2, parent: e1, root_call_id: c1}
+  - {link_type: exec_parent, command_id: e3, parent: e2, root_call_id: c1}
+  - {link_type: exec_parent, command_id: e4, parent: e3, root_call_id: c1}
+expect:
+  call_facts:
+    c1: {descendants_over: 3, depth_max_over: 3, depth_max_under: null}
+  exec_facts:
+    e2: {depth: 1}
+    e3: {depth: 2}
+    e4: {depth: 3}
+  facts:
+    bases.depth: fallback
+    M1.4.depth_max_under: null
+    M1.4.depth_max_over: 3

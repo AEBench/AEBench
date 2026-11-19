@@ -1,0 +1,33 @@
+name: F16_env_confirmed
+description: A prefix assignment before a command, confirmed in the nested shell; shell-managed names never count.
+rules: [ENV1, ENV2, ENV3, ENV4, ENV5]
+calls:
+  - {call_id: c0, command: pwd, t_start: 1}
+  - {call_id: c1, command: "A=1 ./run.sh", t_start: 10}
+execs:
+  - {command_id: e0, command: pwd, t_start: 1.1}
+  - {command_id: e1, command: "A=1 ./run.sh", t_start: 10.1, duration_s: 5}
+  - {command_id: e2, command: ./run.sh, t_start: 11, duration_s: 1}
+links:
+  - {link_type: call_exec, call_id: c0, command_id: e0}
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: exec_parent, command_id: e2, parent: e1, root_call_id: c1}
+env_keys:
+  e0: [HOME, PATH]
+  e1: [HOME, PATH, PWD, SHLVL]
+  e2: [HOME, PATH, A, OLDPWD, SHLVL, PWD]
+expect:
+  call_facts:
+    c0: {env_assigned: [], env_confirmed: []}
+    c1: {env_assigned: [A], env_confirmed: [A]}
+  exec_facts:
+    e1: {env_added: []}
+    e2: {env_added: [A]}
+  facts:
+    preconditions.env_keys: holds
+    M5.2.names_assigned_over: [A]
+    M5.2.names_assigned_under: [A]
+    M5.2.names_observed: [A]
+    M5.2.env_names_assigned_over: 1
+    M5.2.env_names_assigned_under: 1
+    M5.2.env_names_observed: 1

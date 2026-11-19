@@ -1,0 +1,24 @@
+name: F30_timing_exact
+description: With exact_timing, intervals and durations are [released_at, ended_at], without the snapshot time.
+rules: [TIM5, TIM1, TIM2, TIM3, CAP1]
+run: {capabilities: {exact_timing: true}}
+calls:
+  - {call_id: c1, command: make, t_start: 10}
+  - {call_id: c2, command: ls, t_start: 20}
+execs:
+  - {command_id: e1, command: make, t_start: 10.0, duration_s: 4.0, released_at: 10.5, ended_at: 13.0}
+  - {command_id: e2, command: ls, t_start: 20.0, duration_s: 2.0, released_at: 20.5, ended_at: 21.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+expect:
+  call_facts:
+    c1: {t_start: 10.5, t_end: 13.0, duration_s: 2.5, span_under_s: 2.5, span_over_s: 2.5}
+    c2: {t_start: 20.5, t_end: 21.0, duration_s: 0.5}
+  facts:
+    bases.timing: exact
+    M1.1.command_time_under_s: 3.0
+    M1.1.command_time_over_s: 3.0
+    M1.1.duration_p50_under_s: 0.5
+    M1.1.duration_p90_under_s: 2.5
+    M1.1.longest_span_under_s: 2.5

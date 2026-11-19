@@ -1,0 +1,19 @@
+name: F13_writes_per_command
+description: Writes per command count exec events only; writer_under false is only in the over version; an edit call writes for itself.
+rules: [WRT2]
+calls:
+  - {call_id: c1, command: ./step.sh, t_start: 10}
+  - {call_id: c2, tool_type: edit, raw_name: Edit, t_start: 20, paths: [/repo/c.txt]}
+execs:
+  - {command_id: e1, command: ./step.sh, t_start: 10.1, duration_s: 2, snapshot: {modified: [a.txt], created: [b.txt]}}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, path: a.txt, writer_id: e1}
+  - {link_type: write_event, path: b.txt, writer_id: e1, op: create, writer_under: false}
+  - {link_type: write_event, path: c.txt, writer_id: c2}
+expect:
+  absent: [c2]
+  call_facts:
+    c1:
+      writes_under: {create: 0, delete: 0, mode: 0, modify: 1}
+      writes_over: {create: 1, delete: 0, mode: 0, modify: 1}

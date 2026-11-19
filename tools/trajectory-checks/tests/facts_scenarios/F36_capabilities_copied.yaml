@@ -1,0 +1,17 @@
+name: F36_capabilities_copied
+description: Every capability except parent_links is true; facts.json copies them, bases follow them and untracked_visible comes from the capability.
+rules: [CAP1, PRE5]
+run:
+  capabilities: {start_events: true, exact_timing: true, content_hashes: true, untracked_visible: true, read_tracing: true, final_content: true, oracle_reads: true, egress_log: true}
+calls:
+  - {call_id: c1, command: ls, t_start: 10}
+execs:
+  - {command_id: e1, command: ls, t_start: 10.1, duration_s: 1, released_at: 10.2, ended_at: 10.6, record_type: closed}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+expect:
+  facts:
+    capabilities: {parent_links: false, start_events: true, exact_timing: true, content_hashes: true, untracked_visible: true, read_tracing: true, final_content: true, oracle_reads: true, egress_log: true}
+    bases: {timing: exact, depth: fallback, running_at_stop: exact}
+    preconditions.untracked_visible: holds
+    M1.1.command_time_under_s: 0.4

@@ -1,0 +1,31 @@
+name: F11_writer_roles
+description: Final writers of four changed files - an edit call, a root shell, a nested shell, and nobody.
+rules: [WRT1, WRT3, WRT4, WRT6]
+calls:
+  - {call_id: c1, command: ./gen.sh, t_start: 10}
+  - {call_id: c2, tool_type: edit, raw_name: Edit, t_start: 20, paths: [/repo/f3]}
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 10.1, duration_s: 3, snapshot: {modified: [f1]}}
+  - {command_id: e2, command: "cp a f2", t_start: 11, duration_s: 1, snapshot: {modified: [f2]}}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: exec_parent, command_id: e2, parent: e1, root_call_id: c1}
+  - {link_type: write_event, path: f1, writer_id: e1}
+  - {link_type: write_event, path: f2, writer_id: e2}
+  - {link_type: write_event, path: f3, writer_id: c2}
+paths:
+  - {path: f4, events: [], final_writer: null, final_writer_under: false}
+expect:
+  absent: [c2]
+  path_facts:
+    f1: {final_writer_role: root_exec, final_writer_root: c1, writer_roles: [root_exec]}
+    f2: {final_writer_role: nested_exec, final_writer_root: c1, writer_roles: [nested_exec]}
+    f3: {final_writer_role: edit_call, final_writer_root: c2, writer_roles: [edit_call]}
+    f4: {final_writer_role: null, final_writer_root: null, writer_roles: []}
+  facts:
+    M4.1.files_changed: 4
+    M4.1.changed_by_final_writer_under: {edit_call: 1, nested_exec: 1, root_exec: 1}
+    M4.1.changed_by_final_writer_over: {edit_call: 1, nested_exec: 1, root_exec: 1}
+    M4.1.changed_unattributed: 1
+    M4.1.changed_any_shell_writer_under: 2
+    M4.1.changed_any_shell_writer_over: 2

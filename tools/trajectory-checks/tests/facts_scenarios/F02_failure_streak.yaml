@@ -1,0 +1,26 @@
+name: F02_failure_streak
+description: Failed, failed, unmatched; the streak counts unknown as a pass (under) and as a failure (over).
+rules: [OUT1, OUT3, EXT1, EXT3, EXT4]
+calls:
+  - {call_id: c1, command: make, t_start: 10}
+  - {call_id: c2, command: make, t_start: 20}
+  - {call_id: c3, command: make test, t_start: 30}
+execs:
+  - {command_id: e1, command: make, t_start: 10.1, exit_code: 2}
+  - {command_id: e2, command: make, t_start: 20.1, exit_code: 2}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+expect:
+  call_facts:
+    c1: {outcome: failed, exit_code: 2}
+    c2: {outcome: failed}
+    c3: {outcome: unknown, command_id: null, exit_code: null, span_under_s: null, depth_max_over: null, command_shape: make test}
+  facts:
+    M1.3.nonzero_exits_under: 2
+    M1.3.nonzero_exits_over: 2
+    M1.3.exits_unknown: 1
+    M1.3.failure_streak_under: 2
+    M1.3.failure_streak_over: 3
+    M1.2.shell_calls: 3
+    M1.2.root_shapes: 2

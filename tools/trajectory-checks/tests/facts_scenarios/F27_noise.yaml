@@ -1,0 +1,19 @@
+name: F27_noise
+description: A harness noise record produces no row and changes no count.
+rules: [OUTF1, TIM1]
+calls:
+  - {call_id: c1, command: ls, t_start: 10}
+execs:
+  - {command_id: e0, command: "true", t_start: 0.5, duration_s: 3, noise: shim_probe}
+  - {command_id: e1, command: ls, t_start: 10.1, duration_s: 1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+env_keys:
+  e0: [HOME, NOISE_ONLY]
+  e1: [HOME]
+expect:
+  absent: [e0]
+  facts:
+    M1.1.command_time_under_s: 1.0
+    M5.2.env_names_observed: 0
+    M6.1.network_execs_over: 0

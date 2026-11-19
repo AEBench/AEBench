@@ -1,0 +1,29 @@
+name: F06_chain
+description: A chain of three nested shells under one root by time containment; the innermost fails.
+rules: [NST2, NST3, NST4, EXT5]
+calls:
+  - {call_id: c1, command: make, t_start: 0}
+execs:
+  - {command_id: e1, command: make, t_start: 0.1, duration_s: 10}
+  - {command_id: e2, command: "sh -c a", t_start: 1, duration_s: 8}
+  - {command_id: e3, command: "sh -c b", t_start: 2, duration_s: 6}
+  - {command_id: e4, command: "cc x.c", t_start: 3, duration_s: 1, exit_code: 1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: exec_parent, command_id: e2, parent: e1, root_call_id: c1}
+  - {link_type: exec_parent, command_id: e3, parent: e2, root_call_id: c1}
+  - {link_type: exec_parent, command_id: e4, parent: e3, root_call_id: c1}
+expect:
+  call_facts:
+    c1: {descendants_under: 3, descendants_over: 3, depth_max_over: 3, outcome: ok}
+  exec_facts:
+    e2: {depth: 1}
+    e3: {depth: 2}
+    e4: {depth: 3, outcome: failed}
+  facts:
+    M1.4.descendants_max_under: 3
+    M1.4.roots_with_descendants_under: 1
+    M1.4.depth_max_over: 3
+    M1.3.nested_nonzero_exits_under: 1
+    M1.3.nested_nonzero_exits_over: 1
+    M1.3.nonzero_exits_over: 0

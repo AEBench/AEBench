@@ -1,0 +1,36 @@
+name: F28_no_shell_calls
+description: A run with no shell call at all; preconditions hold vacuously and counts are 0, percentiles and spans null.
+rules: [PRE2, EXT4]
+calls:
+  - {call_id: c1, tool_type: read, raw_name: Read, t_start: 10, paths: [/repo/README]}
+coverage:
+  rates.call_match_rate_under: null
+  rates.call_match_rate_over: null
+  rates.exec_explained_rate_under: null
+  rates.exec_explained_rate_over: null
+  rates.listed_path_rate: null
+  rates.final_diff_attributed_rate_under: null
+  rates.final_diff_attributed_rate_over: null
+env_keys: {}
+system_diff: {changed: 0, executables: [], python_startup: [], etc: []}
+expect:
+  absent: [c1]
+  facts:
+    preconditions.C1_under: vacuous
+    preconditions.C2_under: vacuous
+    preconditions.C6: vacuous
+    preconditions.C7_under: vacuous
+    preconditions.env_keys: vacuous
+    M1.1.command_time_under_s: 0.0
+    M1.1.duration_p50_under_s: null
+    M1.1.longest_span_under_s: null
+    M1.2.shell_calls: 0
+    M1.2.root_shapes: 0
+    M1.3.failure_streak_under: 0
+    M1.3.failure_streak_over: 0
+    M1.4.descendants_max_over: 0
+    M5.2.env_names_assigned_over: 0
+    M4.4.changed_total: 0
+  warnings_exact: true
+  warnings:
+    - "precondition untracked_visible failed"
