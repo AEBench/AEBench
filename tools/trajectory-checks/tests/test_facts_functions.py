@@ -175,6 +175,8 @@ SIMPLE = (
     pytest.param("echo {", [["echo", "{"]]),
     pytest.param("echo a }", [["echo", "a", "}"]]),
     pytest.param("{ echo }; }", [["echo", "}"]]),
+    # A word that starts with `{` in command position opens no group.
+    pytest.param("{x} a; p1", [["{x}", "a"], ["p1"]]),
 )
 
 
@@ -315,6 +317,11 @@ PARTS = (
     ),
     # The reserved word `time` before a group: the group reads the pipe.
     pytest.param("p1 | time { p2; }", [_cmd(["p1"]), _cmd(["p2"], pipe=True)]),
+    # `<<-` is a heredoc operator like `<<`; its body is not shell text.
+    pytest.param(
+        "cat <<-A\n\tx &\n\tA\nls",
+        [_cmd(["cat"], (("<<-", "A"),)), _cmd(["ls"])],
+    ),
 )
 
 
@@ -549,6 +556,15 @@ COMMAND_WORDS = (
         ["A=1", "sudo", "-E", "timeout", "5", "make", "-j8"],
         (["A"], ["make", "-j8"]),
     ),
+    # D62: the value of an option that takes one is skipped too.
+    (["sudo", "-u", "x", "cat", "f"], ([], ["cat", "f"])),
+    (["sudo", "-ux", "cat"], ([], ["cat"])),
+    (["env", "-u", "X", "cmd"], ([], ["cmd"])),
+    (["nice", "-n", "5", "make"], ([], ["make"])),
+    (["timeout", "-s", "KILL", "-k", "1", "5", "make"], ([], ["make"])),
+    (["stdbuf", "-o", "L", "grep", "x"], ([], ["grep", "x"])),
+    (["xargs", "-n", "1", "rm"], ([], ["rm"])),
+    (["sudo", "-E", "env", "Y=2", "cmd"], (["Y"], ["cmd"])),
 )
 
 
