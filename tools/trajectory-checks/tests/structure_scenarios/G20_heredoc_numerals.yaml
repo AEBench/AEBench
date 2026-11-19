@@ -1,0 +1,24 @@
+name: G20_heredoc_numerals
+description: >
+  Spec RS19. Two heredoc commands that differ only in a numeral of the
+  body: same shape, not identical, and no argument change (heredoc
+  numerals are not arguments, layer 2 SHP6).
+rules: [RR3, RR4]
+calls:
+  - {call_id: c1, command: "python3 gen.py <<EOF\nn = 10\nEOF", t_start: 10, t_end: 12}
+  - {call_id: c2, command: "python3 gen.py <<EOF\nn = 20\nEOF", t_start: 20, t_end: 22}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 21.9}
+expect:
+  call_structure:
+    c1: {exact_class: x0, shape_class: s0, program_key: python3 gen.py}
+    c2: {exact_class: x1, shape_class: s0}
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, identical: false, arg_change_type: none, numeric_changes: [], numeric_direction: null, words_removed: [], words_added: []}
+    - {key_type: program, prev_call_id: c1, call_id: c2, arg_change_type: none}
+  reruns_exact: true
+  structure:
+    M2.3.args_unchanged: 1
+    M2.1.exact_repeat_max_act: 1
+    M2.1.repeat_max_act: 2

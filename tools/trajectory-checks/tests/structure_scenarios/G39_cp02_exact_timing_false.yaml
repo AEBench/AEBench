@@ -1,0 +1,20 @@
+name: G39_cp02_exact_timing_false
+description: >
+  Spec CP02, false half. Without exact timing the exec's interval starts
+  at t_start, inside the gap, so it overlaps and its skipped snapshot
+  leaves the gap unobserved.
+rules: [RR5, RR6]
+calls:
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 12}
+  - {call_id: c2, command: tail -3 log, t_start: 29, t_end: 33}
+  - {call_id: c3, command: ./run.sh 3, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e2, call: c2, t_start: 29.5, t_end: 32.5, snapshot: {status: skipped, scope: null, skip_reason: too many files}}
+  - {command_id: e3, call: c3, t_start: 30.1, t_end: 31.9}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c3, calls_between: 1, act_calls_between: 0, gap_observed: false, unchanged_under: false, unchanged_over: true}
+  structure:
+    bases.gap: fallback
+    M2.2.reruns_after_success_unchanged_under: 0

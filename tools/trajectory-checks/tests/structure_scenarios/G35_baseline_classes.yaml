@@ -1,0 +1,21 @@
+name: G35_baseline_classes
+description: >
+  Spec FS10, first half. Every baseline file is classified for
+  baseline_by_class, a json under a data folder as data (FC8 before FC9);
+  baseline files have no per-path row.
+rules: [CLS4, PRE3, FC8]
+baseline:
+  commit: abc123
+  files:
+    src/a.py: {mode: 420}
+    src/b.c: {mode: 420}
+    data/x.csv: {mode: 420}
+    data/y.json: {mode: 420}
+    README.md: {mode: 420}
+expect:
+  structure:
+    preconditions.tracked_files: holds
+    M4.2.baseline_by_class: {code: 2, data: 2, docs: 1}
+  absent: [src/a.py, data/y.json]
+  warnings: [precondition untracked_visible, precondition final_content]
+  warnings_exact: true

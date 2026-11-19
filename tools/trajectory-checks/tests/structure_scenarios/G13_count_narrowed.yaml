@@ -1,0 +1,21 @@
+name: G13_count_narrowed
+description: >
+  Spec RS12. Fewer arguments: different shapes, one program edge with a
+  count change of -2 that only removes words (narrowed).
+rules: [RR3, REP3]
+calls:
+  - {call_id: c1, command: ./run.py a b c, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.py a, t_start: 20, t_end: 22}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 21.9}
+expect:
+  call_structure:
+    c1: {shape_class: s0, program_class: p0, program_key: run.py a}
+    c2: {shape_class: s1, program_class: p0, program_key: run.py a}
+  reruns:
+    - {key_type: program, class_id: p0, prev_call_id: c1, call_id: c2, arg_change_type: count, arg_count_delta: -2, words_removed: [b, c], words_added: [], narrowed: true, numeric_changes: [], numeric_direction: null}
+  reruns_exact: true
+  structure:
+    M2.2.shape_reruns: 0
+    M2.3: {program_reruns: 1, args_unchanged: 0, numeric_changed: 0, count_changed: 1, words_changed: 0, numeric_decreased: 0, numeric_increased: 0, count_decreased: 1, count_increased: 0, narrowed: 1}

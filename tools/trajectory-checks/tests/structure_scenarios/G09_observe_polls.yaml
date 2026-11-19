@@ -1,0 +1,30 @@
+name: G09_observe_polls
+description: >
+  Spec RS08. Ten identical observe calls and two different act calls: the
+  poll class is the largest over all calls, but no act class repeats, and
+  no edge joins observe calls.
+rules: [OBS2, OBS6, REP1]
+calls:
+  - {call_id: c01, command: ./start.sh, t_start: 10}
+  - {call_id: c02, command: "sleep 30; tail -3 log", t_start: 20}
+  - {call_id: c03, command: "sleep 30; tail -3 log", t_start: 60}
+  - {call_id: c04, command: "sleep 30; tail -3 log", t_start: 100}
+  - {call_id: c05, command: "sleep 30; tail -3 log", t_start: 140}
+  - {call_id: c06, command: "sleep 30; tail -3 log", t_start: 180}
+  - {call_id: c07, command: "sleep 30; tail -3 log", t_start: 220}
+  - {call_id: c08, command: "sleep 30; tail -3 log", t_start: 260}
+  - {call_id: c09, command: "sleep 30; tail -3 log", t_start: 300}
+  - {call_id: c10, command: "sleep 30; tail -3 log", t_start: 340}
+  - {call_id: c11, command: "sleep 30; tail -3 log", t_start: 380}
+  - {call_id: c12, command: ./collect.sh, t_start: 420}
+expect:
+  call_structure:
+    c01: {call_class: act, class_reason: program, shape_class: s0, shape_index: 1}
+    c05: {call_class: observe, class_reason: observe, shape_class: s1, program_key: tail log, shape_index: null, program_index: null, prev_shape_call: null, prev_program_call: null}
+    c12: {call_class: act, shape_class: s2, program_class: p2, shape_index: 1}
+  reruns: []
+  reruns_exact: true
+  structure:
+    M2.1: {shell_calls: 12, act_calls: 2, observe_calls: 10, shape_classes: 3, repeated_shapes_all: 1, repeat_max_all: 10, repeated_shapes_act: 0, repeat_max_act: 1, exact_repeat_max_act: 1, program_classes_act: 2, repeated_programs_act: 0, program_repeat_max_act: 1}
+    M2.2.shape_reruns: 0
+    M2.3.program_reruns: 0

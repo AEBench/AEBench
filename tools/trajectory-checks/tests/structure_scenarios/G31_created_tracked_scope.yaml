@@ -1,0 +1,29 @@
+name: G31_created_tracked_scope
+description: >
+  Spec FS06, second half. The same created files in a tracked-scope run
+  with no MC-05 lists: created_by_class_* is null with one warning.
+rules: [CLS3, PRE5]
+calls:
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 12}
+  - {call_id: c2, tool_type: write, paths: [/repo/report.md], t_start: 20}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+links:
+  - {link_type: write_event, path: outputs/run.log, writer_id: e1, op: create}
+  - {link_type: write_event, path: report.md, writer_id: c2, op: create}
+paths:
+  - {path: outputs/run.log, tracked: false, final_state: untracked}
+  - {path: report.md, tracked: false, final_state: untracked}
+path_facts:
+  outputs/run.log: {created: true}
+  report.md: {created: true}
+expect:
+  file_classes:
+    outputs/run.log: {file_class: data, class_rule: FC8}
+    report.md: {file_class: docs, class_rule: FC6}
+  structure:
+    preconditions.untracked_visible: fails
+    M4.2.created_by_class_under: null
+    M4.2.created_by_class_over: null
+    bases.unchanged_under: fallback
+  warnings: [precondition untracked_visible]

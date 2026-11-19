@@ -1,0 +1,25 @@
+name: G32_c7_under_fails
+description: >
+  Spec FS07. C7_under fails: the role splits and shell_written_by_class_*
+  are null with one warning; the class counts and reverted_by_class (C6
+  holds) are computed.
+rules: [PRE4, PRE5]
+calls:
+  - {call_id: c1, command: ./fix.sh 3, t_start: 10, t_end: 12}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+links:
+  - {link_type: write_event, path: src/a.py, writer_id: e1}
+facts:
+  preconditions.C7_under: fails
+expect:
+  structure:
+    preconditions.C7_under: fails
+    M4.2.changed_by_class: {code: 1}
+    M4.2.reverted_by_class: {}
+    M4.2.changed_by_class_and_role_under: null
+    M4.2.changed_by_class_and_role_over: null
+    M4.2.shell_written_by_class_under: null
+    M4.2.shell_written_by_class_over: null
+  warnings: [precondition C7_under, precondition untracked_visible, baseline_by_class, precondition final_content]
+  warnings_exact: true

@@ -1,0 +1,27 @@
+name: G18_c1_under_fails
+description: >
+  Spec RS17. Layer 2's C1_under fails: M2.2 is null with one warning; M2.1
+  and M2.3 need only the log and are computed; the edges are still
+  written.
+rules: [PRE1, PRE4]
+calls:
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh 3, t_start: 20, t_end: 22}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 21.9}
+facts:
+  preconditions.C1_under: fails
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2}
+    - {key_type: program, prev_call_id: c1, call_id: c2}
+  reruns_exact: true
+  structure:
+    preconditions.C1_under: fails
+    M2.2: {shape_reruns: null, reruns_after_failure_under: null, reruns_after_failure_over: null, reruns_after_success_under: null, reruns_after_success_over: null, reruns_after_unknown: null, reruns_after_failure_unchanged_under: null, reruns_after_failure_unchanged_over: null, reruns_after_success_unchanged_under: null, reruns_after_success_unchanged_over: null}
+    M2.1.shell_calls: 2
+    M2.1.repeat_max_act: 2
+    M2.3.program_reruns: 1
+  warnings: [precondition C1_under, precondition untracked_visible, baseline_by_class, precondition final_content]
+  warnings_exact: true

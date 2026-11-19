@@ -1,0 +1,20 @@
+name: G21_program_key_of_first_member
+description: >
+  Spec RS20. A quoted and an unquoted shell -c with equal shapes: alone,
+  the second would have program key cd, but every member of a shape class
+  gets the key of its first member (KEY4), so both are make.
+rules: [KEY2, KEY4]
+calls:
+  - {call_id: c1, command: "bash -c 'cd a && make'", t_start: 10, t_end: 12}
+  - {call_id: c2, command: "bash -c cd a && make", t_start: 20, t_end: 22}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 21.9}
+expect:
+  call_structure:
+    c1: {call_class: act, exact_class: x0, shape_class: s0, program_class: p0, program_key: make}
+    c2: {call_class: act, exact_class: x1, shape_class: s0, program_class: p0, program_key: make}
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, identical: false, arg_change_type: none, arg_count_delta: 2}
+    - {key_type: program, prev_call_id: c1, call_id: c2}
+  reruns_exact: true

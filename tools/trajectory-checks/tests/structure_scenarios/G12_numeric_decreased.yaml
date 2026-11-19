@@ -1,0 +1,21 @@
+name: G12_numeric_decreased
+description: >
+  Spec RS11. The same shape with a smaller numeral: numeric change,
+  decreased, at the shape and the program level.
+rules: [RR3, RR4, REP3]
+calls:
+  - {call_id: c1, command: ./run.sh --iters 10, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh --iters 3, t_start: 20, t_end: 22}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 21.9}
+expect:
+  call_structure:
+    c1: {exact_class: x0, shape_class: s0, program_key: run.sh N}
+    c2: {exact_class: x1, shape_class: s0}
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, identical: false, arg_change_type: numeric, numeric_changes: [{index: 0, from: "10", to: "3"}], numeric_direction: decreased}
+    - {key_type: program, prev_call_id: c1, call_id: c2, identical: false, arg_change_type: numeric, arg_count_delta: 0, numeric_changes: [{index: 0, from: "10", to: "3"}], numeric_direction: decreased, words_removed: [], words_added: [], narrowed: false}
+  reruns_exact: true
+  structure:
+    M2.3: {program_reruns: 1, args_unchanged: 0, numeric_changed: 1, count_changed: 0, words_changed: 0, numeric_decreased: 1, numeric_increased: 0, count_decreased: 0, count_increased: 0, narrowed: 0}

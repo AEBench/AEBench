@@ -1,0 +1,38 @@
+name: G11_act_reasons
+description: >
+  Spec RS10. A redirect to a file, sed -i, tee and a background command,
+  each twice, are act with their reasons; an empty command is act with
+  no_command; redirects to /dev/null or to a descriptor stay observe.
+rules: [OBS4, OBS6, REP1, REP2]
+calls:
+  - {call_id: c01, command: cat a > b, t_start: 10}
+  - {call_id: c02, command: sed -i s/a/b/ f, t_start: 20}
+  - {call_id: c03, command: tee f, t_start: 30}
+  - {call_id: c04, command: cmd &, t_start: 40}
+  - {call_id: c05, command: cat a > b, t_start: 50}
+  - {call_id: c06, command: sed -i s/a/b/ f, t_start: 60}
+  - {call_id: c07, command: tee f, t_start: 70}
+  - {call_id: c08, command: cmd &, t_start: 80}
+  - {call_id: c09, command: "", t_start: 90}
+  - {call_id: c10, command: ls 2>/dev/null, t_start: 100}
+  - {call_id: c11, command: ls >/dev/null 2>&1, t_start: 110}
+  - {call_id: c12, command: ls 2>&1, t_start: 120}
+expect:
+  call_structure:
+    c01: {call_class: act, class_reason: redirect, program_key: cat a}
+    c02: {call_class: act, class_reason: program}
+    c03: {call_class: act, class_reason: program, program_key: tee f}
+    c04: {call_class: act, class_reason: background, program_key: cmd}
+    c05: {shape_class: s0, shape_index: 2, prev_shape_call: c01}
+    c09: {call_class: act, class_reason: no_command, program_key: ""}
+    c10: {call_class: observe, class_reason: observe}
+    c11: {call_class: observe, class_reason: observe}
+    c12: {call_class: observe, class_reason: observe}
+  reruns:
+    - {key_type: shape, prev_call_id: c01, call_id: c05, identical: true, calls_between: 3, act_calls_between: 3, prev_outcome: unknown, prev_match_under: false}
+    - {key_type: shape, prev_call_id: c04, call_id: c08}
+  structure:
+    M2.1: {shell_calls: 12, act_calls: 9, observe_calls: 3, shape_classes: 8, repeated_shapes_all: 4, repeat_max_all: 2, repeated_shapes_act: 4, repeat_max_act: 2, exact_repeat_max_act: 2, program_classes_act: 5, repeated_programs_act: 4, program_repeat_max_act: 2}
+    M2.2.shape_reruns: 4
+    M2.2.reruns_after_unknown: 4
+    M2.3.program_reruns: 4

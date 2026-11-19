@@ -1,0 +1,26 @@
+name: G23_poll_loop
+description: >
+  Spec RS22. A timed poll loop repeated eight times: the substitutions are
+  part of their words and their commands observe, the arithmetic
+  assignment is neutral, the reserved words are syntax. Every loop call is
+  observe; the two act calls do not repeat.
+rules: [OBS1, OBS2, REP1]
+calls:
+  - {call_id: c00, command: ./start.sh, t_start: 5}
+  - {call_id: c01, command: &poll "end=$(( $(date +%s) + 60 )); while [ $(date +%s) -lt $end ]; do grep -q DONE log && break; sleep 30; done; tail -3 log", t_start: 10}
+  - {call_id: c02, command: *poll, t_start: 80}
+  - {call_id: c03, command: *poll, t_start: 150}
+  - {call_id: c04, command: *poll, t_start: 220}
+  - {call_id: c05, command: *poll, t_start: 290}
+  - {call_id: c06, command: *poll, t_start: 360}
+  - {call_id: c07, command: *poll, t_start: 430}
+  - {call_id: c08, command: *poll, t_start: 500}
+  - {call_id: c09, command: ./collect.sh, t_start: 570}
+expect:
+  call_structure:
+    c01: {call_class: observe, class_reason: observe}
+    c08: {call_class: observe, class_reason: observe}
+  reruns: []
+  reruns_exact: true
+  structure:
+    M2.1: {shell_calls: 10, act_calls: 2, observe_calls: 8, shape_classes: 3, repeated_shapes_all: 1, repeat_max_all: 8, repeated_shapes_act: 0, repeat_max_act: 1, exact_repeat_max_act: 1, program_classes_act: 2, repeated_programs_act: 0, program_repeat_max_act: 1}

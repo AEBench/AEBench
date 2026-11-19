@@ -1,0 +1,24 @@
+name: G19_empty_run
+description: >
+  Spec RS18 on an empty run: no call, no exec, no path. M2.1 counts and
+  maxima are 0; C1_under holds vacuously, so M2.2 is computed as 0; the
+  per-item files are empty.
+rules: [PRE2, REP1]
+expect:
+  reruns: []
+  reruns_exact: true
+  structure:
+    preconditions.C1_under: vacuous
+    M2.1: {shell_calls: 0, act_calls: 0, observe_calls: 0, shape_classes: 0, repeated_shapes_all: 0, repeat_max_all: 0, repeated_shapes_act: 0, repeat_max_act: 0, exact_repeat_max_act: 0, program_classes_act: 0, repeated_programs_act: 0, program_repeat_max_act: 0}
+    M2.2: {shape_reruns: 0, reruns_after_failure_under: 0, reruns_after_failure_over: 0, reruns_after_success_under: 0, reruns_after_success_over: 0, reruns_after_unknown: 0, reruns_after_failure_unchanged_under: 0, reruns_after_failure_unchanged_over: 0, reruns_after_success_unchanged_under: 0, reruns_after_success_unchanged_over: 0}
+    M2.3: {program_reruns: 0, args_unchanged: 0, numeric_changed: 0, count_changed: 0, words_changed: 0, numeric_decreased: 0, numeric_increased: 0, count_decreased: 0, count_increased: 0, narrowed: 0}
+    M4.2.changed_by_class: {}
+    M4.2.mode_only_by_class: {}
+    M4.2.reverted_by_class: {}
+    M4.2.changed_by_class_and_role_under: {}
+    M4.2.shell_written_by_class_over: {}
+    M4.2.created_by_class_under: null
+    M4.2.baseline_by_class: null
+    M4.2.binary_changed_by_class: null
+  warnings: [precondition untracked_visible, baseline_by_class, precondition final_content]
+  warnings_exact: true

@@ -1,0 +1,22 @@
+name: G10_observe_recursion
+description: >
+  Spec RS09. Observe calls inside bash -lc and inside container exec front
+  ends are observe by recursion; a shell -c running an unknown program is
+  act.
+rules: [OBS3, OBS6]
+calls:
+  - {call_id: c1, command: "bash -lc 'tail -5 /tmp/run.log'", t_start: 10}
+  - {call_id: c2, command: "docker exec box sh -c 'ps aux | grep worker'", t_start: 20}
+  - {call_id: c3, command: "kubectl exec pod -- cat /tmp/out.txt", t_start: 30}
+  - {call_id: c4, command: "docker exec -it box bash -lc 'grep -l done /tmp/*.log'", t_start: 40}
+  - {call_id: c5, command: "bash -c './run.sh'", t_start: 50}
+expect:
+  call_structure:
+    c1: {call_class: observe, class_reason: observe}
+    c2: {call_class: observe, class_reason: observe}
+    c3: {call_class: observe, class_reason: observe}
+    c4: {call_class: observe, class_reason: observe}
+    c5: {call_class: act, class_reason: program, program_key: run.sh}
+  structure:
+    M2.1.act_calls: 1
+    M2.1.observe_calls: 4

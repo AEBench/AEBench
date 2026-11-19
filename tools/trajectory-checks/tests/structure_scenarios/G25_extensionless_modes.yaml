@@ -1,0 +1,30 @@
+name: G25_extensionless_modes
+description: >
+  Spec FS02, first two cases. An extensionless tracked file with an
+  execute bit in the baseline (0o700) is code; the same with mode 0o600 is
+  other; both modes come from the baseline. The baseline also gives
+  baseline_by_class.
+rules: [FC5, FC11, CLS4]
+calls:
+  - {call_id: c1, command: ./update.sh, t_start: 10, t_end: 20}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 19.9}
+links:
+  - {link_type: write_event, path: bin/run_all, writer_id: e1}
+  - {link_type: write_event, path: bin/helper, writer_id: e1}
+baseline:
+  commit: abc123
+  files:
+    bin/run_all: {mode: 448}
+    bin/helper: {mode: 384}
+    src/a.py: {mode: 420}
+expect:
+  file_classes:
+    bin/run_all: {file_class: code, class_rule: FC5, extension: "", mode_source: baseline}
+    bin/helper: {file_class: other, class_rule: FC11, extension: "", mode_source: baseline}
+  structure:
+    preconditions.tracked_files: holds
+    M4.2.changed_by_class: {code: 1, other: 1}
+    M4.2.baseline_by_class: {code: 2, other: 1}
+  warnings: [precondition untracked_visible, precondition final_content]
+  warnings_exact: true

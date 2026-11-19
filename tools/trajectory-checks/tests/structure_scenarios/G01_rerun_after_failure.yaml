@@ -1,0 +1,29 @@
+name: G01_rerun_after_failure
+description: >
+  Spec RS01. Two identical act calls of an unknown program; the first
+  fails. Both are act (reason program), one shape edge and one program
+  edge, identical, and the rerun counts as after a failure.
+rules: [OBS5, OBS6, KEY1, KEY2, RR1, RR2, REP1, REP2, REP3]
+calls:
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh, t_start: 20, t_end: 22}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9, exit_code: 1}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 21.9}
+expect:
+  call_structure:
+    c1: {call_class: act, class_reason: program, exact_class: x0, shape_class: s0, program_class: p0, program_key: run.sh, shape_index: 1, program_index: 1, prev_shape_call: null, prev_program_call: null}
+    c2: {call_class: act, class_reason: program, exact_class: x0, shape_class: s0, program_class: p0, program_key: run.sh, shape_index: 2, program_index: 2, prev_shape_call: c1, prev_program_call: c1}
+  reruns:
+    - {rerun_id: r0, key_type: shape, class_id: s0, prev_call_id: c1, call_id: c2, prev_seq: 0, seq: 1, prev_outcome: failed, prev_match_under: true, identical: true, arg_change_type: none, arg_count_delta: 0, numeric_changes: [], numeric_direction: null, words_removed: [], words_added: [], narrowed: false, calls_between: 0, act_calls_between: 0, edit_calls_between: 0, writes_between_under: 0, writes_between_over: 0, untracked_writes_between: null, gap_observed: true, unchanged_under: true, unchanged_over: true}
+    - {rerun_id: r1, key_type: program, class_id: p0, prev_call_id: c1, call_id: c2, identical: true, arg_change_type: none}
+  reruns_exact: true
+  structure:
+    M2.1: {shell_calls: 2, act_calls: 2, observe_calls: 0, shape_classes: 1, repeated_shapes_all: 1, repeat_max_all: 2, repeated_shapes_act: 1, repeat_max_act: 2, exact_repeat_max_act: 2, program_classes_act: 1, repeated_programs_act: 1, program_repeat_max_act: 2}
+    M2.2: {shape_reruns: 1, reruns_after_failure_under: 1, reruns_after_failure_over: 1, reruns_after_success_under: 0, reruns_after_success_over: 0, reruns_after_unknown: 0, reruns_after_failure_unchanged_under: 1, reruns_after_failure_unchanged_over: 1, reruns_after_success_unchanged_under: 0, reruns_after_success_unchanged_over: 0}
+    M2.3.program_reruns: 1
+    M2.3.args_unchanged: 1
+    preconditions.C1_under: holds
+    preconditions.log: holds
+  warnings: [precondition untracked_visible, baseline_by_class, precondition final_content]
+  warnings_exact: true

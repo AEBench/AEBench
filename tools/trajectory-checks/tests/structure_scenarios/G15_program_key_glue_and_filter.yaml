@@ -1,0 +1,19 @@
+name: G15_program_key_glue_and_filter
+description: >
+  Spec RS14. A leading cd (glue) and a trailing filter right of a pipe are
+  skipped by the program key: both calls are python3 run.py, with
+  different shapes and one program edge.
+rules: [KEY3, RR3]
+calls:
+  - {call_id: c1, command: cd d && python3 run.py, t_start: 10, t_end: 12}
+  - {call_id: c2, command: python3 run.py | tail -5, t_start: 20, t_end: 22}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 21.9}
+expect:
+  call_structure:
+    c1: {shape_class: s0, program_class: p0, program_key: python3 run.py}
+    c2: {shape_class: s1, program_class: p0, program_key: python3 run.py}
+  reruns:
+    - {key_type: program, class_id: p0, prev_call_id: c1, call_id: c2, arg_change_type: words, arg_count_delta: 0, words_removed: [cd, d], words_added: [N, tail]}
+  reruns_exact: true

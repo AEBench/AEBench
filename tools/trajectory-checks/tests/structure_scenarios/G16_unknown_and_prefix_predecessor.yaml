@@ -1,0 +1,23 @@
+name: G16_unknown_and_prefix_predecessor
+description: >
+  Spec RS15. One predecessor is unmatched (outcome unknown) and one is
+  matched by rule prefix (not under): the first counts as after an
+  unknown outcome, the second as after success in _over only.
+rules: [RR2, REP2]
+calls:
+  - {call_id: c1, command: ./a.sh, t_start: 10, t_end: 11}
+  - {call_id: c2, command: ./a.sh, t_start: 20, t_end: 22}
+  - {call_id: c3, command: ./b.sh, t_start: 30, t_end: 32}
+  - {call_id: c4, command: ./b.sh, t_start: 40, t_end: 42}
+execs:
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 21.9}
+  - {command_id: e3, command: ./b.sh --with-a-longer-tail, t_start: 30.1, t_end: 31.9}
+  - {command_id: e4, call: c4, t_start: 40.1, t_end: 41.9}
+links:
+  - {link_type: call_exec, call_id: c3, command_id: e3, rule: prefix}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, prev_outcome: unknown, prev_match_under: false}
+    - {key_type: shape, prev_call_id: c3, call_id: c4, prev_outcome: ok, prev_match_under: false, unchanged_under: true, unchanged_over: true}
+  structure:
+    M2.2: {shape_reruns: 2, reruns_after_failure_under: 0, reruns_after_failure_over: 0, reruns_after_success_under: 0, reruns_after_success_over: 1, reruns_after_unknown: 1, reruns_after_failure_unchanged_under: 0, reruns_after_failure_unchanged_over: 0, reruns_after_success_unchanged_under: 0, reruns_after_success_unchanged_over: 1}

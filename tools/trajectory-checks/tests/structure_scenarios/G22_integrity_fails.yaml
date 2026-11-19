@@ -1,0 +1,29 @@
+name: G22_integrity_fails
+description: >
+  Spec RS21. Layer 1's C0.1 fails, so layer 2's trace-derived labels fail;
+  this layer copies them and adds no warning of its own beyond one per
+  voiding label: C1_under voids M2.2, C6 voids the reverted and role keys,
+  and C7_under adds none (its keys are already void).
+rules: [PRE7, PRE1, PRE4]
+calls:
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh 3, t_start: 20, t_end: 22}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 21.9}
+coverage:
+  integrity.C0.1: false
+expect:
+  structure:
+    preconditions.C1_under: fails
+    preconditions.C6: fails
+    preconditions.C7_under: fails
+    M2.2.shape_reruns: null
+    M2.1.shell_calls: 2
+    M2.3.program_reruns: 1
+    M4.2.changed_by_class: {}
+    M4.2.reverted_by_class: null
+    M4.2.changed_by_class_and_role_under: null
+    M4.2.shell_written_by_class_over: null
+  warnings: [precondition C1_under, precondition C6, precondition untracked_visible, baseline_by_class, precondition final_content]
+  warnings_exact: true

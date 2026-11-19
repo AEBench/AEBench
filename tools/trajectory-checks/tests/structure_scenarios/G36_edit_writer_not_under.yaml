@@ -1,0 +1,17 @@
+name: G36_edit_writer_not_under
+description: >
+  Spec FS11. The final writer is an edit call whose attribution is not
+  certain (final_writer_under false): counted in the _over role split
+  only; no shell wrote the file.
+rules: [CLS1]
+calls:
+  - {call_id: c1, tool_type: edit, paths: [/repo/src/a.py], t_start: 10}
+links:
+  - {link_type: write_event, path: src/a.py, writer_id: c1, writer_under: false}
+expect:
+  structure:
+    M4.2.changed_by_class: {code: 1}
+    M4.2.changed_by_class_and_role_over: {code: {edit_call: 1}}
+    M4.2.changed_by_class_and_role_under: {}
+    M4.2.shell_written_by_class_over: {}
+    M4.2.shell_written_by_class_under: {}
