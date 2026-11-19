@@ -14,19 +14,31 @@ import typing
 from trajectory_checks import parse
 
 
-class _RunRequired(typing.TypedDict):
+class RunInfo(typing.TypedDict):
+    """The run facts `link` needs (spec §5.6, decision D26).
+
+    Every field is present; a field the run's monitor did not record is
+    None. `capabilities` maps each name of CAPABILITIES to a bool.
+    """
+
     t_start: float | None
     t_end: float | None
     workspace_root: str
     trace_ok: bool
-
-
-class Run(_RunRequired, total=False):
-    """The run facts `link` needs; the last three are optional context."""
-
-    run_key: str
-    family: str
-    log_ok: bool
+    run_key: str | None
+    family: str | None
+    log_ok: bool | None
+    monitor_version: str | None  # MC-09
+    schema_version: int | None  # MC-21
+    trace_meta: dict | None  # MC-09
+    final_diff_content: str | None  # MC-03
+    final_workspace: str | None
+    oracle_reads: str | None  # MC-02
+    case_image_digest: str | None
+    commit: str | None
+    shim_intact: bool | None  # MC-17
+    unattributed_reads: list[dict] | None  # MC-14, no command_id
+    capabilities: dict[str, bool]
 
 
 class CallExecLink(typing.TypedDict):
@@ -72,6 +84,7 @@ class WriteEvent(typing.TypedDict):
     writer_id: str
     t_start: float
     t_end: float
+    order_t: float  # the ordering key: the measured end (D32)
     root_call_id: str | None
     root_ambiguous: bool
     root_candidates: list[str]
@@ -119,8 +132,10 @@ class Coverage(typing.TypedDict):
     family: str | None
     inputs: dict[str, bool]
     integrity: dict[str, typing.Any]
+    capabilities: dict[str, bool]
     counts: dict[str, typing.Any]
     rates: dict[str, typing.Any]
+    preconditions: dict[str, str]  # label -> holds, vacuous, fails
     warnings: list[str]
 
 
@@ -152,8 +167,17 @@ DEFAULTS = types.MappingProxyType(
         "join_rate_warn": 0.9,
         # New; to be set from the measured distribution.
         "snapshot_coverage_warn": 0.8,
+        # J3 observation window: the snapshot walk's 2 s cap (D33).
+        "snapshot_slop_s": 2.0,
     }
 )
+# Spec §5.6: what a run's records and folder actually hold.
+CAPABILITIES = (
+    *("parent_links", "start_events", "exact_timing", "content_hashes"),
+    *("untracked_visible", "read_tracing", "final_content", "oracle_reads"),
+    "egress_log",
+)
+KNOWN_SCHEMA_VERSIONS = (1, 2)  # MC-21: absent means 1
 # (label, rate key, threshold, metrics voided) of spec §7.2.
 PRECONDITIONS = (
     ("C1_under", "call_match_rate_under", ">=", "M1, M2, M5.2, M6.1"),
@@ -192,6 +216,8 @@ _EVENT_FIELDS = (
     *("path", "in_workspace", "op", "scope", "writer_type", "writer_id"),
     *("t_start", "t_end"),
 )
+# Final states in which the file exists at the end (decision D34).
+_EXISTING = ("changed", "mode_only", "reverted")
 _STARTERS = ("nohup", "setsid", "disown")
 _CONTROL = (";", "&&", "||", "|", "&", "(", "{", "!", "then", "do", "else")
 
@@ -213,8 +239,10 @@ def _containing(
     return [e for e in execs[:stop] if ends[e["command_id"]] >= t]
 
 
-def _backgrounds(command: str) -> bool:
+def backgrounds(command: str) -> bool:
     """Whether a command backgrounds something, by shell syntax only.
+
+    Public (decision D31): layer 4 must decide it exactly as J2 does.
 
     Args:
         command: Shell text.
@@ -233,7 +261,7 @@ def _backgrounds(command: str) -> bool:
 
 
 def _integrity(
-    execs: list[parse.Exec], run: Run, baseline: dict | None, cfg: dict
+    execs: list[parse.Exec], run: RunInfo, baseline: dict | None, cfg: dict
 ) -> tuple[dict, set[str], list[str]]:
     """C0.1, C0.2, C0.5 (decision F2), the out-of-window execs, warnings."""
     counted = [e for e in execs if e["noise"] is None]
@@ -387,8 +415,9 @@ def _nest(
     under: dict[str, bool],
     ends: dict[str, float],
     duplicates: dict[str, str],
+    parent_links: bool,
 ) -> list[Link]:
-    """J2: time containment, then reparenting of detached processes.
+    """J2: rule parent_id, time containment, reparenting (spec §6.5).
 
     Args:
         execs: Non-noise, in-window execs sorted by start.
@@ -399,6 +428,8 @@ def _nest(
             and its root is unambiguous.
         ends: End time per command_id.
         duplicates: Wrapper duplicates, which are never parents.
+        parent_links: The run's capability: try each exec's recorded
+            parent first (decision D28).
 
     Returns:
         The exec_parent links.
@@ -414,13 +445,18 @@ def _nest(
             continue
         if cid in matched:
             active.append(record)
-            if _backgrounds(record["command"]):
+            if backgrounds(record["command"]):
                 finished.append(record)
             continue
         candidates = [e for e in active if e["command_id"] != cid]
         roots = sorted({root_of[e["command_id"]] for e in candidates})
         rule, parent = "time_containment", None
-        if candidates:
+        recorded = record["parent_command_id"] if parent_links else None
+        recorded = duplicates.get(recorded, recorded)
+        if recorded in root_of and recorded != cid:
+            rule, parent, root = "parent_id", recorded, root_of[recorded]
+            roots = [root]
+        elif candidates:
             inner = max(candidates, key=lambda e: (e["t_start"], e["seq"]))
             parent, root = inner["command_id"], root_of[inner["command_id"]]
         else:
@@ -452,8 +488,19 @@ def _nest(
     return links
 
 
-def _rel(path: str, root: str) -> tuple[str, bool]:
-    """Workspace-relative path and whether it is inside the workspace."""
+def relative_path(path: str, root: str) -> tuple[str, bool]:
+    """Workspace-relative path and whether it is inside the workspace.
+
+    J3 rule 1. Public (decision D31): layer 4 must normalize oracle paths
+    exactly as J3 normalizes snapshot paths.
+
+    Args:
+        path: A path, relative to the workspace or absolute.
+        root: The workspace root.
+
+    Returns:
+        (workspace-relative path, True), or (absolute path, False) outside.
+    """
     root = posixpath.normpath(root or "/")
     full = posixpath.normpath(posixpath.join(root, path))
     if full == root or full.startswith(root.rstrip("/") + "/"):
@@ -470,18 +517,26 @@ def _event(*values: typing.Any) -> dict:
     )
 
 
+def _window_end(event: dict, slop: float) -> float:
+    """The end of an event's observation window (decision D33)."""
+    return event["t_end"] + (slop if event["writer_type"] == "exec" else 0.0)
+
+
 def _write_events(
     calls: list[parse.Call],
     execs: list[parse.Exec],
     nest_links: list[Link],
     root_of: dict[str, str],
     under: dict[str, bool],
-    ends: dict[str, float],
+    slop: float,
     diff: dict[str, set[str]],
     tracked: dict,
     root: str,
 ) -> list[Link]:
     """J3: write events by rules 1 to 8, in event order (spec §6.6).
+
+    An exec event has the exec's measured interval (decision D32); the
+    overlap tests of rules 5 and 6 use observation windows (D33).
 
     Args:
         calls: All calls.
@@ -490,7 +545,7 @@ def _write_events(
         nest_links: The exec_parent links of J2.
         root_of: Root call per rooted exec.
         under: Rule R3 per exec.
-        ends: End time per command_id.
+        slop: snapshot_slop_s, added to an exec event's end.
         diff: Workspace-relative final-diff paths per _DIFF_KEYS key.
         tracked: The baseline's files ({} without a baseline).
         root: The workspace root.
@@ -504,10 +559,11 @@ def _write_events(
     reports: dict[str, list[dict]] = {}
     for record in execs:
         cid, snap = record["command_id"], record["snapshot"]
-        writer = (snap["scope"], "exec", cid, record["t_start"], ends[cid])
+        span = record["t_start"], record["t_end"]  # measured (D32)
+        writer = (snap["scope"], "exec", cid, *span)
         for op, key in _OPS:
             for raw in snap[key]:
-                path, inside = _rel(raw, root)
+                path, inside = relative_path(raw, root)
                 op_type = "mode" if op == "modify" and path in mode_only else op
                 reports.setdefault(path, []).append(
                     _event(path, inside, op_type, *writer)
@@ -533,7 +589,7 @@ def _write_events(
         ):
             continue
         for raw in call["paths"]:
-            path, inside = _rel(raw, root)
+            path, inside = relative_path(raw, root)
             op = (
                 "create"
                 if edit_type == "write" and path not in tracked
@@ -551,21 +607,24 @@ def _write_events(
         event["root_candidates"] = list(candidates.get(wid, []))
         event["root_ambiguous"] = bool(event["root_candidates"])
         event["overlaps_sibling"] = False
+        event["order_t"] = event["t_end"]
         by_path.setdefault(event["path"], []).append(event)
     for found in by_path.values():  # rules 5 and 6
         for edit in [e for e in found if e["writer_type"] == "edit_call"]:
             for other in found:
                 if (
                     other["writer_type"] == "exec"
-                    and other["t_start"] <= edit["t_start"] <= other["t_end"]
+                    and other["t_start"]
+                    <= edit["t_start"]
+                    <= _window_end(other, slop)
                     and other["possibly_edit_call"] is None
                 ):
                     other["possibly_edit_call"] = edit["writer_id"]
         for i, a in enumerate(found):
             for b in found[i + 1 :]:
                 if (
-                    a["t_start"] > b["t_end"]
-                    or b["t_start"] > a["t_end"]
+                    a["t_start"] > _window_end(b, slop)
+                    or b["t_start"] > _window_end(a, slop)
                     or _explains(a, b)
                 ):
                     continue
@@ -589,7 +648,7 @@ def _write_events(
             and event["possibly_edit_call"] is None
         )
     events.sort(
-        key=lambda e: (e["t_end"], e["t_start"], e["path"], e["writer_id"])
+        key=lambda e: (e["order_t"], e["t_start"], e["path"], e["writer_id"])
     )
     for n, event in enumerate(events):
         event.update(link_type="write_event", event_id=f"w{n}")
@@ -612,8 +671,9 @@ def _paths(
     tracked: dict | None,
     execs: list[parse.Exec],
     root: str,
+    slop: float,
 ) -> list[PathSummary]:
-    """The per-path summaries of spec §6.6 (rules 1 to 4).
+    """The per-path summaries of spec §6.6 (rules 1 to 4, decision D34).
 
     Args:
         events: The write events in event order.
@@ -622,6 +682,7 @@ def _paths(
         tracked: The baseline's files, or None without a baseline.
         execs: Non-noise, in-window execs (unattributed candidates).
         root: The workspace root.
+        slop: snapshot_slop_s, for the overlap clause of rule 2.
 
     Returns:
         One summary per written or changed path, workspace paths first.
@@ -632,7 +693,7 @@ def _paths(
             event
         )
     in_diff = set().union(*diff.values())
-    inside = {p: _rel(p, root)[1] for p in set(by_path) | in_diff}
+    inside = {p: relative_path(p, root)[1] for p in set(by_path) | in_diff}
     blind = [
         {"command_id": e["command_id"], "reason": e["snapshot"]["status"]}
         for e in execs
@@ -641,19 +702,22 @@ def _paths(
     rows: list[PathSummary] = []
     for path in sorted(inside, key=lambda p: (not inside[p], p)):
         found = by_path.get(path, [])
-        pick = [e for e in found if e["possibly_edit_call"] is None] or found
-        final = pick[-1] if pick else None
         is_tracked = path in tracked if tracked is not None else None
         state = next((s for s, key in _STATES if path in diff[key]), None)
         if state is None and has_diff:
             state = {True: "reverted", False: "untracked"}.get(is_tracked)
+        live = [
+            e for e in found if state not in _EXISTING or e["op"] != "delete"
+        ]
+        pick = [e for e in live if e["possibly_edit_call"] is None] or live
+        final = pick[-1] if pick else None
         under = bool(
             final
             and final["writer_under"]
             and not any(
                 e is not final
                 and e["root_call_id"] != final["root_call_id"]
-                and e["t_start"] <= final["t_end"] <= e["t_end"]
+                and e["t_start"] <= final["t_end"] <= _window_end(e, slop)
                 and not _explains(e, final)
                 for e in found
             )
@@ -668,7 +732,7 @@ def _paths(
                 final_writer_under=under,
                 final_state=state,
                 unattributed_candidates=(
-                    [] if found or path not in in_diff else blind
+                    [] if final or path not in in_diff else blind
                 ),
             )
         )
@@ -698,7 +762,7 @@ def _measure(
     ends: dict[str, float],
     diff_paths: set[str] | None,
     usable: bool,
-) -> tuple[dict[str, typing.Any], dict[str, typing.Any]]:
+) -> tuple[dict[str, typing.Any], dict[str, typing.Any], dict]:
     """The counts and rates C1 to C8 of coverage.json (spec §7).
 
     Args:
@@ -712,7 +776,8 @@ def _measure(
         usable: Whether the trace passed C0.1.
 
     Returns:
-        (counts, rates).
+        (counts, rates, denominators): the denominator of the rate each
+        precondition label reads, None when its input is missing (D30).
     """
     live = [e for e in execs if e["noise"] is None]
     snapped = [
@@ -816,18 +881,39 @@ def _measure(
     }
     if not usable:
         rates.update(dict.fromkeys(set(rates) - {"reverted_changes"}))
-    return counts, rates
+    dens = {
+        "C1_under": shells - running,
+        "C2_under": exec_den,
+        "C6": totals if snapped or not live else None,
+        "C7_under": None if diff_paths is None else len(diff_rows),
+    }
+    return counts, rates, dens if usable else dict.fromkeys(dens)
 
 
-def _precondition_warnings(rates: dict, cfg: dict) -> list[str]:
-    """The coverage warnings of spec §7.2 and the snapshot coverage one."""
-    warnings = []
+def _preconditions(
+    rates: dict, dens: dict, cfg: dict
+) -> tuple[dict[str, str], list[str]]:
+    """The precondition states of spec §7.2 (D30) and the warnings.
+
+    Args:
+        rates: The coverage rates.
+        dens: The denominator per label, None when the input is missing.
+        cfg: Configuration.
+
+    Returns:
+        (label to holds, vacuous or fails; warnings for the failed ones
+        and for low snapshot coverage).
+    """
+    states, warnings = {}, []
     for label, key, op, metrics in PRECONDITIONS:
         value = rates[key]
         held = value is not None and (
             value >= cfg["join_rate_warn"] if op == ">=" else value == 1
         )
-        if not held:
+        states[label] = "holds" if held else "fails"
+        if dens[label] == 0:
+            states[label] = "vacuous"
+        if states[label] == "fails":
             shown = "null" if value is None else f"{value:.2f}"
             bound = f">= {cfg['join_rate_warn']}" if op == ">=" else "= 1"
             warnings.append(
@@ -839,7 +925,7 @@ def _precondition_warnings(rates: dict, cfg: dict) -> list[str]:
             f"snapshot_time_coverage {value:.2f} < "
             f"{cfg['snapshot_coverage_warn']}"
         )
-    return warnings
+    return dict(sorted(states.items())), warnings
 
 
 def round_floats(value: typing.Any) -> typing.Any:
@@ -892,7 +978,7 @@ def link(
     calls: list[parse.Call],
     execs: list[parse.Exec],
     *,
-    run: Run,
+    run: RunInfo,
     baseline: dict | None = None,
     final_diff: dict | None = None,
     config: typing.Mapping[str, typing.Any] | None = None,
@@ -902,8 +988,8 @@ def link(
     Args:
         calls: Call records of the run (any order; sorted by seq here).
         execs: Exec records of the run (any order; sorted by seq here).
-        run: `t_start`, `t_end`, `workspace_root`, `trace_ok`, and
-            optionally `run_key`, `family`, `log_ok`.
+        run: The run's RunInfo (spec §5.6); `capabilities` selects the
+            rules that need new monitor data.
         baseline: tracked_files.json content, or None when missing.
         final_diff: tracked_files_diff.json content, or None when missing.
         config: Overrides of DEFAULTS.
@@ -944,7 +1030,10 @@ def link(
     duplicates = {k["command_id"]: k["of"] for k in matches if "of" in k}
     for inner, outer in duplicates.items():
         root_of[inner], under[inner] = root_of[outer], under[outer]
-    nest_links = _nest(live, root_of, under, ends, duplicates)
+    caps = run["capabilities"]
+    nest_links = _nest(
+        live, root_of, under, ends, duplicates, caps["parent_links"]
+    )
     codes = {e["command_id"]: e["exit_code"] for e in execs}
     logged = {c["call_id"]: c["log_exit_code"] for c in calls}
     warnings = []
@@ -958,6 +1047,12 @@ def link(
                 f"logged {log_code}, exec {k['command_id']} {code}"
             )
     warnings += trace_warnings
+    versions = {run["schema_version"], *(e["schema_version"] for e in execs)}
+    for version in sorted(versions - {None, *KNOWN_SCHEMA_VERSIONS}, key=str):
+        warnings.append(
+            f"schema_version {version} unknown: known fields read, "
+            "others ignored"
+        )
     trace_reason = {None: "trace_missing", False: "trace_mismatched"}
     prefixes = {
         e["command_norm"][: cfg["prefix_chars"]]
@@ -1007,13 +1102,16 @@ def link(
             )
         )
     diff = {
-        key: {_rel(p, root)[0] for p in (final_diff or {}).get(key) or []}
+        key: {
+            relative_path(p, root)[0] for p in (final_diff or {}).get(key) or []
+        }
         for key in _DIFF_KEYS
     }
     files = (baseline or {}).get("files") or {}
     writers = [e for e in live if e["command_id"] not in duplicates]
     events = _write_events(
-        calls, writers, nest_links, root_of, under, ends, diff, files, root
+        *(calls, writers, nest_links, root_of, under),
+        *(cfg["snapshot_slop_s"], diff, files, root),
     )
     has_diff = final_diff is not None
     paths = _paths(
@@ -1023,6 +1121,7 @@ def link(
         files if baseline is not None else None,
         live,
         root,
+        cfg["snapshot_slop_s"],
     )
     seq = {e["command_id"]: e["seq"] for e in execs}
     seq.update({c["call_id"]: c["seq"] for c in calls})
@@ -1035,25 +1134,28 @@ def link(
         ),
     )
     links += events
-    counts, rates = _measure(
+    counts, rates, dens = _measure(
         *(calls, execs, links, rows, paths, ends),
         set().union(*diff.values()) if has_diff else None,
         usable,
     )
+    states, pre_warnings = _preconditions(rates, dens, cfg)
     coverage = Coverage(
         schema_version="1",
-        run_key=run.get("run_key"),
-        family=run.get("family") or (calls[0]["family"] if calls else None),
+        run_key=run["run_key"],
+        family=run["family"] or (calls[0]["family"] if calls else None),
         inputs={
-            "log": bool(run.get("log_ok", bool(calls))),
+            "log": bool(calls if run["log_ok"] is None else run["log_ok"]),
             "trace": integrity["C0.1"] is not None,
             "tracked_files": integrity["C0.5"],
             "final_diff": has_diff,
         },
         integrity=integrity,
+        capabilities={name: bool(caps[name]) for name in CAPABILITIES},
         counts=counts,
         rates=rates,
-        warnings=warnings + _precondition_warnings(rates, cfg),
+        preconditions=states,
+        warnings=warnings + pre_warnings,
     )
     return round_floats(
         LinkResult(
