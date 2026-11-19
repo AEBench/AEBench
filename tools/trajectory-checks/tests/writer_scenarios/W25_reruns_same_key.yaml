@@ -1,0 +1,73 @@
+id: W25
+title: The same rerun key writes the input three times
+rules: [RW1, RW2, RW3, RW4, RW6]
+calls:
+  - {call_id: c1, seq: 0, command: ./run.sh --n 10, t_start: 9.5, t_end: 20.0}
+  - {call_id: c2, seq: 1, command: ./run.sh --n 10, t_start: 29.5, t_end: 40.0}
+  - {call_id: c3, seq: 2, command: ./run.sh --n 20, t_start: 49.5, t_end: 60.0}
+execs:
+  - {command_id: e1, command: ./run.sh --n 10, t_start: 10.1, duration_s: 9.0,
+     exit_code: 1}
+  - {command_id: e2, command: ./run.sh --n 10, t_start: 30.1, duration_s: 9.0}
+  - {command_id: e3, command: ./run.sh --n 20, t_start: 50.1, duration_s: 9.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: call_exec, call_id: c3, command_id: e3}
+  - {link_type: write_event, event_id: w0, path: out/r.csv, op: create,
+     writer_id: e1}
+  - {link_type: write_event, event_id: w1, path: out/r.csv, writer_id: e2}
+  - {link_type: write_event, event_id: w2, path: out/r.csv, writer_id: e3}
+paths:
+  - {path: out/r.csv, events: [w0, w1, w2], final_writer: w2}
+call_facts:
+  - {call_id: c1, command_shape: run.sh --n N, numeric_args: ["10"], arg_count: 3}
+  - {call_id: c2, command_shape: run.sh --n N, numeric_args: ["10"], arg_count: 3}
+  - {call_id: c3, command_shape: run.sh --n N, numeric_args: ["20"], arg_count: 3}
+call_structure:
+  - {call_id: c1, program_key: run.sh}
+  - {call_id: c2, program_key: run.sh}
+  - {call_id: c3, program_key: run.sh}
+oracle_inputs:
+  - {input_id: i0, path: out/r.csv}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+expect:
+  input_rewrites:
+    - input_id: i0
+      path: out/r.csv
+      visible: true
+      members:
+        - {call_id: c1, seq: 0, member_type: shell, events: [w0],
+           first_lo: 10.1, last_hi: 21.1, under: true, outcome: failed,
+           command_shape: run.sh --n N, numeric_args: ["10"], arg_count: 3,
+           rerun_key: run.sh}
+        - {call_id: c2, seq: 1, member_type: shell, events: [w1],
+           first_lo: 30.1, last_hi: 41.1, under: true, outcome: ok,
+           command_shape: run.sh --n N, numeric_args: ["10"], arg_count: 3,
+           rerun_key: run.sh}
+        - {call_id: c3, seq: 2, member_type: shell, events: [w2],
+           first_lo: 50.1, last_hi: 61.1, under: true, outcome: ok,
+           command_shape: run.sh --n N, numeric_args: ["20"], arg_count: 3,
+           rerun_key: run.sh}
+      pairs:
+        - {prev_call_id: c1, call_id: c2, after: failed, same_key: true,
+           writer_switched: false, args_changed: false, shape_changed: false,
+           under: true}
+        - {prev_call_id: c2, call_id: c3, after: ok, same_key: true,
+           writer_switched: false, args_changed: true, shape_changed: false,
+           under: true}
+      delete_roots: []
+      rewrites_over: 2
+      rewrites_under: 2
+  metrics:
+    M2.4: {inputs_rewritten_over: 1, inputs_rewritten_under: 1,
+           rewrites_total_over: 2, rewrites_total_under: 2,
+           rewrites_max_over: 2, rewrites_max_under: 2,
+           rewrites_after_ok_over: 1, rewrites_after_ok_under: 1,
+           rewrites_after_failure_over: 1, rewrites_after_failure_under: 1,
+           rewrites_after_other_over: 0, rewrites_after_other_under: 0,
+           writer_switches_over: 0, writer_switches_under: 0,
+           args_changed_over: 1, args_changed_under: 1,
+           inputs_with_delete_roots: 0}

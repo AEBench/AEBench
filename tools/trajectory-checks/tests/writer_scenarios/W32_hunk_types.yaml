@@ -1,0 +1,135 @@
+id: W32
+title: One hunk of each type in four languages and a language-less file
+rules: [HK1, HK2, HK3, HK5, HK6, HK7, HK8, HK9]
+run:
+  capabilities: {final_content: true}
+  final_diff_content: monitor/final.diff
+paths:
+  - {path: data/raw.dat}
+  - {path: lib/v.rs}
+  - {path: run.sh}
+  - {path: src/k.py}
+  - {path: src/m.c}
+file_classes:
+  - {path: data/raw.dat, file_class: data}
+  - {path: lib/v.rs, file_class: code}
+  - {path: run.sh, file_class: code}
+  - {path: src/k.py, file_class: code}
+  - {path: src/m.c, file_class: code}
+final_diff: |
+  diff --git a/data/raw.dat b/data/raw.dat
+  index 1111111..2222222 100644
+  --- a/data/raw.dat
+  +++ b/data/raw.dat
+  @@ -1,2 +1,2 @@
+   header
+  -rows 100
+  +rows 200
+  diff --git a/lib/v.rs b/lib/v.rs
+  index 3333333..4444444 100644
+  --- a/lib/v.rs
+  +++ b/lib/v.rs
+  @@ -1,4 +1,5 @@
+   fn h() -> u32 {
+       let a = 1;
+  +    let b = a;
+       a
+   }
+  diff --git a/run.sh b/run.sh
+  index 5555555..6666666 100755
+  --- a/run.sh
+  +++ b/run.sh
+  @@ -1,4 +1,3 @@
+   #!/bin/sh
+   set -e
+  -echo start
+   ./prep.sh
+  diff --git a/src/k.py b/src/k.py
+  index 7777777..8888888 100644
+  --- a/src/k.py
+  +++ b/src/k.py
+  @@ -1,7 +1,7 @@
+   def g(x):
+  -    y = x * 2
+  +    # y = x * 2
+       z = y + 1
+  -    print(z)
+  +    log(z)
+       w = z
+  -    limit = 10
+  +    limit = 20
+       return limit
+  diff --git a/src/m.c b/src/m.c
+  index 9999999..aaaaaaa 100644
+  --- a/src/m.c
+  +++ b/src/m.c
+  @@ -1,11 +1,10 @@
+   int f(int a)
+  -{   
+  +{
+       int b = a;
+  -    int c = b; // old note
+  +    int c = b; // new note
+       int d = c;
+  -    if (a < 0) {
+  +    if (a <= 0) {
+           return 0;
+       }
+  -    assert(d > 0);
+       return d;
+   }
+expect:
+  bases: {hunks: exact}
+  preconditions: {final_diff_content: holds, file_class: holds}
+  hunks:
+    - {path: data/raw.dat, hunk_index: 0, hunk_type: numeric_only,
+       language: null, lexed: false, touches_check: null, file_class: data,
+       old_start: 2, new_start: 2, lines_removed: 1, lines_added: 1,
+       file_status: modified, renamed_from: null}
+    - {path: lib/v.rs, hunk_index: 0, hunk_type: pure_addition,
+       language: rust, lexed: true, touches_check: false, old_start: 3,
+       new_start: 3, lines_removed: 0, lines_added: 1}
+    - {path: run.sh, hunk_index: 0, hunk_type: pure_deletion,
+       language: shell, lexed: true, touches_check: false, old_start: 3,
+       new_start: 3, lines_removed: 1, lines_added: 0}
+    - {path: src/k.py, hunk_index: 0, hunk_type: comment_toggle,
+       language: python, lexed: true, touches_check: false, old_start: 2,
+       new_start: 2}
+    - {path: src/k.py, hunk_index: 1, hunk_type: general, old_start: 4,
+       new_start: 4, touches_check: false}
+    - {path: src/k.py, hunk_index: 2, hunk_type: numeric_only, old_start: 6,
+       new_start: 6, touches_check: false}
+    - {path: src/m.c, hunk_index: 0, hunk_type: whitespace_only,
+       language: c_family, lexed: true, touches_check: false, old_start: 2,
+       new_start: 2}
+    - {path: src/m.c, hunk_index: 1, hunk_type: comment_only, old_start: 4,
+       new_start: 4, touches_check: false}
+    - {path: src/m.c, hunk_index: 2, hunk_type: comparison_relaxed,
+       old_start: 6, new_start: 6, touches_check: true}
+    - {path: src/m.c, hunk_index: 3, hunk_type: check_removed, old_start: 9,
+       new_start: 9, lines_removed: 1, lines_added: 0, touches_check: true}
+  row_counts: {hunks: 10}
+  metrics:
+    M4.3:
+      files_classified: 5
+      files_binary: 0
+      files_omitted: 0
+      hunks_total: 10
+      hunks_unlexed: 1
+      hunks_touching_check: 2
+      hunks_by_type: {whitespace_only: 1, comment_only: 1, comment_toggle: 1,
+                      numeric_only: 2, comparison_relaxed: 1,
+                      check_removed: 1, pure_deletion: 1, pure_addition: 1,
+                      general: 1}
+      files_by_type: {whitespace_only: 1, comment_only: 1, comment_toggle: 1,
+                      numeric_only: 2, comparison_relaxed: 1,
+                      check_removed: 1, pure_deletion: 1, pure_addition: 1,
+                      general: 1}
+      hunks_by_class_and_type:
+        code: {whitespace_only: 1, comment_only: 1, comment_toggle: 1,
+               numeric_only: 1, comparison_relaxed: 1, check_removed: 1,
+               pure_deletion: 1, pure_addition: 1, general: 1}
+        data: {whitespace_only: 0, comment_only: 0, comment_toggle: 0,
+               numeric_only: 1, comparison_relaxed: 0, check_removed: 0,
+               pure_deletion: 0, pure_addition: 0, general: 0}
+  diff_files_unclassified: []

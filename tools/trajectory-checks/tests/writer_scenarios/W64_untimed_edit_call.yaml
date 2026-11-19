@@ -1,0 +1,35 @@
+id: W64
+title: An edit call with no start time has an unbounded window, written as null
+description: >
+  Layer 1 gives an edit event only to a call with a start time, but
+  observation_window is exported (layer 6) and the records are not
+  checked: a call with t_start null has window start -inf (D45 (1)),
+  which JSON cannot hold. The row and the member write it as null
+  (D46), and the output is valid JSON.
+rules: [LW4, RW2]
+calls:
+  - {call_id: c1, seq: 0, tool_type: edit, paths: [out/notes.txt],
+     t_start: null, t_end: 21.0}
+links:
+  - {link_type: write_event, event_id: w0, path: out/notes.txt, op: modify,
+     writer_id: c1, t_start: 21.0, t_end: 21.0}
+paths:
+  - {path: out/notes.txt, events: [w0], final_writer: w0}
+oracle_inputs:
+  - {input_id: i0, path: out/notes.txt}
+input_states:
+  - {input_id: i0, state_under: edit_written, states_over: [edit_written],
+     grading_exists: true, content_source: final_diff}
+expect:
+  last_writers:
+    - {input_id: i0, last_writer: w0, last_writer_type: edit_call,
+       window_lo: null, window_hi: 22.0, last_writer_candidates: [w0],
+       later_writer_risk: [], last_writer_under: true}
+  input_rewrites:
+    - input_id: i0
+      members:
+        - {call_id: c1, seq: 0, member_type: edit, events: [w0],
+           first_lo: null, last_hi: 22.0, under: true, outcome: null,
+           command_shape: null, numeric_args: null, arg_count: null,
+           rerun_key: null}
+      rewrites_over: 0

@@ -1,0 +1,57 @@
+id: W37
+title: Three runs of one artifact give per-input and run-level peer ratios
+description: >
+  The same (path, pattern) under run-local input ids i0, i3 and i1, with
+  writer durations 1, 2 and 10 s. Each value is divided by the median of
+  the other two runs' values.
+rules: [PEER1, PEER2]
+calls:
+  - {call_id: c1, seq: 0, command: node collect.js, t_start: 9.5, t_end: 21.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, event_id: w0, path: results/t.json, writer_id: e1}
+paths:
+  - {path: results/t.json, events: [w0], final_writer: w0}
+runs:
+  - run: {run_key: art__claude__1}
+    execs:
+      - {command_id: e1, command: node collect.js, t_start: 10.0, duration_s: 1.0}
+    oracle_inputs:
+      - {input_id: i0, path: results/t.json}
+    input_states:
+      - {input_id: i0, states_over: [command_written], grading_exists: true,
+         content_source: final_diff}
+  - run: {run_key: art__claude__2}
+    execs:
+      - {command_id: e1, command: node collect.js, t_start: 10.0, duration_s: 2.0}
+    oracle_inputs:
+      - {input_id: i3, path: results/t.json}
+    input_states:
+      - {input_id: i3, states_over: [command_written], grading_exists: true,
+         content_source: final_diff}
+  - run: {run_key: art__codex__1}
+    execs:
+      - {command_id: e1, command: node collect.js, t_start: 10.0, duration_s: 10.0}
+    oracle_inputs:
+      - {input_id: i1, path: results/t.json}
+    input_states:
+      - {input_id: i1, states_over: [command_written], grading_exists: true,
+         content_source: final_diff}
+expect:
+  peer_ratios:
+    - {run_key: art__claude__1, input_id: i0,
+       M3.3.writer_duration_s_peer_ratio: 0.166667,
+       M3.3.root_span_over_s_peer_ratio: 0.166667,
+       M2.4.rewrites_over_peer_ratio: null}
+    - {run_key: art__claude__2, input_id: i3,
+       M3.3.writer_duration_s_peer_ratio: 0.363636,
+       M3.3.root_span_over_s_peer_ratio: 0.363636,
+       M2.4.rewrites_over_peer_ratio: null}
+    - {run_key: art__codex__1, input_id: i1,
+       M3.3.writer_duration_s_peer_ratio: 6.666667,
+       M3.3.root_span_over_s_peer_ratio: 6.666667,
+       M2.4.rewrites_over_peer_ratio: null}
+  run_peer_ratios:
+    - {run_key: art__claude__1, M3.3.writer_duration_max_s_over_peer_ratio: 0.166667}
+    - {run_key: art__claude__2, M3.3.writer_duration_max_s_over_peer_ratio: 0.363636}
+    - {run_key: art__codex__1, M3.3.writer_duration_max_s_over_peer_ratio: 6.666667}

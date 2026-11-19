@@ -1,0 +1,27 @@
+id: W33
+title: Without final content, M4.3 is void and M3.3 is not
+rules: [PRE3, HK1]
+calls:
+  - {call_id: c1, seq: 0, command: ./gen.sh, t_start: 9.5, t_end: 11.0}
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 10.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, event_id: w0, path: out/r.json, writer_id: e1}
+paths:
+  - {path: out/r.json, events: [w0], final_writer: w0}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+expect:
+  preconditions: {final_diff_content: fails, read_events: fails}
+  bases: {hunks: fallback}
+  metrics_null: [M4.3]
+  row_counts: {hunks: 0}
+  metrics:
+    M3.3: {inputs: 1, inputs_written_under: 1}
+  diff_files_unclassified: []
+  warnings:
+    - "precondition final_diff_content failed: M4.3 null"

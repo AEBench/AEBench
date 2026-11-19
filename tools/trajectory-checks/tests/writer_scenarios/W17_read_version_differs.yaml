@@ -1,0 +1,37 @@
+id: W17
+title: A graded read whose hash differs from the end-of-agent hash (MC-03)
+rules: [LW11, LW12]
+run:
+  capabilities: {oracle_reads: true, final_content: true}
+  final_diff_content: monitor/final.diff
+calls:
+  - {call_id: c1, seq: 0, command: ./gen.sh, t_start: 9.5, t_end: 11.0}
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 10.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, event_id: w0, path: out/r.json, writer_id: e1}
+paths:
+  - {path: out/r.json, events: [w0], final_writer: w0}
+final_diff: ""
+final_files:
+  - {path: out/r.json, status: M, sha256: aa}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json, source_type: graded, grading_exists: true,
+     grading_sha256: bb, oracle_writes: true, oracle_writes_basis: exact}
+input_states:
+  - {input_id: i0, states_over: [command_written, oracle_written],
+     grading_exists: true, content_source: grading_read, grading_sha256: bb}
+expect:
+  last_writers:
+    - {input_id: i0, read_version: differs, differs_causes: [oracle],
+       oracle_writes: true, oracle_writes_basis: exact,
+       exists_source: grading_read, hash_confirms_writer: null,
+       mtime_candidates: null, last_writer_under: false,
+       not_under: [read_version_differs]}
+  bases: {read_version: exact, oracle_writes: exact, mtime: exact,
+          hunks: exact}
+  preconditions: {final_diff_content: vacuous}
+  metrics:
+    M3.3: {inputs_read_version_differs: 1, inputs_read_version_unverified: 0}
+    M4.3: {hunks_total: 0, files_classified: 0, files_omitted: 0}

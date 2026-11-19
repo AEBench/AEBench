@@ -1,0 +1,39 @@
+id: W06
+title: An incomplete exec deletes the input, a short command recreates it
+description: >
+  Regression scenario for the removed correction (LW7): the incomplete
+  exec's measured end is 40, so layer 1 orders its delete before the
+  recreate at 90 and names the recreate (its D32).
+rules: [LW3, LW5, LW6]
+calls:
+  - {call_id: c1, seq: 0, command: rm -f out/r.json; ./long.sh, t_start: 9.5,
+     t_end: 41.0, log_ok: false}
+  - {call_id: c2, seq: 1, command: ./gen.sh, t_start: 89.5, t_end: 91.0}
+execs:
+  - {command_id: e1, command: rm -f out/r.json; ./long.sh, t_start: 10.0,
+     duration_s: 30.0, complete: false, exit_code: null}
+  - {command_id: e2, command: ./gen.sh, t_start: 90.0, duration_s: 0.5}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: write_event, event_id: w0, path: out/r.json, op: delete,
+     writer_id: e1}
+  - {link_type: write_event, event_id: w1, path: out/r.json, op: create,
+     writer_id: e2}
+paths:
+  - {path: out/r.json, events: [w0, w1], final_writer: w1}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+input_states:
+  - {input_id: i0, states_over: [command_written, deleted], grading_exists: true,
+     content_source: final_diff, detached_execs: [e1],
+     unseen_writer_possible: true}
+expect:
+  last_writers:
+    - {input_id: i0, last_writer: w1, last_writer_op: create,
+       last_writer_candidates: [w1], later_writer_risk: [],
+       state_conflict: false, root_candidates: [c1, c2],
+       root_candidates_complete: false, last_writer_under: true,
+       not_under: []}
+  input_rewrites:
+    - {input_id: i0, delete_roots: [c1], rewrites_over: 0}

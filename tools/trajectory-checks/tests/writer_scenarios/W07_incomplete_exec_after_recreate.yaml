@@ -1,0 +1,34 @@
+id: W07
+title: The incomplete exec, a detached one, ends after the recreate
+rules: [LW9]
+calls:
+  - {call_id: c1, seq: 0, command: rm -f out/r.json; ./long.sh, t_start: 9.5,
+     t_end: 96.0, log_ok: false}
+  - {call_id: c2, seq: 1, command: ./gen.sh, t_start: 89.5, t_end: 91.0}
+execs:
+  - {command_id: e1, command: rm -f out/r.json; ./long.sh, t_start: 10.0,
+     duration_s: 85.0, complete: false, exit_code: null}
+  - {command_id: e2, command: ./gen.sh, t_start: 90.0, duration_s: 0.5}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: write_event, event_id: w0, path: out/r.json, op: create,
+     writer_id: e2}
+  - {link_type: write_event, event_id: w1, path: out/r.json, op: delete,
+     writer_id: e1}
+paths:
+  - {path: out/r.json, events: [w0, w1], final_writer: w0}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff, detached_execs: [e1],
+     unseen_writer_possible: true}
+expect:
+  last_writers:
+    - {input_id: i0, last_writer: w0, last_writer_candidates: [w0],
+       later_writer_risk: [{id: e1, item_type: exec, reason: incomplete}],
+       last_writer_under: false, not_under: [later_writer_risk]}
+  metrics:
+    M3.3: {inputs_later_writer_risk: 1, inputs_written_under: 0,
+           inputs_written_over: 1}

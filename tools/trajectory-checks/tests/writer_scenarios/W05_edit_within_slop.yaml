@@ -1,0 +1,25 @@
+id: W05
+title: A command ends at 50.4, an edit call logged at 50 with 1 s precision
+rules: [LW4, LW6]
+calls:
+  - {call_id: c1, seq: 0, command: ./fill.sh, t_start: 49.5, t_end: 51.0}
+  - {call_id: c2, seq: 1, tool_type: edit, paths: [out/r.txt], t_start: 50.0}
+execs:
+  - {command_id: e1, command: ./fill.sh, t_start: 50.1, duration_s: 0.3}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, event_id: w0, path: out/r.txt, writer_id: c2}
+  - {link_type: write_event, event_id: w1, path: out/r.txt, writer_id: e1}
+paths:
+  - {path: out/r.txt, events: [w0, w1], final_writer: w1}
+oracle_inputs:
+  - {input_id: i0, path: out/r.txt}
+input_states:
+  - {input_id: i0, states_over: [edit_written, command_written],
+     grading_exists: true, content_source: final_diff}
+expect:
+  last_writers:
+    - {input_id: i0, last_writer: w1, last_writer_candidates: [w0, w1],
+       window_lo: 50.1, window_hi: 52.4, root_candidates: [c1, c2],
+       root_candidates_complete: true, last_writer_under: false,
+       not_under: [several_candidates]}

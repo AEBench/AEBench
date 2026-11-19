@@ -1,0 +1,31 @@
+id: W49
+title: With start events, a command running at stop is an incomplete record
+rules: [LW9]
+run:
+  capabilities: {start_events: true}
+calls:
+  - {call_id: c1, seq: 0, command: ./gen.sh, t_start: 99.5, t_end: 101.0}
+  - {call_id: c2, seq: 1, command: ./serve.sh, t_start: 900.0, t_end: null}
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 100.0, duration_s: 1.0,
+     record_type: closed}
+  - {command_id: e2, command: ./serve.sh, t_start: 900.2, duration_s: 99.0,
+     complete: false, exit_code: null, record_type: flushed_at_stop}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: write_event, event_id: w0, path: out/r.json, writer_id: e1}
+paths:
+  - {path: out/r.json, events: [w0], final_writer: w0}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff, detached_execs: [e2],
+     unseen_writer_possible: true}
+expect:
+  bases: {unrecorded_risk: exact}
+  last_writers:
+    - {input_id: i0, last_writer: w0,
+       later_writer_risk: [{id: e2, item_type: exec, reason: incomplete}],
+       last_writer_under: false, not_under: [later_writer_risk]}

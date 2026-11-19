@@ -1,0 +1,25 @@
+id: W04
+title: An edit call at t = 10, then a command rewrites the file at t = 50
+rules: [LW5]
+calls:
+  - {call_id: c1, seq: 0, tool_type: edit, paths: [out/r.txt], t_start: 10.0}
+  - {call_id: c2, seq: 1, command: ./regen.sh, t_start: 49.5, t_end: 52.0}
+execs:
+  - {command_id: e2, command: ./regen.sh, t_start: 50.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: write_event, event_id: w0, path: out/r.txt, writer_id: c1}
+  - {link_type: write_event, event_id: w1, path: out/r.txt, writer_id: e2}
+paths:
+  - {path: out/r.txt, events: [w0, w1], final_writer: w1}
+oracle_inputs:
+  - {input_id: i0, path: out/r.txt}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+expect:
+  last_writers:
+    - {input_id: i0, last_writer: w1, last_writer_type: exec,
+       last_writer_role: root_exec, last_writer_candidates: [w1],
+       window_lo: 50.0, window_hi: 53.0, writer_call_id: c2,
+       last_writer_under: true}

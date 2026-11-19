@@ -1,0 +1,20 @@
+id: W23
+title: Without oracle inputs, M3.3 and M2.4 are void
+rules: [PRE1, PRE3, PRE4]
+calls:
+  - {call_id: c1, seq: 0, command: ./gen.sh, t_start: 9.5, t_end: 11.0}
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 10.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, event_id: w0, path: out/r.json, writer_id: e1}
+paths:
+  - {path: out/r.json, events: [w0], final_writer: w0}
+oracle_inputs: absent
+expect:
+  preconditions: {oracle_inputs: fails, input_states: vacuous, trace: holds}
+  metrics_null: [M3.3, M2.4]
+  row_counts: {last_writers: 0, input_rewrites: 0, hunks: 0}
+  warnings:
+    - "input oracle_inputs missing: M3.3, M2.4 null"
+    - "precondition final_diff_content failed: M4.3 null"

@@ -1,0 +1,33 @@
+id: W38
+title: Layer 1's writer is a delete, but the grading read found the file
+rules: [LW5, LW10]
+run:
+  capabilities: {oracle_reads: true}
+calls:
+  - {call_id: c1, seq: 0, command: ./gen.sh, t_start: 9.5, t_end: 11.0}
+  - {call_id: c2, seq: 1, command: rm -f out/r.json, t_start: 49.5, t_end: 51.0}
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 10.0, duration_s: 1.0}
+  - {command_id: e2, command: rm -f out/r.json, t_start: 50.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: write_event, event_id: w0, path: out/r.json, op: create,
+     writer_id: e1}
+  - {link_type: write_event, event_id: w1, path: out/r.json, op: delete,
+     writer_id: e2}
+paths:
+  - {path: out/r.json, events: [w0, w1], final_writer: w1,
+     final_state: deleted}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json, source_type: graded, grading_exists: true,
+     grading_sha256: ab}
+input_states:
+  - {input_id: i0, states_over: [deleted, command_written],
+     grading_exists: true, content_source: grading_read, grading_sha256: ab}
+expect:
+  last_writers:
+    - {input_id: i0, last_writer: w1, last_writer_op: delete,
+       last_writer_candidates: [w1], exists_at_read: true,
+       exists_source: grading_read, state_conflict: true,
+       last_writer_under: false, not_under: [state_conflict]}

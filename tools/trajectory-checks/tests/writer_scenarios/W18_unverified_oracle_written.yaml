@@ -1,0 +1,31 @@
+id: W18
+title: Without grading reads, a fallback oracle_writes of true voids under
+rules: [LW11, LW12]
+calls:
+  - {call_id: c1, seq: 0, command: ./gen.sh, t_start: 9.5, t_end: 11.0}
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 10.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, event_id: w0, path: out/a.json, writer_id: e1}
+  - {link_type: write_event, event_id: w1, path: out/b.json, writer_id: e1}
+paths:
+  - {path: out/a.json, events: [w0], final_writer: w0}
+  - {path: out/b.json, events: [w1], final_writer: w1}
+oracle_inputs:
+  - {input_id: i0, path: out/a.json, oracle_writes: true,
+     oracle_writes_basis: fallback}
+  - {input_id: i1, path: out/b.json}
+input_states:
+  - {input_id: i0, states_over: [command_written, oracle_written],
+     grading_exists: true, content_source: final_diff}
+  - {input_id: i1, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+expect:
+  last_writers:
+    - {input_id: i0, read_version: unverified, oracle_writes: true,
+       oracle_writes_basis: fallback, last_writer_under: false,
+       not_under: [unverified_oracle_written]}
+    - {input_id: i1, read_version: unverified, oracle_writes: null,
+       oracle_writes_basis: null, last_writer_under: true, not_under: []}
+  bases: {read_version: fallback, oracle_writes: fallback}

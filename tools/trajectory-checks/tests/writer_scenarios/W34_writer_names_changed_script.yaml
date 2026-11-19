@@ -1,0 +1,83 @@
+id: W34
+title: The last writer's command names a script the run changed
+description: >
+  Two inputs, each written by a command that runs a script the run
+  edited. The first writer is certain; the second is not (layer 4's model
+  conflict), so its script's hunk is in the over filter only.
+rules: [LW14, FLT2]
+run:
+  capabilities: {final_content: true}
+  final_diff_content: monitor/final.diff
+calls:
+  - {call_id: c0, seq: 0, tool_type: edit, paths: [scripts/gen.sh], t_start: 5.0}
+  - {call_id: c1, seq: 1, command: bash scripts/gen.sh > out/r.json,
+     t_start: 9.5, t_end: 11.0}
+  - {call_id: c3, seq: 2, tool_type: edit, paths: [scripts/two.sh], t_start: 15.0}
+  - {call_id: c2, seq: 3, command: bash scripts/two.sh > out/s.json,
+     t_start: 19.5, t_end: 21.0}
+execs:
+  - {command_id: e1, command: bash scripts/gen.sh > out/r.json, t_start: 10.0,
+     duration_s: 1.0}
+  - {command_id: e2, command: bash scripts/two.sh > out/s.json, t_start: 20.0,
+     duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: write_event, event_id: w0, path: scripts/gen.sh, writer_id: c0}
+  - {link_type: write_event, event_id: w1, path: out/r.json, writer_id: e1}
+  - {link_type: write_event, event_id: w2, path: scripts/two.sh, writer_id: c3}
+  - {link_type: write_event, event_id: w3, path: out/s.json, writer_id: e2}
+paths:
+  - {path: scripts/gen.sh, events: [w0], final_writer: w0}
+  - {path: out/r.json, events: [w1], final_writer: w1}
+  - {path: scripts/two.sh, events: [w2], final_writer: w2}
+  - {path: out/s.json, events: [w3], final_writer: w3}
+file_classes:
+  - {path: scripts/gen.sh, file_class: code}
+  - {path: scripts/two.sh, file_class: code}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+  - {input_id: i1, path: out/s.json}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+  - {input_id: i1, states_over: [command_written], grading_exists: true,
+     content_source: final_diff, model_conflict: true}
+final_diff: |
+  diff --git a/scripts/gen.sh b/scripts/gen.sh
+  index 1111111..2222222 100755
+  --- a/scripts/gen.sh
+  +++ b/scripts/gen.sh
+  @@ -1,2 +1,2 @@
+   set -e
+  -N=1
+  +N=2
+  diff --git a/scripts/two.sh b/scripts/two.sh
+  index 3333333..4444444 100755
+  --- a/scripts/two.sh
+  +++ b/scripts/two.sh
+  @@ -1,2 +1,2 @@
+   set -e
+  -M=1
+  +M=3
+expect:
+  last_writers:
+    - {input_id: i0, writer_named_written: [scripts/gen.sh],
+       writer_named_changed: [scripts/gen.sh], last_writer_under: true}
+    - {input_id: i1, writer_named_written: [scripts/two.sh],
+       writer_named_changed: [scripts/two.sh], last_writer_under: false,
+       not_under: [model_conflict]}
+  hunks:
+    - {path: scripts/gen.sh, hunk_index: 0, hunk_type: numeric_only,
+       language: shell, file_class: code, in_named_under: true,
+       in_named_over: true, in_read: null}
+    - {path: scripts/two.sh, hunk_index: 0, hunk_type: numeric_only,
+       in_named_under: false, in_named_over: true}
+  metrics:
+    M3.3: {inputs_writer_code_changed_over: 2,
+           inputs_writer_code_changed_under: 1, writer_calls_over: 2,
+           writer_calls_under: 1}
+    M4.3:
+      hunks_by_type_named_under: {numeric_only: 1, general: 0}
+      hunks_by_type_named_over: {numeric_only: 2, general: 0}
+      hunks_by_type_read: null

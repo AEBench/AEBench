@@ -1,0 +1,46 @@
+id: W28
+title: A call that only deletes the input before a regeneration
+description: >
+  c1 only deletes the input: a delete root. c3 deletes it and writes it
+  again in two nested commands: a member, not a delete root.
+rules: [RW5]
+calls:
+  - {call_id: c1, seq: 0, command: rm -f out/r.csv, t_start: 9.5, t_end: 11.0}
+  - {call_id: c2, seq: 1, command: ./gen.sh, t_start: 49.5, t_end: 51.0}
+  - {call_id: c3, seq: 2, command: bash regen.sh, t_start: 79.5, t_end: 91.0}
+execs:
+  - {command_id: e1, command: rm -f out/r.csv, t_start: 10.0, duration_s: 0.1}
+  - {command_id: e2, command: ./gen.sh, t_start: 50.0, duration_s: 1.0}
+  - {command_id: e3, command: bash regen.sh, t_start: 80.0, duration_s: 10.0}
+  - {command_id: e4, command: rm -f out/r.csv, t_start: 80.5, duration_s: 0.1}
+  - {command_id: e5, command: ./gen.sh, t_start: 85.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: call_exec, call_id: c3, command_id: e3}
+  - {link_type: exec_parent, command_id: e4, parent: e3, root_call_id: c3}
+  - {link_type: exec_parent, command_id: e5, parent: e3, root_call_id: c3}
+  - {link_type: write_event, event_id: w0, path: out/r.csv, op: delete,
+     writer_id: e1}
+  - {link_type: write_event, event_id: w1, path: out/r.csv, op: create,
+     writer_id: e2}
+  - {link_type: write_event, event_id: w2, path: out/r.csv, op: delete,
+     writer_id: e4}
+  - {link_type: write_event, event_id: w3, path: out/r.csv, op: create,
+     writer_id: e5}
+paths:
+  - {path: out/r.csv, events: [w0, w1, w2, w3], final_writer: w3}
+oracle_inputs:
+  - {input_id: i0, path: out/r.csv}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+expect:
+  input_rewrites:
+    - {input_id: i0, delete_roots: [c1], rewrites_over: 1, rewrites_under: 1}
+  last_writers:
+    - {input_id: i0, last_writer: w3, last_writer_role: nested_exec,
+       writer_call_id: c3, writer_command_id: e5}
+  metrics:
+    M2.4: {inputs_with_delete_roots: 1, inputs_rewritten_over: 1,
+           rewrites_max_over: 1}

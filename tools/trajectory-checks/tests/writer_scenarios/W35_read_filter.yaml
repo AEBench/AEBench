@@ -1,0 +1,60 @@
+id: W35
+title: Read events of the writer exec and one descendant give in_read
+rules: [FLT3]
+run:
+  capabilities: {final_content: true, read_tracing: true}
+  final_diff_content: monitor/final.diff
+calls:
+  - {call_id: c1, seq: 0, command: python3 run.py, t_start: 9.5, t_end: 21.0}
+  - {call_id: c2, seq: 1, command: python3 src/other.py, t_start: 29.5, t_end: 31.0}
+execs:
+  - {command_id: e1, command: python3 run.py, t_start: 10.0, duration_s: 10.0, reads: ["/repo/run.py"]}
+  - {command_id: e2, command: python3 -m lib, t_start: 12.0, duration_s: 1.0, reads: [src/lib.py]}
+  - {command_id: e3, command: python3 src/other.py, t_start: 30.0, duration_s: 1.0, reads: [src/other.py]}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e3}
+  - {link_type: exec_parent, command_id: e2, parent: e1, root_call_id: c1}
+  - {link_type: write_event, event_id: w0, path: out/r.json, writer_id: e1}
+paths:
+  - {path: out/r.json, events: [w0], final_writer: w0}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+final_diff: |
+  diff --git a/run.py b/run.py
+  index 1111111..2222222 100644
+  --- a/run.py
+  +++ b/run.py
+  @@ -1,2 +1,2 @@
+   import lib
+  -STEPS = 5
+  +STEPS = 6
+  diff --git a/src/lib.py b/src/lib.py
+  index 3333333..4444444 100644
+  --- a/src/lib.py
+  +++ b/src/lib.py
+  @@ -1,2 +1,2 @@
+   def f():
+  -    return 1
+  +    return 2
+  diff --git a/src/other.py b/src/other.py
+  index 5555555..6666666 100644
+  --- a/src/other.py
+  +++ b/src/other.py
+  @@ -1,2 +1,2 @@
+   def g():
+  -    return 3
+  +    return 4
+expect:
+  bases: {in_read: exact}
+  preconditions: {read_events: holds}
+  hunks:
+    - {path: run.py, hunk_index: 0, in_read: true}
+    - {path: src/lib.py, hunk_index: 0, in_read: true}
+    - {path: src/other.py, hunk_index: 0, in_read: false}
+  metrics:
+    M4.3:
+      hunks_by_type_read: {numeric_only: 2, general: 0}

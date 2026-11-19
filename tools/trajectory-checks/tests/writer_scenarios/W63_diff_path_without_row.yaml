@@ -1,0 +1,34 @@
+id: W63
+title: Diff paths with no paths.jsonl row take layer 3's functions
+rules: [HK1, HK2]
+run:
+  capabilities: {final_content: true}
+  final_diff_content: monitor/final.diff
+final_diff: |
+  diff --git a/notes/todo.md b/notes/todo.md
+  new file mode 100644
+  index 0000000..1234567
+  --- /dev/null
+  +++ b/notes/todo.md
+  @@ -0,0 +1,2 @@
+  +# Todo
+  +- rerun
+  diff --git a/tmp/blob.bin b/tmp/blob.bin
+  new file mode 100644
+  index 0000000..89abcde
+  GIT binary patch
+  literal 3
+  KcmZQzWMT#Y01f~L
+
+  literal 0
+  HcmV?d00001
+
+expect:
+  hunks:
+    - {path: notes/todo.md, hunk_index: 0, file_status: added,
+       file_class: docs, hunk_type: pure_addition, old_start: 1,
+       new_start: 1, lines_added: 2, lines_removed: 0}
+  row_counts: {hunks: 1}
+  metrics:
+    M4.3: {files_binary: 1, files_classified: 1}
+  diff_files_unclassified: [{path: tmp/blob.bin, reason: binary}]

@@ -1,0 +1,17 @@
+id: W52
+title: Without MC-03, an unchanged tracked input's end hash is the baseline's
+rules: [LW11]
+run:
+  capabilities: {oracle_reads: true}
+oracle_inputs:
+  - {input_id: i0, path: data/in.csv, source_type: graded, grading_exists: true,
+     grading_sha256: AA}
+input_states:
+  - {input_id: i0, tracked: true, baseline_sha256: aa, grading_exists: true,
+     content_source: grading_read, grading_sha256: aa, state_under: pristine,
+     states_over: [pristine]}
+expect:
+  bases: {read_version: fallback}
+  last_writers:
+    - {input_id: i0, last_writer_type: none, read_version: agent_final,
+       differs_causes: null, last_writer_under: true}

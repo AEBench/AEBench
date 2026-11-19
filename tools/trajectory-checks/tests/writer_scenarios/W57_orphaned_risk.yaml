@@ -1,0 +1,44 @@
+id: W57
+title: A recorded orphan is a later-writer risk; shell syntax alone is not
+description: >
+  Two runs. With parent links every exec carries an orphans list (layer
+  4's detached basis exact) and the complete exec that left a process is a
+  risk. Without them the same exec is in layer 4's detached list because
+  it backgrounds, and it is a root candidate only.
+rules: [LW9, LW16]
+calls:
+  - {call_id: c1, seq: 0, command: ./daemon.sh &, t_start: 99.5, t_end: 101.0}
+  - {call_id: c2, seq: 1, command: ./gen.sh, t_start: 499.5, t_end: 501.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: write_event, event_id: w0, path: out/r.json, writer_id: e2}
+paths:
+  - {path: out/r.json, events: [w0], final_writer: w0}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff, detached_execs: [e1],
+     unseen_writer_possible: true}
+runs:
+  - run:
+      capabilities: {parent_links: true}
+    execs:
+      - {command_id: e1, command: ./daemon.sh &, t_start: 100.0, duration_s: 1.0, parent_command_id: null, root_command_id: e1, depth: 0, orphans: [4242]}
+      - {command_id: e2, command: ./gen.sh, t_start: 500.0, duration_s: 1.0, parent_command_id: null, root_command_id: e2, depth: 0, orphans: []}
+    expect:
+      last_writers:
+        - {input_id: i0, last_writer: w0, later_writer_risk: [{id: e1, item_type: exec, reason: orphaned}],
+           root_candidates: [c1, c2], root_candidates_complete: false,
+           last_writer_under: false, not_under: [later_writer_risk]}
+  - run:
+      capabilities: {parent_links: false}
+    execs:
+      - {command_id: e1, command: ./daemon.sh &, t_start: 100.0, duration_s: 1.0}
+      - {command_id: e2, command: ./gen.sh, t_start: 500.0, duration_s: 1.0}
+    expect:
+      last_writers:
+        - {input_id: i0, last_writer: w0, later_writer_risk: [],
+           root_candidates: [c1, c2], root_candidates_complete: false,
+           last_writer_under: true, not_under: []}

@@ -1,0 +1,27 @@
+id: W14
+title: With untracked_visible, an untracked input created by a command
+rules: [VIS1]
+run:
+  capabilities: {untracked_visible: true}
+calls:
+  - {call_id: c1, seq: 0, command: ./gen.sh, t_start: 9.5, t_end: 11.0}
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 10.0, duration_s: 1.0,
+     snapshot: {created_untracked: [out/new.json], modified_untracked: [],
+                deleted_untracked: []}}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, event_id: w0, path: out/new.json, op: create,
+     writer_id: e1}
+paths:
+  - {path: out/new.json, tracked: false, events: [w0], final_writer: w0,
+     final_state: untracked}
+oracle_inputs:
+  - {input_id: i0, path: out/new.json}
+input_states:
+  - {input_id: i0, states_over: [command_written]}
+expect:
+  last_writers:
+    - {input_id: i0, visible: true, last_writer: w0, last_writer_type: exec,
+       read_version: unverified, exists_source: last_event,
+       exists_at_read: true, state_conflict: null, last_writer_under: true}

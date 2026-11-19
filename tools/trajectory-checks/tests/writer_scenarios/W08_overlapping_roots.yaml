@@ -1,0 +1,26 @@
+id: W08
+title: Two long execs of different roots overlap, both report the input
+rules: [LW6]
+calls:
+  - {call_id: c1, seq: 0, command: ./bench_a.sh, t_start: 9.5, t_end: 111.0}
+  - {call_id: c2, seq: 1, command: ./bench_b.sh, t_start: 49.5, t_end: 81.0}
+execs:
+  - {command_id: e1, command: ./bench_a.sh, t_start: 10.0, duration_s: 100.0}
+  - {command_id: e2, command: ./bench_b.sh, t_start: 50.0, duration_s: 30.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: write_event, event_id: w0, path: out/r.csv, writer_id: e2}
+  - {link_type: write_event, event_id: w1, path: out/r.csv, writer_id: e1}
+paths:
+  - {path: out/r.csv, events: [w0, w1], final_writer: w1}
+oracle_inputs:
+  - {input_id: i0, path: out/r.csv}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+expect:
+  last_writers:
+    - {input_id: i0, last_writer: w1, last_writer_candidates: [w0, w1],
+       window_lo: 10.0, window_hi: 112.0, root_candidates: [c1, c2],
+       last_writer_under: false, not_under: [several_candidates]}

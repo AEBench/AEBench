@@ -1,0 +1,70 @@
+id: W58
+title: Who can have written between the end of the agent and the read
+description: >
+  Three runs. (a) With MC-03 only the oracle can have written. (b) Without
+  it, a run with layer 4's late-write cause adds a late process. (c) The
+  same run without the cause names the oracle only.
+rules: [LW11]
+calls:
+  - {call_id: c1, seq: 0, command: ./gen.sh, t_start: 9.5, t_end: 11.0}
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 10.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, event_id: w0, path: out/r.json, writer_id: e1}
+paths:
+  - {path: out/r.json, events: [w0], final_writer: w0}
+runs:
+  - run:
+      capabilities: {oracle_reads: true, final_content: true}
+      final_diff_content: monitor/final.diff
+    final_diff: ""
+    final_files:
+      - {path: out/r.json, status: M, sha256: aa}
+    oracle_inputs:
+      - {input_id: i0, path: out/r.json, source_type: graded,
+         grading_exists: true, grading_sha256: bb, oracle_writes: true, oracle_writes_basis: exact}
+    input_states:
+      - {input_id: i0, tracked: true, baseline_sha256: aa,
+         grading_exists: true, content_source: grading_read,
+         grading_sha256: bb, states_over: [command_written],
+         late_write: true}
+    expect:
+      bases: {read_version: exact}
+      last_writers:
+        - {input_id: i0, read_version: differs, differs_causes: [oracle],
+           last_writer_under: false, not_under: [read_version_differs]}
+  - run:
+      capabilities: {oracle_reads: true}
+    paths:
+      - {path: out/r.json, events: [w0], final_writer: w0, final_state: reverted}
+    oracle_inputs:
+      - {input_id: i0, path: out/r.json, source_type: graded,
+         grading_exists: true, grading_sha256: bb}
+    input_states:
+      - {input_id: i0, tracked: true, baseline_sha256: aa,
+         grading_exists: true, content_source: grading_read,
+         grading_sha256: bb, states_over: [command_written],
+         late_write: true}
+    expect:
+      bases: {read_version: fallback}
+      last_writers:
+        - {input_id: i0, read_version: differs, differs_causes: [oracle, late_process],
+           last_writer_under: false, not_under: [read_version_differs]}
+  - run:
+      capabilities: {oracle_reads: true}
+    paths:
+      - {path: out/r.json, events: [w0], final_writer: w0, final_state: reverted}
+    oracle_inputs:
+      - {input_id: i0, path: out/r.json, source_type: graded,
+         grading_exists: true, grading_sha256: bb}
+    input_states:
+      - {input_id: i0, tracked: true, baseline_sha256: aa,
+         grading_exists: true, content_source: grading_read,
+         grading_sha256: bb, states_over: [command_written],
+         late_write: false}
+    expect:
+      bases: {read_version: fallback}
+      last_writers:
+        - {input_id: i0, read_version: differs, differs_causes: [oracle],
+           last_writer_under: false, not_under: [read_version_differs]}

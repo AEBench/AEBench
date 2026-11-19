@@ -1,0 +1,37 @@
+id: W48
+title: Without parent links, J2's parent chain is the ancestry
+rules: [LW14]
+calls:
+  - {call_id: c0, seq: 0, tool_type: edit, paths: [scripts/build.sh], t_start: 2.0}
+  - {call_id: c3, seq: 1, tool_type: edit, paths: [scripts/other.sh], t_start: 3.0}
+  - {call_id: c1, seq: 2, command: bash scripts/build.sh, t_start: 9.5, t_end: 31.0}
+  - {call_id: c2, seq: 3, command: bash scripts/other.sh, t_start: 14.5, t_end: 26.0}
+execs:
+  - {command_id: e1, command: bash scripts/build.sh, t_start: 10.0, duration_s: 20.0}
+  - {command_id: e2, command: bash scripts/other.sh, t_start: 15.0, duration_s: 10.0}
+  - {command_id: e3, command: python3 gen.py, t_start: 20.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: exec_parent, command_id: e3, parent: e2, root_call_id: c2,
+     root_ambiguous: true, root_candidates: [c1, c2]}
+  - {link_type: write_event, event_id: w0, path: scripts/build.sh, writer_id: c0}
+  - {link_type: write_event, event_id: w1, path: scripts/other.sh, writer_id: c3}
+  - {link_type: write_event, event_id: w2, path: out/r.json, writer_id: e3,
+     writer_under: false}
+dispositions:
+  e3: {root_under: false}
+paths:
+  - {path: scripts/build.sh, events: [w0], final_writer: w0}
+  - {path: scripts/other.sh, events: [w1], final_writer: w1}
+  - {path: out/r.json, events: [w2], final_writer: w2, final_writer_under: false}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+expect:
+  bases: {ancestry: fallback}
+  last_writers:
+    - {input_id: i0, writer_named_written: [scripts/other.sh],
+       writer_named_changed: [scripts/other.sh]}

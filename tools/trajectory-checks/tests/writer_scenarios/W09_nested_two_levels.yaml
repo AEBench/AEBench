@@ -1,0 +1,38 @@
+id: W09
+title: The writer is nested two levels inside a root script
+rules: [LW13]
+calls:
+  - {call_id: c1, seq: 0, command: bash run.sh, t_start: 9.5, t_end: 61.0}
+execs:
+  - {command_id: e1, command: bash run.sh, t_start: 10.0, duration_s: 50.0}
+  - {command_id: e2, command: python3 step.py, t_start: 11.0, duration_s: 40.0}
+  - {command_id: e3, command: python3 write.py, t_start: 20.0, duration_s: 5.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: exec_parent, command_id: e2, parent: e1, root_call_id: c1}
+  - {link_type: exec_parent, command_id: e3, parent: e2, root_call_id: c1}
+  - {link_type: write_event, event_id: w0, path: out/r.json, op: create,
+     writer_id: e3}
+paths:
+  - {path: out/r.json, events: [w0], final_writer: w0}
+call_facts:
+  - {call_id: c1, span_under_s: 50.0, span_over_s: 55.0}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+expect:
+  last_writers:
+    - {input_id: i0, last_writer_role: nested_exec, writer_depth: 2,
+       writer_command_id: e3, writer_call_id: c1, writer_duration_s: 5.0,
+       root_duration_s: 50.0, root_span_under_s: 50.0, root_span_over_s: 55.0,
+       writer_root_certain: true, writer_named_written: [],
+       window_lo: 20.0, window_hi: 27.0, last_writer_under: true}
+  metrics:
+    M3.3:
+      writer_depth_max_over: 2
+      root_span_max_s_over: 55.0
+      root_span_max_s_under: 50.0
+      last_writer_by_role_under: {edit_call: 0, nested_exec: 1, root_exec: 0}
+      writer_duration_max_s_under: 5.0

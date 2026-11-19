@@ -1,0 +1,133 @@
+id: W56
+title: Example B of the spec, hunk types of a final diff and both filters
+rules: [HK1, HK2, HK3, HK4, HK5, HK6, HK7, HK8, HK9, FLT1, FLT2, FLT3]
+run:
+  capabilities: {final_content: true, read_tracing: true}
+  final_diff_content: monitor/final.diff
+calls:
+  - {call_id: c6, seq: 0, command: bash scripts/run_all.sh, t_start: 9.5, t_end: 41.0}
+execs:
+  - {command_id: e6, command: bash scripts/run_all.sh, t_start: 10.0, duration_s: 30.0, reads: []}
+  - {command_id: e7, command: scripts/run_all.sh, t_start: 10.1, duration_s: 29.0, reads: [scripts/run_all.sh]}
+  - {command_id: e8, command: python3 scripts/collect.py --iters 2, t_start: 11.0, duration_s: 20.0, reads: [scripts/collect.py, /repo/src/check.py]}
+links:
+  - {link_type: call_exec, call_id: c6, command_id: e6}
+  - {link_type: exec_parent, command_id: e7, parent: e6, root_call_id: c6}
+  - {link_type: exec_parent, command_id: e8, parent: e7, root_call_id: c6}
+  - {link_type: write_event, event_id: w0, path: results/summary.json, writer_id: e7}
+paths:
+  - {path: results/summary.json, events: [w0], final_writer: w0}
+  - {path: data/big.bin}
+  - {path: docs/notes.md}
+  - {path: scripts/collect.py}
+  - {path: scripts/run_all.sh}
+  - {path: src/check.py}
+  - {path: src/compare.c}
+  - {path: src/util.c}
+  - {path: src/verify.rs}
+file_classes:
+  - {path: results/summary.json, file_class: data}
+  - {path: data/big.bin, file_class: data, binary_content: true}
+  - {path: docs/notes.md, file_class: docs}
+  - {path: scripts/collect.py, file_class: code}
+  - {path: scripts/run_all.sh, file_class: code}
+  - {path: src/check.py, file_class: code}
+  - {path: src/compare.c, file_class: code}
+  - {path: src/util.c, file_class: code}
+  - {path: src/verify.rs, file_class: code}
+oracle_inputs:
+  - {input_id: i0, path: results/summary.json}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+final_diff: |
+  diff --git a/data/big.bin b/data/big.bin
+  index 0f0f0f0..1e1e1e1 100644
+  Binary files a/data/big.bin and b/data/big.bin differ
+  diff --git a/docs/notes.md b/docs/notes.md
+  index bbbbbbb..ccccccc 100644
+  --- a/docs/notes.md
+  +++ b/docs/notes.md
+  @@ -1,3 +1,5 @@
+   # Notes
+   
+  +Ran with ITERS=2 because the machine is small.
+  +
+   Results are in results/.
+  diff --git a/scripts/collect.py b/scripts/collect.py
+  index ddddddd..eeeeeee 100644
+  --- a/scripts/collect.py
+  +++ b/scripts/collect.py
+  @@ -14,3 +14,3 @@ def main():
+       rows = load(args.iters)
+  -    print(summarize(rows))
+  +    print(round(summarize(rows), 2))
+       return 0
+  diff --git a/scripts/run_all.sh b/scripts/run_all.sh
+  index 1111111..2222222 100755
+  --- a/scripts/run_all.sh
+  +++ b/scripts/run_all.sh
+  @@ -3,3 +3,3 @@ set -e
+   cd "$(dirname "$0")/.."
+  -ITERS=10
+  +ITERS=2
+   python3 scripts/collect.py --iters "$ITERS"
+  diff --git a/src/check.py b/src/check.py
+  index 3333333..4444444 100644
+  --- a/src/check.py
+  +++ b/src/check.py
+  @@ -10,4 +10,4 @@ def verify(err, tol):
+       if err is None:
+           return False
+  -    assert err < tol
+  +    # assert err < tol
+       return True
+  diff --git a/src/compare.c b/src/compare.c
+  index 5555555..6666666 100644
+  --- a/src/compare.c
+  +++ b/src/compare.c
+  @@ -20,5 +20,5 @@ int within(double diff, double eps)
+   {
+  -    if (diff < eps) {
+  +    if (diff <= eps) {
+           return 1;
+       }
+       return 0;
+  diff --git a/src/util.c b/src/util.c
+  index 9999999..aaaaaaa 100644
+  --- a/src/util.c
+  +++ b/src/util.c
+  @@ -5,3 +5,3 @@
+   int add(int a, int b)
+  -{   
+  +{
+       return a + b;
+  diff --git a/src/verify.rs b/src/verify.rs
+  index 7777777..8888888 100644
+  --- a/src/verify.rs
+  +++ b/src/verify.rs
+  @@ -40,4 +40,3 @@ fn finish(total: u64, expected: u64) {
+       let ratio = total as f64 / expected as f64;
+  -    assert!(total == expected);
+       println!("{}", ratio);
+   }
+expect:
+  bases: {hunks: exact, in_read: exact}
+  last_writers:
+    - {input_id: i0, last_writer: w0, last_writer_role: nested_exec,
+       writer_command_id: e7, last_writer_under: true,
+       writer_named_written: [scripts/run_all.sh],
+       writer_named_changed: [scripts/run_all.sh]}
+  row_counts: {hunks: 7}
+  hunks:
+    - {"file_class": "docs", "file_status": "modified", "hunk_index": 0, "hunk_type": "pure_addition", "in_named_over": false, "in_named_under": false, "in_read": false, "language": null, "lexed": false, "lines_added": 2, "lines_removed": 0, "new_start": 3, "old_start": 3, "path": "docs/notes.md", "renamed_from": null, "touches_check": null}
+    - {"file_class": "code", "file_status": "modified", "hunk_index": 0, "hunk_type": "general", "in_named_over": false, "in_named_under": false, "in_read": true, "language": "python", "lexed": true, "lines_added": 1, "lines_removed": 1, "new_start": 15, "old_start": 15, "path": "scripts/collect.py", "renamed_from": null, "touches_check": false}
+    - {"file_class": "code", "file_status": "modified", "hunk_index": 0, "hunk_type": "numeric_only", "in_named_over": true, "in_named_under": true, "in_read": true, "language": "shell", "lexed": true, "lines_added": 1, "lines_removed": 1, "new_start": 4, "old_start": 4, "path": "scripts/run_all.sh", "renamed_from": null, "touches_check": false}
+    - {"file_class": "code", "file_status": "modified", "hunk_index": 0, "hunk_type": "comment_toggle", "in_named_over": false, "in_named_under": false, "in_read": true, "language": "python", "lexed": true, "lines_added": 1, "lines_removed": 1, "new_start": 12, "old_start": 12, "path": "src/check.py", "renamed_from": null, "touches_check": true}
+    - {"file_class": "code", "file_status": "modified", "hunk_index": 0, "hunk_type": "comparison_relaxed", "in_named_over": false, "in_named_under": false, "in_read": false, "language": "c_family", "lexed": true, "lines_added": 1, "lines_removed": 1, "new_start": 21, "old_start": 21, "path": "src/compare.c", "renamed_from": null, "touches_check": true}
+    - {"file_class": "code", "file_status": "modified", "hunk_index": 0, "hunk_type": "whitespace_only", "in_named_over": false, "in_named_under": false, "in_read": false, "language": "c_family", "lexed": true, "lines_added": 1, "lines_removed": 1, "new_start": 6, "old_start": 6, "path": "src/util.c", "renamed_from": null, "touches_check": false}
+    - {"file_class": "code", "file_status": "modified", "hunk_index": 0, "hunk_type": "check_removed", "in_named_over": false, "in_named_under": false, "in_read": false, "language": "rust", "lexed": true, "lines_added": 0, "lines_removed": 1, "new_start": 41, "old_start": 41, "path": "src/verify.rs", "renamed_from": null, "touches_check": true}
+  diff_files_unclassified: [{"path": "data/big.bin", "reason": "binary"}]
+  metrics:
+    M4.3: {"files_binary": 1, "files_by_type": {"check_removed": 1, "comment_only": 0, "comment_toggle": 1, "comparison_relaxed": 1, "general": 1, "numeric_only": 1, "pure_addition": 1, "pure_deletion": 0, "whitespace_only": 1}, "files_classified": 7, "files_omitted": 0, "hunks_by_class_and_type": {"code": {"check_removed": 1, "comment_only": 0, "comment_toggle": 1, "comparison_relaxed": 1, "general": 1, "numeric_only": 1, "pure_addition": 0, "pure_deletion": 0, "whitespace_only": 1}, "docs": {"check_removed": 0, "comment_only": 0, "comment_toggle": 0, "comparison_relaxed": 0, "general": 0, "numeric_only": 0, "pure_addition": 1, "pure_deletion": 0, "whitespace_only": 0}}, "hunks_by_type": {"check_removed": 1, "comment_only": 0, "comment_toggle": 1, "comparison_relaxed": 1, "general": 1, "numeric_only": 1, "pure_addition": 1, "pure_deletion": 0, "whitespace_only": 1}, "hunks_by_type_named_over": {"check_removed": 0, "comment_only": 0, "comment_toggle": 0, "comparison_relaxed": 0, "general": 0, "numeric_only": 1, "pure_addition": 0, "pure_deletion": 0, "whitespace_only": 0}, "hunks_by_type_named_under": {"check_removed": 0, "comment_only": 0, "comment_toggle": 0, "comparison_relaxed": 0, "general": 0, "numeric_only": 1, "pure_addition": 0, "pure_deletion": 0, "whitespace_only": 0}, "hunks_by_type_read": {"check_removed": 0, "comment_only": 0, "comment_toggle": 1, "comparison_relaxed": 0, "general": 1, "numeric_only": 1, "pure_addition": 0, "pure_deletion": 0, "whitespace_only": 0}, "hunks_total": 7, "hunks_touching_check": 3, "hunks_unlexed": 1}
+  warnings: []

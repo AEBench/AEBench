@@ -1,0 +1,46 @@
+id: W36
+title: A binary file and a file MC-03 omitted have no hunks
+rules: [HK1, HK4]
+run:
+  capabilities: {final_content: true}
+  final_diff_content: monitor/final.diff
+paths:
+  - {path: data/img.png}
+  - {path: src/a.py}
+file_classes:
+  - {path: data/img.png, file_class: data, binary_content: true}
+  - {path: src/a.py, file_class: code}
+final_files:
+  - {path: big/log.txt, status: M, size: 900000000, reason_omitted: size_cap}
+  - {path: data/img.png, status: M, sha256: c1}
+  - {path: src/a.py, status: M, sha256: c2}
+final_diff: |
+  diff --git a/big/log.txt b/big/log.txt
+  index 1111111..2222222 100644
+  --- a/big/log.txt
+  +++ b/big/log.txt
+  @@ -1,2 +1,2 @@
+   start
+  -step 1
+  +step 2
+  diff --git a/data/img.png b/data/img.png
+  index 3333333..4444444 100644
+  Binary files a/data/img.png and b/data/img.png differ
+  diff --git a/src/a.py b/src/a.py
+  index 5555555..6666666 100644
+  --- a/src/a.py
+  +++ b/src/a.py
+  @@ -1,2 +1,2 @@
+   import os
+  -x = 1
+  +x = 2
+expect:
+  row_counts: {hunks: 1}
+  hunks:
+    - {path: src/a.py, hunk_index: 0, hunk_type: numeric_only}
+  metrics:
+    M4.3: {files_binary: 1, files_omitted: 1, files_classified: 1,
+           hunks_total: 1}
+  diff_files_unclassified:
+    - {path: big/log.txt, reason: omitted}
+    - {path: data/img.png, reason: binary}
