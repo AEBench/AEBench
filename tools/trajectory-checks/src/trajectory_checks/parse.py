@@ -205,6 +205,9 @@ _TIME = re.compile(
     r"(Z|[+-]\d\d:?\d\d)?\Z"
 )
 _HEREDOC = re.compile(r"<<(-?)[ \t]*(['\"]?)([A-Za-z_][\w.-]*)\2")
+# Characters after which `#` starts a word, so a comment (bash metacharacters).
+_WORD_BREAK = frozenset(" \t|&;()<>")
+_BLANKS = re.compile(r"[ \t]+")
 _PATH_KEYS = ("file_path", "path", "notebook_path")
 # MC-01 fields copied from a trace record as they are.
 _LINK_KEYS = (
@@ -600,6 +603,8 @@ def split_heredocs(command: str) -> Iterator[tuple[str, str]]:
 
     Heredoc bodies (and their terminator lines) are "body"; quote state is
     carried across shell lines so a quoted newline stays inside its quote.
+    A `#` that starts a word outside quotes begins a comment to the end of
+    the line; quotes and `<<` inside it are ignored (decision D35).
     Public (decision D31): layer 2 must split heredocs exactly as J1 does.
 
     Args:
@@ -629,6 +634,11 @@ def split_heredocs(command: str) -> Iterator[tuple[str, str]]:
                 continue
             elif quote == '"':
                 quote = "" if char == '"' else quote
+            elif char == "#" and (not out or out[-1] in _WORD_BREAK):
+                # A comment runs to the end of the line: its quote
+                # characters and `<<` open nothing.
+                out.append(_BLANKS.sub(" ", line[i:]))
+                break
             elif char in "'\"":
                 quote = char
             elif char in " \t":
