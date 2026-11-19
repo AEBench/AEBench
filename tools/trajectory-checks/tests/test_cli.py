@@ -73,6 +73,10 @@ def test_analyse_links_the_real_pair(tmp_path: pathlib.Path) -> None:
         "reruns",
         "file_classes",
         "structure",
+        "oracle_inputs",
+        "oracle_inputs_run",
+        "input_states",
+        "state_counts",
     }
     links = [lk for lk in result["links"] if lk["link_type"] == "call_exec"]
     assert len(links) == 1
@@ -322,6 +326,43 @@ def test_main_min_peers_override(tmp_path: pathlib.Path) -> None:
         rows = list(csv.DictReader(handle))
     assert len(rows) == 2
     assert [r["M1.2.shell_calls_peer_ratio"] for r in rows] == ["1.0", "1.0"]
+
+
+def test_config_keys_routed_by_owner(tmp_path: pathlib.Path) -> None:
+    """Each --config key reaches the layer that owns it (spec §3.8 L2).
+
+    A layer-3 key and a layer-4 key no longer fail match.link; a key no
+    layer knows is rejected once, before any run.
+    """
+    run_dir = _make_run(tmp_path / "in")
+    result = cli.analyse(
+        run_dir,
+        {
+            "recursion_depth": 2,
+            "passing_statuses": ["success"],
+            "reference_prefixes": ["/refs"],
+            "min_peers": 1,
+            "join_rate_warn": 0.8,
+        },
+    )
+    assert result["coverage"]["preconditions"]["C7_under"] == "fails"
+    routed = cli.route_config({"recursion_depth": 2, "join_rate_warn": 0.8})
+    assert routed["match"] == {"join_rate_warn": 0.8}
+    assert routed["structure"] == {"recursion_depth": 2, "join_rate_warn": 0.8}
+    assert routed["facts"] == {"join_rate_warn": 0.8}
+    assert routed["oracle_inputs"] == routed["input_state"] == {}
+    with pytest.raises(ValueError, match="no_such_key"):
+        cli.analyse(run_dir, {"no_such_key": 1})
+    config = tmp_path / "config.toml"
+    config.write_text("recursion_depth = 2\n")
+    out = tmp_path / "out"
+    args = [str(run_dir), "--out", str(out), "--config", str(config)]
+    assert cli.main(args) == 0
+    config.write_text("no_such_key = 1\n")
+    with pytest.raises(SystemExit) as stopped:
+        cli.main([str(run_dir), "--out", str(tmp_path / "bad"), *args[3:]])
+    assert stopped.value.code == 2
+    assert not (tmp_path / "bad").exists()
 
 
 def test_join_rate_warn_decides_and_reports(tmp_path: pathlib.Path) -> None:
