@@ -739,8 +739,8 @@ def _paths(
     return rows
 
 
-def _union(intervals: list[tuple[float, float]]) -> float:
-    """Total length of the union of intervals."""
+def union_length(intervals: list[tuple[float, float]]) -> float:
+    """Total length of the union of intervals (public for layer 2)."""
     total, reach = 0.0, float("-inf")
     for low, high in sorted(intervals):
         if high > reach:
@@ -842,8 +842,8 @@ def _measure(
         ),
     }
     exec_den = len(live) - by_exec["out_of_window"]
-    span = _union([(e["t_start"], ends[e["command_id"]]) for e in live])
-    snap_span = _union(
+    span = union_length([(e["t_start"], ends[e["command_id"]]) for e in live])
+    snap_span = union_length(
         [
             (e["t_start"], ends[e["command_id"]])
             for e in live
