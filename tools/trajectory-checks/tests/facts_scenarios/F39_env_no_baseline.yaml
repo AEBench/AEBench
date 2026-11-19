@@ -1,0 +1,19 @@
+name: F39_env_no_baseline
+description: With no matched root there is no baseline, so env_added is null for every exec (S6).
+rules: [ENV2, ENV3]
+calls:
+  - {call_id: c1, command: make, t_start: 10}
+execs:
+  - {command_id: e1, command: ./bg, t_start: 50, duration_s: 1}
+  - {command_id: e2, command: ./bg2, t_start: 60, duration_s: 1}
+env_keys:
+  e1: [HOME, PATH, FOO]
+  e2: [HOME, PATH]
+expect:
+  call_facts:
+    c1: {command_id: null, env_assigned: [], env_confirmed: null}
+  exec_facts:
+    e1: {disposition: unrooted, env_added: null}
+    e2: {disposition: unrooted, env_added: null}
+  facts:
+    preconditions.env_keys: holds

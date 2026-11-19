@@ -1,0 +1,23 @@
+name: F37_wrapper_duplicate_network
+description: A Codex wrapper's inner duplicate of a download is not a separate exec, so the network counts see one exec (S3).
+rules: [NET3, NET5]
+calls:
+  - {call_id: c1, command: "curl -o a u", t_start: 10}
+execs:
+  - {command_id: e1, command: "curl -o a u", t_start: 10.1, duration_s: 2, wrapper: codex_snapshot_exec, snapshot: {status: skipped, scope: null, skip_reason: too many files}}
+  - {command_id: e2, command: "curl -o a u", t_start: 10.2, duration_s: 1.5, snapshot: {status: skipped, scope: null, skip_reason: too many files}}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: wrapper_duplicate, command_id: e2, of: e1}
+expect:
+  call_facts:
+    c1: {network_types_under: [download], network_types_over: [download], descendants_over: 0}
+  exec_facts:
+    e2: {disposition: wrapper_duplicate, root_call_id: c1}
+  facts:
+    M6.1.network_execs_under: 1
+    M6.1.network_execs_over: 1
+    M6.1.network_execs_by_type_over: {download: 1, install: 0}
+    M6.1.network_calls_under: 1
+    M6.1.network_calls_over: 1
+    M6.1.network_execs_unobserved: 1

@@ -1,0 +1,22 @@
+name: F42_depth_wrapper_duplicate_fallback
+description: F41 without parent_links - the duplicate has its outer exec's depth and a shell under it is at depth 1 (S7).
+rules: [NST2, CAP1]
+calls:
+  - {call_id: c1, command: make, t_start: 0}
+execs:
+  - {command_id: e1, command: make, t_start: 0.1, duration_s: 10, wrapper: codex_snapshot_exec}
+  - {command_id: e2, command: make, t_start: 0.2, duration_s: 9}
+  - {command_id: e3, command: "sh -c a", t_start: 1, duration_s: 2}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: wrapper_duplicate, command_id: e2, of: e1}
+  - {link_type: exec_parent, command_id: e3, parent: e2, root_call_id: c1}
+expect:
+  call_facts:
+    c1: {depth_max_over: 1, depth_max_under: null}
+  exec_facts:
+    e1: {depth: 0}
+    e2: {depth: 0, disposition: wrapper_duplicate}
+    e3: {depth: 1}
+  facts:
+    bases.depth: fallback
