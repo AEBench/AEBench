@@ -265,7 +265,8 @@ def make_call(raw: Mapping[str, Any], index: int) -> dict[str, Any]:
     is_shell = tool_type == "shell"
     call.setdefault("seq", index)
     call.setdefault("raw_name", "Bash" if is_shell else tool_type)
-    call.setdefault("t_end", call["t_start"] + 1.0)
+    if "t_end" not in call:  # lazily: an untimed call may give its end
+        call["t_end"] = call["t_start"] + 1.0
     call.setdefault("command", None)
     call.setdefault("command_norm", call["command"])
     call.setdefault("background", False if is_shell else None)
