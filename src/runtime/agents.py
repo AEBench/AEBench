@@ -53,6 +53,13 @@ class TraceFormat(str, Enum):
 	RAW = "raw"
 
 
+class ToolHookFormat(str, Enum):
+	"""How AEBench installs a hook the harness runs before every tool call."""
+
+	# Claude Code PreToolUse hooks, passed as `claude --settings "$AEBENCH_TOOL_HOOK_SETTINGS"`.
+	CLAUDE_CODE = "claude_code"
+
+
 class _Model(BaseModel):
 	model_config = ConfigDict(extra="forbid")
 
@@ -115,6 +122,8 @@ class AgentConfig(_Model):
 	# Appended to the AEBench prompt for this agent only.
 	prompt_append: str | None = None
 	trace_format: TraceFormat = TraceFormat.RAW
+	# Set when agent.sh loads $AEBENCH_TOOL_HOOK_SETTINGS; needed for workdir snapshots.
+	tool_hooks: ToolHookFormat | None = None
 	secrets: list[AgentSecret] = Field(default_factory=list)
 	files: list[AgentFile] = Field(default_factory=list)
 

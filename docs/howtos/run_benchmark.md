@@ -199,6 +199,39 @@ Requirements and caveats:
 - Pass `--socket-dir` if the default socket location is unusable. The path must
   be short, since a unix socket path cannot exceed 107 bytes.
 
+### Workdir snapshots
+
+`--workdir-snapshots` additionally takes a btrfs snapshot of the whole
+workspace before every tool call the agent makes (Claude Code agents only:
+`claude`, `claude_non_api`). Set up a btrfs filesystem once, as root:
+
+```bash
+sudo apt install btrfs-progs
+sudo scripts/setup_btrfs_workspace_root.sh /data/aebench-btrfs.img 100G /mnt/aebench-btrfs "$USER"
+export AEBENCH_BTRFS_WORKSPACE_ROOT=/mnt/aebench-btrfs/workspaces
+```
+
+Then:
+
+```bash
+uv run aebench case monitor osdi24_kondo --agent claude --model claude-opus-5-5 \
+  --workdir-snapshots
+```
+
+```text
+Workdir snapshots: 214 taken (212 before tool calls, 0 failed, final ok) in /mnt/aebench-btrfs/workspaces/ae_workspace_osdi24_kondo_x1y2/snapshots (.../monitor/9f2c1ab4/workdir_snapshots.jsonl)
+```
+
+- Snapshot `000000` is the workspace before the agent starts, each tool call
+  gets one before it runs, and the last is taken after the agent exits. Each
+  line of `workdir_snapshots.jsonl` maps a snapshot number to the
+  `tool_use_id` and tool name it preceded, matching the Claude transcript.
+- A snapshot that cannot be taken stops the agent: no tool runs unsnapshotted,
+  and the run ends in an error.
+- The workspace and its snapshots are kept after the run, even with
+  `--cleanup-workspace`. Plain `rm -r` cannot remove read-only snapshots; use
+  `sudo btrfs subvolume delete <snapshots>/* <workspace>`.
+
 
 ## 7. Unavailable Runner Commands
 

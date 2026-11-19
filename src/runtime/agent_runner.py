@@ -14,6 +14,7 @@ It is deleted after the run.
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import shutil
@@ -23,7 +24,7 @@ from pathlib import Path
 
 from models import AgentResult
 
-from .agents import AgentDefinition, resolve_files, resolve_secrets
+from .agents import AgentDefinition, ToolHookFormat, resolve_files, resolve_secrets
 from .backend import BenchRuntime, DockerRuntime, LocalRuntime
 
 _RUNTIME_ENV_KEYS = ("PATH", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TERM")
@@ -53,6 +54,61 @@ TIMESTAMP_SCRIPT = "timestamp_lines.py"
 PROMPT_FILE = "prompt.txt"
 SECRETS_FILE = "secrets.sh"
 _COPY_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", ".git")
+
+# Workdir snapshots: a hook the harness runs before every tool call, and the
+# harness settings that install it. agent.sh reads the settings path from
+# $AEBENCH_TOOL_HOOK_SETTINGS, which is set only when the hook is installed.
+WORKDIR_SNAPSHOT_HOOK = "workdir_snapshot_hook.py"
+TOOL_HOOK_SETTINGS = "tool_hooks.json"
+TOOL_HOOK_SETTINGS_ENV = "AEBENCH_TOOL_HOOK_SETTINGS"
+# The hook gives up (and stops the agent) before the harness would kill it,
+# which for Claude Code would let the tool run unsnapshotted.
+_HOOK_CLIENT_TIMEOUT_SECONDS = 90
+_HOOK_TIMEOUT_SECONDS = 120
+
+
+def install_workdir_snapshot_hook(
+	agent: AgentDefinition,
+	host_support_dir: Path,
+	runtime_support_dir: str,
+	*,
+	runtime_socket_path: str,
+) -> None:
+	"""Installs the pre-tool-call snapshot hook into the support directory.
+
+	Pass tool_hooks=True to run_agent() so the harness loads it.
+	"""
+	if agent.config.tool_hooks != ToolHookFormat.CLAUDE_CODE:
+		raise ValueError(
+			f"agent {agent.name!r} declares no supported tool_hooks in agent.toml, so it "
+			"cannot take workdir snapshots (supported: claude_code)"
+		)
+	aebench_dir = host_support_dir / AEBENCH_SUBDIR
+	_write_private(
+		aebench_dir / WORKDIR_SNAPSHOT_HOOK,
+		(_SUPPORT_FILES_DIR / WORKDIR_SNAPSHOT_HOOK).read_text(encoding="utf-8"),
+	)
+	hook = shlex.join(
+		[
+			"python3",
+			f"{runtime_support_dir}/{AEBENCH_SUBDIR}/{WORKDIR_SNAPSHOT_HOOK}",
+			runtime_socket_path,
+			str(_HOOK_CLIENT_TIMEOUT_SECONDS),
+		]
+	)
+	settings = {
+		"hooks": {
+			"PreToolUse": [
+				{
+					"matcher": "*",
+					"hooks": [
+						{"type": "command", "command": hook, "timeout": _HOOK_TIMEOUT_SECONDS}
+					],
+				}
+			]
+		}
+	}
+	_write_private(aebench_dir / TOOL_HOOK_SETTINGS, json.dumps(settings, indent=1))
 
 
 def prepare_agent_support_dir(
@@ -106,6 +162,7 @@ def run_agent(
 	timeout_seconds: float,
 	output_path: Path,
 	shell_path: str = "bash",
+	tool_hooks: bool = False,
 ) -> AgentResult:
 	reasoning_effort = agent.config.reasoning_effort
 	_write_private(
@@ -118,6 +175,9 @@ def run_agent(
 		runtime_support_dir=runtime_support_dir,
 		include_host_runtime=isinstance(runtime, LocalRuntime),
 	)
+	if tool_hooks:
+		# Written by install_workdir_snapshot_hook(); agent.sh passes it to the harness.
+		env[TOOL_HOOK_SETTINGS_ENV] = f"{runtime_support_dir}/{AEBENCH_SUBDIR}/{TOOL_HOOK_SETTINGS}"
 	command = _timeout_command(runtime, timeout_seconds) + _agent_shell_command(
 		runtime, shell_path=shell_path
 	)
@@ -296,6 +356,7 @@ def _agent_shell_command(runtime: BenchRuntime, *, shell_path: str = "bash") -> 
 __all__ = [
 	"check_agent_requirements",
 	"clear_agent_support_dir",
+	"install_workdir_snapshot_hook",
 	"prepare_agent_runtime",
 	"prepare_agent_support_dir",
 	"run_agent",

@@ -3,6 +3,8 @@ description = "Claude Code with a Claude subscription OAuth token"
 requires = ["claude"]
 reasoning_effort = "high"
 trace_format = "claude_code"
+# agent.sh passes $AEBENCH_TOOL_HOOK_SETTINGS to --settings (workdir snapshots).
+tool_hooks = "claude_code"
 prompt_append = """
 You cannot receive interactive input. Wait for every process that you start to \
 finish before you write your final response."""
