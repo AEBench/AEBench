@@ -543,6 +543,21 @@ def test_env_assigned(command: str, expected: list[str]) -> None:
     assert facts.env_assigned(command) == expected
 
 
+# (words, (assigned names, words from the program on)): SHP8, ENV1, D61.
+COMMAND_WORDS = (
+    (
+        ["A=1", "sudo", "-E", "timeout", "5", "make", "-j8"],
+        (["A"], ["make", "-j8"]),
+    ),
+)
+
+
+@pytest.mark.parametrize(("words", "expected"), COMMAND_WORDS)
+def test_command_words(words: list[str], expected: tuple) -> None:
+    """D61: assignments and PREFIX_WORDS are skipped up to the program."""
+    assert facts.command_words(words) == expected
+
+
 # (exit_code, signal, outcome, exit_signal): OUT1, OUT2.
 OUTCOMES = (
     (0, None, "ok", None),
