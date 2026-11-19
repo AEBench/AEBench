@@ -67,6 +67,45 @@ def _run_key(run_dir: pathlib.Path) -> str:
     return "__".join(parts[-3:]) if parts[-1].isdigit() else parts[-1]
 
 
+def _file(path: pathlib.Path) -> str | None:
+    """The path as text when the file exists, else None."""
+    return str(path) if path.is_file() else None
+
+
+def capabilities(
+    execs: list[parse.Exec],
+    run: typing.Mapping[str, typing.Any],
+    monitor_dir: pathlib.Path,
+) -> dict[str, bool]:
+    """The capabilities of a run: which new monitor data it holds (§5.6).
+
+    Each is true only when the data is present, so all are false on runs
+    of a monitor that predates the to-change.md items.
+
+    Args:
+        execs: The run's Exec records.
+        run: Its RunInfo, without `capabilities`.
+        monitor_dir: Its `monitor/` folder.
+
+    Returns:
+        One bool per name of match.CAPABILITIES.
+    """
+    snapshots = [e["snapshot"] for e in execs]
+    return {
+        "parent_links": any(e["depth"] is not None for e in execs),
+        "start_events": any(e["record_type"] is not None for e in execs),
+        "exact_timing": any(e["ended_at"] is not None for e in execs),
+        "content_hashes": any(s["hashes"] is not None for s in snapshots),
+        "untracked_visible": any(
+            s["created_untracked"] is not None for s in snapshots
+        ),
+        "read_tracing": any(e["reads"] is not None for e in execs),
+        "final_content": run["final_diff_content"] is not None,
+        "oracle_reads": run["oracle_reads"] is not None,
+        "egress_log": (monitor_dir / "egress.jsonl").is_file(),
+    }
+
+
 def analyse(
     run_dir: pathlib.Path,
     config: typing.Mapping[str, typing.Any] | None = None,
@@ -98,9 +137,15 @@ def analyse(
         else monitor.get("run_token")
     )
     has_trace = trace.is_file()
-    execs = parse.load_execs(trace, family) if has_trace else []
+    folder = run_dir / "monitor"
+    events = folder / "file_events.jsonl"
+    events = events if events.is_file() else None
+    execs = parse.load_execs(trace, family, events) if has_trace else []
     runtime = result.get("runtime") or {}
-    run = match.Run(
+    baseline = _read_json(folder / "tracked_files.json")
+    meta = _read_json(folder / "trace_meta.json")
+    versions = [e["schema_version"] for e in execs]
+    run = match.RunInfo(
         t_start=parse.parse_time(result.get("started_at")),
         t_end=parse.parse_time(result.get("finished_at")),
         workspace_root=str(runtime.get("workspace_mount") or "/"),
@@ -108,13 +153,27 @@ def analyse(
         run_key=_run_key(run_dir),
         family=family,
         log_ok=log_ok,
+        monitor_version=(meta or {}).get("broker_version"),
+        schema_version=(meta or {}).get("schema_version")
+        or next((v for v in versions if v is not None), None),
+        trace_meta=meta,
+        final_diff_content=_file(folder / "final.diff"),
+        final_workspace=_file(folder / "final_workspace.tar.zst"),
+        oracle_reads=_file(run_dir / "run" / "oracle_inputs.jsonl")
+        or _file(folder / "oracle_inputs.jsonl"),
+        case_image_digest=runtime.get("image_digest"),
+        commit=(baseline or {}).get("commit"),
+        shim_intact=monitor.get("shim_intact"),
+        unattributed_reads=parse.read_events(events)[1] if events else None,
+        capabilities={},
     )
+    run["capabilities"] = capabilities(execs, run, folder)
     linked = match.link(
         calls,
         execs,
         run=run,
-        baseline=_read_json(run_dir / "monitor" / "tracked_files.json"),
-        final_diff=_read_json(run_dir / "monitor" / "tracked_files_diff.json"),
+        baseline=baseline,
+        final_diff=_read_json(folder / "tracked_files_diff.json"),
         config=config,
     )
     return {
@@ -135,7 +194,7 @@ def _flat(value: typing.Any, prefix: str = "") -> dict[str, typing.Any]:
 
 
 def csv_row(coverage: match.Coverage) -> dict[str, typing.Any]:
-    """One coverage.csv row: identity, integrity, counts, rates, warnings.
+    """One coverage.csv row: identity, the coverage blocks, warnings.
 
     Args:
         coverage: A run's coverage report.
@@ -144,7 +203,8 @@ def csv_row(coverage: match.Coverage) -> dict[str, typing.Any]:
         Column name to value, in the fixed column order.
     """
     row = {"run_key": coverage["run_key"], "family": coverage["family"]}
-    for block in ("inputs", "integrity", "counts", "rates"):
+    blocks = ("inputs", "integrity", "counts", "rates", "preconditions")
+    for block in (*blocks, "capabilities"):
         row.update(_flat(coverage[block], block))
     row["warnings"] = ";".join(coverage["warnings"])
     return row
