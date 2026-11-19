@@ -1,0 +1,21 @@
+[project]
+name = "trajectory-checks"
+version = "0.1.0"
+description = "Matching layer of the AEBench trajectory analysis tool"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 80
+
+[tool.ruff.format]
+indent-style = "space"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "D", "UP", "B"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
