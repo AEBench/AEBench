@@ -39,6 +39,73 @@ NORMALIZE_CASES = (
     ("", ""),
 )
 
+# (command, split_heredocs pieces); decision D35: a word-initial `#` outside
+# quotes is a comment to the end of the line, and its quotes open nothing.
+SPLIT_HEREDOCS_CASES = (
+    (
+        "# it's done\ncat > f <<'EOF'\nrm -rf x\nEOF",
+        [
+            ("shell", "# it's done"),
+            ("shell", "cat > f <<'EOF'"),
+            ("body", "rm -rf x"),
+            ("body", "EOF"),
+        ],
+    ),
+    (
+        '# say "hi\ncat <<EOF\nrm -rf x\nEOF',
+        [
+            ("shell", '# say "hi'),
+            ("shell", "cat <<EOF"),
+            ("body", "rm -rf x"),
+            ("body", "EOF"),
+        ],
+    ),
+    (
+        "make;#  it's\nls  -la",
+        [("shell", "make;# it's"), ("shell", "ls -la")],
+    ),
+    # `<<` inside a comment opens no heredoc.
+    (
+        "ls  # see <<EOF\necho  x",
+        [("shell", "ls # see <<EOF"), ("shell", "echo x")],
+    ),
+    # `#` inside a word is not a comment: the quote opened after it holds.
+    (
+        "echo a#b 'c\nd' <<EOF\nx\nEOF",
+        [
+            ("shell", "echo a#b 'c"),
+            ("shell", "d' <<EOF"),
+            ("body", "x"),
+            ("body", "EOF"),
+        ],
+    ),
+    (
+        "echo 'a # b'  \"c # d\" <<EOF\nx\nEOF",
+        [
+            ("shell", "echo 'a # b' \"c # d\" <<EOF"),
+            ("body", "x"),
+            ("body", "EOF"),
+        ],
+    ),
+    (
+        "echo $#  ${#x}  ${x#y} <<EOF\nx\nEOF",
+        [
+            ("shell", "echo $# ${#x} ${x#y} <<EOF"),
+            ("body", "x"),
+            ("body", "EOF"),
+        ],
+    ),
+    (
+        "cat <<-'EOF'\n\tit's\n\tEOF\necho  x",
+        [
+            ("shell", "cat <<-'EOF'"),
+            ("body", "\tit's"),
+            ("body", "\tEOF"),
+            ("shell", "echo x"),
+        ],
+    ),
+)
+
 # (a, b, same tokens?)
 SAME_TOKENS_CASES = (
     ("echo 'a b'", 'echo "a b"', True),
@@ -232,6 +299,12 @@ def test_normalize_is_idempotent(command: str, _: str) -> None:
     """Normalising twice changes nothing."""
     once = parse.normalize(command)
     assert parse.normalize(once) == once
+
+
+@pytest.mark.parametrize(("command", "expected"), SPLIT_HEREDOCS_CASES)
+def test_split_heredocs(command: str, expected: list[tuple[str, str]]) -> None:
+    """Heredoc bodies cut off; comments open no quote (§6.4, D35)."""
+    assert list(parse.split_heredocs(command)) == expected
 
 
 @pytest.mark.parametrize(("a", "b", "expected"), SAME_TOKENS_CASES)
