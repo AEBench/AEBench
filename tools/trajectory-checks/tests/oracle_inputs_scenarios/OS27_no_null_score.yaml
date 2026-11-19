@@ -1,0 +1,23 @@
+name: OS27_no_null_score
+description: >
+  A null-agent manifest but no null_agent_score.json: M3.1 is computed,
+  null_commit holds with a warning (the null run's commit is unknown,
+  D41), and M3.5 is void with its own warning.
+rules: [OI9, NS4]
+null_manifest:
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: aa, exists_before: true, sha256_before: aa, tracked_before: true}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {path: data/a.csv, oracle_writes: false, oracle_writes_basis: fallback}
+  block:
+    preconditions.oracle_inputs: holds
+    preconditions.null_commit: holds
+    preconditions.null_score: fails
+    M3.1.inputs_under: 1
+    M3.1.null_commit: null
+    M3.5.null_score: null
+    M3.5.run_score: null
+    M3.5.phases_gained: null
+  warnings: ["null_commit unverified: art null run commit unknown", input null_score missing]
+  warnings_exact: true

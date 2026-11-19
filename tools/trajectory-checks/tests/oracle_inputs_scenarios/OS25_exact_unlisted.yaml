@@ -1,0 +1,23 @@
+name: OS25_exact_unlisted
+description: >
+  A graded run with final_content and final_files listing neither input:
+  D, tracked at the baseline, is unchanged since then (D36) and its
+  grading hash equals the baseline's, so oracle_writes is an exact false;
+  E, untracked, has no end-of-agent state and no fallback.
+rules: [OI10]
+run: {capabilities: {oracle_reads: true, final_content: true}}
+baseline: {files: {data/d.csv: {sha256: dd}}}
+graded_manifest:
+  - {check_id: read_d, path: /repo/data/d.csv, exists: true, sha256: dd}
+  - {check_id: read_e, path: /repo/out/e.csv, exists: true, sha256: e1}
+final_files:
+  - {path: notes/other.txt, status: A, sha256: oo}
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {path: data/d.csv, oracle_writes: false, oracle_writes_basis: exact, tracked_at_baseline: true}
+    - {path: out/e.csv, oracle_writes: null, oracle_writes_basis: null, tracked_at_baseline: false}
+  oracle_inputs_exact: true
+  block:
+    bases.oracle_writes: exact

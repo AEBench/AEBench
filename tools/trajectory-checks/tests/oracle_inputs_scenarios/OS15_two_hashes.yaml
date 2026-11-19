@@ -1,0 +1,16 @@
+name: OS15_two_hashes
+description: >
+  Two reads of one path with different hashes merge into one row whose
+  null_sha256 is null, with a warning.
+rules: [OI3]
+null_manifest:
+  - {check_id: first, path: /repo/data/a.csv, exists: true, sha256: aa, exists_before: true, sha256_before: aa, tracked_before: true}
+  - {check_id: second, path: /repo/data/a.csv, exists: true, sha256: ab, exists_before: true, sha256_before: aa, tracked_before: true}
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {input_id: i0, path: data/a.csv, null_sha256: null, checks: [first, second], at_baseline: true, baseline_sha256: aa}
+  oracle_inputs_exact: true
+  warnings: [oracle input data/a.csv read with two hashes]
+  warnings_exact: true

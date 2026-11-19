@@ -1,0 +1,24 @@
+name: OS08_null_image_differs
+description: >
+  The run's image digest is known and differs from the null run's:
+  null_image_matches false with a warning; neither block is void, but the
+  fallback oracle_writes is (D49).
+rules: [OI9, OI10]
+run: {case_image_digest: "sha256:77"}
+null_manifest:
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: aa, exists_before: true, sha256_before: aa, tracked_before: true}
+null_score: {phases: {experiment_runs: success}, case_image_digest: "sha256:44"}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {path: data/a.csv, oracle_writes: null, oracle_writes_basis: null, at_baseline: true}
+  block:
+    preconditions.null_commit: holds
+    M3.1.inputs_under: 1
+    M3.1.null_image_matches: false
+    M3.1.run_case_image_digest: "sha256:77"
+    M3.1.null_case_image_digest: "sha256:44"
+    M3.5.null_score: 1
+    M3.5.score_gain: 0
+  warnings: ["null run image differs: art"]
+  warnings_exact: true

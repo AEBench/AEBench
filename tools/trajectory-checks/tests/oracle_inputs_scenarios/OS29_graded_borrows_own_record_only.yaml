@@ -1,0 +1,20 @@
+name: OS29_graded_borrows_own_record_only
+description: >
+  A graded read of an untracked file that the null-agent manifest only
+  lists through a glob of its folder. That null row holds no record of
+  its own path, so nothing is borrowed (OI3, D47): at_baseline and
+  baseline_sha256 stay null and tracked_at_baseline is false, as with no
+  null row at all (A7).
+rules: [OI3, OI4]
+run: {capabilities: {oracle_reads: true}}
+baseline: {files: {src/main.py: {sha256: mm}}}
+graded_manifest:
+  - {check_id: read_x, path: /repo/out/x.csv, exists: true, sha256: aa}
+null_manifest:
+  - {check_id: list_out, method: glob, path: /repo/out, glob_pattern: "*", glob_matches: [out/x.csv], exists: true, exists_before: true}
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {path: out/x.csv, source_type: graded, at_baseline: null, baseline_sha256: null, tracked_at_baseline: false, grading_exists: true, grading_sha256: aa}
+  oracle_inputs_exact: true

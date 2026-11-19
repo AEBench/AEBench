@@ -1,0 +1,17 @@
+name: OS16_oracle_builds_input
+description: >
+  A file absent before the oracle that exists when read (an earlier check
+  built it): at_baseline false and the null-agent value of oracle_writes
+  true.
+rules: [OI3, OI8, OI10]
+null_manifest:
+  - {check_id: build, path: /repo/build/out.txt, exists: true, sha256: bb, exists_before: false, tracked_before: false}
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {input_id: i0, path: build/out.txt, at_baseline: false, baseline_sha256: null, tracked_at_baseline: false, null_sha256: bb, oracle_writes: true, oracle_writes_basis: fallback}
+  block:
+    bases.oracle_writes: fallback
+    M3.1.inputs_oracle_written: 1
+    M3.1.inputs_absent_at_baseline: 1

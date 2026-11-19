@@ -1,0 +1,23 @@
+name: OS14_outside_and_reference
+description: >
+  An input outside the workspace and one under a configured reference
+  prefix: absolute paths, in_workspace false, scopes outside_workspace
+  and reference.
+rules: [OI2, OI7, OI8]
+config: {reference_prefixes: [/refs]}
+null_manifest:
+  - {check_id: home_log, method: path_exists, path: /home/agent/log.txt, exists: false, exists_before: false}
+  - {check_id: expected, path: /refs/exp.json, exists: true, sha256: ee}
+  - {check_id: read_a, path: /repo/data/a.csv, resolved_workspace_path: ./data/../data/a.csv, exists: true, sha256: aa, exists_before: true, sha256_before: aa, tracked_before: true}
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {input_id: i0, path: data/a.csv, in_workspace: true, input_scope: workspace}
+    - {input_id: i1, path: /home/agent/log.txt, in_workspace: false, input_scope: outside_workspace}
+    - {input_id: i2, path: /refs/exp.json, in_workspace: false, input_scope: reference}
+  oracle_inputs_exact: true
+  block:
+    M3.1.inputs_under: 3
+    M3.1.inputs_outside_workspace: 1
+    M3.1.inputs_reference: 1

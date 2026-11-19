@@ -1,0 +1,20 @@
+name: OS19_graded_borrows_pre_oracle
+description: >
+  A graded run: an untracked input the baseline does not list takes
+  at_baseline, baseline_sha256 and tracked_at_baseline from the null-agent
+  pre-oracle pass; every grading field stays the graded manifest's.
+rules: [OI3]
+run: {capabilities: {oracle_reads: true}}
+baseline: {files: {data/a.csv: {sha256: aa}}}
+graded_manifest:
+  - {check_id: summary, path: /repo/out/new.csv, exists: true, sha256: nn, mtime_ns: 9}
+null_manifest:
+  - {check_id: summary, path: /repo/out/new.csv, exists: false, exists_before: false, tracked_before: false}
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {input_id: i0, path: out/new.csv, source_type: graded, at_baseline: false, baseline_sha256: null, tracked_at_baseline: false, null_sha256: null, grading_exists: true, grading_sha256: nn, grading_mtime_ns: 9, oracle_writes: false, oracle_writes_basis: fallback}
+  oracle_inputs_exact: true
+  block:
+    M3.1.inputs_absent_at_baseline: 1

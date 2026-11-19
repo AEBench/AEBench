@@ -1,0 +1,22 @@
+name: OS07_run_commit_unknown
+description: >
+  Neither RunInfo.commit nor run_meta.txt gives the run's commit: the
+  label holds with the warning null_commit unverified, and both blocks
+  are computed (D24).
+rules: [OI9]
+run: {commit: null}
+null_manifest:
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: aa, exists_before: true, sha256_before: aa, tracked_before: true}
+null_score: {phases: {experiment_runs: success}, commit: c0}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {path: data/a.csv, oracle_writes: false, oracle_writes_basis: fallback}
+  block:
+    preconditions.null_commit: holds
+    M3.1.inputs_under: 1
+    M3.1.run_commit: null
+    M3.1.null_commit: c0
+    M3.5.null_score: 1
+  warnings: ["null_commit unverified: art null run graded c0, run commit unknown"]
+  warnings_exact: true

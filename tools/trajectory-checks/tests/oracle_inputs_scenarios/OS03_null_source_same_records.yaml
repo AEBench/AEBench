@@ -1,0 +1,18 @@
+name: OS03_null_source_same_records
+description: >
+  OS02's grading read given as a null-agent manifest with oracle_reads
+  false: the null-agent source (basis fallback), no grading fields, the
+  read's hash as null_sha256 and the pre-oracle pass as baseline.
+rules: [OI1, OI3]
+baseline: {files: {data/a.csv: {sha256: aa}}}
+null_manifest:
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: ab, mtime_ns: 5, exists_before: true, sha256_before: aa, tracked_before: true}
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {input_id: i0, path: data/a.csv, source_type: null_agent, at_baseline: true, baseline_sha256: aa, tracked_at_baseline: true, null_sha256: ab, grading_exists: null, grading_sha256: null, grading_mtime_ns: null, oracle_writes: true, oracle_writes_basis: fallback}
+  oracle_inputs_exact: true
+  block:
+    bases.source: fallback
+    M3.1.source_type: null_agent

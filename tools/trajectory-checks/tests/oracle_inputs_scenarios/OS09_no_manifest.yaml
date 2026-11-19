@@ -1,0 +1,16 @@
+name: OS09_no_manifest
+description: >
+  No manifest of either source: the oracle_inputs precondition fails,
+  M3.1 is void and the rows file is empty.
+rules: [OI1]
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs: []
+  oracle_inputs_exact: true
+  block:
+    preconditions.oracle_inputs: fails
+    M3.1.inputs_under: null
+    M3.1.source_type: null
+    M3.1.patterns: null
+  warnings: [input oracle_inputs missing]

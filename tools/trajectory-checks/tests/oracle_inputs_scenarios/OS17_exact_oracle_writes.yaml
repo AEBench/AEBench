@@ -1,0 +1,28 @@
+name: OS17_exact_oracle_writes
+description: >
+  A graded run with final_content and final_files: A's end-of-agent hash
+  differs from its grading hash (the oracle wrote it), B's agrees; C,
+  outside the workspace, takes the null-agent value. Bases mixed.
+rules: [OI10, OI8]
+run: {capabilities: {oracle_reads: true, final_content: true}}
+baseline: {files: {data/a.csv: {sha256: aa}, data/b.csv: {sha256: bb}}}
+graded_manifest:
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: a2, mtime_ns: 7}
+  - {check_id: read_b, path: /repo/data/b.csv, exists: true, sha256: b1}
+  - {check_id: stat_c, method: path_exists, path: /tmp/c.log, exists: true}
+null_manifest:
+  - {check_id: stat_c, method: path_exists, path: /tmp/c.log, exists: true, exists_before: false}
+final_files:
+  - {path: data/a.csv, status: M, sha256: a1}
+  - {path: data/b.csv, status: M, sha256: b1}
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {path: data/a.csv, oracle_writes: true, oracle_writes_basis: exact, grading_sha256: a2, grading_mtime_ns: 7}
+    - {path: data/b.csv, oracle_writes: false, oracle_writes_basis: exact}
+    - {path: /tmp/c.log, in_workspace: false, oracle_writes: true, oracle_writes_basis: fallback, grading_exists: true}
+  oracle_inputs_exact: true
+  block:
+    bases.oracle_writes: mixed
+    M3.1.inputs_oracle_written: 2
