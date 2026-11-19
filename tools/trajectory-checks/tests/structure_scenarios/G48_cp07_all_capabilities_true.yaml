@@ -1,0 +1,39 @@
+name: G48_cp07_all_capabilities_true
+description: >
+  Spec CP07, true half. Every capability is true and every field it
+  implies is set: structure.json copies the capabilities and every basis
+  is exact, with no PRE8 warning.
+rules: [PRE8, RR5, RR6]
+run:
+  capabilities: {parent_links: true, start_events: true, exact_timing: true, content_hashes: true, untracked_visible: true, read_tracing: true, final_content: true, oracle_reads: true, egress_log: true}
+  final_diff_content: /runs/r/monitor/final.diff
+  oracle_reads: /runs/r/run/oracle_inputs.jsonl
+calls:
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh 3, t_start: 20, t_end: 22}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9, depth: 0, root_command_id: e1, record_type: closed, released_at: 10.2, ended_at: 11.8, reads: [], snapshot: {hashes: {}, created_untracked: [], modified_untracked: [], deleted_untracked: []}}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 21.9, depth: 0, root_command_id: e2, record_type: closed, released_at: 20.2, ended_at: 21.8, reads: [], snapshot: {hashes: {}, created_untracked: [], modified_untracked: [], deleted_untracked: []}}
+links:
+  - {link_type: write_event, path: src/a.py, writer_id: e1}
+final_diff_text: |
+  diff --git a/src/a.py b/src/a.py
+  index 3333333..4444444 100644
+  --- a/src/a.py
+  +++ b/src/a.py
+  @@ -1 +1 @@
+  -x = 1
+  +x = 2
+expect:
+  file_classes:
+    src/a.py: {file_class: code, binary_content: false}
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, untracked_writes_between: 0, unchanged_under: true}
+  structure:
+    capabilities: {parent_links: true, start_events: true, exact_timing: true, content_hashes: true, untracked_visible: true, read_tracing: true, final_content: true, oracle_reads: true, egress_log: true}
+    bases: {writes_between: exact, gap: exact, unchanged_under: exact}
+    preconditions.final_content: holds
+    preconditions.untracked_visible: holds
+    M4.2.binary_changed_by_class: {}
+  warnings: [baseline_by_class]
+  warnings_exact: true

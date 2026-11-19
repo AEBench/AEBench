@@ -1,0 +1,24 @@
+name: G50_cp08_workspace_scope_true
+description: >
+  Spec CP08, true half. CP03 in a workspace-scope run with every
+  capability false: the run is untracked-visible by scope (D33), so the
+  exact form of RR6 applies; there are no MC-05 lists, so the untracked
+  count is null.
+rules: [RR6, REP2]
+coverage:
+  rates.untracked_visible: true
+  rates.snapshot_scope: workspace
+calls:
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: cp -r in out, t_start: 20, t_end: 21}
+  - {call_id: c3, command: ./run.sh, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9, snapshot: {scope: workspace}}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 20.2, snapshot: {scope: workspace}}
+  - {command_id: e3, call: c3, t_start: 30.1, t_end: 31.9, snapshot: {scope: workspace}}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c3, act_calls_between: 1, untracked_writes_between: null, gap_observed: true, unchanged_under: true, unchanged_over: true}
+  structure:
+    bases: {writes_between: fallback, gap: fallback, unchanged_under: exact}
+    M2.2.reruns_after_success_unchanged_under: 1

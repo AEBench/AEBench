@@ -1,0 +1,17 @@
+name: G43_cp04_unmatched_between_false
+description: >
+  Spec CP04, false half. The unmatched act call in between breaks
+  unchanged_under in the fallback form too.
+rules: [RR6]
+calls:
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: cp -r in out, t_start: 20, t_end: 21}
+  - {call_id: c3, command: ./run.sh, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e3, call: c3, t_start: 30.1, t_end: 31.9}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c3, act_calls_between: 1, untracked_writes_between: null, unchanged_under: false, unchanged_over: true}
+  structure:
+    bases.unchanged_under: fallback

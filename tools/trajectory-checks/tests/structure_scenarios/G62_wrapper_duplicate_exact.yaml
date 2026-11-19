@@ -1,0 +1,31 @@
+name: G62_wrapper_duplicate_exact
+description: >
+  Codex wrapper duplicates with parent links. The writer's recorded root
+  is the previous call's inner duplicate, which stands for the outer
+  record it duplicates, so the write is the endpoint's own; J2 guessed the
+  call in between, which the fallback would have counted in _over.
+rules: [RR5, PRE8]
+run: {capabilities: {parent_links: true}}
+calls:
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./prep.sh 4, t_start: 15, t_end: 16}
+  - {call_id: c3, command: ./run.sh, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9, wrapper: codex_snapshot_exec, depth: 0, root_command_id: e1}
+  - {command_id: e1d, command: ./run.sh, t_start: 10.2, t_end: 11.8, depth: 0, root_command_id: e1d}
+  - {command_id: e1c, command: flush_cache, t_start: 11.5, t_end: 18.0, depth: 1, root_command_id: e1d}
+  - {command_id: e2, call: c2, t_start: 15.1, t_end: 15.5, wrapper: codex_snapshot_exec, depth: 0, root_command_id: e2}
+  - {command_id: e2d, command: ./prep.sh 4, t_start: 15.2, t_end: 15.4, depth: 0, root_command_id: e2d}
+  - {command_id: e3, call: c3, t_start: 30.1, t_end: 31.9, wrapper: codex_snapshot_exec, depth: 0, root_command_id: e3}
+links:
+  - {link_type: wrapper_duplicate, command_id: e1d, of: e1}
+  - {link_type: wrapper_duplicate, command_id: e2d, of: e2}
+  - {link_type: exec_parent, command_id: e1c, parent: e2d, root_call_id: c2, root_ambiguous: true, root_candidates: [c1, c2]}
+  - {link_type: write_event, path: out/cache.bin, writer_id: e1c, writer_under: false}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c3, writes_between_under: 0, writes_between_over: 0, gap_observed: true, unchanged_over: true}
+  structure:
+    bases.writes_between: exact
+  warnings: [precondition untracked_visible, baseline_by_class, precondition final_content]
+  warnings_exact: true

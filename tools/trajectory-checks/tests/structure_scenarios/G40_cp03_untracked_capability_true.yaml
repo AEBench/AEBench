@@ -1,0 +1,26 @@
+name: G40_cp03_untracked_capability_true
+description: >
+  Spec CP03, true half. RS04 with MC-05 lists in a tracked-scope run: the
+  act call in between is matched with certainty, its snapshot is ok and
+  its lists are empty, so the exact form counts the rerun unchanged.
+rules: [RR5, RR6, REP2]
+run: {capabilities: {untracked_visible: true}}
+calls:
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: cp -r in out, t_start: 20, t_end: 21}
+  - {call_id: c3, command: ./run.sh, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9, snapshot: {created_untracked: [], modified_untracked: [], deleted_untracked: []}}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 20.2, snapshot: {created_untracked: [], modified_untracked: [], deleted_untracked: []}}
+  - {command_id: e3, call: c3, t_start: 30.1, t_end: 31.9, snapshot: {created_untracked: [], modified_untracked: [], deleted_untracked: []}}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c3, act_calls_between: 1, untracked_writes_between: 0, gap_observed: true, unchanged_under: true, unchanged_over: true}
+  structure:
+    bases.unchanged_under: exact
+    capabilities.untracked_visible: true
+    preconditions.untracked_visible: holds
+    M2.2.reruns_after_success_unchanged_under: 1
+    M4.2.created_by_class_under: {}
+  warnings: [baseline_by_class, precondition final_content]
+  warnings_exact: true

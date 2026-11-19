@@ -1,0 +1,21 @@
+name: G76_slop_before_gap_unobserved
+description: >
+  RR6 (critic cycle 2, test gap 6): the longest exec of the run, another
+  call's root, ends 0.9 s before prev_end (within snapshot_slop_s = 2 s)
+  and its snapshot is skipped. Widened by the slop it overlaps the gap,
+  so the gap is not observed: gap_observed and unchanged_under are false,
+  unchanged_over stays true.
+rules: [RR5, RR6]
+calls:
+  - {call_id: c0, command: ./serve.sh &, t_start: 0, t_end: 1}
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh 3, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e0, call: c0, t_start: 0.1, t_end: 11.0, snapshot: {status: skipped, scope: null, skip_reason: too many files}}
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e2, call: c2, t_start: 30.1, t_end: 31.9}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, writes_between_over: 0, gap_observed: false, unchanged_under: false, unchanged_over: true}
+    - {key_type: program, prev_call_id: c1, call_id: c2, gap_observed: false, unchanged_under: false}
+  reruns_exact: true

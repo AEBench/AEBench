@@ -1,0 +1,25 @@
+name: G44_cp05_created_mc05_true
+description: >
+  Spec CP05, true half. FS06 with MC-05 in a tracked-scope run: the run is
+  untracked-visible by capability, so a created file written by the write
+  tool is counted.
+rules: [CLS3, PRE5]
+run: {capabilities: {untracked_visible: true}}
+calls:
+  - {call_id: c1, tool_type: write, paths: [/repo/report.md], t_start: 10}
+  - {call_id: c2, command: ls, t_start: 20}
+execs:
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 20.2, snapshot: {created_untracked: [], modified_untracked: [], deleted_untracked: []}}
+links:
+  - {link_type: write_event, path: report.md, writer_id: c1, op: create}
+paths:
+  - {path: report.md, tracked: false, final_state: untracked}
+path_facts:
+  report.md: {created: true}
+expect:
+  structure:
+    preconditions.untracked_visible: holds
+    M4.2.created_by_class_under: {docs: 1}
+    M4.2.created_by_class_over: {docs: 1}
+  warnings: [baseline_by_class, precondition final_content]
+  warnings_exact: true

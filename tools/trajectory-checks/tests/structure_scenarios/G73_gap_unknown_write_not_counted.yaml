@@ -1,0 +1,24 @@
+name: G73_gap_unknown_write_not_counted
+description: >
+  D55 (critic cycle 2, test gap 3): G71's unknown gap, the previous call's
+  root exec incomplete, with a certain exec write of another root inside
+  (prev_end, next_start]. Nothing is counted in an unknown gap, so both
+  write counts are 0 and unchanged_over is edit_calls_between = 0.
+rules: [RR5, RR6]
+calls:
+  - {call_id: c0, command: ./serve.sh &, t_start: 1, t_end: 2}
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh 3, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e0, call: c0, t_start: 1.1, t_end: 1.5}
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9, complete: false, exit_code: null}
+  - {command_id: e0b, command: sync_worker, t_start: 19.0, t_end: 20.0}
+  - {command_id: e2, call: c2, t_start: 30.1, t_end: 31.9}
+links:
+  - {link_type: exec_parent, command_id: e0b, parent: e0, root_call_id: c0}
+  - {link_type: write_event, path: out/state.dat, writer_id: e0b, writer_under: true}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, writes_between_under: 0, writes_between_over: 0, gap_observed: false, unchanged_under: false, unchanged_over: true}
+    - {key_type: program, prev_call_id: c1, call_id: c2, writes_between_under: 0, writes_between_over: 0, unchanged_over: true}
+  reruns_exact: true

@@ -1,0 +1,18 @@
+name: G67_killed_is_failure
+description: >
+  A predecessor killed by a signal counts as a failure (RR2): the rerun is
+  after a failure, under and over.
+rules: [RR2, REP2]
+calls:
+  - {call_id: c1, command: ./bench.sh 3, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./bench.sh 3, t_start: 20, t_end: 22}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9, exit_code: null, signal: 9}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 21.9}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, prev_outcome: killed}
+  structure:
+    M2.2.reruns_after_failure_under: 1
+    M2.2.reruns_after_failure_over: 1
+    M2.2.reruns_after_failure_unchanged_under: 1

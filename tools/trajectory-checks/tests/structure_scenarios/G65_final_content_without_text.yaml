@@ -1,0 +1,22 @@
+name: G65_final_content_without_text
+description: >
+  The run has final content (capability true, final_diff_content set) but
+  no diff text reached derive: PRE3's final_content fails, so
+  binary_content is null on every row and binary_changed_by_class is null
+  with a warning.
+rules: [PRE3, BIN1, CLS5]
+run: {capabilities: {final_content: true}, final_diff_content: /runs/r/monitor/final.diff}
+calls:
+  - {call_id: c1, command: ./fix.sh 3, t_start: 10, t_end: 12}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+links:
+  - {link_type: write_event, path: src/a.py, writer_id: e1}
+expect:
+  file_classes:
+    src/a.py: {file_class: code, binary_content: null}
+  structure:
+    capabilities.final_content: true
+    preconditions.final_content: fails
+    M4.2.binary_changed_by_class: null
+  warnings: [precondition final_content]

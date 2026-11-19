@@ -1,0 +1,69 @@
+name: G60_old_format_run
+description: >
+  An old-format run (every capability false, every universal field null,
+  tracked scope), modelled on the worked example with generic names: a
+  solver run fails, a folder copy, an identical rerun that fails, then two
+  runs on other input sets. Plus three paths: a reverted source file, a
+  data file changed by a root shell, a report created by the write tool;
+  and a baseline holding a packaged jar. Every basis is fallback.
+rules: [OBS2, OBS4, KEY1, KEY3, KEY5, RR1, RR3, RR6, REP1, REP2, REP3, FC2, FC5, FC6, FC8, CLS1, CLS2, CLS4, PRE8]
+calls:
+  - {call_id: c1, command: .venv/bin/python solver/run_batch.py set_a > /tmp/run-set_a.log 2>&1, t_start: 10, t_end: 11}
+  - {call_id: c2, command: cp -a data/maps outputs/maps, t_start: 21, t_end: 22}
+  - {call_id: c3, command: .venv/bin/python solver/run_batch.py set_a > /tmp/run-set_a.log 2>&1, t_start: 22.5, t_end: 24}
+  - {call_id: c4, command: .venv/bin/python solver/run_batch.py set_b > /tmp/run-set_b.log 2>&1, t_start: 28, t_end: 30}
+  - {call_id: c5, command: .venv/bin/python solver/run_batch.py ablation > /tmp/run-ablation.log 2>&1, t_start: 32, t_end: 37}
+  - {call_id: c6, command: git lfs pull, t_start: 100, t_end: 105}
+  - {call_id: c7, tool_type: write, paths: [/repo/outputs/verification.md], t_start: 110}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.5, t_end: 11.3, exit_code: 1}
+  - {command_id: e2, call: c2, t_start: 21.5, t_end: 21.6}
+  - {command_id: e3, call: c3, t_start: 22.8, t_end: 24.0, exit_code: 1}
+  - {command_id: e4, call: c4, t_start: 28.7, t_end: 29.9, exit_code: 1}
+  - {command_id: e5, call: c5, t_start: 32.4, t_end: 36.3, exit_code: 1}
+  - {command_id: e6, call: c6, t_start: 100.2, t_end: 104.8}
+links:
+  - {link_type: write_event, path: src/Main.java, writer_id: e6, writer_under: false}
+  - {link_type: write_event, path: data/traces/trace.txt, writer_id: e6}
+  - {link_type: write_event, path: outputs/verification.md, writer_id: c7, op: create}
+paths:
+  - {path: src/Main.java, final_state: reverted}
+  - {path: outputs/verification.md, tracked: false, final_state: untracked}
+path_facts:
+  outputs/verification.md: {created: true}
+baseline:
+  commit: abc123
+  files:
+    src/Main.java: {mode: 436}
+    data/traces/trace.txt: {mode: 436}
+    gradle/wrapper/gradle-wrapper.jar: {mode: 436}
+expect:
+  call_structure:
+    c1: {call_class: act, class_reason: redirect, exact_class: x0, shape_class: s0, program_class: p0, program_key: python run_batch.py, shape_index: 1, program_index: 1}
+    c2: {call_class: act, class_reason: program, exact_class: x1, shape_class: s1, program_class: p1, program_key: cp maps}
+    c3: {class_reason: redirect, exact_class: x0, shape_class: s0, program_class: p0, shape_index: 2, program_index: 2, prev_shape_call: c1, prev_program_call: c1}
+    c4: {exact_class: x2, shape_class: s2, program_class: p0, shape_index: 1, program_index: 3, prev_shape_call: null, prev_program_call: c3}
+    c5: {exact_class: x3, shape_class: s3, program_class: p0, program_index: 4}
+    c6: {class_reason: program, shape_class: s4, program_class: p2, program_key: git lfs}
+  reruns:
+    - {rerun_id: r0, key_type: shape, class_id: s0, prev_call_id: c1, call_id: c3, prev_seq: 0, seq: 2, prev_outcome: failed, prev_match_under: true, identical: true, arg_change_type: none, calls_between: 1, act_calls_between: 1, edit_calls_between: 0, writes_between_under: 0, writes_between_over: 0, untracked_writes_between: null, gap_observed: true, unchanged_under: false, unchanged_over: true}
+    - {rerun_id: r1, key_type: program, class_id: p0, prev_call_id: c1, call_id: c3, identical: true, arg_change_type: none}
+    - {rerun_id: r2, key_type: program, class_id: p0, prev_call_id: c3, call_id: c4, identical: false, arg_change_type: words, arg_count_delta: 0, words_removed: [run-set_a.log, set_a], words_added: [run-set_b.log, set_b], narrowed: false, calls_between: 0, unchanged_under: true}
+    - {rerun_id: r3, key_type: program, class_id: p0, prev_call_id: c4, call_id: c5, arg_change_type: words, words_removed: [run-set_b.log, set_b], words_added: [ablation, run-ablation.log]}
+  reruns_exact: true
+  file_classes:
+    src/Main.java: {file_class: code, class_rule: FC5, extension: .java, mode_source: baseline, binary_content: null}
+    data/traces/trace.txt: {file_class: data, class_rule: FC8, extension: .txt, mode_source: baseline, binary_content: null}
+    outputs/verification.md: {file_class: docs, class_rule: FC6, extension: .md, mode_source: null, binary_content: null}
+  structure:
+    schema_version: "1"
+    run_key: art__agent__1
+    bases: {writes_between: fallback, gap: fallback, unchanged_under: fallback}
+    capabilities: {parent_links: false, start_events: false, exact_timing: false, content_hashes: false, untracked_visible: false, read_tracing: false, final_content: false, oracle_reads: false, egress_log: false}
+    preconditions: {log: holds, C1_under: holds, final_diff: holds, C6: holds, C7_under: holds, untracked_visible: fails, tracked_files: holds, final_content: fails}
+    M2.1: {shell_calls: 6, act_calls: 6, observe_calls: 0, shape_classes: 5, repeated_shapes_all: 1, repeat_max_all: 2, repeated_shapes_act: 1, repeat_max_act: 2, exact_repeat_max_act: 2, program_classes_act: 3, repeated_programs_act: 1, program_repeat_max_act: 4}
+    M2.2: {shape_reruns: 1, reruns_after_failure_under: 1, reruns_after_failure_over: 1, reruns_after_success_under: 0, reruns_after_success_over: 0, reruns_after_unknown: 0, reruns_after_failure_unchanged_under: 0, reruns_after_failure_unchanged_over: 1, reruns_after_success_unchanged_under: 0, reruns_after_success_unchanged_over: 0}
+    M2.3: {program_reruns: 3, args_unchanged: 1, numeric_changed: 0, count_changed: 0, words_changed: 2, numeric_decreased: 0, numeric_increased: 0, count_decreased: 0, count_increased: 0, narrowed: 0}
+    M4.2: {changed_by_class: {data: 1}, mode_only_by_class: {}, reverted_by_class: {code: 1}, changed_by_class_and_role_under: {data: {root_exec: 1}}, changed_by_class_and_role_over: {data: {root_exec: 1}}, shell_written_by_class_under: {data: 1}, shell_written_by_class_over: {data: 1}, created_by_class_under: null, created_by_class_over: null, baseline_by_class: {build: 1, code: 1, data: 1}, binary_changed_by_class: null}
+  warnings: [precondition untracked_visible, precondition final_content]
+  warnings_exact: true

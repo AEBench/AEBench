@@ -1,0 +1,18 @@
+name: G74_gap_unknown_bounds_equal
+description: >
+  D55 (critic cycle 2, test gap 4): the previous call's root exec ends at
+  the instant the next call's starts, prev_end = next_start. The gap
+  (prev_end, next_start] is empty and unknown (prev_end >= next_start),
+  not vacuously observed: gap_observed and unchanged_under are false.
+rules: [RR5, RR6]
+calls:
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 30.5}
+  - {call_id: c2, command: ./run.sh 3, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 30.1}
+  - {command_id: e2, call: c2, t_start: 30.1, t_end: 31.9}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, calls_between: 0, edit_calls_between: 0, gap_observed: false, unchanged_under: false, unchanged_over: true}
+    - {key_type: program, prev_call_id: c1, call_id: c2, gap_observed: false, unchanged_under: false}
+  reruns_exact: true

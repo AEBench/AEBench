@@ -1,0 +1,32 @@
+name: G61_wrapper_duplicate_fallback
+description: >
+  Codex wrapper duplicates in the fallback form. The previous call's inner
+  duplicate overlaps the gap with a skipped snapshot, and a detached child
+  of that duplicate writes in the gap: both belong to the endpoint through
+  the duplicate, so neither is counted. The act call in between has its
+  own outer record and duplicate, both ok.
+rules: [RR5, RR6]
+calls:
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./prep.sh 4, t_start: 15, t_end: 16}
+  - {call_id: c3, command: ./run.sh, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9, wrapper: codex_snapshot_exec}
+  - {command_id: e1d, command: ./run.sh, t_start: 10.2, t_end: 11.8, snapshot: {status: skipped, scope: null, skip_reason: too many files}}
+  - {command_id: e1c, command: flush_cache, t_start: 11.5, t_end: 18.0}
+  - {command_id: e2, call: c2, t_start: 15.1, t_end: 15.5, wrapper: codex_snapshot_exec}
+  - {command_id: e2d, command: ./prep.sh 4, t_start: 15.2, t_end: 15.4}
+  - {command_id: e3, call: c3, t_start: 30.1, t_end: 31.9, wrapper: codex_snapshot_exec}
+links:
+  - {link_type: wrapper_duplicate, command_id: e1d, of: e1}
+  - {link_type: wrapper_duplicate, command_id: e2d, of: e2}
+  - {link_type: exec_parent, command_id: e1c, parent: e1d, root_call_id: c1}
+  - {link_type: write_event, path: out/cache.bin, writer_id: e1c}
+expect:
+  call_structure:
+    c2: {call_class: act, shape_class: s1}
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c3, calls_between: 1, act_calls_between: 1, writes_between_under: 0, writes_between_over: 0, gap_observed: true, unchanged_under: false, unchanged_over: true}
+  structure:
+    M2.1.shell_calls: 3
+    bases.writes_between: fallback

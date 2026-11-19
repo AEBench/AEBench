@@ -1,0 +1,22 @@
+name: G58_nothing_recorded
+description: >
+  A run with no log, no trace, no final diff and no baseline: every
+  precondition but untracked visibility's input fails, so every metric key
+  is null, with one warning per voiding label (C6, C7_under and
+  final_content add none: their keys are already void).
+rules: [PRE1, PRE3, PRE4, PRE5]
+coverage:
+  inputs.log: false
+  inputs.trace: false
+  inputs.final_diff: false
+expect:
+  structure:
+    preconditions: {log: fails, C1_under: fails, final_diff: fails, C6: fails, C7_under: fails, untracked_visible: fails, tracked_files: fails, final_content: fails}
+    M2.1: {shell_calls: null, act_calls: null, observe_calls: null, shape_classes: null, repeated_shapes_all: null, repeat_max_all: null, repeated_shapes_act: null, repeat_max_act: null, exact_repeat_max_act: null, program_classes_act: null, repeated_programs_act: null, program_repeat_max_act: null}
+    M2.2: {shape_reruns: null, reruns_after_failure_under: null, reruns_after_failure_over: null, reruns_after_success_under: null, reruns_after_success_over: null, reruns_after_unknown: null, reruns_after_failure_unchanged_under: null, reruns_after_failure_unchanged_over: null, reruns_after_success_unchanged_under: null, reruns_after_success_unchanged_over: null}
+    M2.3: {program_reruns: null, args_unchanged: null, numeric_changed: null, count_changed: null, words_changed: null, numeric_decreased: null, numeric_increased: null, count_decreased: null, count_increased: null, narrowed: null}
+    M4.2: {changed_by_class: null, mode_only_by_class: null, reverted_by_class: null, changed_by_class_and_role_under: null, changed_by_class_and_role_over: null, shell_written_by_class_under: null, shell_written_by_class_over: null, created_by_class_under: null, created_by_class_over: null, baseline_by_class: null, binary_changed_by_class: null}
+  reruns: []
+  reruns_exact: true
+  warnings: [M2.1, precondition C1_under, mode_only_by_class, precondition untracked_visible, baseline_by_class]
+  warnings_exact: true

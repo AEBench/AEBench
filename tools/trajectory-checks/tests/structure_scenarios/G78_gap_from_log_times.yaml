@@ -1,0 +1,29 @@
+name: G78_gap_from_log_times
+description: >
+  RR5 (critic cycle 2, test gap 8): neither call has a root exec, so the
+  gap is (the previous call's log t_end, the next call's log t_start] =
+  (20, 30]. Of three exec writes of another certain root, the one ending
+  at 15 (after the previous call's log t_start) and the one at 35 (before
+  the next call's log t_end) lie outside; only the one at 25 counts.
+rules: [RR5]
+calls:
+  - {call_id: c0, command: ./serve.sh &, t_start: 1, t_end: 2}
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 20}
+  - {call_id: c2, command: ./run.sh 3, t_start: 30, t_end: 40}
+execs:
+  - {command_id: e0, call: c0, t_start: 1.1, t_end: 1.5}
+  - {command_id: w15, command: sync_worker, t_start: 14.0, t_end: 15.0}
+  - {command_id: w25, command: sync_worker, t_start: 24.0, t_end: 25.0}
+  - {command_id: w35, command: sync_worker, t_start: 34.0, t_end: 35.0}
+links:
+  - {link_type: exec_parent, command_id: w15, parent: e0, root_call_id: c0}
+  - {link_type: exec_parent, command_id: w25, parent: e0, root_call_id: c0}
+  - {link_type: exec_parent, command_id: w35, parent: e0, root_call_id: c0}
+  - {link_type: write_event, path: out/a.dat, writer_id: w15, writer_under: true}
+  - {link_type: write_event, path: out/b.dat, writer_id: w25, writer_under: true}
+  - {link_type: write_event, path: out/c.dat, writer_id: w35, writer_under: true}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, prev_outcome: unknown, writes_between_under: 1, writes_between_over: 1, gap_observed: true, unchanged_under: false, unchanged_over: false}
+    - {key_type: program, prev_call_id: c1, call_id: c2, writes_between_under: 1, writes_between_over: 1}
+  reruns_exact: true

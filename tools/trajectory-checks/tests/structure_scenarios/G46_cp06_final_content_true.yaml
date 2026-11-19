@@ -1,0 +1,54 @@
+name: G46_cp06_final_content_true
+description: >
+  Spec CP06, true half. The final diff has a GIT binary patch section for
+  a data file, a Binary files line for an image under a data folder, a
+  text patch for a source file, and no section for a reverted file:
+  binary_content true, true, false, null; two binary content changes in
+  class data; no final_content warning.
+rules: [BIN1, CLS5, FC5, FC8]
+run: {capabilities: {final_content: true}, final_diff_content: /runs/r/monitor/final.diff}
+calls:
+  - {call_id: c1, command: ./make_all.sh 3, t_start: 10, t_end: 20}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 19.9}
+links:
+  - {link_type: write_event, path: data/x.dat, writer_id: e1}
+  - {link_type: write_event, path: src/a.py, writer_id: e1}
+  - {link_type: write_event, path: results/plot.png, writer_id: e1}
+  - {link_type: write_event, path: b.c, writer_id: e1}
+paths:
+  - {path: b.c, final_state: reverted}
+final_diff_text: |
+  diff --git a/data/x.dat b/data/x.dat
+  index 1111111..2222222 100644
+  GIT binary patch
+  literal 4
+  LcmZ?wWME|g00961
+
+  literal 0
+  HcmV?d00001
+
+  diff --git a/src/a.py b/src/a.py
+  index 3333333..4444444 100644
+  --- a/src/a.py
+  +++ b/src/a.py
+  @@ -1 +1 @@
+  -x = 1
+  +x = 2
+  diff --git a/results/plot.png b/results/plot.png
+  index 5555555..6666666 100644
+  Binary files a/results/plot.png and b/results/plot.png differ
+expect:
+  file_classes:
+    data/x.dat: {file_class: data, class_rule: FC8, binary_content: true}
+    src/a.py: {file_class: code, class_rule: FC5, binary_content: false}
+    results/plot.png: {file_class: data, class_rule: FC8, binary_content: true}
+    b.c: {file_class: code, class_rule: FC5, binary_content: null}
+  structure:
+    preconditions.final_content: holds
+    capabilities.final_content: true
+    M4.2.binary_changed_by_class: {data: 2}
+    M4.2.changed_by_class: {code: 1, data: 2}
+    M4.2.reverted_by_class: {code: 1}
+  warnings: [precondition untracked_visible, baseline_by_class]
+  warnings_exact: true
