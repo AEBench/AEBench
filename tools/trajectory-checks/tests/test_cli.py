@@ -4,6 +4,7 @@ The run folder is assembled in a temporary directory from two fixtures of
 the same real run: one Claude shell call and its trace record.
 """
 
+import csv
 import json
 import pathlib
 from typing import Any
@@ -20,6 +21,9 @@ OUTPUT_FILES = (
     "links.jsonl",
     "dispositions.jsonl",
     "paths.jsonl",
+    "call_facts.jsonl",
+    "exec_facts.jsonl",
+    "path_facts.jsonl",
     "coverage.json",
 )
 
@@ -61,6 +65,10 @@ def test_analyse_links_the_real_pair(tmp_path: pathlib.Path) -> None:
         "dispositions",
         "paths",
         "coverage",
+        "call_facts",
+        "exec_facts",
+        "path_facts",
+        "facts",
     }
     links = [lk for lk in result["links"] if lk["link_type"] == "call_exec"]
     assert len(links) == 1
@@ -95,12 +103,25 @@ def test_write_outputs_is_byte_identical(tmp_path: pathlib.Path) -> None:
     # Spec §5: files go to <out>/<run_key>/.
     (first,) = {p.parent for p in first.rglob("coverage.json")}
     (second,) = {p.parent for p in second.rglob("coverage.json")}
-    for name in OUTPUT_FILES:
+    for name in (*OUTPUT_FILES, "facts.json"):
         assert (first / name).read_bytes() == (second / name).read_bytes()
     for name in OUTPUT_FILES[:-1]:
         for line in (first / name).read_text().splitlines():
             record = json.loads(line)
             assert list(record) == sorted(record)
+
+
+def test_main_facts_csv_is_byte_identical(tmp_path: pathlib.Path) -> None:
+    """Writing facts.csv twice from the same run gives the same bytes (§1)."""
+    written = []
+    for name in ("one", "two"):
+        out = tmp_path / f"out_{name}"
+        assert (
+            cli.main([str(_make_run(tmp_path / name)), "--out", str(out)]) == 0
+        )
+        written.append((out / "facts.csv").read_bytes())
+    assert written[0] == written[1]
+    assert written[0].count(b"\n") == 2  # the header and one run
 
 
 def test_main_exit_status(tmp_path: pathlib.Path) -> None:
@@ -109,6 +130,8 @@ def test_main_exit_status(tmp_path: pathlib.Path) -> None:
     out = tmp_path / "out"
     assert cli.main([str(run_dir), "--out", str(out)]) == 0
     assert any(out.rglob("coverage.json"))
+    assert any(out.rglob("facts.json"))
+    assert (out / "facts.csv").is_file()
 
 
 def test_main_reports_unparseable_run(
@@ -273,3 +296,36 @@ def test_csv_row_has_capabilities_and_preconditions(
     row = cli.csv_row(cli.analyse(_make_run(tmp_path))["coverage"])
     assert row["capabilities.parent_links"] is False
     assert row["preconditions.C1_under"] in ("holds", "vacuous", "fails")
+
+
+def test_main_min_peers_override(tmp_path: pathlib.Path) -> None:
+    """--config min_peers reaches facts.csv's peer ratios (§6.12)."""
+    first = _make_run(tmp_path / "in")
+    second = first.parent / "project__claude__2"
+    second.mkdir()
+    for name in ("run/runner_output.log", "run/result.jsonl"):
+        (second / name).parent.mkdir(exist_ok=True)
+        (second / name).write_bytes((first / name).read_bytes())
+    (second / "monitor").mkdir()
+    trace = first / "monitor" / "commands.jsonl"
+    (second / "monitor" / "commands.jsonl").write_bytes(trace.read_bytes())
+    config = tmp_path / "config.toml"
+    config.write_text("min_peers = 1\n")
+    out = tmp_path / "out"
+    args = [str(tmp_path / "in"), "--out", str(out), "--config", str(config)]
+    assert cli.main(args) == 0
+    with (out / "facts.csv").open(encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    assert len(rows) == 2
+    assert [r["M1.2.shell_calls_peer_ratio"] for r in rows] == ["1.0", "1.0"]
+
+
+def test_join_rate_warn_decides_and_reports(tmp_path: pathlib.Path) -> None:
+    """T2: layer 1's join_rate_warn is the bound facts.json reports."""
+    result = cli.analyse(_make_run(tmp_path), {"join_rate_warn": 0.8})
+    assert result["coverage"]["preconditions"]["C7_under"] == "fails"
+    warnings = result["facts"]["warnings"]
+    assert any(
+        w.startswith("precondition C7_under >= 0.8 failed") for w in warnings
+    )
+    assert not any(">= 0.9" in w for w in warnings)
