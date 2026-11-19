@@ -18,11 +18,12 @@ try:
 except ModuleNotFoundError:  # Python 3.10
     import tomli as tomllib
 
-from trajectory_checks import facts, match, parse
+from trajectory_checks import facts, match, parse, structure
 
 logger = logging.getLogger(__name__)
 OUTPUT_FILES = ("calls", "execs", "links", "dispositions", "paths")
 FACTS_FILES = ("call_facts", "exec_facts", "path_facts")
+STRUCTURE_FILES = ("call_structure", "reruns", "file_classes")
 
 
 def _read_json(path: pathlib.Path) -> dict | None:
@@ -119,7 +120,8 @@ def analyse(
 
     Returns:
         `calls`, `execs`, `links`, `dispositions`, `paths`, `coverage`,
-        `call_facts`, `exec_facts`, `path_facts` and `facts`.
+        `call_facts`, `exec_facts`, `path_facts`, `facts`,
+        `call_structure`, `reruns`, `file_classes` and `structure`.
 
     Raises:
         parse.UnsupportedFormatError: The agent format is unknown.
@@ -190,11 +192,27 @@ def analyse(
         else None,
         config=config,  # join_rate_warn too: one threshold (D51)
     )
+    final_diff_text = None
+    if run["capabilities"]["final_content"]:  # BIN1: MC-03's final.diff
+        final_diff_text = pathlib.Path(run["final_diff_content"]).read_text(
+            encoding="utf-8", errors="replace"
+        )
+    shaped = structure.derive(
+        calls,
+        execs,
+        linked,
+        derived,
+        run_info=run,
+        baseline=baseline,
+        final_diff_text=final_diff_text,
+        config=config,  # snapshot_slop_s and join_rate_warn are layer 1's
+    )
     return {
         "calls": match.round_floats(calls),
         "execs": match.round_floats(execs),
         **linked,
         **derived,
+        **shaped,
     }
 
 
@@ -225,18 +243,24 @@ def csv_row(coverage: match.Coverage) -> dict[str, typing.Any]:
     return row
 
 
-def facts_row(run_facts: facts.RunFacts) -> dict[str, typing.Any]:
-    """One facts.csv row (facts spec §5.5), before the peer ratios.
+def facts_row(
+    run_facts: facts.RunFacts | structure.RunStructure,
+    dict_fields: typing.Mapping[str, typing.Sequence[str]] = facts.DICT_FIELDS,
+) -> dict[str, typing.Any]:
+    """One facts.csv or structure.csv row (§5.5 of each spec).
 
     Identity, preconditions, capabilities, bases, scalar metrics, warnings.
 
     Args:
-        run_facts: A run's facts.json value.
+        run_facts: A run's facts.json or structure.json value.
+        dict_fields: facts.DICT_FIELDS, or structure.DICT_FIELDS for a
+            structure.json value.
 
     Returns:
-        Column name to value, in the fixed column order: a dict-valued
-        metric is flattened by facts.DICT_FIELDS, also when PRE4 voided it
-        to null; the M5.2 name lists are left out.
+        Column name to value, before the peer ratios, in the fixed column
+        order: a dict-valued metric is flattened by `dict_fields` (a
+        dotted sub-key walks nested dicts, an absent one is 0), also when
+        PRE4 voided it to null; the M5.2 name lists are left out.
     """
     row = {"run_key": run_facts["run_key"], "family": run_facts["family"]}
     for block in ("preconditions", "capabilities", "bases"):
@@ -245,9 +269,12 @@ def facts_row(run_facts: facts.RunFacts) -> dict[str, typing.Any]:
         for field, value in fields.items():
             if field.startswith("names_"):
                 continue
-            for key in facts.DICT_FIELDS.get(field) or [None]:
+            for key in dict_fields.get(field) or [None]:
                 name = f"{block}.{field}" + (f".{key}" if key else "")
-                row[name] = (value or {}).get(key) if key else value
+                cell = value
+                for part in key.split(".") if key else ():
+                    cell = cell.get(part, 0) if isinstance(cell, dict) else cell
+                row[name] = cell
     row["warnings"] = ";".join(run_facts["warnings"])
     return row
 
@@ -276,11 +303,11 @@ def write_outputs(
     """
     folder = pathlib.Path(out_dir)
     folder.mkdir(parents=True, exist_ok=True)
-    for name in OUTPUT_FILES + FACTS_FILES:
+    for name in OUTPUT_FILES + FACTS_FILES + STRUCTURE_FILES:
         with (folder / f"{name}.jsonl").open("w", encoding="utf-8") as out:
             for record in result[name]:
                 out.write(json.dumps(record, sort_keys=True) + "\n")
-    for name in ("coverage", "facts"):
+    for name in ("coverage", "facts", "structure"):
         with (folder / f"{name}.json").open("w", encoding="utf-8") as out:
             json.dump(result[name], out, sort_keys=True, indent=1)
             out.write("\n")
@@ -326,28 +353,35 @@ def main(argv: list[str] | None = None) -> int:
     if args.config:
         with open(args.config, "rb") as handle:
             config = tomllib.load(handle)
-    rows, fact_rows, failed = [], [], []
+    rows, fact_rows, structure_rows, failed = [], [], [], []
     for run_dir in _run_dirs(args.paths, args.runs):
-        try:
+        try:  # one run's error, of any kind, fails only that run (D56)
             result = analyse(run_dir, config)
-        except (OSError, ValueError) as error:
+            built = (
+                csv_row(result["coverage"]),
+                facts_row(result["facts"]),
+                facts_row(result["structure"], structure.DICT_FIELDS),
+            )
+            key = str(result["coverage"]["run_key"])
+            write_outputs(result, pathlib.Path(args.out) / key)
+        except Exception:
             failed.append(run_dir)
-            logger.error("run %s failed: %s", run_dir, error)
+            logger.exception("run %s failed", run_dir)
             continue
-        write_outputs(
-            result, pathlib.Path(args.out) / str(result["coverage"]["run_key"])
-        )
-        rows.append(csv_row(result["coverage"]))
-        fact_rows.append(facts_row(result["facts"]))
+        tables = (rows, fact_rows, structure_rows)
+        for table, row in zip(tables, built, strict=True):
+            table.append(row)
     if rows:
+        peers = {k: v for k, v in config.items() if k in facts.DEFAULTS}
         _write_csv(rows, pathlib.Path(args.out) / "coverage.csv")
-        _write_csv(
-            facts.peer_ratios(
-                fact_rows,
-                {k: v for k, v in config.items() if k in facts.DEFAULTS},
-            ),
-            pathlib.Path(args.out) / "facts.csv",
-        )
+        for name, table in (
+            ("facts", fact_rows),
+            ("structure", structure_rows),
+        ):
+            _write_csv(
+                facts.peer_ratios(table, peers),
+                pathlib.Path(args.out) / f"{name}.csv",
+            )
     for run_dir in failed:
         print(f"failed: {run_dir}", file=sys.stderr)
     return 1 if failed else 0
