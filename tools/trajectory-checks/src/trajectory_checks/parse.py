@@ -23,15 +23,23 @@ class UnsupportedFormatError(ValueError):
 
 
 class Snapshot(typing.TypedDict):
-    """The per-command file snapshot of one trace record."""
+    """The per-command file snapshot of one trace record.
+
+    The last four fields are None when the monitor did not record them
+    (decision D26).
+    """
 
     status: str  # ok, skipped, truncated, absent
-    scope: str | None  # tracked, workspace
+    scope: str | None  # tracked, workspace, tracked+untracked
     created: list[str]
     modified: list[str]
     deleted: list[str]
     totals: dict[str, int] | None
     skip_reason: str | None
+    hashes: dict[str, str] | None  # MC-07
+    created_untracked: list[str] | None  # MC-05
+    modified_untracked: list[str] | None
+    deleted_untracked: list[str] | None
 
 
 class Call(typing.TypedDict):
@@ -57,7 +65,10 @@ class Call(typing.TypedDict):
 
 
 class Exec(typing.TypedDict):
-    """One monitor trace record (spec §5.2, decision F4)."""
+    """One monitor trace record (spec §5.2, decisions F4, D26).
+
+    Every field from env_keys on is None when the monitor did not record it.
+    """
 
     command_id: str
     seq: int
@@ -77,6 +88,22 @@ class Exec(typing.TypedDict):
     snapshot: Snapshot
     stdout_bytes: int | None
     stderr_bytes: int | None
+    env_keys: list[str] | None
+    schema_version: int | None  # MC-21
+    parent_command_id: str | None  # MC-01
+    root_command_id: str | None
+    depth: int | None
+    ppid: int | None
+    pgid: int | None
+    sid: int | None
+    parent_link: str | None  # live, closed, adopted, none
+    record_type: str | None  # MC-04: closed, flushed_at_stop, start_only
+    released_at: float | None  # MC-10
+    ended_at: float | None
+    snapshot_before_s: float | None
+    snapshot_after_s: float | None
+    reads: list[str] | None  # MC-14
+    orphans: list[dict] | None  # MC-01: {pid, comm} left running
 
 
 def _by_name(table: dict[str, str]) -> typing.Mapping[str, str]:
@@ -179,6 +206,13 @@ _TIME = re.compile(
 )
 _HEREDOC = re.compile(r"<<(-?)[ \t]*(['\"]?)([A-Za-z_][\w.-]*)\2")
 _PATH_KEYS = ("file_path", "path", "notebook_path")
+# MC-01 fields copied from a trace record as they are.
+_LINK_KEYS = (
+    *("parent_command_id", "root_command_id", "depth", "ppid", "pgid"),
+    *("sid", "parent_link"),
+)
+# MC-14 event types that write; every other event type reads (spec §5.6).
+WRITE_EVENT_TYPES = frozenset({"close_write", "moved_from", "moved_to"})
 _EDIT_KEYS = ("old_string", "new_string", "content", "edits")
 
 
@@ -561,12 +595,19 @@ def noise_reason(command: str, wrapper: str | None, family: str) -> str | None:
     return None
 
 
-def _scan(command: str) -> Iterator[tuple[str, str]]:
+def split_heredocs(command: str) -> Iterator[tuple[str, str]]:
     """Splits a command into ("shell", line) and ("body", line) pieces.
 
     Heredoc bodies (and their terminator lines) are "body"; quote state is
     carried across shell lines so a quoted newline stays inside its quote.
-    The shell pieces are yielded after outside-quote whitespace collapsing.
+    Public (decision D31): layer 2 must split heredocs exactly as J1 does.
+
+    Args:
+        command: Shell text.
+
+    Yields:
+        (piece type, line); shell lines after outside-quote whitespace
+        collapsing, body lines verbatim.
     """
     pending: list[tuple[bool, str]] = []
     quote = ""
@@ -617,7 +658,7 @@ def normalize(command: str) -> str:
     Returns:
         The normalized text.
     """
-    return "\n".join(line for _, line in _scan(command)).rstrip()
+    return "\n".join(line for _, line in split_heredocs(command)).rstrip()
 
 
 def tokens(command: str) -> list[str]:
@@ -650,7 +691,7 @@ def same_tokens(a: str, b: str) -> bool:
     """
 
     def key(command: str) -> tuple[list[str], list[str]]:
-        pieces = list(_scan(command))
+        pieces = list(split_heredocs(command))
         shell = "\n".join(text for part, text in pieces if part == "shell")
         return tokens(shell), [t for part, t in pieces if part == "body"]
 
@@ -671,6 +712,13 @@ def _snapshot(monitors: dict) -> Snapshot:
         op: [str(p) for p in raw.get(op) or []] if listed else []
         for op in ("created", "modified", "deleted")
     }
+    untracked = {
+        f"{op}_untracked": _strings(raw.get(f"{op}_untracked"))
+        if listed
+        else None
+        for op in ("created", "modified", "deleted")
+    }
+    hashes = raw.get("hashes") if listed else None
     return Snapshot(
         status=status,
         scope=str(raw.get("scope") or "workspace") if listed else None,
@@ -682,20 +730,133 @@ def _snapshot(monitors: dict) -> Snapshot:
         if listed
         else None,
         skip_reason=str(raw["skipped"]) if status == "skipped" else None,
+        hashes=dict(hashes) if isinstance(hashes, dict) else None,
+        **untracked,
     )
 
 
-def load_execs(trace_path: pathlib.Path, family: str) -> list[Exec]:
+def _strings(value: typing.Any) -> list[str] | None:
+    """A list of strings as recorded, or None when not a list."""
+    return [str(v) for v in value] if isinstance(value, list) else None
+
+
+def _seconds(value: typing.Any) -> float | None:
+    """Milliseconds to seconds, or None when not a number."""
+    number = isinstance(value, (int, float)) and not isinstance(value, bool)
+    return value / 1000 if number else None
+
+
+def _record_type(record: dict) -> str | None:
+    """MC-04's record type; None on traces without it (decision D27)."""
+    if record.get("event") == "start":
+        return "start_only"
+    if record.get("end_reason") == "broker_shutdown":
+        return "flushed_at_stop"
+    return "closed" if "event" in record or "end_reason" in record else None
+
+
+def read_events(
+    path: pathlib.Path,
+) -> tuple[dict[str, list[str]], list[dict]]:
+    """Reads MC-14's file_events.jsonl (spec §5.6).
+
+    Args:
+        path: The file.
+
+    Returns:
+        (sorted unique paths read per command_id, the read events with no
+        command_id, as recorded and in file order).
+    """
+    found: dict[str, set[str]] = {}
+    unattributed: list[dict] = []
+    with path.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            try:
+                event = _obj(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+            event_type = event.get("event_type", event.get("kind"))
+            cid, name = event.get("command_id"), event.get("path")
+            if name is None or event_type in WRITE_EVENT_TYPES | {None}:
+                continue
+            if cid is None:
+                unattributed.append(event)
+            else:
+                found.setdefault(str(cid), set()).add(str(name))
+    reads = {cid: sorted(names) for cid, names in found.items()}
+    return reads, unattributed
+
+
+def _exec(record: dict, family: str) -> Exec | None:
+    """One trace line to an Exec, or None without a start time."""
+    monitors = _obj(record.get("monitors"))
+    timing = _obj(monitors.get("timing"))
+    t_start = parse_time(timing.get("started_at"))
+    if t_start is None or "command_id" not in record:
+        return None
+    duration = (timing.get("duration_ms") or 0) / 1000
+    argv = record.get("argv")
+    command, wrapper = unwrap(argv, family)
+    code = record.get("return_code", record.get("exit_code"))
+    ended_at = parse_time(timing.get("ended_at"))
+    released_at = parse_time(timing.get("released_at"))
+    if released_at is None and ended_at is not None:
+        released_at = t_start  # MC-10 moves started_at to the release
+    return Exec(
+        command_id=str(record["command_id"]),
+        seq=0,
+        t_start=t_start,
+        t_end=t_start + duration,
+        duration_s=duration,
+        exit_code=code,
+        signal=record.get("signal"),
+        complete=bool(record.get("complete")),
+        cwd=record.get("cwd"),
+        pid=record.get("pid"),
+        argv0=str(argv[0]) if isinstance(argv, list) and argv else None,
+        command=command,
+        command_norm=normalize(command),
+        wrapper=wrapper,
+        noise=noise_reason(command, wrapper, family),
+        snapshot=_snapshot(monitors),
+        stdout_bytes=_obj(record.get("stdout")).get("bytes_received"),
+        stderr_bytes=_obj(record.get("stderr")).get("bytes_received"),
+        env_keys=_strings(record.get("env_keys")),
+        schema_version=record.get("schema_version"),
+        **{key: record.get(key) for key in _LINK_KEYS},
+        record_type=_record_type(record),
+        released_at=released_at,
+        ended_at=ended_at,
+        snapshot_before_s=_seconds(timing.get("snapshot_before_ms")),
+        snapshot_after_s=_seconds(timing.get("snapshot_after_ms")),
+        reads=None,
+        orphans=record["orphans"]
+        if isinstance(record.get("orphans"), list)
+        else None,
+    )
+
+
+def load_execs(
+    trace_path: pathlib.Path,
+    family: str,
+    file_events: pathlib.Path | None = None,
+) -> list[Exec]:
     """Reads commands.jsonl into Exec records sorted by (t_start, id).
+
+    A start event (MC-04) is dropped when the trace also has a line for its
+    command that is not a start event, in either file order (spec §5.6).
 
     Args:
         trace_path: The monitor trace.
         family: The agent family, which selects the wrappers and noise.
+        file_events: MC-14's file_events.jsonl, or None; when given, every
+            exec's reads is a list.
 
     Returns:
         One Exec per record with a start time, numbered by sorted position.
     """
     execs: list[Exec] = []
+    starts: dict[str, Exec] = {}
     with pathlib.Path(trace_path).open(
         encoding="utf-8", errors="replace"
     ) as handle:
@@ -704,45 +865,19 @@ def load_execs(trace_path: pathlib.Path, family: str) -> list[Exec]:
                 record = _obj(json.loads(line))
             except json.JSONDecodeError:
                 continue
-            monitors = _obj(record.get("monitors"))
-            timing = _obj(monitors.get("timing"))
-            t_start = parse_time(timing.get("started_at"))
-            if t_start is None or "command_id" not in record:
+            found = _exec(record, family)
+            if found is None:
                 logger.warning("%s: record without start skipped", trace_path)
-                continue
-            duration = (timing.get("duration_ms") or 0) / 1000
-            argv = record.get("argv")
-            command, wrapper = unwrap(argv, family)
-            code = record.get("return_code", record.get("exit_code"))
-            execs.append(
-                Exec(
-                    command_id=str(record["command_id"]),
-                    seq=0,
-                    t_start=t_start,
-                    t_end=t_start + duration,
-                    duration_s=duration,
-                    exit_code=code,
-                    signal=record.get("signal"),
-                    complete=bool(record.get("complete")),
-                    cwd=record.get("cwd"),
-                    pid=record.get("pid"),
-                    argv0=str(argv[0])
-                    if isinstance(argv, list) and argv
-                    else None,
-                    command=command,
-                    command_norm=normalize(command),
-                    wrapper=wrapper,
-                    noise=noise_reason(command, wrapper, family),
-                    snapshot=_snapshot(monitors),
-                    stdout_bytes=_obj(record.get("stdout")).get(
-                        "bytes_received"
-                    ),
-                    stderr_bytes=_obj(record.get("stderr")).get(
-                        "bytes_received"
-                    ),
-                )
-            )
+            elif found["record_type"] == "start_only":
+                starts.setdefault(found["command_id"], found)
+            else:
+                execs.append(found)
+    ended = {e["command_id"] for e in execs}
+    execs += [e for cid, e in starts.items() if cid not in ended]
+    reads = read_events(pathlib.Path(file_events))[0] if file_events else None
     execs.sort(key=lambda e: (e["t_start"], e["command_id"]))
     for seq, record in enumerate(execs):
         record["seq"] = seq
+        if reads is not None:
+            record["reads"] = reads.get(record["command_id"], [])
     return execs
