@@ -1,4 +1,4 @@
-"""Reading one run directory, writing the six output files, the CLI.
+"""Reading one run directory, writing its output files, the CLI.
 
 Usage:
     python -m trajectory_checks RUN_DIR_OR_ROOT ... --out DIR
@@ -18,10 +18,11 @@ try:
 except ModuleNotFoundError:  # Python 3.10
     import tomli as tomllib
 
-from trajectory_checks import match, parse
+from trajectory_checks import facts, match, parse
 
 logger = logging.getLogger(__name__)
 OUTPUT_FILES = ("calls", "execs", "links", "dispositions", "paths")
+FACTS_FILES = ("call_facts", "exec_facts", "path_facts")
 
 
 def _read_json(path: pathlib.Path) -> dict | None:
@@ -110,14 +111,15 @@ def analyse(
     run_dir: pathlib.Path,
     config: typing.Mapping[str, typing.Any] | None = None,
 ) -> dict[str, typing.Any]:
-    """Reads one run directory and links it.
+    """Reads one run directory, links it and derives its facts.
 
     Args:
         run_dir: A folder holding `run/` and `monitor/`.
-        config: Overrides of match.DEFAULTS.
+        config: Overrides of match.DEFAULTS and facts.DEFAULTS.
 
     Returns:
-        `calls`, `execs`, `links`, `dispositions`, `paths` and `coverage`.
+        `calls`, `execs`, `links`, `dispositions`, `paths`, `coverage`,
+        `call_facts`, `exec_facts`, `path_facts` and `facts`.
 
     Raises:
         parse.UnsupportedFormatError: The agent format is unknown.
@@ -168,18 +170,31 @@ def analyse(
         capabilities={},
     )
     run["capabilities"] = capabilities(execs, run, folder)
+    config = config or {}
     linked = match.link(
         calls,
         execs,
         run=run,
         baseline=baseline,
         final_diff=_read_json(folder / "tracked_files_diff.json"),
-        config=config,
+        config={k: v for k, v in config.items() if k not in facts.DEFAULTS},
+    )
+    diff_path = (monitor.get("system_files") or {}).get("diff_path")
+    derived = facts.derive(
+        calls,
+        execs,
+        linked,
+        run=run,
+        system_diff=_read_json(_trace_path(run_dir, diff_path))
+        if diff_path
+        else None,
+        config=config,  # join_rate_warn too: one threshold (D51)
     )
     return {
         "calls": match.round_floats(calls),
         "execs": match.round_floats(execs),
         **linked,
+        **derived,
     }
 
 
@@ -210,10 +225,47 @@ def csv_row(coverage: match.Coverage) -> dict[str, typing.Any]:
     return row
 
 
+def facts_row(run_facts: facts.RunFacts) -> dict[str, typing.Any]:
+    """One facts.csv row (facts spec §5.5), before the peer ratios.
+
+    Identity, preconditions, capabilities, bases, scalar metrics, warnings.
+
+    Args:
+        run_facts: A run's facts.json value.
+
+    Returns:
+        Column name to value, in the fixed column order: a dict-valued
+        metric is flattened by facts.DICT_FIELDS, also when PRE4 voided it
+        to null; the M5.2 name lists are left out.
+    """
+    row = {"run_key": run_facts["run_key"], "family": run_facts["family"]}
+    for block in ("preconditions", "capabilities", "bases"):
+        row.update(_flat(run_facts[block], block))
+    for block, fields in run_facts["metrics"].items():
+        for field, value in fields.items():
+            if field.startswith("names_"):
+                continue
+            for key in facts.DICT_FIELDS.get(field) or [None]:
+                name = f"{block}.{field}" + (f".{key}" if key else "")
+                row[name] = (value or {}).get(key) if key else value
+    row["warnings"] = ";".join(run_facts["warnings"])
+    return row
+
+
+def _write_csv(rows: list[dict[str, typing.Any]], path: pathlib.Path) -> None:
+    """Writes rows as CSV; columns of the first row first, then the rest."""
+    columns = list(rows[0])
+    columns += sorted({k for r in rows for k in r} - set(columns))
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def write_outputs(
     result: dict[str, typing.Any], out_dir: pathlib.Path
 ) -> pathlib.Path:
-    """Writes the six files of one run into `out_dir`.
+    """Writes the output files of one run into `out_dir`.
 
     Args:
         result: The value of analyse.
@@ -224,13 +276,14 @@ def write_outputs(
     """
     folder = pathlib.Path(out_dir)
     folder.mkdir(parents=True, exist_ok=True)
-    for name in OUTPUT_FILES:
+    for name in OUTPUT_FILES + FACTS_FILES:
         with (folder / f"{name}.jsonl").open("w", encoding="utf-8") as out:
             for record in result[name]:
                 out.write(json.dumps(record, sort_keys=True) + "\n")
-    with (folder / "coverage.json").open("w", encoding="utf-8") as out:
-        json.dump(result["coverage"], out, sort_keys=True, indent=1)
-        out.write("\n")
+    for name in ("coverage", "facts"):
+        with (folder / f"{name}.json").open("w", encoding="utf-8") as out:
+            json.dump(result[name], out, sort_keys=True, indent=1)
+            out.write("\n")
     return folder
 
 
@@ -269,11 +322,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runs")
     parser.add_argument("--config")
     args = parser.parse_args(argv)
-    config = None
+    config = {}
     if args.config:
         with open(args.config, "rb") as handle:
             config = tomllib.load(handle)
-    rows, failed = [], []
+    rows, fact_rows, failed = [], [], []
     for run_dir in _run_dirs(args.paths, args.runs):
         try:
             result = analyse(run_dir, config)
@@ -285,15 +338,16 @@ def main(argv: list[str] | None = None) -> int:
             result, pathlib.Path(args.out) / str(result["coverage"]["run_key"])
         )
         rows.append(csv_row(result["coverage"]))
+        fact_rows.append(facts_row(result["facts"]))
     if rows:
-        columns = list(rows[0])
-        columns += sorted({k for r in rows for k in r} - set(columns))
-        with (pathlib.Path(args.out) / "coverage.csv").open(
-            "w", encoding="utf-8", newline=""
-        ) as handle:
-            writer = csv.DictWriter(handle, fieldnames=columns)
-            writer.writeheader()
-            writer.writerows(rows)
+        _write_csv(rows, pathlib.Path(args.out) / "coverage.csv")
+        _write_csv(
+            facts.peer_ratios(
+                fact_rows,
+                {k: v for k, v in config.items() if k in facts.DEFAULTS},
+            ),
+            pathlib.Path(args.out) / "facts.csv",
+        )
     for run_dir in failed:
         print(f"failed: {run_dir}", file=sys.stderr)
     return 1 if failed else 0
