@@ -37,16 +37,22 @@ Exec defaults (``DEFAULT_EXEC``): ``duration_s`` 1.0 when neither it nor
 ``duration_s`` = ``t_end`` - ``t_start``); ``exit_code`` 0, ``signal`` None,
 ``complete`` True, ``cwd`` the run's workspace root, ``pid`` 1000 + list
 index, ``argv0`` "/bin/bash", ``command_norm`` = ``command``, ``wrapper``
-None, ``noise`` None, ``stdout_bytes`` and ``stderr_bytes`` 0.
+None, ``noise`` None, ``stdout_bytes`` and ``stderr_bytes`` 0, and every
+field decision D26 adds (``env_keys``, ``schema_version``,
+``parent_command_id`` and the others of ``NEW_EXEC_FIELDS``) None.
 ``snapshot`` defaults to status "ok", scope "tracked", empty lists,
-``skip_reason`` None, and ``totals`` equal to the list lengths; a partial
-``snapshot`` is merged into that default. ``seq`` is the position after
+``skip_reason`` None, the D26 fields (``hashes`` and the three
+``*_untracked`` lists) None, and ``totals`` equal to the list lengths; a
+partial ``snapshot`` is merged into that default. ``seq`` is the position after
 sorting by (``t_start``, ``command_id``); the list order of the YAML file is
 kept, so it may differ from ``seq`` (spec §5.2).
 
-Run defaults (``DEFAULT_RUN``): ``t_start`` 0, ``t_end`` 10000,
-``workspace_root`` "/repo", ``trace_ok`` True. ``baseline``,
-``final_diff`` and ``config`` default to None.
+Run defaults (``DEFAULT_RUN``, a ``RunInfo``): ``t_start`` 0, ``t_end``
+10000, ``workspace_root`` "/repo", ``trace_ok`` True, every other
+``RunInfo`` field None (``log_ok`` None: ``inputs.log`` is then whether
+calls were given) and every capability False. A scenario's
+``run.capabilities`` is merged into the default capabilities.
+``baseline``, ``final_diff`` and ``config`` default to None.
 """
 
 import copy
@@ -123,6 +129,19 @@ EXEC_FIELDS = frozenset(
         "stderr_bytes",
     }
 )
+# Decision D26: present in every Exec, None when the monitor did not record
+# them (``env_keys`` is in every existing trace).
+NEW_EXEC_FIELDS = (
+    *("env_keys", "schema_version", "parent_command_id", "root_command_id"),
+    *("depth", "ppid", "pgid", "sid", "parent_link", "record_type"),
+    *("released_at", "ended_at", "snapshot_before_s", "snapshot_after_s"),
+    *("reads", "orphans"),
+)
+EXEC_FIELDS = EXEC_FIELDS | frozenset(NEW_EXEC_FIELDS)
+NEW_SNAPSHOT_FIELDS = (
+    *("hashes", "created_untracked", "modified_untracked"),
+    "deleted_untracked",
+)
 SNAPSHOT_FIELDS = frozenset(
     {
         "status",
@@ -132,8 +151,27 @@ SNAPSHOT_FIELDS = frozenset(
         "deleted",
         "totals",
         "skip_reason",
+        *NEW_SNAPSHOT_FIELDS,
     }
 )
+RECORD_TYPES = frozenset({"closed", "flushed_at_stop", "start_only"})
+PARENT_LINKS = frozenset({"live", "closed", "adopted", "none"})
+# Spec §5.6: the capabilities of a RunInfo, all False on old runs.
+CAPABILITIES = (
+    *("parent_links", "start_events", "exact_timing", "content_hashes"),
+    *("untracked_visible", "read_tracing", "final_content", "oracle_reads"),
+    "egress_log",
+)
+RUN_INFO_FIELDS = frozenset(
+    {
+        *("t_start", "t_end", "workspace_root", "trace_ok", "run_key"),
+        *("family", "log_ok", "monitor_version", "schema_version"),
+        *("trace_meta", "final_diff_content", "final_workspace"),
+        *("oracle_reads", "case_image_digest", "commit", "shim_intact"),
+        *("unattributed_reads", "capabilities"),
+    }
+)
+PRECONDITION_LABELS = frozenset({"C1_under", "C2_under", "C6", "C7_under"})
 
 TOOL_TYPES = frozenset(
     {
@@ -152,10 +190,12 @@ RESULT_KEYS = frozenset({"links", "dispositions", "paths", "coverage"})
 
 DEFAULT_RUN = types.MappingProxyType(
     {
+        **dict.fromkeys(RUN_INFO_FIELDS),
         "t_start": 0.0,
         "t_end": 10000.0,
         "workspace_root": "/repo",
         "trace_ok": True,
+        "capabilities": dict.fromkeys(CAPABILITIES, False),
     }
 )
 DEFAULT_CALL = types.MappingProxyType(
@@ -180,10 +220,12 @@ DEFAULT_EXEC = types.MappingProxyType(
         "noise": None,
         "stdout_bytes": 0,
         "stderr_bytes": 0,
+        **dict.fromkeys(NEW_EXEC_FIELDS),
     }
 )
 DEFAULT_SNAPSHOT = types.MappingProxyType(
     {
+        **dict.fromkeys(NEW_SNAPSHOT_FIELDS),
         "status": "ok",
         "scope": "tracked",
         "created": (),
@@ -290,8 +332,10 @@ def load_scenario(path: pathlib.Path) -> dict[str, Any]:
         ``baseline``, ``final_diff``, ``config`` and ``expect``.
     """
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-    run = dict(DEFAULT_RUN)
-    run.update(raw.get("run") or {})
+    run = copy.deepcopy(dict(DEFAULT_RUN))
+    given = dict(raw.get("run") or {})
+    run["capabilities"].update(given.pop("capabilities", None) or {})
+    run.update(given)
     _floats(run, ("t_start", "t_end"))
     calls = [make_call(c, i) for i, c in enumerate(raw.get("calls") or [])]
     execs = [

@@ -121,3 +121,155 @@ def test_main_reports_unparseable_run(
     (run_dir / "run" / "runner_output.log").write_text("")
     assert cli.main([str(run_dir), "--out", str(tmp_path / "out")]) == 1
     assert "broken__claude__1" in capsys.readouterr().err
+
+
+# ---- RunInfo and capabilities (spec §5.6, decision D26). -----------------
+
+NEW_TOKEN = "5a1c0de0"  # run_id of the new-format trace fixture
+
+
+def _make_new_run(root: pathlib.Path, *, extras: bool) -> pathlib.Path:
+    """A run folder whose trace is the new-format fixture.
+
+    Args:
+        root: Where to create it.
+        extras: Whether to add every optional to-change.md file.
+
+    Returns:
+        The run folder.
+    """
+    run_dir = _make_run(root, NEW_TOKEN)
+    monitor = run_dir / "monitor"
+    trace = conftest.TRACE_FIXTURES_DIR / "claude_new_format.jsonl"
+    (monitor / "commands.jsonl").write_bytes(trace.read_bytes())
+    result = _result_line(NEW_TOKEN)
+    (monitor / "tracked_files.json").write_text(
+        json.dumps({"source": "git", "commit": "c0ffee", "files": {}})
+    )
+    if extras:
+        events = trace.parent / "file_events" / trace.name
+        (monitor / "file_events.jsonl").write_bytes(events.read_bytes())
+        (monitor / "trace_meta.json").write_text(
+            json.dumps(
+                {
+                    "run_token": NEW_TOKEN,
+                    "schema_version": 2,
+                    "broker_version": "0.2.0",
+                }
+            )
+        )
+        (monitor / "final.diff").write_text("")
+        (monitor / "final_workspace.tar.zst").write_bytes(b"")
+        (monitor / "egress.jsonl").write_text("")
+        (run_dir / "run" / "oracle_inputs.jsonl").write_text("")
+        result["command_monitor"]["shim_intact"] = True
+        result["runtime"]["image_digest"] = "sha256:" + "0" * 64
+    (run_dir / "run" / "result.jsonl").write_text(json.dumps(result) + "\n")
+    return run_dir
+
+
+def _captured_run(
+    run_dir: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> dict[str, Any]:
+    from trajectory_checks import match
+
+    seen: dict[str, Any] = {}
+    original = match.link
+
+    def spy(*args: Any, **kwargs: Any) -> Any:
+        seen.update(kwargs["run"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(match, "link", spy)
+    cli.analyse(run_dir)
+    return seen
+
+
+def test_old_run_has_every_capability_false(tmp_path: pathlib.Path) -> None:
+    """On today's traces all nine capabilities are false (§5.6)."""
+    coverage = cli.analyse(_make_run(tmp_path))["coverage"]
+    assert coverage["capabilities"] == dict.fromkeys(
+        conftest.CAPABILITIES, False
+    )
+    assert set(coverage["preconditions"]) == conftest.PRECONDITION_LABELS
+
+
+def test_run_info_of_an_old_run(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every RunInfo field is present; the new ones are None."""
+    run = _captured_run(_make_run(tmp_path), monkeypatch)
+    assert set(run) == conftest.RUN_INFO_FIELDS
+    for field in (
+        *("monitor_version", "schema_version", "trace_meta", "commit"),
+        *("final_diff_content", "final_workspace", "oracle_reads"),
+        *("case_image_digest", "shim_intact", "unattributed_reads"),
+    ):
+        assert run[field] is None, field
+    assert run["trace_ok"] is True
+    assert run["run_key"] == "project__claude__1"
+
+
+def test_new_format_trace_alone(tmp_path: pathlib.Path) -> None:
+    """Capabilities read from the records only: no extra files."""
+    result = cli.analyse(_make_new_run(tmp_path, extras=False))
+    assert result["coverage"]["capabilities"] == {
+        **dict.fromkeys(conftest.CAPABILITIES, False),
+        "parent_links": True,
+        "start_events": True,
+        "exact_timing": True,
+        "content_hashes": True,
+        "untracked_visible": True,
+    }
+    assert [e["reads"] for e in result["execs"]] == [None] * 4
+    assert result["execs"][0]["orphans"] == [{"pid": 140, "comm": "python3"}]
+
+
+def test_new_format_run_with_every_file(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each optional file of a to-change.md item sets its capability."""
+    run_dir = _make_new_run(tmp_path, extras=True)
+    run = _captured_run(run_dir, monkeypatch)
+    assert run["capabilities"] == dict.fromkeys(conftest.CAPABILITIES, True)
+    assert run["schema_version"] == 2
+    assert run["monitor_version"] == "0.2.0"
+    assert run["trace_meta"]["run_token"] == NEW_TOKEN
+    assert run["commit"] == "c0ffee"
+    assert run["shim_intact"] is True
+    assert run["case_image_digest"] == "sha256:" + "0" * 64
+    assert run["final_diff_content"].endswith("monitor/final.diff")
+    assert run["final_workspace"].endswith("final_workspace.tar.zst")
+    assert run["oracle_reads"].endswith("run/oracle_inputs.jsonl")
+    assert [e["path"] for e in run["unattributed_reads"]] == ["/etc/passwd"]
+    result = cli.analyse(run_dir)
+    assert result["execs"][1]["reads"] == [
+        "/tmp/ws/project/include/a.h",
+        "/tmp/ws/project/src/a.c",
+    ]
+    assert not [w for w in result["coverage"]["warnings"] if "schema" in w]
+
+
+def test_unknown_schema_version_warns(tmp_path: pathlib.Path) -> None:
+    """An unknown schema_version is a warning, never an error (D26)."""
+    run_dir = _make_new_run(tmp_path, extras=False)
+    trace = run_dir / "monitor" / "commands.jsonl"
+    lines = [
+        json.dumps({**json.loads(line), "schema_version": 9})
+        for line in trace.read_text().splitlines()
+    ]
+    trace.write_text("\n".join(lines) + "\n")
+    result = cli.analyse(run_dir)
+    assert [w for w in result["coverage"]["warnings"] if "schema" in w] == [
+        "schema_version 9 unknown: known fields read, others ignored"
+    ]
+    assert result["coverage"]["capabilities"]["parent_links"] is True
+
+
+def test_csv_row_has_capabilities_and_preconditions(
+    tmp_path: pathlib.Path,
+) -> None:
+    """coverage.csv flattens the two new blocks."""
+    row = cli.csv_row(cli.analyse(_make_run(tmp_path))["coverage"])
+    assert row["capabilities.parent_links"] is False
+    assert row["preconditions.C1_under"] in ("holds", "vacuous", "fails")
