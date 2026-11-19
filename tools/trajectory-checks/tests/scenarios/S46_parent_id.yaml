@@ -1,0 +1,24 @@
+name: S46_parent_id
+description: With parent_links, a recorded parent wins over time containment and is not ambiguous; an exec whose parent is None or not in the trace falls back to time containment (§6.5; decision D28).
+run: {capabilities: {parent_links: true}}
+calls:
+  - {call_id: c1, t_start: 10, t_end: 11, command: "python3 -m http.server &", background: true}
+  - {call_id: c2, t_start: 50, t_end: 60, command: "make"}
+execs:
+  - {command_id: e1, t_start: 10.2, t_end: 200, command: "python3 -m http.server &", depth: 0, root_command_id: e1}
+  - {command_id: e2, t_start: 50.2, t_end: 59, command: "make", depth: 0, root_command_id: e2}
+  - {command_id: n2, t_start: 52, t_end: 53, command: "cc -c a.c", depth: 1, parent_command_id: null}
+  - {command_id: n1, t_start: 55, t_end: 58, command: "python3 handler.py", depth: 1, parent_command_id: e1, root_command_id: e1, parent_link: live}
+  - {command_id: n4, t_start: 57, t_end: 57.5, command: "gzip log", depth: 2, parent_command_id: n1, root_command_id: e1, parent_link: live}
+  - {command_id: n3, t_start: 58.5, t_end: 58.7, command: "cc -c b.c", depth: 1, parent_command_id: ghost}
+expect:
+  links:
+    - {link_type: exec_parent, command_id: n1, parent: e1, root_call_id: c1, rule: parent_id, root_ambiguous: false, root_candidates: []}
+    - {link_type: exec_parent, command_id: n4, parent: n1, root_call_id: c1, rule: parent_id, root_ambiguous: false}
+    - {link_type: exec_parent, command_id: n2, parent: e2, root_call_id: c2, rule: time_containment, root_ambiguous: true, root_candidates: [c1, c2]}
+    - {link_type: exec_parent, command_id: n3, parent: e2, root_call_id: c2, rule: time_containment, root_ambiguous: true}
+  links_exact: true
+  dispositions:
+    n1: {disposition: nested, root_under: true}
+    n4: {disposition: nested, root_under: true}
+    n2: {disposition: nested, root_under: false}

@@ -1,0 +1,17 @@
+name: S49b_two_roots_no_slop
+description: As S49 with snapshot_slop_s = 0; the measured intervals do not overlap, so neither event is root-ambiguous (§6.6 rule 6, §6.7; decision D33).
+config: {snapshot_slop_s: 0}
+calls:
+  - {call_id: c1, t_start: 10, t_end: 11, command: "./gen.sh"}
+  - {call_id: c2, t_start: 11.5, t_end: 12, command: "./gen2.sh"}
+execs:
+  - {command_id: e1, t_start: 10.2, t_end: 10.6, command: "./gen.sh", snapshot: {modified: [out.csv]}}
+  - {command_id: e2, t_start: 11.6, t_end: 11.9, command: "./gen2.sh", snapshot: {modified: [out.csv]}}
+baseline: {files: {out.csv: {}}}
+final_diff: {modified: [out.csv], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: write_event, writer_id: e1, root_ambiguous: false, root_candidates: [], writer_under: true}
+    - {link_type: write_event, writer_id: e2, root_ambiguous: false, root_candidates: [], writer_under: true}
+  paths:
+    - {path: out.csv, final_writer: w1, final_writer_under: true}

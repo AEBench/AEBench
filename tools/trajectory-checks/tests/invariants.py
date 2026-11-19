@@ -10,12 +10,19 @@ message per violated invariant:
    and agrees with the dispositions.
 3. Matched pairs satisfy the window, and ``dt_s`` is the start difference.
 4. ``exec_parent`` links: containment for ``time_containment``, a finished,
-   backgrounding root for ``reparenting``, acyclic chains, one root per
-   nested exec, consistent ambiguity fields.
+   backgrounding root for ``reparenting``, the recorded parent for
+   ``parent_id`` (D28), acyclic chains, one root per nested exec,
+   consistent ambiguity fields.
 5. Disposition counts sum to the number of execs.
 6. Rates are in [0, 1] or None.
 7. Write events refer to existing writers; every ``final_writer`` is one of
-   its path's events; every final-diff path has a paths row.
+   its path's events; every path with events has one, unless all its events
+   are deletions of a file that exists at the end (D34); every final-diff
+   path has a paths row.
+8. An exec's write event has the exec's measured interval (D32); a
+   ``delete`` is never the final writer of a file that exists (D34).
+9. Precondition states are holds, vacuous or fails; holds has a rate,
+   vacuous none; all fail without a usable trace (D30).
 
 Plus format checks from decision R6 (link order, event ids).
 """
@@ -63,6 +70,16 @@ NON_RATE_KEYS = frozenset(
     {"reverted_changes", "snapshot_scope", "untracked_visible"}
 )
 BACKGROUND_PREFIXES = frozenset({"nohup", "setsid", "disown"})
+# Final states in which the file exists at the end of the run (D34).
+EXISTING_STATES = frozenset({"changed", "mode_only", "reverted"})
+# Coverage precondition label -> the rate it reads (D30).
+PRECONDITION_RATES = {
+    "C1_under": "call_match_rate_under",
+    "C2_under": "exec_explained_rate_under",
+    "C6": "listed_path_rate",
+    "C7_under": "final_diff_attributed_rate_under",
+}
+PRECONDITION_STATES = frozenset({"holds", "vacuous", "fails"})
 
 
 def check_invariants(
@@ -118,6 +135,7 @@ def check_invariants(
     )
     problems += _check_j3(calls_by_id, execs_by_id, by_type, result, final_diff)
     problems += _check_rates(result.get("coverage", {}))
+    problems += _check_preconditions(result.get("coverage", {}), trace_ok)
     return problems
 
 
@@ -354,6 +372,19 @@ def _check_j2(
             )
             if expected_root != root_call:
                 problems.append(f"exec {command_id}: root differs from parent")
+        elif rule == "parent_id":
+            recorded = record.get("parent_command_id")
+            outer = {
+                lk["command_id"]: lk["of"]
+                for lk in by_type["wrapper_duplicate"]
+            }
+            if parent != outer.get(recorded, recorded):
+                problems.append(f"exec {command_id}: parent_id not recorded")
+            expected_root = roots.get(parent) or (
+                parents.get(parent, {}).get("root_call_id")
+            )
+            if expected_root != root_call or link.get("root_ambiguous"):
+                problems.append(f"exec {command_id}: parent_id root differs")
         elif rule == "reparenting":
             if parent is not None:
                 problems.append(f"exec {command_id}: reparented with a parent")
@@ -429,6 +460,14 @@ def _check_j3(calls_by_id, execs_by_id, by_type, result, final_diff):
             problems.append(f"{event_id}: possibly_edit_call but writer_under")
         if event.get("root_ambiguous") and event.get("writer_under"):
             problems.append(f"{event_id}: root_ambiguous but writer_under")
+        record = execs_by_id.get(writer) if writer_type == "exec" else None
+        if record is not None and not (
+            math.isclose(event["t_start"], record["t_start"], abs_tol=1e-5)
+            and math.isclose(event["t_end"], record["t_end"], abs_tol=1e-5)
+        ):
+            problems.append(f"{event_id}: not the measured interval (D32)")
+        if event.get("order_t") != event.get("t_end"):
+            problems.append(f"{event_id}: order_t is not t_end (D32)")
     try:
         ordered = sorted(events, key=_event_key)
         expected_ids = [f"w{n}" for n in range(len(ordered))]
@@ -448,8 +487,18 @@ def _check_j3(calls_by_id, execs_by_id, by_type, result, final_diff):
         final = row.get("final_writer")
         if final is not None and final not in listed:
             problems.append(f"path {row['path']}: final writer not an event")
-        if final is None and listed:
+        exists = row.get("final_state") in EXISTING_STATES
+        if (
+            final is None
+            and listed
+            and not (
+                exists
+                and all(by_id.get(e, {}).get("op") == "delete" for e in listed)
+            )
+        ):
             problems.append(f"path {row['path']}: events but no final writer")
+        if exists and final in by_id and by_id[final].get("op") == "delete":
+            problems.append(f"path {row['path']}: delete is final (D34)")
         if final is None and row.get("final_writer_under"):
             problems.append(f"path {row['path']}: final_writer_under on null")
     for event in events:
@@ -478,4 +527,33 @@ def _check_rates(coverage: Mapping[str, Any]) -> list[str]:
     reverted = rates.get("reverted_changes")
     if reverted is not None and (not isinstance(reverted, int) or reverted < 0):
         problems.append(f"reverted_changes {reverted!r}")
+    return problems
+
+
+def _check_preconditions(
+    coverage: Mapping[str, Any], trace_ok: bool
+) -> list[str]:
+    problems = []
+    states = coverage.get("preconditions")
+    if not isinstance(states, Mapping) or set(states) != set(
+        PRECONDITION_RATES
+    ):
+        return [f"preconditions {states!r}: not the four labels (D30)"]
+    rates = coverage.get("rates", {})
+    for label, state in states.items():
+        rate = rates.get(PRECONDITION_RATES[label])
+        if state not in PRECONDITION_STATES:
+            problems.append(f"precondition {label}: state {state!r}")
+        elif state == "holds" and rate is None:
+            problems.append(f"precondition {label}: holds on a null rate")
+        elif state == "vacuous" and rate is not None:
+            problems.append(f"precondition {label}: vacuous on a rate")
+        if not trace_ok and state != "fails":
+            problems.append(f"precondition {label}: {state} without trace")
+        warned = any(
+            w.startswith(f"precondition {label} ")
+            for w in coverage.get("warnings", [])
+        )
+        if warned != (state == "fails"):
+            problems.append(f"precondition {label}: {state}, warned {warned}")
     return problems

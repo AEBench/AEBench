@@ -1,0 +1,17 @@
+name: S42_vacuous_c6
+description: Usable snapshots that count no change; listed_path_rate is null and C6 holds vacuously (§7.2; decision D30).
+calls:
+  - {call_id: c1, t_start: 10, t_end: 11, command: "ls -la"}
+execs:
+  - {command_id: e1, t_start: 10.2, t_end: 10.3, command: "ls -la"}
+baseline: {files: {}}
+final_diff: {modified: [], deleted: [], mode_changed: []}
+expect:
+  coverage:
+    rates.listed_path_rate: null
+    rates.call_match_rate_under: 1.0
+    preconditions.C1_under: holds
+    preconditions.C2_under: holds
+    preconditions.C6: vacuous
+    preconditions.C7_under: vacuous
+    warnings: []

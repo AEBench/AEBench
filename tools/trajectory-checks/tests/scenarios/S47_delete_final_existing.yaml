@@ -1,0 +1,18 @@
+name: S47_delete_final_existing
+description: A complete exec deletes a file the final diff lists as modified and nothing seen recreates it; the delete is not the final writer, the path gets unattributed candidates (§6.6; decision D34).
+calls:
+  - {call_id: c0, t_start: 5, t_end: 9, command: "make"}
+  - {call_id: c1, t_start: 10, t_end: 11, command: "rm data.csv"}
+execs:
+  - {command_id: e0, t_start: 5.2, t_end: 8, command: "make", snapshot: {status: skipped, scope: null, skip_reason: "workspace exceeds 20000 files"}}
+  - {command_id: e1, t_start: 10.2, t_end: 10.3, command: "rm data.csv", snapshot: {deleted: [data.csv]}}
+baseline: {files: {data.csv: {}}}
+final_diff: {modified: [data.csv], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: write_event, event_id: w0, writer_id: e1, op: delete}
+  paths:
+    - {path: data.csv, events: [w0], final_writer: null, final_writer_under: false, final_state: changed, unattributed_candidates: [{command_id: e0, reason: skipped}]}
+  coverage:
+    counts.paths_unattributed: 1
+    rates.final_diff_attributed_rate_over: 0.0

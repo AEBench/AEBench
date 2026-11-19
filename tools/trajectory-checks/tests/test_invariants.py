@@ -99,6 +99,7 @@ def test_time_shift_changes_only_absolute_times(path: pathlib.Path) -> None:
         if link.get(conftest.LINK_TYPE_FIELD) == "write_event":
             link["t_start"] -= SHIFT_S
             link["t_end"] -= SHIFT_S
+            link["order_t"] -= SHIFT_S
     assert conftest.close(shifted, expected, tolerance=1e-5)
 
 
@@ -275,6 +276,7 @@ def _good_result() -> dict[str, Any]:
                 "writer_id": "n1",
                 "t_start": 100.4,
                 "t_end": 100.5,
+                "order_t": 100.5,
                 "root_call_id": "c1",
                 "root_ambiguous": False,
                 "root_candidates": [],
@@ -324,7 +326,14 @@ def _good_result() -> dict[str, Any]:
             },
         ],
         "coverage": {
-            "rates": {"call_match_rate_under": 1.0, "reverted_changes": 0}
+            "rates": {"call_match_rate_under": 1.0, "reverted_changes": 0},
+            "preconditions": {
+                "C1_under": "holds",
+                "C2_under": "vacuous",
+                "C6": "vacuous",
+                "C7_under": "vacuous",
+            },
+            "warnings": [],
         },
     }
 
@@ -430,6 +439,30 @@ def _matched_without_link(r: dict[str, Any]) -> None:
     r["links"] = [lk for lk in r["links"] if lk["link_type"] != "call_exec"]
 
 
+def _extended_interval(r: dict[str, Any]) -> None:
+    _link(r, "write_event")["t_end"] = 1000.0
+
+
+def _delete_final_on_existing(r: dict[str, Any]) -> None:
+    _link(r, "write_event")["op"] = "delete"
+
+
+def _bad_precondition_state(r: dict[str, Any]) -> None:
+    r["coverage"]["preconditions"]["C6"] = "maybe"
+
+
+def _holds_on_null_rate(r: dict[str, Any]) -> None:
+    r["coverage"]["preconditions"]["C7_under"] = "holds"
+
+
+def _vacuous_with_warning(r: dict[str, Any]) -> None:
+    r["coverage"]["warnings"] = ["precondition C6 = 1 failed (null): M4 null"]
+
+
+def _parent_id_not_recorded(r: dict[str, Any]) -> None:
+    _link(r, "exec_parent")["rule"] = "parent_id"
+
+
 BREAKERS: tuple[Callable[[dict[str, Any]], None], ...] = (
     _duplicate_row,
     _drop_exec_row,
@@ -446,6 +479,12 @@ BREAKERS: tuple[Callable[[dict[str, Any]], None], ...] = (
     _links_out_of_order,
     _noise_disposition_on_agent_exec,
     _matched_without_link,
+    _extended_interval,
+    _delete_final_on_existing,
+    _bad_precondition_state,
+    _holds_on_null_rate,
+    _vacuous_with_warning,
+    _parent_id_not_recorded,
 )
 
 
@@ -493,3 +532,63 @@ def test_oracle_catches_reparenting_to_non_background_root() -> None:
         ORACLE_CALLS, execs, result, run=ORACLE_RUN, final_diff=ORACLE_DIFF
     )
     assert any("backgrounds nothing" in p for p in problems)
+
+
+# ---- Universal records (D26, D28): old fields only give the fallback. -----
+
+NEW_EXEC_FIELDS = (
+    *("schema_version", "parent_command_id", "root_command_id", "depth"),
+    *("ppid", "pgid", "sid", "parent_link", "record_type", "released_at"),
+    *("ended_at", "snapshot_before_s", "snapshot_after_s", "reads"),
+    "orphans",
+)
+NEW_SNAPSHOT_FIELDS = (
+    *("hashes", "created_untracked", "modified_untracked"),
+    "deleted_untracked",
+)
+
+
+def _strip(execs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Removes every D26 field, as if the trace were in the old format."""
+    stripped = copy.deepcopy(execs)
+    for record in stripped:
+        record.update(dict.fromkeys(NEW_EXEC_FIELDS))
+        record["env_keys"] = None
+        record["snapshot"].update(dict.fromkeys(NEW_SNAPSHOT_FIELDS))
+    return stripped
+
+
+def _parent_links(paths: list[pathlib.Path]) -> list[pathlib.Path]:
+    return [
+        p
+        for p in paths
+        if conftest.load_scenario(p)["run"]["capabilities"]["parent_links"]
+    ]
+
+
+@pytest.mark.parametrize("path", _parent_links(SCENARIOS), ids=lambda p: p.stem)
+def test_old_fields_give_the_time_based_fallback(path: pathlib.Path) -> None:
+    """Stripping D26 fields equals keeping them with every parent unknown.
+
+    Both must give exactly the links of time containment and reparenting:
+    ``parent_id`` falls back per exec when ``parent_command_id`` is None.
+    """
+    scenario = conftest.load_scenario(path)
+    old_run = copy.deepcopy(scenario["run"])
+    old_run["capabilities"] = dict.fromkeys(old_run["capabilities"], False)
+    stripped = conftest.run_link(
+        scenario, execs=_strip(scenario["execs"]), run=old_run
+    )
+    unknown = copy.deepcopy(scenario["execs"])
+    for record in unknown:
+        record["parent_command_id"] = None
+    fallback = conftest.run_link(scenario, execs=unknown)
+    assert conftest.canonical(fallback["links"]) == conftest.canonical(
+        stripped["links"]
+    )
+    assert conftest.canonical(fallback["paths"]) == conftest.canonical(
+        stripped["paths"]
+    )
+    assert not [lk for lk in stripped["links"] if lk.get("rule") == "parent_id"]
+    with_ids = conftest.run_link(scenario)
+    assert [lk for lk in with_ids["links"] if lk.get("rule") == "parent_id"]
