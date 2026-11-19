@@ -4,14 +4,16 @@
 (parse.py, match.py) and returns per-call, per-exec and per-path facts and
 the run counts of facts.json (trajectory-per-command-spec.md §5).
 `peer_ratios` is the cross-run step. The shell-text functions
-`simple_commands` (returning `SimpleCommand` records, D43), `normalize_word`
-and the table `PREFIX_WORDS` are public for layers 3 and 6 (D29). Shell text
-is tokenized here, not with shlex: substitutions stay inside their words
-and quoted punctuation is never an operator (SHP1, D33).
+`simple_commands` (returning `SimpleCommand` records, D43), `command_words`
+(D61), `normalize_word` and the table `PREFIX_WORDS` are public for layers 3
+and 6 (D29). Shell text is parsed with tree-sitter-bash, not shlex (D60):
+substitutions stay inside their words and quoted punctuation is never an
+operator (SHP1, D33).
 """
 
 import collections
 import fnmatch
+import functools
 import itertools
 import math
 import operator
@@ -19,6 +21,10 @@ import re
 import statistics
 import types
 import typing
+import warnings
+
+import tree_sitter
+import tree_sitter_bash
 
 from trajectory_checks import match, parse
 
@@ -132,6 +138,8 @@ class SimpleCommand(typing.TypedDict):
 class _Token(typing.NamedTuple):
     text: str  # a word with its quotes removed, or an operator
     token_type: str  # word, fd (SHP5) or operator
+    start: int = 0  # the byte offsets of its text
+    end: int = 0
     inner: typing.Sequence[list["_Token"]] = ()  # each substitution's tokens
     skipped: bool = False  # a case pattern or a function's name (SHP8)
 
@@ -240,22 +248,6 @@ DEFAULTS = types.MappingProxyType(
 _RATES = types.MappingProxyType(
     {label: (key, op) for label, key, op, _ in match.PRECONDITIONS}
 )
-# Control and redirection operators, longest first (bash manual,
-# Definitions); `{` and `}` are operators only as unquoted words in command
-# position (D33, D53).
-_OPERATOR = re.compile(
-    r"&>>|<<<|<<-|;;&|&&|\|\||;;|;&|\|&|&>|>>|>&|>\||<<|<&|<>|[;&|()<>\n]"
-)
-_NEWLINE = _Token("\n", "operator")
-_WORD_END = frozenset(" \t\r\n;&|()<>")
-# Expansions kept in their word; `<(`, `>(` and `((` only at a word's start.
-_OPEN = re.compile(r"\$\(\(|\$\(|\$\{|\$'|`|[<>(]\(")
-# The rest of a backquoted or ANSI-C quoted text, through its closing quote.
-_UNTIL = {q: re.compile(rf"(?:[^{q}\\]|\\.)*{q}", re.S) for q in "`'"}
-# After these reserved words a command starts (bash manual, Reserved Words).
-_STARTERS = frozenset("! if then else elif while until do time".split())
-_FUNCTION = re.compile(r"[ \t]*\([ \t]*\)")  # NAME () of a function definition
-_DIGITS = re.compile(r"[0-9]+")
 _NUMBER = re.compile(r"[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?|0[xX][0-9a-fA-F]+")
 _BODY_NUMBER = re.compile(r"(?<![\w.])[-+]?\d+(\.\d+)?(?![\w.])")
 _KEY_VALUE = re.compile(r"(-{0,2}[A-Za-z_][\w.-]*)=(.*)", re.S)
@@ -263,167 +255,444 @@ _ASSIGNMENT = re.compile(r"([A-Za-z_]\w*)\+?=")
 _NAME = re.compile(r"[A-Za-z_]\w*(=.*)?", re.S)
 
 
-def _word(
-    shell: str, i: int, pair: str = "", depth: int = 1
-) -> tuple[_Token, bool, int]:
-    """Reads the word at i: (token, whether any of it is quoted, end).
+# Shell text is parsed with tree-sitter-bash (D60). The parser reads each
+# heredoc operator as `<`, since layer 1 has cut off the bodies, `;&` and
+# `;;&` as `;;`, and `time` before a group as blanks, since the grammar has
+# no `time` keyword.
+# A parse is cut off after 1 s, as its error recovery can be quadratic
+# (D59). `timeout_micros` is deprecated in 0.25 for a progress callback,
+# but cancelling with one crashes 0.25.2.
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", DeprecationWarning)
+    _PARSER = tree_sitter.Parser(
+        tree_sitter.Language(tree_sitter_bash.language()),
+        timeout_micros=1_000_000,
+    )
+_HIDDEN = re.compile(
+    rb"(?<!<)<<-?(?!<)|;;?&|(?<![^\s;&|(){}])time[ \t]+(?=[({])"
+)
+# Nodes walked for their children; any other named node is one word.
+_STATEMENTS = frozenset(
+    "program list pipeline redirected_statement command subshell"
+    " compound_statement if_statement elif_clause else_clause while_statement"
+    " for_statement case_statement do_group negated_command file_redirect"
+    " herestring_redirect declaration_command unset_command"
+    " variable_assignments".split()
+)
+# The expressions of `[ … ]` and `[[ … ]]`, read as words.
+_EXPRESSIONS = frozenset(
+    "binary_expression unary_expression parenthesized_expression"
+    " postfix_expression ternary_expression".split()
+)
+# Kept as written in their word: expansions and an array value (D56).
+_VERBATIM = frozenset(
+    "expansion simple_expansion arithmetic_expansion command_substitution"
+    " process_substitution array".split()
+)
+_SUBSTITUTIONS = ("command_substitution", "process_substitution")
+_NEWLINE = _Token("\n", "operator")
+_OPERATOR = frozenset(";&|(){}<>")  # the characters of operator tokens
+_UNQUOTED = re.compile(r"\\(.)?", re.S)  # bash removes the backslash
+_DOUBLE = re.compile(r'\\([$`"\\\n])')  # the backslashes removed inside "…"
+_BACKQUOTED = re.compile(r"\\([$`\\])")  # unescaped in `…` before parsing
+# Nodes checked for tree-sitter-bash's quirks (D60): an unescaped newline
+# ends all but a case, where an `esac` can be a word.
+_SIMPLE = frozenset(
+    "case_statement command redirected_statement file_redirect"
+    " herestring_redirect declaration_command unset_command"
+    " variable_assignments".split()
+)
+_BREAK = re.compile(rb"(?<!\\)\n")  # an unescaped newline
+_CONTINUED = re.compile(rb"(\\\n)*")  # backslash-newlines inside a word
+_DIGITS = re.compile(r"[0-9]+")
+_STRAY = re.compile(rb"\S+")
+# After these, an `esac` is the reserved word.
+_BEFORE_ESAC = frozenset(";; ;& ;;& ; & in done fi esac".split())
+_BACKQUOTE = re.compile(rb"(?<!\\)`")  # an unescaped backquote
 
-    Quotes and escapes are removed, a backslash-newline joins lines and
-    expansions are kept as written; `$'…'` is quoted text, its escapes as
-    written. The tokens of each `$(…)`, `` `…` ``, `<(…)` and `>(…)` go to
-    `inner`, also inside `$((…))`, `((…))`, `${…}` and an array `NAME=(…)`
-    (D54, D56). With `pair`, reads such a body up to the bracket that closes
-    `depth` open ones instead. Raises ValueError when a quote or an
-    expansion is unclosed.
-    """
-    out, inner, quoted, start, double = [], [], False, i, False
-    while i < len(shell):
-        char = shell[i]
-        opened = char in "$`<>(" and _OPEN.match(shell, i)
-        array = (
-            not pair
-            and char == "("
-            and not quoted
-            and _ASSIGNMENT.fullmatch("".join(out))
-        )
-        kind = "(" if array else opened and opened[0]  # D56: NAME=(…)
-        dollar = char in "$`" and not (double and kind == "$'")
-        if kind and (dollar or array or i == start and not pair):
-            body = i + len(kind)
-            if kind in ("`", "$'"):
-                close = _UNTIL[kind[-1]].match(shell, body)
-                if close is None:
-                    raise ValueError("unclosed quote")
-                end = close.end()
-                if kind == "`":  # bash unescapes \$, \` and \\ first
-                    text = re.sub(r"\\([$`\\])", r"\1", shell[body : end - 1])
-                    inner.append(_lex(text)[0])
-            elif kind in ("$(", "<(", ">("):
-                tokens, end = _lex(shell, body, nested=True)
-                inner.append(tokens)
-            elif array:  # its comments as in bash; only substitutions run
-                tokens, end = _lex(shell, body, nested=True, array=True)
-                inner += [found for token in tokens for found in token.inner]
-            else:
-                pairs = "{}" if kind == "${" else "()"
-                token, _, end = _word(shell, body, pairs, kind.count("(") or 1)
-                inner += token.inner
-            quoted |= kind == "$'"
-            out.append(shell[body : end - 1] if kind == "$'" else shell[i:end])
-            i = end
-        elif char == '"':
-            double, quoted, i = not double, True, i + 1
-        elif char == "\\" and (not double or shell[i + 1 : i + 2] in '$`"\\\n'):
-            if shell[i + 1 : i + 2] != "\n":  # a backslash-newline joins lines
-                out.append(shell[i + 1 : i + 2] or char)
-                quoted = True
-            i += 2
-        elif pair and not double and char in pair:
-            depth += 1 if char == pair[0] else -1
-            if depth == 0:
-                return _Token("".join(out), "word", inner), quoted, i + 1
-            out.append(char)
-            i += 1
-        elif double or char != "'" and (pair or char not in _WORD_END):
-            out.append(char)
-            i += 1
-        elif char == "'":
-            end = shell.index("'", i + 1)
-            out.append(shell[i + 1 : end])
-            quoted, i = True, end + 1
+
+class _UnparsedError(Exception):
+    """The tree holds an ERROR or MISSING node (D59)."""
+
+
+def _parse(text: bytearray) -> tree_sitter.Node | None:
+    """The root of tree-sitter's tree, or None when the parse timed out."""
+    try:
+        return _PARSER.parse(bytes(text)).root_node
+    except ValueError:
+        _PARSER.reset()  # else the next parse resumes this one
+        return None
+
+
+def _unescape(found: re.Match[str]) -> str:
+    """A backslash's replacement: none before a newline (it joins lines)."""
+    return "" if found[1] == "\n" else found[1] or "\\"
+
+
+class _Walk:
+    """The tokens of shell text, read from its tree-sitter tree (D60)."""
+
+    def __init__(self, shell: str) -> None:
+        self.src = shell.encode(errors="surrogatepass")
+        self.operators: dict[int, str] = {}  # offset -> operator hidden
+        self.times: dict[int, int] = {}  # group offset -> its `time`
+        self.word_end: _Token | None = None  # the last token, from a word node
+        self.repairs: dict[int, bytes] = {}  # offset -> text parsed instead
+
+        def hide(found: re.Match[bytes]) -> bytes:
+            text = found[0]
+            if text[:1] in b"<;":  # the grammar ends no last arm with `;&`
+                self.operators[found.start()] = text.decode()
+                return (b"<" if text[:1] == b"<" else b";;").ljust(len(text))
+            self.times[found.end()] = found.start()
+            return b" " * len(text)
+
+        self.hidden = bytearray(_HIDDEN.sub(hide, self.src))
+        self.root = _parse(self.hidden)
+
+    def slice(self, start: int, end: int) -> str:
+        """The original text from start to end."""
+        return self.src[start:end].decode(errors="surrogatepass")
+
+    def text(self, node: tree_sitter.Node) -> str:
+        """The original text of a node."""
+        return self.slice(node.start_byte, node.end_byte)
+
+    def program(self) -> list[_Token]:
+        """The tokens of the whole text.
+
+        Where the walk finds a line tree-sitter joined to the next one, or
+        an `esac` it took for the reserved word, the text is parsed again
+        with a `;` for that newline or `esa_` for that word.
+        """
+        while True:
+            found = self.statements()
+            if not self.repairs:
+                return self.lines(found, 0, len(self.src))
+            for start, text in self.repairs.items():
+                self.hidden[start : start + len(text)] = text
+            self.repairs.clear()
+            self.root = _parse(self.hidden)
+
+    def statements(self) -> list[_Token]:
+        """The tokens of the top-level statements, without newlines.
+
+        D59: a statement (the top-level nodes up to a separator or a
+        newline) holding an ERROR or MISSING node, or nested too deep for
+        the recursion limit, is read as whitespace words with newline
+        operators, as parse.tokens does; the other statements keep their
+        tree.
+        """
+        root, runs = self.root, []
+        if root is None:  # the parse timed out
+            return self.words(0, len(self.src))
+        for node in root.children if root.type == "program" else [root]:
+            last = runs[-1][-1] if runs else None
+            if (
+                last is None
+                or not (node.is_named and last.is_named)
+                or b"\n" in self.src[last.end_byte : node.start_byte]
+            ):
+                runs.append([])
+            runs[-1].append(node)
+        out: list[_Token] = []
+        for run in runs:
+            found: list[_Token] = []
+            try:
+                for node in run:
+                    self.emit(node, found)
+            except (_UnparsedError, RecursionError):
+                stack = run[::-1]  # an `esac` word can cause the error
+                while stack:
+                    node = stack.pop()
+                    stack += reversed(node.children)
+                    self.esacs(node)
+                found = self.words(run[0].start_byte, run[-1].end_byte)
+            out += found
+        return out
+
+    def words(self, start: int, end: int) -> list[_Token]:
+        """Whitespace words with newline operators (D59).
+
+        Each spans the whole text from start to end.
+        """
+        return [
+            _Token(w, "operator" if w == "\n" else "word", start, end)
+            for w in re.findall(r"\S+|\n", self.slice(start, end))
+        ]
+
+    def check(self, node: tree_sitter.Node) -> None:
+        """Records the repairs a node needs (tree-sitter-bash quirks).
+
+        In a simple command an unescaped newline ends the command, but
+        tree-sitter continues it after two assignments (`a=1 b=2`) or
+        before a word that starts with a backslash; and it closes a case
+        at an `esac` argument (one not after `in`, a pattern's `)`, a
+        separator or a newline).
+        """
+        children = node.children
+        if node.type == "case_statement":
+            self.esacs(node)
+            return
+        spans = [
+            (a.end_byte, b.start_byte) for a, b in itertools.pairwise(children)
+        ]
+        for child in children:
+            word = child.child(0) if child.type == "command_name" else child
+            if word is not None and word.type == "word":
+                spans.append((word.start_byte, word.end_byte))
+        breaks = (_BREAK.search(self.hidden, a, b) for a, b in spans)
+        first = min((b.start() for b in breaks if b), default=None)
+        if first is not None:  # the rest after parsing again
+            self.repairs[first] = b";"
+
+    def esacs(self, node: tree_sitter.Node) -> None:
+        """Records a repair for each `esac` child bash reads as a word."""
+        for child in node.children:
+            word = self.hidden[child.start_byte : child.end_byte]
+            if word == b"esac" and self.argument(child):
+                self.repairs[child.start_byte] = b"esa_"
+
+    def argument(self, esac: tree_sitter.Node) -> bool:
+        """Whether bash reads this `esac` as an argument, not the end.
+
+        It is the end after `in`, a separator, a compound command's end, a
+        pattern's `)` or a newline.
+        """
+        last = esac.prev_sibling
+        while last is not None and last.type == "comment":
+            last = last.prev_sibling
+        while last is not None and last.child_count:
+            last = last.children[-1]
+        if last is None or last.type in _BEFORE_ESAC and not last.is_named:
+            return False
+        groups = ("case_item", "subshell", "compound_statement")
+        if last.type in (")", "}") and last.parent.type in groups:
+            return False  # a pattern's `)` or a group's end
+        return b"\n" not in self.src[last.end_byte : esac.start_byte]
+
+    def lines(self, found: list[_Token], start: int, end: int) -> list[_Token]:
+        """Adds a newline operator for each newline between the tokens.
+
+        A backslash-newline joins lines, and a whole-line comment goes with
+        its newline (SHP1, D45 (7)).
+        """
+        out: list[_Token] = []
+        for token in (*found, _Token("", "end", end, end)):
+            gap, i = self.src[start : token.start], 0
+            while i < len(gap):
+                if gap.startswith(b"\\\n", i):
+                    i += 2
+                elif gap.startswith(b"#", i):
+                    stop = gap.find(b"\n", i)
+                    whole = not out or out[-1][:2] == _NEWLINE[:2]
+                    i = len(gap) if stop < 0 else stop + whole
+                elif gap[i : i + 1].isspace():
+                    if gap.startswith(b"\n", i):
+                        out.append(_NEWLINE)
+                    i += 1
+                else:  # text tree-sitter left out, as in `x - 2>y`
+                    stray = _STRAY.match(gap, i)
+                    text = stray[0].decode(errors="surrogatepass")
+                    out.append(
+                        _Token(text, "word", start + i, start + stray.end())
+                    )
+                    i = stray.end()
+            out.append(token)
+            start = max(start, token.end)
+        return out[:-1]
+
+    def push(
+        self, out: list[_Token], token: _Token, word: bool = False
+    ) -> None:
+        """Appends a token after its hidden `time`, if any.
+
+        Two word nodes with nothing or only backslash-newlines between them
+        are one word (tree-sitter splits `$R/$1` and a continued line), and
+        digits right after `>&` or `<&` are a descriptor.
+        """
+        if token.start in self.times:
+            begin = self.times[token.start]
+            out.append(_Token("time", "word", begin, begin + 4))
+        last = out[-1] if out else _NEWLINE
+        if word and last is self.word_end and not token.skipped:
+            if _CONTINUED.fullmatch(self.src, last.end, token.start):
+                text, inner = (
+                    last.text + token.text,
+                    [*last.inner, *token.inner],
+                )
+                token = last._replace(text=text, end=token.end, inner=inner)
+                out.pop()
+        if (
+            last.text in (">&", "<&")
+            and last.end == token.start
+            and _DIGITS.fullmatch(token.text)
+        ):
+            token = token._replace(token_type="fd")
+        out.append(token)
+        self.word_end = token if word and not token.skipped else None
+
+    def emit(self, node: tree_sitter.Node, out: list[_Token]) -> None:
+        """Appends the tokens of a node in text order."""
+        if node.is_error or node.is_missing:
+            raise _UnparsedError
+        kind, children = node.type, node.children
+        if kind == "comment" or not (children or self.text(node).strip()):
+            return
+        if not node.is_named:
+            self.leaf(node, out)
+        elif kind == "file_descriptor":
+            self.push(out, self.word(node)._replace(token_type="fd"))
+        elif kind in ("compound_statement", "c_style_for_statement") and any(
+            c.type == "((" for c in children
+        ):
+            self.arithmetic(children, out)
+        elif kind == "test_command":
+            self.expression(node, out)
+        elif kind == "case_item":  # the patterns are skipped (SHP8, D55)
+            types = [c.type for c in children]
+            if ")" not in types:
+                raise _UnparsedError
+            close = types.index(")")
+            for child in children[: close + 1]:
+                self.skip(child, out)
+            for child in children[close + 1 :]:
+                self.emit(child, out)
+        elif kind == "function_definition":  # `function` and the name (D52)
+            name = node.child_by_field_name("name")
+            for child in children:
+                if child.type == "function" or child == name:
+                    self.skip(child, out)
+                else:
+                    self.emit(child, out)
+        elif kind in _STATEMENTS:
+            if kind in _SIMPLE:
+                self.check(node)
+            for child in children:
+                self.emit(child, out)
         else:
-            break
-    if double or pair:
-        raise ValueError("unclosed quote or expansion")
-    return _Token("".join(out), "word", inner), quoted, i
+            self.push(out, self.word(node), word=True)
 
-
-def _lex(
-    shell: str, i: int = 0, nested: bool = False, array: bool = False
-) -> tuple[list[_Token], int]:
-    """Tokens of shell text from i without heredoc bodies, and their end.
-
-    SHP1, SHP5, D33: only unquoted punctuation and, in command position, an
-    unquoted `{` or `}` word are operators; `#` at a word's start comments
-    to the end of the line. Case patterns and function names are marked
-    `skipped` (SHP8, D52, D55). `nested` reads the body of `$(…)`, `<(…)`,
-    `>(…)` or, with `array`, an array value, where `case` is a word (D56):
-    it ends after the `)` that closes it. Raises ValueError on an unclosed
-    quote or substitution.
-    """
-    found: list[_Token] = []
-    depth, start, naming, cases, end = 0, True, False, [], i
-    while i < len(shell):
-        if shell[i] in " \t\r" or shell.startswith("\\\n", i):
-            i += 2 if shell[i] == "\\" else 1
-            continue
-        if shell[i] == "#":  # a whole-line comment goes with its newline
-            stop = shell.find("\n", i)
-            whole = not found or found[-1] == _NEWLINE
-            i = len(shell) if stop < 0 else stop + whole
-            continue
-        mode = cases[-1] if cases else ""
-        operator = _OPERATOR.match(shell, i)
-        if operator and not shell.startswith(("((", "<(", ">("), i):
-            text = operator[0]
-            pattern = mode == "pattern" and text in ("(", "|", ")")
-            if pattern and text == ")":
-                cases[-1] = "body"
-            elif text in ("(", ")") and not pattern:
-                depth += 1 if text == "(" else -1
-            elif text in (";;", ";&", ";;&") and cases:
-                cases[-1] = "pattern"
-            if depth < 0 and nested:
-                return found, operator.end()
-            found.append(_Token(text, "operator", skipped=pattern))
-            start = not set(text) & set("<>")
-            i = end = operator.end()
-            continue
-        adjacent = i == end
-        token, quoted, i = _word(shell, i)
-        word = None if quoted else token.text
-        named, naming = naming, start and word == "function"
-        if mode == "pattern" and word != "esac" or named or naming:
-            token = token._replace(skipped=True)
-        elif start and word in ("{", "}"):
+    def skip(self, node: tree_sitter.Node, out: list[_Token]) -> None:
+        """Appends a node as a skipped token (SHP8)."""
+        if node.is_error or node.is_missing:
+            raise _UnparsedError
+        if node.type == "comment":
+            return
+        token = self.word(node)
+        if not node.is_named and _OPERATOR.issuperset(node.type):
             token = token._replace(token_type="operator")
-        elif word and _DIGITS.fullmatch(word):
-            after = adjacent and found and found[-1].text in (">&", "<&")
-            if after or shell[i : i + 1] in ("<", ">"):
-                token = token._replace(token_type="fd")
-        elif start and word and _FUNCTION.match(shell, i):
-            token = token._replace(skipped=True)
-        if word == "esac" and (mode == "pattern" or start and mode == "body"):
-            cases.pop()
-        elif start and word == "case" and not array:
-            cases.append("header")
-        elif mode == "header" and word == "in":
-            cases[-1] = "pattern"
-        found.append(token)
-        start = naming or named or start and word in _STARTERS
-        start |= token.token_type == "operator"
-        end = i
-    if nested:
-        raise ValueError("unclosed substitution")
-    return found, i
+        self.push(out, token._replace(skipped=True))
+
+    def leaf(self, node: tree_sitter.Node, out: list[_Token]) -> None:
+        """Appends an operator, or a reserved word as a word token."""
+        start, end, text = node.start_byte, node.end_byte, self.text(node)
+        if start in self.operators:
+            text = self.operators[start]
+            end = start + len(text)
+        if text in (">&-", "<&-"):  # the `-` is the operator's target
+            self.push(out, _Token(text[:2], "operator", start, end - 1))
+            self.push(out, _Token("-", "word", end - 1, end))
+            return
+        kind = "operator" if _OPERATOR.issuperset(text) else "word"
+        self.push(out, _Token(text, kind, start, end))
+
+    def arithmetic(
+        self, children: list[tree_sitter.Node], out: list[_Token]
+    ) -> None:
+        """Appends `((…))` as one word as written, with its substitutions."""
+        types = [c.type for c in children]
+        if "))" not in types:
+            raise _UnparsedError
+        first, last = types.index("(("), len(types) - types[::-1].index("))")
+        for child in children[:first]:
+            self.emit(child, out)
+        start, end = children[first].start_byte, children[last - 1].end_byte
+        inner = [s for c in children[first:last] for s in self.substitutions(c)]
+        self.push(
+            out, _Token(self.slice(start, end), "word", start, end, inner)
+        )
+        for child in children[last:]:
+            self.emit(child, out)
+
+    def expression(self, node: tree_sitter.Node, out: list[_Token]) -> None:
+        """Appends each part of a test command as a word."""
+        for child in node.children:
+            if child.type in _EXPRESSIONS:
+                self.expression(child, out)
+            elif child.type != "comment":
+                self.push(out, self.word(child), word=child.is_named)
+
+    def word(self, node: tree_sitter.Node) -> _Token:
+        """A word token, its substitutions' tokens in `inner`."""
+        last, inner = self.word_end, self.substitutions(node)
+        self.word_end = last  # the walk of a substitution moved it
+        text = self.unquote(node, double=False)
+        return _Token(text, "word", node.start_byte, node.end_byte, inner)
+
+    def unquote(self, node: tree_sitter.Node, double: bool) -> str:
+        """The text of a word node with its quotes removed (SHP1).
+
+        Expansions and an array value stay as written (D56), and so do the
+        escapes of `$'…'` (D58); `double` is true inside "…".
+        """
+        kind, raw = node.type, self.text(node)
+        if kind in _VERBATIM:
+            return raw
+        if kind == "raw_string":
+            return raw[1:-1]
+        if kind == "ansi_c_string":
+            return raw[2:-1]
+        if kind == '"' and double:  # tree-sitter puts trailing blanks here
+            return _DOUBLE.sub(_unescape, raw[:-1])
+        double |= kind == "string"
+        escapes = _DOUBLE if double else _UNQUOTED
+        out, start = [], node.start_byte
+        for child in node.children:
+            out.append(
+                escapes.sub(_unescape, self.slice(start, child.start_byte))
+            )
+            out.append(self.unquote(child, double))
+            start = child.end_byte
+        out.append(escapes.sub(_unescape, self.slice(start, node.end_byte)))
+        return "".join(out)
+
+    def substitutions(self, node: tree_sitter.Node) -> list[list[_Token]]:
+        """The tokens of each substitution in a node, in text order."""
+        if node.is_error or node.is_missing:
+            raise _UnparsedError
+        if node.type in _SUBSTITUTIONS:
+            return [self.substitution(node)]
+        return [s for c in node.children for s in self.substitutions(c)]
+
+    def substitution(self, node: tree_sitter.Node) -> list[_Token]:
+        """The tokens inside `$(…)`, `` `…` ``, `<(…)` or `>(…)`.
+
+        A backquoted text is parsed again after bash's unescaping.
+        """
+        if node.child_count < 2:
+            raise _UnparsedError
+        first, *body, last = node.children
+        if last.is_missing or last.type not in (")", "`"):
+            raise _UnparsedError
+        if first.type == "`":
+            if _BACKQUOTE.search(self.src, first.end_byte, last.start_byte):
+                raise _UnparsedError  # tree-sitter joins `a` `b` into one
+            text = self.slice(first.end_byte, last.start_byte)
+            return _Walk(_BACKQUOTED.sub(r"\1", text)).program()
+        out: list[_Token] = []
+        for child in body:
+            self.emit(child, out)
+        return self.lines(out, first.end_byte, last.start_byte)
 
 
-def _tokens(command: str) -> tuple[list[_Token], list[str]]:
-    """The tokens of the shell part and the heredoc body lines (SHP1).
-
-    When the shell part does not lex (an unclosed quote, or nesting too
-    deep for the recursion limit), it falls back to whitespace words with
-    newline operators, as parse.tokens does (D59).
-    """
+@functools.lru_cache(maxsize=256)  # derive reads each command 2-3 times
+def _tokens(command: str) -> tuple[tuple[_Token, ...], tuple[str, ...]]:
+    """The tokens of the shell part and the heredoc body lines (SHP1)."""
     pieces = list(parse.split_heredocs(command))
     shell = "\n".join(text for part, text in pieces if part == "shell")
-    bodies = [text for part, text in pieces if part == "body"]
-    try:
-        return _lex(shell)[0], bodies
-    except (ValueError, RecursionError):
-        words = re.findall(r"\S+|\n", shell.strip())
-        found = [_NEWLINE if w == "\n" else _Token(w, "word") for w in words]
-        return found, bodies
+    bodies = tuple(text for part, text in pieces if part == "body")
+    return tuple(_Walk(shell).program()), bodies
 
 
 def normalize_word(word: str) -> tuple[str, list[str]]:
@@ -501,7 +770,7 @@ def simple_commands(command: str) -> list[SimpleCommand]:
     return _split(_tokens(command)[0], nested=False)
 
 
-def _split(found: list[_Token], nested: bool) -> list[SimpleCommand]:
+def _split(found: typing.Sequence[_Token], nested: bool) -> list[SimpleCommand]:
     """simple_commands over tokens; `nested` inside a substitution."""
     commands: list[SimpleCommand] = []
     inner: list[list[_Token]] = []
@@ -552,12 +821,19 @@ def _split(found: list[_Token], nested: bool) -> list[SimpleCommand]:
     return commands
 
 
-def _command_words(words: list[str]) -> tuple[list[str], list[str]]:
-    """(assigned names, the words from the program on) of one command.
+def command_words(words: list[str]) -> tuple[list[str], list[str]]:
+    """Splits one simple command's words at its program (SHP8, ENV1).
 
     Leading NAME=value words and PREFIX_WORDS with their options (and the
-    duration of `timeout`) are skipped (SHP8, ENV1). `command -v` and
-    `command -V` look a name up: no program (D50).
+    duration of `timeout`) are skipped. `command -v` and `command -V` look
+    a name up: no program (D50). Public for layer 3 (D61).
+
+    Args:
+        words: The `words` of one SimpleCommand.
+
+    Returns:
+        The names the leading assignments assign, and the words from the
+        program on (empty when there is no program).
     """
     names, i = [], 0
     while i < len(words):
@@ -577,8 +853,8 @@ def _command_words(words: list[str]) -> tuple[list[str], list[str]]:
 
 
 def _heads(command: str) -> list[tuple[list[str], list[str]]]:
-    """_command_words of each simple command of shell text."""
-    return [_command_words(c["words"]) for c in simple_commands(command)]
+    """command_words of each simple command of shell text."""
+    return [command_words(c["words"]) for c in simple_commands(command)]
 
 
 def programs(command: str) -> list[str]:
