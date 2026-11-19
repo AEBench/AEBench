@@ -816,7 +816,7 @@ def file_class(path: str, mode: int | None) -> tuple[str, str]:
 
 
 _QUOTED = r'"(?:[^"\\]|\\.)*"'
-_HEADER = re.compile(rf"(?:{_QUOTED}|a/.*?) ({_QUOTED}|b/.*)")
+_HEADER = re.compile(rf"({_QUOTED}|a/.*?) ({_QUOTED}|b/.*)")
 _BINARY = re.compile(r"^(GIT binary patch|Binary files .* differ)$", re.M)
 
 
@@ -833,15 +833,33 @@ def binary_sections(diff_text: str) -> dict[str, bool]:
     out = {}
     for section in re.split(r"^diff --git ", diff_text or "", flags=re.M)[1:]:
         header, _, body = section.partition("\n")
-        found = _HEADER.fullmatch(header)
+        found = header_paths(header)
         if found:
-            path = found[1]
-            if path.startswith('"'):  # git's C-style quotes
-                raw = path[1:-1].encode("latin-1", "backslashreplace")
-                path = raw.decode("unicode_escape").encode("latin-1")
-                path = path.decode("utf-8")
-            out[path[2:]] = bool(_BINARY.search(body))
+            out[unquote(found[1])[2:]] = bool(_BINARY.search(body))
     return out
+
+
+def header_paths(header: str) -> tuple[str, str] | None:
+    """The two paths of a `diff --git` header, as written (and layer 5).
+
+    git writes `a/P b/P` unless the file was renamed, so an unquoted
+    header is split where both sides name one path, which a path holding
+    " b/" does not break; otherwise at the first " b/".
+    """
+    half = (len(header) - 1) // 2
+    if header[:2] == "a/" and header[2:half] == header[half + 3 :]:
+        if header[half : half + 3] == " b/":
+            return header[:half], header[half + 1 :]
+    found = _HEADER.fullmatch(header)
+    return (found[1], found[2]) if found else None
+
+
+def unquote(path: str) -> str:
+    """A diff header path with git's C-style quotes decoded (and layer 5)."""
+    if path.startswith('"'):
+        raw = path[1:-1].encode("latin-1", "backslashreplace")
+        path = raw.decode("unicode_escape").encode("latin-1").decode("utf-8")
+    return path
 
 
 def _m42(
