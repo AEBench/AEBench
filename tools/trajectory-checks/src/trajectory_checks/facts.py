@@ -151,8 +151,25 @@ PREFIX_WORDS = frozenset(
     {"sudo", "env", "nohup", "time", "nice", "exec", "command", "timeout"}
     | {"xargs", "setsid", "stdbuf"}
 )
+# The options of PREFIX_WORDS that take the next word as their value (their
+# man pages; D62).
+_OPTION_VALUES = types.MappingProxyType(
+    {
+        program: frozenset(options.split())
+        for program, options in (
+            ("sudo", "-u -g -C -D -h -p -r -t -U"),
+            ("env", "-u -C -S"),
+            ("nice", "-n"),
+            ("timeout", "-s -k"),
+            ("stdbuf", "-i -o -e"),
+            ("xargs", "-a -d -E -I -L -n -P -s"),
+            ("exec", "-a"),
+            ("time", "-f -o"),
+        )
+    }
+)
 # Reserved words skipped at the start of a simple command (bash manual,
-# Reserved Words; layer 3's SYNTAX_WORDS, D41). `[[` is kept as a program.
+# Reserved Words; D41; layer 3 cites this list). `[[` is kept as a program.
 _RESERVED = frozenset(
     {"!", "if", "then", "else", "elif", "fi", "while", "until", "do"}
     | {"done", "esac", "in"}
@@ -258,7 +275,8 @@ _NAME = re.compile(r"[A-Za-z_]\w*(=.*)?", re.S)
 # Shell text is parsed with tree-sitter-bash (D60). The parser reads each
 # heredoc operator as `<`, since layer 1 has cut off the bodies, `;&` and
 # `;;&` as `;;`, and `time` before a group as blanks, since the grammar has
-# no `time` keyword.
+# no `time` keyword, and the `{` that starts a word (`{x}`) as `_`, since
+# the grammar opens a group there.
 # A parse is cut off after 1 s, as its error recovery can be quadratic
 # (D59). `timeout_micros` is deprecated in 0.25 for a progress callback,
 # but cancelling with one crashes 0.25.2.
@@ -270,6 +288,7 @@ with warnings.catch_warnings():
     )
 _HIDDEN = re.compile(
     rb"(?<!<)<<-?(?!<)|;;?&|(?<![^\s;&|(){}])time[ \t]+(?=[({])"
+    rb"|(?<![^\s;&|(){}])\{(?=[^\s{}();&|<>])"
 )
 # Nodes walked for their children; any other named node is one word.
 _STATEMENTS = frozenset(
@@ -341,6 +360,8 @@ class _Walk:
 
         def hide(found: re.Match[bytes]) -> bytes:
             text = found[0]
+            if text == b"{":  # a word such as `{x}`: no group
+                return b"_"
             if text[:1] in b"<;":  # the grammar ends no last arm with `;&`
                 self.operators[found.start()] = text.decode()
                 return (b"<" if text[:1] == b"<" else b";;").ljust(len(text))
@@ -594,7 +615,8 @@ class _Walk:
             self.push(out, _Token(text[:2], "operator", start, end - 1))
             self.push(out, _Token("-", "word", end - 1, end))
             return
-        kind = "operator" if _OPERATOR.issuperset(text) else "word"
+        hidden = start in self.operators  # `<<-` is one too
+        kind = "operator" if hidden or _OPERATOR.issuperset(text) else "word"
         self.push(out, _Token(text, kind, start, end))
 
     def arithmetic(
@@ -824,8 +846,9 @@ def _split(found: typing.Sequence[_Token], nested: bool) -> list[SimpleCommand]:
 def command_words(words: list[str]) -> tuple[list[str], list[str]]:
     """Splits one simple command's words at its program (SHP8, ENV1).
 
-    Leading NAME=value words and PREFIX_WORDS with their options (and the
-    duration of `timeout`) are skipped. `command -v` and `command -V` look
+    Leading NAME=value words and PREFIX_WORDS with their options, the
+    values of those in _OPTION_VALUES and the duration of `timeout`, are
+    skipped. `command -v` and `command -V` look
     a name up: no program (D50). Public for layer 3 (D61).
 
     Args:
@@ -846,7 +869,7 @@ def command_words(words: list[str]) -> tuple[list[str], list[str]]:
         if head == "command" and words[i : i + 1] in (["-v"], ["-V"]):
             break
         while i < len(words) and words[i].startswith("-"):
-            i += 1
+            i += 1 + (words[i] in _OPTION_VALUES.get(head, ()))
         if head == "timeout" and words[i : i + 1] and words[i][:1].isdigit():
             i += 1
     return names, []
