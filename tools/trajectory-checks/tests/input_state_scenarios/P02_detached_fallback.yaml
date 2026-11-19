@@ -16,7 +16,7 @@ oracle_inputs:
   - {path: out/r.json, at_baseline: true, baseline_sha256: aa}
 expect:
   input_states:
-    out/r.json: {states_under: [pristine], states_over: [pristine, rewritten_identical, command_written, deleted], detached_execs: [e1], unseen_writer_possible: true}
+    out/r.json: {states_under: [pristine], states_over: [pristine, rewritten_identical, command_written, deleted], detached_execs: [e1], unseen_writer_possible: true, late_write: true}
   counts:
     bases.detached: fallback
     M3.2.detached_possible: true

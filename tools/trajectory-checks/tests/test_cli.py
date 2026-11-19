@@ -77,6 +77,10 @@ def test_analyse_links_the_real_pair(tmp_path: pathlib.Path) -> None:
         "oracle_inputs_run",
         "input_states",
         "state_counts",
+        "last_writers",
+        "input_rewrites",
+        "hunks",
+        "writer",
     }
     links = [lk for lk in result["links"] if lk["link_type"] == "call_exec"]
     assert len(links) == 1
