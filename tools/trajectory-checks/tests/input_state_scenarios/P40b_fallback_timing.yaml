@@ -1,0 +1,23 @@
+name: P40b_fallback_timing
+description: >
+  P40 with exact_timing false (released_at and ended_at null): the
+  skipped exec's [t_start, t_end] meets the window, so it is blind (basis
+  fallback); the content still fixes the label.
+rules: [EVD7]
+calls:
+  - {call_id: c1, command: ./big.sh, t_start: 10, t_end: 36}
+  - {call_id: c2, command: ./gen.sh, t_start: 30}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 35, snapshot: {status: skipped, skip_reason: limit}}
+  - {command_id: e2, call: c2, t_start: 30.1, snapshot: {modified: [out/r.json]}}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e2}
+baseline: {files: {out/r.json: {sha256: aa}}}
+final_diff: {modified: [out/r.json]}
+oracle_inputs:
+  - {path: out/r.json, at_baseline: true, baseline_sha256: aa}
+expect:
+  input_states:
+    out/r.json: {blind_execs: [e1], states_under: [command_written], state_under: command_written, unseen_writer_possible: true}
+  counts:
+    bases.timing: fallback

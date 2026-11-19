@@ -1,0 +1,18 @@
+name: P07_command_then_edit
+description: A command writes the file, then an edit; layer 1's final writer is the edit.
+rules: [CON6]
+calls:
+  - {call_id: c1, command: ./gen.sh, t_start: 10}
+  - {call_id: c2, tool_type: edit, paths: [/repo/cfg/p.yaml], t_start: 20}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, snapshot: {modified: [cfg/p.yaml]}}
+links:
+  - {link_type: write_event, path: cfg/p.yaml, writer_id: e1}
+  - {link_type: write_event, path: cfg/p.yaml, writer_id: c2}
+baseline: {files: {cfg/p.yaml: {sha256: aa}}}
+final_diff: {modified: [cfg/p.yaml]}
+oracle_inputs:
+  - {path: cfg/p.yaml, at_baseline: true, baseline_sha256: aa}
+expect:
+  input_states:
+    cfg/p.yaml: {state_under: edit_written, states_over: [edit_written, command_written], final_writer: w1, final_writer_type: edit_call}

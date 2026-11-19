@@ -1,0 +1,25 @@
+name: P08_edit_during_background_exec
+description: >
+  An edit during a long exec whose snapshot then reports the path; layer
+  1's final writer is the edit (its R4). The shell call's own background
+  flag does not make the exec detached.
+rules: [CON6, EVD8]
+calls:
+  - {call_id: c1, command: ./watch.sh, background: true, t_start: 10, t_end: 31}
+  - {call_id: c2, tool_type: edit, paths: [/repo/cfg/p.yaml], t_start: 20}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 30, snapshot: {modified: [cfg/p.yaml]}}
+links:
+  - {link_type: write_event, path: cfg/p.yaml, writer_id: c2}
+  - {link_type: write_event, path: cfg/p.yaml, writer_id: e1}
+paths:
+  - {path: cfg/p.yaml, events: [w0, w1], final_writer: w0, final_writer_under: true}
+baseline: {files: {cfg/p.yaml: {sha256: aa}}}
+final_diff: {modified: [cfg/p.yaml]}
+oracle_inputs:
+  - {path: cfg/p.yaml, at_baseline: true, baseline_sha256: aa}
+expect:
+  input_states:
+    cfg/p.yaml: {state_under: edit_written, states_over: [edit_written, command_written], final_writer: w0, final_writer_type: edit_call, events: [w0, w1], detached_execs: []}
+  counts:
+    M3.2.detached_possible: false

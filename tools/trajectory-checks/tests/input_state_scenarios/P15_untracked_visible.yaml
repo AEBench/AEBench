@@ -1,0 +1,28 @@
+name: P15_untracked_visible
+description: >
+  An untracked input in tracked scope created by one exec, with
+  untracked_visible: the snapshot lists it, so it is observable (basis
+  exact) and its writer is known; final_files gives its existence.
+rules: [EVD6, CON9, CON11]
+capabilities: {untracked_visible: true, final_content: true}
+calls:
+  - {call_id: c1, command: ./gen.sh, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2, snapshot: {created_untracked: [out/new.csv], modified_untracked: [], deleted_untracked: []}}
+links:
+  - {link_type: write_event, path: out/new.csv, writer_id: e1, op: create}
+paths:
+  - {path: out/new.csv, tracked: false, final_state: untracked}
+baseline: {files: {src/main.py: {sha256: mm}}}
+final_diff: {}
+final_files:
+  - {path: out/new.csv, status: A, sha256: bb}
+oracle_inputs:
+  - {path: out/new.csv, at_baseline: false}
+expect:
+  input_states:
+    out/new.csv: {observable: true, state_under: command_written, states_over: [command_written], origin_under: new_file, final_writer: w0, final_writer_root: c1, unseen_writer_possible: false}
+  counts:
+    bases.observable: exact
+    M3.2.created_by_agent_under: 1
+    M3.2.written_unseen_under: 0

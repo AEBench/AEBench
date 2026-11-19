@@ -1,0 +1,19 @@
+name: P13_untracked_grading_read
+description: >
+  P12 with oracle_reads: the §0 row is graded with a grading existence
+  and hash, the highest content source; no final writer.
+rules: [EVD2, EVD4]
+capabilities: {oracle_reads: true}
+calls:
+  - {call_id: c1, command: ./gen.sh, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2}
+baseline: {files: {src/main.py: {sha256: mm}}}
+final_diff: {}
+oracle_inputs:
+  - {path: out/new.csv, at_baseline: false, source_type: graded, grading_exists: true, grading_sha256: cc, grading_mtime_ns: 15000000000}
+expect:
+  input_states:
+    out/new.csv: {source_type: graded, content_source: grading_read, grading_exists: true, grading_sha256: cc, content_cmp: differs, content_sources_disagree: false, states_under: [command_written], states_over: [command_written], final_writer: null, final_writer_type: null}
+  counts:
+    M3.2.created_by_agent_under: 1

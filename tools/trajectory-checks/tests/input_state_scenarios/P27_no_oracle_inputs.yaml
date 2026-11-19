@@ -1,0 +1,21 @@
+name: P27_no_oracle_inputs
+description: Without §0's rows every M3.2 key is null and no row is written.
+rules: [PRE1]
+calls:
+  - {call_id: c1, command: make, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2, snapshot: {modified: [out/r.json]}}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+baseline: {files: {out/r.json: {sha256: aa}}}
+final_diff: {modified: [out/r.json]}
+expect:
+  absent: [out/r.json]
+  counts:
+    preconditions.oracle_inputs: fails
+    M3.2.oracle_inputs: null
+    M3.2.by_state_under: null
+    M3.2.phases: null
+    M3.2.detached_possible: null
+  warnings: ["input oracle_inputs missing: M3.2 null"]
+  warnings_exact: true

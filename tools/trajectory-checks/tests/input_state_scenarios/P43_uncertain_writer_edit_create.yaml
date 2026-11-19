@@ -1,0 +1,28 @@
+name: P43_uncertain_writer_edit_create
+description: >
+  A tracked file: an exec deletes it while a write call, inside the
+  exec's window, creates it again. Layer 1 names the exec's delete as
+  the final writer without certainty; the final diff says the file
+  exists. CON15 does not apply to an uncertain writer, so the strict
+  model keeps both writer types (A1, Lemma U).
+rules: [CON15, CON13]
+run: {t_start: 0.0, t_end: 150.0}
+calls:
+  - {call_id: c1, command: rm f, t_start: 10.0, t_end: 12.0}
+  - {call_id: c2, tool_type: write, paths: [/repo/f], t_start: 11.05}
+  - {call_id: ct, command: "true", t_start: 140.0}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, duration_s: 1.0, snapshot: {status: ok, deleted: [f]}}
+  - {command_id: et, call: ct, t_start: 140.1, snapshot: {status: ok}}
+links:
+  - {link_type: write_event, path: f, writer_id: c2, op: create, event_id: w1}
+  - {link_type: write_event, path: f, writer_id: e1, op: delete, event_id: w2}
+paths:
+  - {path: f, tracked: true, final_state: changed, events: [w1, w2], final_writer: w2, final_writer_under: false}
+baseline: {files: {f: {sha256: b}}}
+final_diff: {modified: [f]}
+oracle_inputs:
+  - {path: f, at_baseline: true, baseline_sha256: b}
+expect:
+  input_states:
+    f: {final_writer_type: exec, final_writer_under: false, observable: true, states_under: [edit_written, command_written], states_over: [edit_written, command_written], under_reason: final_writer_uncertain, model_conflict: false}

@@ -1,0 +1,31 @@
+name: P41_uncertain_writer_unseen_op
+description: >
+  Two overlapping execs of different roots end within snapshot_slop_s of
+  each other: e1 deletes the untracked file and ends last, e2 creates it.
+  Layer 1's final writer (e1) is not certain, so the file existing at
+  grading is no evidence of an unseen write: CON15 does not apply and
+  the strict model keeps command_written (A1, Lemma U).
+rules: [CON15, LWR4]
+capabilities: {final_content: true}
+coverage: {rates.snapshot_scope: workspace}
+run: {t_start: 0.0, t_end: 150.0}
+calls:
+  - {call_id: c1, command: ./a.sh, t_start: 10.0, t_end: 12.0}
+  - {call_id: c2, command: ./b.sh, t_start: 10.0, t_end: 12.0}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, duration_s: 1.0, snapshot: {status: ok, deleted: [f]}}
+  - {command_id: e2, call: c2, t_start: 10.0, duration_s: 1.05, snapshot: {status: ok, created: [f]}}
+links:
+  - {link_type: write_event, path: f, writer_id: e2, op: create, event_id: w1}
+  - {link_type: write_event, path: f, writer_id: e1, op: delete, event_id: w2}
+paths:
+  - {path: f, tracked: false, final_state: null, events: [w1, w2], final_writer: w2, final_writer_under: false}
+final_files:
+  - {path: f, status: A, sha256: x}
+oracle_inputs:
+  - {path: f, at_baseline: false, tracked_at_baseline: false}
+expect:
+  input_states:
+    f: {final_writer: w2, final_writer_under: false, observable: true, grading_exists: true, states_under: [command_written], states_over: [command_written], model_conflict: false}
+  counts:
+    M3.2.model_conflicts: 0

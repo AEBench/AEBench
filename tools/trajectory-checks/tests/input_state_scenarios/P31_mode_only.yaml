@@ -1,0 +1,23 @@
+name: P31_mode_only
+description: >
+  The final diff lists the input in mode_changed only, after a chmod
+  event: content equal to the baseline, and something wrote it.
+rules: [EVD3, CON4, CON5]
+calls:
+  - {call_id: c1, command: chmod +x bin/run.sh, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2, snapshot: {modified: [bin/run.sh]}}
+links:
+  - {link_type: write_event, path: bin/run.sh, writer_id: e1, op: mode}
+paths:
+  - {path: bin/run.sh, final_state: mode_only}
+baseline: {files: {bin/run.sh: {sha256: aa}}}
+final_diff: {mode_changed: [bin/run.sh]}
+oracle_inputs:
+  - {path: bin/run.sh, at_baseline: true, baseline_sha256: aa}
+expect:
+  input_states:
+    bin/run.sh: {content_cmp: equal, states_under: [rewritten_identical], states_over: [rewritten_identical], rewrite_type: null}
+  counts:
+    M3.2.baseline_content_under: 1
+    M3.2.fresh_under: 1

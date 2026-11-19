@@ -1,0 +1,27 @@
+name: P20_final_delete_but_exists
+description: >
+  A graded row (grading_exists true) of an untracked path in workspace
+  scope whose layer-1 final writer is a delete: a later re-creation went
+  unseen, which refutes the strict model; the final writer is copied.
+rules: [CON15, CON13]
+capabilities: {oracle_reads: true}
+coverage: {rates.snapshot_scope: workspace, rates.untracked_visible: true}
+calls:
+  - {call_id: c1, command: ./gen.sh, t_start: 10}
+  - {call_id: c2, command: ./clean.sh, t_start: 20}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2, snapshot: {scope: workspace, created: [out/tmp.dat]}}
+  - {command_id: e2, call: c2, t_start: 20.2, snapshot: {scope: workspace, deleted: [out/tmp.dat]}}
+links:
+  - {link_type: write_event, path: out/tmp.dat, writer_id: e1, op: create, scope: workspace}
+  - {link_type: write_event, path: out/tmp.dat, writer_id: e2, op: delete, scope: workspace}
+paths:
+  - {path: out/tmp.dat, tracked: false, final_state: untracked}
+baseline: {files: {src/main.py: {sha256: mm}}}
+oracle_inputs:
+  - {path: out/tmp.dat, at_baseline: false, source_type: graded, grading_exists: true, grading_sha256: dd}
+expect:
+  input_states:
+    out/tmp.dat: {observable: true, final_writer: w1, final_writer_root: c2, states_under: [], model_conflict: true, states_over: [command_written], under_reason: model_conflict}
+  counts:
+    M3.2.model_conflicts: 1

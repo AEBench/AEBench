@@ -1,0 +1,14 @@
+name: P33_two_checks_one_row
+description: One §0 row read by one check and stat-ed by another gives one row.
+rules: [INP3]
+baseline: {files: {out/r.json: {sha256: aa}}}
+final_diff: {}
+oracle_inputs:
+  - {path: out/r.json, at_baseline: true, baseline_sha256: aa, access_types: [read, stat], checks: [a_check, b_check], phases: [benchmark_prep, experiment_runs]}
+expect:
+  input_states:
+    out/r.json: {check_ids: [a_check, b_check], access_types: [read, stat], phases: [benchmark_prep, experiment_runs], input_id: i0, in_under: true, source_type: null_agent}
+  counts:
+    M3.2.oracle_inputs: 1
+    M3.2.phases.benchmark_prep.inputs: 1
+    M3.2.phases.experiment_runs.inputs: 1
