@@ -57,6 +57,7 @@ class InputState(typing.TypedDict):
     unmonitored_calls: list[str]
     detached_execs: list[str]
     unseen_writer_possible: bool
+    late_write: bool  # the run's D73 cause, for layer 5 (L4-a)
     rewrite_type: str | None  # same_content, restored
     states_under: list[str]
     states_over: list[str]
@@ -687,6 +688,7 @@ def _state(
     origins = _origins(under, out["baseline_exists"])
     out.update(
         detached_execs=list(ctx.detached),
+        late_write=ctx.late,
         unseen_writer_possible=bool(
             ctx.detached
             or not out["observable"]
