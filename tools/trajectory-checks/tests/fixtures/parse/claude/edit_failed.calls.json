@@ -1,0 +1,22 @@
+[
+  {
+    "actor": "main",
+    "background": null,
+    "call_id": "toolu_01A3yWctY3vsESNEqrd9F27K",
+    "command": null,
+    "command_norm": null,
+    "edit_content": true,
+    "family": "claude",
+    "log_exit_code": null,
+    "log_ok": false,
+    "paths": [
+      "/repo/examples/fibonacci.rs"
+    ],
+    "raw_name": "Edit",
+    "seq": 0,
+    "t_end": 1792181624.0,
+    "t_precision_s": 1.0,
+    "t_start": 1792181624.0,
+    "tool_type": "edit"
+  }
+]

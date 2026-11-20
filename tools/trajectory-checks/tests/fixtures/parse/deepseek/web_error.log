@@ -1,0 +1,2 @@
+[2026-11-03T16:51:26Z] {"type":"tool_call","callId":"call_00_PQDiPZGquqbueRbEb1Hg2667","tool":"web_fetch","input":{"url":"https://example.org/poster.pdf"}}
+[2026-11-03T16:51:27Z] {"type":"tool_result","callId":"call_00_PQDiPZGquqbueRbEb1Hg2667","status":"error","result":"Error: unsupported content type \"application/pdf\""}

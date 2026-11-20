@@ -1,0 +1,20 @@
+[
+  {
+    "actor": "main",
+    "background": true,
+    "call_id": "toolu_013JLAmBKRhzMTSHPyeQUXD3",
+    "command": "./run-all.sh > verify-all.log 2>&1",
+    "command_norm": "./run-all.sh > verify-all.log 2>&1",
+    "edit_content": false,
+    "family": "claude",
+    "log_exit_code": null,
+    "log_ok": true,
+    "paths": [],
+    "raw_name": "Bash",
+    "seq": 0,
+    "t_end": 1791059699.0,
+    "t_precision_s": 1.0,
+    "t_start": 1791059699.0,
+    "tool_type": "shell"
+  }
+]

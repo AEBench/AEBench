@@ -1,0 +1,20 @@
+[
+  {
+    "actor": "main",
+    "background": null,
+    "call_id": "call_00_PQDiPZGquqbueRbEb1Hg2667",
+    "command": null,
+    "command_norm": null,
+    "edit_content": false,
+    "family": "deepseek",
+    "log_exit_code": null,
+    "log_ok": false,
+    "paths": [],
+    "raw_name": "web_fetch",
+    "seq": 0,
+    "t_end": 1793724687.0,
+    "t_precision_s": 1.0,
+    "t_start": 1793724686.0,
+    "tool_type": "web"
+  }
+]

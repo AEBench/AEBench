@@ -1,0 +1,20 @@
+[
+  {
+    "actor": "main",
+    "background": null,
+    "call_id": "call_51b98b9121544eb295265720",
+    "command": null,
+    "command_norm": null,
+    "edit_content": false,
+    "family": "zcode",
+    "log_exit_code": null,
+    "log_ok": false,
+    "paths": [],
+    "raw_name": "WebFetch",
+    "seq": 0,
+    "t_end": 1793973507.998,
+    "t_precision_s": 0.001,
+    "t_start": 1793973507.366,
+    "tool_type": "web"
+  }
+]

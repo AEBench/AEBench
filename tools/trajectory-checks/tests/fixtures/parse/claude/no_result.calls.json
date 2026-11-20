@@ -1,0 +1,20 @@
+[
+  {
+    "actor": "main",
+    "background": false,
+    "call_id": "toolu_01RoBuHN55QLnDBAjaD8ZqC8",
+    "command": "until grep -qiE \"Successfully built|naming to docker|writing image|ERROR|failed to\" /tmp/docker_build.log; do sleep 45; done; echo BUILD_DONE",
+    "command_norm": "until grep -qiE \"Successfully built|naming to docker|writing image|ERROR|failed to\" /tmp/docker_build.log; do sleep 45; done; echo BUILD_DONE",
+    "edit_content": false,
+    "family": "claude",
+    "log_exit_code": null,
+    "log_ok": null,
+    "paths": [],
+    "raw_name": "Bash",
+    "seq": 0,
+    "t_end": null,
+    "t_precision_s": 1.0,
+    "t_start": 1791083233.0,
+    "tool_type": "shell"
+  }
+]

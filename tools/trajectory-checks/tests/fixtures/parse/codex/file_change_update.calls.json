@@ -1,0 +1,22 @@
+[
+  {
+    "actor": "main",
+    "background": null,
+    "call_id": "item_29",
+    "command": null,
+    "command_norm": null,
+    "edit_content": false,
+    "family": "codex",
+    "log_exit_code": null,
+    "log_ok": true,
+    "paths": [
+      "/repo/benchmark/uprobe/benchmark.py"
+    ],
+    "raw_name": "file_change",
+    "seq": 0,
+    "t_end": 1791867353.0,
+    "t_precision_s": 1.0,
+    "t_start": 1791867353.0,
+    "tool_type": "edit"
+  }
+]

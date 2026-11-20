@@ -1,0 +1,48 @@
+[
+  {
+    "argv0": "/bin/bash",
+    "command": "ls -la",
+    "command_id": "2d5be08ba942482b9b9a2c785622473a",
+    "command_norm": "ls -la",
+    "complete": true,
+    "cwd": "/tmp/ws/project",
+    "duration_s": 0.275,
+    "exit_code": 0,
+    "noise": null,
+    "pid": 176,
+    "seq": 0,
+    "signal": null,
+    "snapshot": {
+      "skip_reason": "workspace exceeds 20000 files",
+      "status": "skipped"
+    },
+    "stderr_bytes": 0,
+    "stdout_bytes": 455,
+    "t_end": 1791328891.986636,
+    "t_start": 1791328891.711636,
+    "wrapper": "claude_eval"
+  },
+  {
+    "argv0": "/bin/bash",
+    "command": "sed -n '1416,1480p' /tmp/build.log | head -70",
+    "command_id": "269b3d627a0443b3b29113dfc3a7f65a",
+    "command_norm": "sed -n '1416,1480p' /tmp/build.log | head -70",
+    "complete": true,
+    "cwd": "/tmp/ws/project",
+    "duration_s": 0.276,
+    "exit_code": 0,
+    "noise": null,
+    "pid": 326,
+    "seq": 1,
+    "signal": null,
+    "snapshot": {
+      "skip_reason": "workspace exceeds 20000 files",
+      "status": "skipped"
+    },
+    "stderr_bytes": 0,
+    "stdout_bytes": 1579,
+    "t_end": 1791329631.091654,
+    "t_start": 1791329630.815654,
+    "wrapper": "claude_eval"
+  }
+]

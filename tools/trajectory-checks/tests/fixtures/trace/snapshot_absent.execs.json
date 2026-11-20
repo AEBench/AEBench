@@ -1,0 +1,19 @@
+[
+  {
+    "command_id": "ec9bd16e14f544eb83407d6dcc11e239",
+    "complete": true,
+    "duration_s": 0.01,
+    "exit_code": 0,
+    "noise": null,
+    "seq": 0,
+    "signal": null,
+    "snapshot": {
+      "status": "absent"
+    },
+    "stderr_bytes": null,
+    "stdout_bytes": 0,
+    "t_end": 1793693752.462149,
+    "t_start": 1793693752.452149,
+    "wrapper": null
+  }
+]

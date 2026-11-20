@@ -1,0 +1,22 @@
+[
+  {
+    "actor": "main",
+    "background": null,
+    "call_id": "toolu_015ttfuLGZcxKR368Nb9mPgD",
+    "command": null,
+    "command_norm": null,
+    "edit_content": true,
+    "family": "claude",
+    "log_exit_code": null,
+    "log_ok": true,
+    "paths": [
+      "/repo/examples/factorial.rs"
+    ],
+    "raw_name": "Edit",
+    "seq": 0,
+    "t_end": 1792181632.0,
+    "t_precision_s": 1.0,
+    "t_start": 1792181632.0,
+    "tool_type": "edit"
+  }
+]

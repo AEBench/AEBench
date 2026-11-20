@@ -1,0 +1,19 @@
+[
+  {
+    "actor": "main",
+    "background": null,
+    "call_id": "exec-57391a89-867a-48b8-8358-34ff64583bb9",
+    "command": null,
+    "command_norm": null,
+    "edit_content": false,
+    "family": "codex",
+    "log_exit_code": null,
+    "paths": [],
+    "raw_name": "web_search",
+    "seq": 0,
+    "t_end": 1791269671.0,
+    "t_precision_s": 1.0,
+    "t_start": 1791269670.0,
+    "tool_type": "web"
+  }
+]
