@@ -3,6 +3,7 @@
 Usage:
     python -m trajectory_checks RUN_DIR_OR_ROOT ... --out DIR
         [--runs runs.txt] [--config overrides.toml] [--oracle-runs DIR]
+        [--cases DIR] [--checkouts DIR]
 """
 
 import argparse
@@ -10,6 +11,7 @@ import csv
 import json
 import logging
 import pathlib
+import re
 import sys
 import types
 import typing
@@ -20,6 +22,8 @@ except ModuleNotFoundError:  # Python 3.10
     import tomli as tomllib
 
 from trajectory_checks import (
+    chain,
+    declared,
     facts,
     input_state,
     match,
@@ -35,6 +39,8 @@ FACTS_FILES = ("call_facts", "exec_facts", "path_facts")
 STRUCTURE_FILES = ("call_structure", "reruns", "file_classes")
 LAYER4_FILES = ("oracle_inputs", "input_states")
 WRITER_FILES = ("last_writers", "input_rewrites", "hunks")
+CHAIN_FILES = ("arg_checks", "chain_nodes", "hop_reads", "faithfulness")
+DECLARED_FILES = ("declared_invocations", "declared_options")
 # The list-valued metrics left out of the layer-4 CSVs, by name (D38).
 LISTS = frozenset(
     "null_phases_passed phases_passed_by_null phases_gained phases_lost "
@@ -48,6 +54,7 @@ BLOCKS = (
     ("oracle_inputs", "oracle_inputs_run"),
     ("state_counts", "state_counts"),
     ("writer", "writer"),
+    ("chain", "chain"),
 )
 # Who owns each --config key; a layer also gets the keys of the layers it
 # lists (match.link rejects any other key, facts.derive too).
@@ -59,8 +66,11 @@ _OWNERS = types.MappingProxyType(
         "oracle_inputs": (oracle_inputs.DEFAULTS,),
         "input_state": (input_state.DEFAULTS,),
         "writer": (match.DEFAULTS,),  # layer 5 owns no key (its D36)
+        "declared": (declared.DEFAULTS,),
+        "chain": (match.DEFAULTS, facts.DEFAULTS, input_state.DEFAULTS),
     }
 )
+_TOML_REF = re.compile(r'ref = "([^"]*)"')  # D85: a copied case.toml line
 
 
 def _read_json(path: pathlib.Path, value_type: type = dict) -> typing.Any:
@@ -114,13 +124,19 @@ def _read_result(path: pathlib.Path, notes: list[str]) -> dict | None:
 
 
 def _upstream_ref(run_dir: pathlib.Path) -> str | None:
-    """The `upstream_ref=` value of run/run_meta.txt, if any (OI9)."""
+    """The `upstream_ref=` value of run/run_meta.txt, if any (OI9).
+
+    The value `ref = "<v>"` (a case.toml line copied whole) gives <v>
+    (D85); any other value is returned as written.
+    """
     meta = run_dir / "run" / "run_meta.txt"
     if not meta.is_file():
         return None
     for line in meta.read_text(encoding="utf-8", errors="replace").splitlines():
         if line.startswith("upstream_ref="):
-            return line.split("=", 1)[1].strip() or None
+            value = line.split("=", 1)[1].strip()
+            found = _TOML_REF.fullmatch(value)
+            return (found[1] if found else value).strip() or None
     return None
 
 
@@ -225,6 +241,7 @@ def analyse(
     run_dir: pathlib.Path,
     config: typing.Mapping[str, typing.Any] | None = None,
     oracle_runs: pathlib.Path | str | None = None,
+    declared_input: tuple | None = None,
 ) -> dict[str, typing.Any]:
     """Reads one run directory, links it and derives its facts.
 
@@ -234,14 +251,17 @@ def analyse(
         oracle_runs: The --oracle-runs folder, holding one null-agent
             oracle run per artifact (`<artifact>/oracle_inputs.jsonl` and
             `null_agent_score.json`); None when there is none.
+        declared_input: (DeclaredResult or None, CaseSpec or None) of the
+            run's artifact, from declared_inputs; None for (None, None).
 
     Returns:
         `calls`, `execs`, `links`, `dispositions`, `paths`, `coverage`,
         `call_facts`, `exec_facts`, `path_facts`, `facts`,
         `call_structure`, `reruns`, `file_classes`, `structure`,
         `oracle_inputs`, `oracle_inputs_run`, `input_states`,
-        `state_counts`, `last_writers`, `input_rewrites`, `hunks` and
-        `writer`.
+        `state_counts`, `last_writers`, `input_rewrites`, `hunks`,
+        `writer`, `arg_checks`, `chain_nodes`, `hop_reads`,
+        `faithfulness` and `chain`.
 
     Raises:
         parse.UnsupportedFormatError: The agent format is unknown.
@@ -342,24 +362,35 @@ def analyse(
         final_files=final_files,
         final_notes=notes,
     )
-    written = writer.derive(
-        calls,
-        execs,
-        linked,
-        derived,
-        shaped,
-        run=run,
-        oracle_inputs={
+    given = {
+        "oracle_inputs": {
             "oracle_inputs": layer4["oracle_inputs"],
             "oracle_inputs_run": layer4["oracle_inputs_run"],
         },
-        input_states={
+        "input_states": {
             "input_states": layer4["input_states"],
             "state_counts": layer4["state_counts"],
         },
+        "final_files": final_files,
+    }
+    written = writer.derive(
+        *(calls, execs, linked, derived, shaped),
+        run=run,
+        **given,
         final_diff_text=final_diff_text,
-        final_files=final_files,
         config=routed["writer"],
+    )
+    result_of, spec = declared_input or (None, None)
+    chained = chain.derive(
+        *(calls, execs, linked, derived, shaped),
+        run=run,
+        baseline=baseline,
+        **given,
+        writer_result=written,
+        declared_result=result_of,
+        spec=spec,
+        run_commit=_upstream_ref(run_dir) if run["commit"] is None else None,
+        config=routed["chain"],
     )
     return {
         "calls": match.round_floats(calls),
@@ -369,7 +400,93 @@ def analyse(
         **shaped,
         **layer4,
         **written,
+        **chained,
     }
+
+
+def load_case(
+    cases: pathlib.Path | None, artifact: str
+) -> tuple[dict | None, list[str]]:
+    """cases/<artifact>/case.toml parsed with tomllib, and a note.
+
+    The note is `case.toml: missing` or `case.toml: unreadable` when the
+    file is missing or does not parse; then the case is None (D69).
+    """
+    path = pathlib.Path(cases or ".") / artifact / "case.toml"
+    try:
+        with path.open("rb") as handle:
+            return tomllib.load(handle), []
+    except FileNotFoundError:
+        return None, ["case.toml: missing"]
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return None, ["case.toml: unreadable"]
+
+
+def declared_inputs(
+    artifact: str,
+    cases: pathlib.Path | None,
+    checkouts: pathlib.Path | None,
+    config: typing.Mapping[str, typing.Any],
+    cache: dict[str, tuple],
+) -> tuple[declared.DeclaredResult | None, declared.CaseSpec | None]:
+    """T6.1 once per artifact per process (cached).
+
+    declared.declare on checkouts/<artifact> when it is a folder, else
+    None; the spec from declared.case_spec even without a checkout;
+    (None, None) without a case. The notes of load_case go into the
+    spec's warnings: a missing or unreadable case.toml gives an empty
+    spec carrying `case.toml: missing` or `case.toml: unreadable` (D69).
+    An error inside T6.1 is logged once and cached as no result, with
+    the warning `declared: T6.1 failed (<error>)` in the spec (D84).
+    """
+    if artifact not in cache:
+        case, notes = load_case(cases, artifact) if cases else (None, [])
+        repo = pathlib.Path(checkouts or ".") / artifact
+        result = spec = None
+        try:  # cached either way: every run of the artifact gets it
+            spec = None if cases is None else declared.case_spec(case or {})
+            if case is not None and checkouts is not None and repo.is_dir():
+                routed = route_config(config)["declared"]
+                result = declared.declare(
+                    repo, case, artifact=artifact, config=routed
+                )
+        except Exception as error:
+            logger.exception("declared %s: T6.1 failed", artifact)
+            notes.append(
+                f"declared: T6.1 failed ({type(error).__name__}: {error})"
+            )
+            spec = spec or declared.case_spec({})
+        if spec is not None:
+            spec["warnings"] += notes
+        cache[artifact] = (result, spec)
+    return cache[artifact]
+
+
+def write_declared(result: declared.DeclaredResult, out: pathlib.Path) -> None:
+    """<out>/declared/<artifact>/: DECLARED_FILES and declared.json."""
+    meta = result["declared"]
+    folder = pathlib.Path(out) / "declared" / meta["artifact"]
+    write_outputs(
+        {**result, "meta": meta},
+        folder,
+        DECLARED_FILES,
+        (("declared", "meta"),),
+    )
+
+
+def chain_rows(result: dict[str, typing.Any]) -> dict[str, typing.Any]:
+    """One chain.csv row: facts_row(result["chain"], chain.DICT_FIELDS).
+
+    faithful_by_phase is filled to input_state.PHASES with None first (a
+    phase the run lacks is empty, never 0: layer4_rows' rule).
+    """
+    block = result["chain"]
+    found = block["metrics"]["faithfulness"]
+    if found["faithful_by_phase"] is not None:
+        phases = dict.fromkeys(input_state.PHASES) | found["faithful_by_phase"]
+        found = {**found, "faithful_by_phase": phases}
+    block = {**block, "metrics": {**block["metrics"], "faithfulness": found}}
+    return facts_row(block, chain.DICT_FIELDS)
 
 
 def _final_files(monitor: pathlib.Path, notes: list[str]) -> list[dict] | None:
@@ -594,13 +711,18 @@ def _write_csv(
 
 
 def write_outputs(
-    result: dict[str, typing.Any], out_dir: pathlib.Path
+    result: dict[str, typing.Any],
+    out_dir: pathlib.Path,
+    files: typing.Sequence[str] | None = None,
+    blocks: typing.Sequence[tuple[str, str]] = BLOCKS,
 ) -> pathlib.Path:
     """Writes the output files of one run into `out_dir`.
 
     Args:
         result: The value of analyse.
         out_dir: The run's output folder (main uses `<out>/<run_key>`).
+        files: The JSON Lines files; every layer's when None.
+        blocks: The JSON files, as (file name, key of result).
 
     Returns:
         The run's output folder.
@@ -608,11 +730,11 @@ def write_outputs(
     folder = pathlib.Path(out_dir)
     folder.mkdir(parents=True, exist_ok=True)
     names = OUTPUT_FILES + FACTS_FILES + STRUCTURE_FILES + LAYER4_FILES
-    for name in names + WRITER_FILES:
+    for name in names + WRITER_FILES + CHAIN_FILES if files is None else files:
         with (folder / f"{name}.jsonl").open("w", encoding="utf-8") as out:
             for record in result[name]:
                 out.write(json.dumps(record, sort_keys=True) + "\n")
-    for name, key in BLOCKS:
+    for name, key in blocks:
         with (folder / f"{name}.json").open("w", encoding="utf-8") as out:
             json.dump(result[key], out, sort_keys=True, indent=1)
             out.write("\n")
@@ -654,6 +776,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runs")
     parser.add_argument("--config")
     parser.add_argument("--oracle-runs")
+    parser.add_argument("--cases", type=pathlib.Path)
+    parser.add_argument("--checkouts", type=pathlib.Path)
     args = parser.parse_args(argv)
     config = {}
     if args.config:
@@ -663,12 +787,22 @@ def main(argv: list[str] | None = None) -> int:
         route_config(config)
     except ValueError as error:
         parser.error(f"--config {args.config}: {error}")
-    names = ("facts", "structure", "oracle_inputs", "state_counts", "writer")
-    rows, failed, inputs = [], [], []
+    names = (
+        *("facts", "structure", "oracle_inputs", "state_counts"),
+        *("writer", "chain"),
+    )
+    rows, failed, inputs, cache = [], [], [], {}
     tables: dict[str, list] = {name: [] for name in names}
     for run_dir in _run_dirs(args.paths, args.runs):
         try:  # one run's error, of any kind, fails only that run (D56)
-            result = analyse(run_dir, config, args.oracle_runs)
+            artifact = _run_key(run_dir).split("__")[0]
+            new = artifact not in cache
+            pair = declared_inputs(
+                artifact, args.cases, args.checkouts, config, cache
+            )
+            if new and pair[0] is not None:
+                write_declared(pair[0], pathlib.Path(args.out))
+            result = analyse(run_dir, config, args.oracle_runs, pair)
             built = {
                 "facts": facts_row(result["facts"]),
                 "structure": facts_row(
@@ -676,6 +810,7 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 **layer4_rows(result),
                 "writer": writer_rows(result),
+                "chain": chain_rows(result),
             }
             input_rows = writer_input_rows(result)
             coverage = csv_row(result["coverage"])
@@ -697,6 +832,10 @@ def main(argv: list[str] | None = None) -> int:
                 facts.peer_ratios(tables[name], peers),
                 pathlib.Path(args.out) / f"{name}.csv",
             )
+        _write_csv(
+            chain.aggregate(tables["chain"], peers),
+            pathlib.Path(args.out) / "chain_summary.csv",
+        )
         ratios = [c for c in writer.INPUT_COLUMNS if c.startswith("M")]
         _write_csv(  # PEER2, with its header even with no row (D40)
             writer.input_peer_ratios(inputs, peers),
