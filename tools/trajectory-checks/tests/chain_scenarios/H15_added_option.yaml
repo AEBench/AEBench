@@ -1,0 +1,25 @@
+id: H15
+title: The writer adds an option no declaration names
+rules: [ARG3]
+execs:
+  - {command_id: e1, command: "./tool.sh --k 3 --extra 1", t_start: 10.0,
+     duration_s: 5.0}
+dispositions: {e1: {disposition: matched_root, root_under: true}}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+oracle_inputs:
+  - {path: out/r.json}
+declared:
+  invocations:
+    - {invocation_key: tool.sh, text: "./tool.sh --k 3",
+       options: {--k: {value: "3", value_type: int}}}
+expect:
+  row_counts: {arg_checks: 2}
+  arg_checks:
+    - {command_id: e1, invocation: 0, option: --extra, comparison: added,
+       effective: null, declared_values: [], declared_origin: [],
+       conforms: null}
+    - {command_id: e1, invocation: 0, option: --k, comparison: equal}
+  metrics:
+    M5.1: {args_added_under: 1, args_added_over: 1, args_equal_under: 1,
+           options_compared_under: 2, args_unmarked_deviations_under: 1}

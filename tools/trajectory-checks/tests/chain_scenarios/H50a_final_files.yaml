@@ -1,0 +1,22 @@
+id: H50a
+title: The writer runs an untracked script listed as created in final_files
+rules: [FA4]
+run:
+  capabilities: {final_content: true}
+  final_diff_content: monitor/final.diff
+execs:
+  - {command_id: e1, command: python3 gen.py, t_start: 10.0, duration_s: 2.0}
+dispositions: {e1: {disposition: matched_root, root_under: true}}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+final_files:
+  - {path: gen.py, status: A}
+oracle_inputs:
+  - {path: out/r.json}
+expect:
+  bases: {delta: exact}
+  preconditions: {delta_complete: holds}
+  chain_nodes:
+    - {input_id: i0, node_id: w0, code_state: changed, code_paths: [gen.py]}
+  faithfulness:
+    - {input_id: i0, clauses: {built: violated}, faithful: violated}

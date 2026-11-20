@@ -1,0 +1,30 @@
+id: H38
+title: A file renamed into place by mv
+rules: [RD5]
+run:
+  capabilities: {read_tracing: true}
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 10.0, duration_s: 5.0,
+     reads: []}
+  - {command_id: e2, command: mv tmp/x.dat out/x.dat, t_start: 20.0,
+     duration_s: 1.0, reads: []}
+dispositions:
+  e1: {disposition: matched_root, root_under: true}
+  e2: {disposition: matched_root, root_under: true}
+links:
+  - {link_type: write_event, path: tmp/x.dat, op: create, writer_id: e1}
+  - {link_type: write_event, path: tmp/x.dat, op: delete, writer_id: e2}
+  - {link_type: write_event, path: out/x.dat, op: create, writer_id: e2}
+paths:
+  - {path: tmp/x.dat, tracked: false, final_state: deleted}
+  - {path: out/x.dat, tracked: false}
+oracle_inputs:
+  - {path: out/x.dat}
+expect:
+  hop_reads:
+    - {input_id: i0, reader_node: w2, read_path: tmp/x.dat, version: w0,
+       read_type: rename, must: false, state: derived}
+  chain_nodes:
+    - {input_id: i0, node_id: w0, hop: 2, must: false}
+  absent:
+    chain_nodes: [{input_id: i0, node_id: w1}]

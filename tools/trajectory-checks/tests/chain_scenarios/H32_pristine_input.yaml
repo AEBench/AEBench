@@ -1,0 +1,29 @@
+id: H32
+title: The graded file is pristine
+rules: [FA2, FA9]
+baseline_files: [results/t.json]
+oracle_inputs:
+  - {path: results/t.json}
+state: pristine
+runs:
+  - {}
+  - input_states:
+      - {input_id: i0, states_over: [pristine, command_written],
+         predicates_over: {fresh: true}}
+    expect:
+      faithfulness:
+        - {input_id: i0, clauses: {fresh: null}, faithful: null}
+      metrics:
+        faithfulness: {inputs_undefined: 1, passed_and_undefined: 1,
+                       passed_and_violated: 0}
+expect:
+  preconditions: {reads: fails, input_states: holds}
+  metrics_null: [M3.4]
+  faithfulness:
+    - {input_id: i0, clauses: {fresh: violated}, faithful: violated,
+       chain_time_under_s: null, chain_time_over_s: null}
+  metrics:
+    faithfulness: {inputs: 1, inputs_violated: 1, faithful_run: violated,
+                   clause_violations: {fresh: 1, derived: 0},
+                   faithful_by_phase: {experiment_runs: violated},
+                   passed_and_violated: 1, passed_and_undefined: 0}

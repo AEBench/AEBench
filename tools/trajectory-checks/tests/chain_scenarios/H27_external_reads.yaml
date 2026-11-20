@@ -1,0 +1,23 @@
+id: H27
+title: Reads of system libraries and the interpreter are external leaves
+rules: [RD4]
+run:
+  capabilities: {read_tracing: true}
+execs:
+  - {command_id: e1, command: python3 agg.py, t_start: 10.0, duration_s: 2.0,
+     reads: [/usr/lib/libz.so.1, /usr/bin/python3]}
+dispositions: {e1: {disposition: matched_root, root_under: true}}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+oracle_inputs:
+  - {path: out/r.json}
+expect:
+  hop_reads:
+    - {input_id: i0, reader_node: w0, read_path: /usr/lib/libz.so.1,
+       version: null, state: external}
+    - {input_id: i0, reader_node: w0, read_path: /usr/bin/python3,
+       version: null, state: external}
+  row_counts: {chain_nodes: 1, hop_reads: 2}
+  metrics:
+    M3.4: {chain_nodes_over: 1, chain_depth_over: 1,
+           hop2_reads_by_state_over: {external: 2, derived: 0, pristine: 0}}

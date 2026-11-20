@@ -1,0 +1,33 @@
+id: H46a
+title: A recorded parent overrides the time-containment parent
+rules: [CH2]
+run:
+  capabilities: {read_tracing: true, parent_links: true}
+calls:
+  - {call_id: c1, command: ./run.sh, t_start: 9.0}
+  - {call_id: c2, command: ./other.sh, t_start: 14.0}
+execs:
+  - {command_id: e0, command: ./prep.sh, t_start: 1.0, duration_s: 2.0,
+     reads: [], root_command_id: e0, depth: 0}
+  - {command_id: e1, command: ./run.sh, t_start: 10.0, duration_s: 50.0,
+     reads: [], root_command_id: e1, depth: 0}
+  - {command_id: e2, command: ./other.sh, t_start: 15.0, duration_s: 40.0,
+     reads: [], root_command_id: e2, depth: 0}
+  - {command_id: e3, command: cat data/in.txt, t_start: 20.0,
+     duration_s: 1.0, reads: [/repo/data/in.txt], parent_command_id: e1,
+     root_command_id: e1, depth: 1}
+dispositions: {e0: {disposition: matched_root, root_under: true}}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: exec_parent, command_id: e3, parent: e2, root_call_id: c2}
+  - {link_type: write_event, path: data/in.txt, writer_id: e0}
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+oracle_inputs:
+  - {path: out/r.json}
+expect:
+  bases: {nesting: exact}
+  hop_reads:
+    - {input_id: i0, reader_node: w1, read_path: data/in.txt, version: w0,
+       reader_exec: e3, must: true}
+  row_counts: {chain_nodes: 2}

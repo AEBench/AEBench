@@ -1,0 +1,26 @@
+id: H16
+title: Writer omits a scale option whose default is below the README value
+rules: [ARG7, SC2]
+execs:
+  - {command_id: e1, command: "python3 tools/run.py", t_start: 10.0,
+     duration_s: 5.0}
+dispositions: {e1: {disposition: matched_root, root_under: true}}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+oracle_inputs:
+  - {path: out/r.json}
+declared:
+  invocations:
+    - {invocation_key: tools/run.py, text: "python3 tools/run.py --iters 10",
+       options: {--iters: {value: "10", value_type: int}}}
+  options:
+    - {invocation_key: tools/run.py, option: --iters,
+       default: {value: "3", value_type: int}}
+expect:
+  arg_checks:
+    - {command_id: e1, invocation: 0, option: --iters, comparison: omitted,
+       effective: below, scale_option: true, scale_reduced: true,
+       executed: {origin: omitted, value: "3", value_type: int},
+       declared_values: [{value: "10", value_type: int}]}
+  metrics:
+    M5.1: {scale_reduced_under: 1, args_omitted_under: 1}

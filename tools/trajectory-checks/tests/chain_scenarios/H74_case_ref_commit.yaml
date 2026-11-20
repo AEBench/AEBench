@@ -1,0 +1,19 @@
+id: H74
+title: The declared commit was taken from the case's ref
+rules: [PRE1, DEC7]
+execs:
+  - {command_id: e1, command: "./tool.sh --k 3", t_start: 10.0, duration_s: 5.0}
+dispositions: {e1: {disposition: matched_root, root_under: true}}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+oracle_inputs:
+  - {path: out/r.json}
+declared:
+  invocations:
+    - {invocation_key: tool.sh, text: "./tool.sh --k 3",
+       options: {--k: {value: "3", value_type: int}}}
+  meta: {commit_source: case_ref,
+         warnings: ["declared commit from case.toml ref"]}
+expect:
+  preconditions: {declared: holds}
+  warnings_include: ["declared commit from case.toml ref"]

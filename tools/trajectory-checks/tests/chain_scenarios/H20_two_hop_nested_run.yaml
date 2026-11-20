@@ -1,0 +1,42 @@
+id: H20
+title: An aggregator reads a file a long nested run wrote
+rules: [CH2, CH3, CH4, CH6, TM2]
+run:
+  capabilities: {read_tracing: true}
+calls:
+  - {call_id: c1, command: ./run.sh, t_start: 9.0}
+  - {call_id: c2, command: python3 agg.py, t_start: 599.0}
+execs:
+  - {command_id: e1, command: ./run.sh, t_start: 10.0, duration_s: 500.0,
+     reads: []}
+  - {command_id: e2, command: "./sim --n 1", t_start: 20.0, duration_s: 400.0,
+     reads: []}
+  - {command_id: e3, command: python3 agg.py, t_start: 600.0, duration_s: 5.0,
+     reads: [/repo/data/raw.csv]}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e3}
+  - {link_type: exec_parent, command_id: e2, parent: e1, root_call_id: c1}
+  - {link_type: write_event, path: data/raw.csv, op: create, writer_id: e2}
+  - {link_type: write_event, path: out/r.json, op: create, writer_id: e3}
+paths:
+  - {path: data/raw.csv, tracked: false}
+  - {path: out/r.json, tracked: false}
+oracle_inputs:
+  - {path: out/r.json}
+expect:
+  chain_nodes:
+    - {input_id: i0, node_id: w1, hop: 1, must: true, ancestors: []}
+    - {input_id: i0, node_id: w0, hop: 2, must: true, ancestors: [e1],
+       t_start: 20.0, t_end: 420.0}
+  hop_reads:
+    - {input_id: i0, reader_node: w1, read_path: data/raw.csv, version: w0,
+       must: true, state: derived, reader_exec: e3, hop: 1}
+  metrics:
+    M3.4: {hop2_writers_under: 1, hop2_writers_over: 1,
+           hop2_writer_max_s_under: 400.0, hop2_reads_under: 1,
+           chain_nodes_under: 2, chain_depth_under: 2}
+    M1.5: {chain_time_under_s: 405.0, chain_time_over_s: 405.0,
+           chain_time_mode: traced}
+  faithfulness:
+    - {input_id: i0, chain_time_under_s: 405.0, chain_time_over_s: 405.0}

@@ -1,0 +1,27 @@
+id: H45a
+title: With read tracing the closure follows the recorded reads
+rules: [RD1, CH7]
+run:
+  capabilities: {read_tracing: true}
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 10.0, duration_s: 5.0,
+     reads: []}
+  - {command_id: e2, command: python3 agg.py, t_start: 20.0, duration_s: 5.0,
+     reads: [/repo/data/x.csv]}
+dispositions:
+  e1: {disposition: matched_root, root_under: true}
+  e2: {disposition: matched_root, root_under: true}
+links:
+  - {link_type: write_event, path: data/x.csv, writer_id: e1}
+  - {link_type: write_event, path: out/r.json, writer_id: e2}
+oracle_inputs:
+  - {path: out/r.json}
+expect:
+  bases: {chain: exact}
+  preconditions: {reads: holds}
+  faithfulness:
+    - {input_id: i0, mode: traced}
+  chain_nodes:
+    - {input_id: i0, node_id: w0, hop: 2, must: true}
+  metrics:
+    M3.4: {chain_nodes_under: 2, chain_depth_under: 2, hop2_writers_under: 1}

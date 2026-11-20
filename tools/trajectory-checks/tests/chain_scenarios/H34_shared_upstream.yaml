@@ -1,0 +1,30 @@
+id: H34
+title: Two oracle inputs share an upstream node
+rules: [TM2]
+run:
+  capabilities: {read_tracing: true}
+execs:
+  - {command_id: e1, command: ./sim, t_start: 10.0, duration_s: 100.0,
+     reads: []}
+  - {command_id: e2, command: python3 a.py, t_start: 200.0, duration_s: 10.0,
+     reads: [/repo/data/raw.csv]}
+  - {command_id: e3, command: python3 b.py, t_start: 300.0, duration_s: 20.0,
+     reads: [/repo/data/raw.csv]}
+dispositions:
+  e1: {disposition: matched_root, root_under: true}
+  e2: {disposition: matched_root, root_under: true}
+  e3: {disposition: matched_root, root_under: true}
+links:
+  - {link_type: write_event, path: data/raw.csv, writer_id: e1}
+  - {link_type: write_event, path: out/a.json, writer_id: e2}
+  - {link_type: write_event, path: out/b.json, writer_id: e3}
+oracle_inputs:
+  - {path: out/a.json}
+  - {path: out/b.json}
+expect:
+  faithfulness:
+    - {input_id: i0, chain_time_under_s: 110.0}
+    - {input_id: i1, chain_time_under_s: 120.0}
+  metrics:
+    M1.5: {chain_time_under_s: 130.0, chain_time_over_s: 130.0}
+    M3.4: {chain_nodes_under: 3, chain_nodes_over: 3, hop2_writers_under: 1}

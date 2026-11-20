@@ -1,0 +1,20 @@
+id: H68
+title: A changed program path refutes clause 3 although the delta is incomplete
+rules: [FA4]
+calls:
+  - {call_id: c0, tool_type: edit, t_start: 5.0}
+execs:
+  - {command_id: e1, command: python3 tools/run.py, t_start: 10.0,
+     duration_s: 5.0}
+dispositions: {e1: {disposition: matched_root, root_under: true}}
+links:
+  - {link_type: write_event, path: tools/run.py, writer_id: c0}
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+oracle_inputs:
+  - {path: out/r.json}
+expect:
+  preconditions: {delta_complete: fails}
+  chain_nodes:
+    - {input_id: i0, node_id: w1, code_state: changed}
+  faithfulness:
+    - {input_id: i0, clauses: {built: violated}, faithful: violated}

@@ -1,0 +1,26 @@
+id: H48a
+title: Exact timing narrows the upstream window before the reader starts
+rules: [RD3, TM1]
+run:
+  capabilities: {read_tracing: true, exact_timing: true}
+execs:
+  - {command_id: e0, command: ./sim, t_start: 8.0, duration_s: 44.0,
+     released_at: 10.0, ended_at: 50.0, snapshot_after_s: 0.5, reads: []}
+  - {command_id: e1, command: python3 agg.py, t_start: 51.0, duration_s: 9.0,
+     released_at: 51.0, ended_at: 60.0, snapshot_after_s: 0.5,
+     reads: [/repo/data/raw.csv]}
+dispositions:
+  e0: {disposition: matched_root, root_under: true}
+  e1: {disposition: matched_root, root_under: true}
+links:
+  - {link_type: write_event, path: data/raw.csv, writer_id: e0}
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+oracle_inputs:
+  - {path: out/r.json}
+expect:
+  bases: {timing: exact}
+  hop_reads:
+    - {input_id: i0, reader_node: w1, read_path: data/raw.csv, version: w0,
+       must: true, read_lo: 51.0, read_hi: 60.0}
+  chain_nodes:
+    - {input_id: i0, node_id: w0, t_start: 10.0, t_end: 50.0, must: true}

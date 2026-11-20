@@ -1,0 +1,24 @@
+id: H19
+title: A make variable below the Makefile's ?= default
+rules: [DEC5, KEY7]
+execs:
+  - {command_id: e1, command: "make RUNS=3 bench", t_start: 10.0,
+     duration_s: 5.0}
+dispositions: {e1: {disposition: matched_root, root_under: true}}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+oracle_inputs:
+  - {path: out/r.json}
+declared:
+  invocations:
+    - {invocation_key: "make:bench", text: make bench}
+  options:
+    - {invocation_key: "make:bench", option: "var:RUNS",
+       default: {value: "10", value_type: int}, source_type: make_variable,
+       source_path: Makefile, line: 3}
+expect:
+  row_counts: {arg_checks: 1}
+  arg_checks:
+    - {command_id: e1, invocation: 0, option: "var:RUNS", comparison: below,
+       declared_origin: [make_variable], scale_option: false,
+       declared_values: [{value: "10", value_type: int}]}

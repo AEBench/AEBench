@@ -1,0 +1,24 @@
+id: H52b
+title: One exec lacks its read list although the capability is set
+rules: [PRE1, PRE3]
+run:
+  capabilities: {read_tracing: true}
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 10.0, duration_s: 5.0}
+  - {command_id: e2, command: python3 agg.py, t_start: 20.0, duration_s: 5.0,
+     reads: [/repo/agg.py]}
+dispositions:
+  e1: {disposition: matched_root, root_under: true}
+  e2: {disposition: matched_root, root_under: true}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e2}
+baseline_files: [agg.py]
+oracle_inputs:
+  - {path: out/r.json}
+expect:
+  bases: {chain: fallback}
+  preconditions: {reads: fails}
+  metrics_null: [M3.4]
+  warnings_include: ["capability read_tracing partial: 1 records"]
+  faithfulness:
+    - {input_id: i0, mode: read_free}

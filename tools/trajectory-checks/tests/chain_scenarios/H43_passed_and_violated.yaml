@@ -1,0 +1,33 @@
+id: H43
+title: Two runs, a passed phase refuted in one and undecided in the other
+rules: [AGG3]
+oracle_inputs:
+  - {path: results/t.json}
+runs:
+  - run: {run_key: art__claude__1}
+    baseline_files: [results/t.json]
+    state: pristine
+    expect:
+      metrics:
+        faithfulness: {passed_and_violated: 1, passed_and_undefined: 0,
+                       faithful_run: violated}
+  - run: {run_key: art__claude__2}
+    execs:
+      - {command_id: e1, command: ./tool.sh, t_start: 10.0, duration_s: 5.0}
+    dispositions: {e1: {disposition: matched_root, root_under: true}}
+    links:
+      - {link_type: write_event, path: results/t.json, writer_id: e1}
+    declared:
+      invocations:
+        - {invocation_key: tool.sh, text: ./tool.sh}
+    expect:
+      metrics:
+        faithfulness: {passed_and_violated: 0, passed_and_undefined: 1,
+                       faithful_run: null}
+expect:
+  summary:
+    - {group_type: all, group: all, runs: 2, runs_traced: 0,
+       passed_and_violated: 1, passed_and_undefined: 1,
+       faithful_holds: 0, faithful_violated: 1, faithful_undefined: 1}
+    - {group_type: family, group: claude, runs: 2}
+    - {group_type: artifact_family, group: art__claude, runs: 2}
