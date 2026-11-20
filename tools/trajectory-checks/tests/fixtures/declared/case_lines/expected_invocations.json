@@ -1,0 +1,4 @@
+[
+  {"decl_id": "d0", "invocation_key": "other.sh", "options": {}, "source_type": "readme", "source_path": "README.md", "line": 2, "block_id": "README.md:1", "position": 0, "cwd": ".", "text": "./other.sh"},
+  {"decl_id": "d1", "invocation_key": "tool.sh", "options": {"--k": {"value": "3", "value_type": "int"}}, "source_type": "case_block", "source_path": null, "line": null, "block_id": "case.toml", "position": 0, "cwd": ".", "text": "./tool.sh --k 3"}
+]

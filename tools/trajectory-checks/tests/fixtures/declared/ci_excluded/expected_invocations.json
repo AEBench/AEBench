@@ -1,0 +1,3 @@
+[
+  {"decl_id": "d0", "invocation_key": "run.sh", "options": {"--n": {"value": "10", "value_type": "int"}}, "source_type": "readme", "source_path": "README.md", "line": 2, "block_id": "README.md:1", "position": 0, "cwd": ".", "text": "./run.sh --n 10"}
+]

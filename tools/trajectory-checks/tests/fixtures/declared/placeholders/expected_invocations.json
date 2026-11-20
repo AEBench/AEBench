@@ -1,0 +1,4 @@
+[
+  {"decl_id": "d0", "invocation_key": "tool.sh", "options": {"--in": {"value": "<file>", "value_type": "symbolic"}, "--n": {"value": "$N", "value_type": "symbolic"}, "--m": {"value": "${N}", "value_type": "symbolic"}, "--k": {"value": "{n}", "value_type": "symbolic"}, "--glob": {"value": "*.csv", "value_type": "symbolic"}, "--q": {"value": "a?", "value_type": "symbolic"}, "--b": {"value": "`date`", "value_type": "symbolic"}}, "source_type": "readme", "source_path": "README.md", "line": 2, "block_id": "README.md:1", "position": 0, "cwd": ".", "text": "./tool.sh --in=<file> --n=$N --m=${N} --k={n} --glob=*.csv --q=a? --b=`date`"},
+  {"decl_id": "d1", "invocation_key": "date", "options": {}, "source_type": "readme", "source_path": "README.md", "line": 2, "block_id": "README.md:1", "position": 1, "cwd": ".", "text": "date"}
+]

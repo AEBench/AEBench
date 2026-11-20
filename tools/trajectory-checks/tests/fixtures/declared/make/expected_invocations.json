@@ -1,0 +1,9 @@
+[
+  {"decl_id": "d0", "invocation_key": "make:bench", "options": {"var:RUNS": {"value": "3", "value_type": "int"}}, "source_type": "readme", "source_path": "README.md", "line": 2, "block_id": "README.md:1", "position": 0, "cwd": ".", "text": "make RUNS=3 bench"},
+  {"decl_id": "d1", "invocation_key": "make:missing", "options": {}, "source_type": "readme", "source_path": "README.md", "line": 3, "block_id": "README.md:1", "position": 1, "cwd": ".", "text": "make missing"},
+  {"decl_id": "d2", "invocation_key": "bench.sh", "options": {"--runs": {"value": "3", "value_type": "int"}, "--out": {"value": "true", "value_type": "bool"}}, "source_type": "make_recipe", "source_path": "Makefile", "line": 7, "block_id": "Makefile:6", "position": 0, "cwd": ".", "text": "./bench.sh --runs 3 --out out"},
+  {"decl_id": "d3", "invocation_key": "make:sub/t", "options": {"-C": {"value": "sub", "value_type": "enum"}}, "source_type": "make_recipe", "source_path": "Makefile", "line": 8, "block_id": "Makefile:6", "position": 1, "cwd": ".", "text": "make -C sub t"},
+  {"decl_id": "d4", "invocation_key": "echo", "options": {}, "source_type": "make_recipe", "source_path": "Makefile", "line": 9, "block_id": "Makefile:6", "position": 2, "cwd": ".", "text": "echo ${UNKNOWN}"},
+  {"decl_id": "d5", "invocation_key": "sub/t.sh", "options": {"--n": {"value": "1", "value_type": "int"}}, "source_type": "make_recipe", "source_path": "sub/Makefile", "line": 2, "block_id": "sub/Makefile:1", "position": 0, "cwd": "sub", "text": "./t.sh --n 1"},
+  {"decl_id": "d6", "invocation_key": "make:sub/deep/x", "options": {"-C": {"value": "deep", "value_type": "enum"}}, "source_type": "make_recipe", "source_path": "sub/Makefile", "line": 3, "block_id": "sub/Makefile:1", "position": 1, "cwd": "sub", "text": "make -C deep x"}
+]

@@ -1,0 +1,4 @@
+jobs:
+  test:
+    steps:
+      - run: ./run.sh --n 1

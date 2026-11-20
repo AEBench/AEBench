@@ -1,0 +1,7 @@
+[
+  {"invocation_key": "tools/run.py", "option": "--fast", "aliases": ["--fast"], "default": {"value": "false", "value_type": "bool"}, "choices": null, "takes_value": false, "source_type": "argparse", "source_path": "tools/run.py", "line": 6},
+  {"invocation_key": "tools/run.py", "option": "--files", "aliases": ["--files"], "default": null, "choices": null, "takes_value": true, "source_type": "argparse", "source_path": "tools/run.py", "line": 8},
+  {"invocation_key": "tools/run.py", "option": "--iters", "aliases": ["--iters", "-n"], "default": {"value": "10", "value_type": "int"}, "choices": null, "takes_value": true, "source_type": "argparse", "source_path": "tools/run.py", "line": 4},
+  {"invocation_key": "tools/run.py", "option": "--mode", "aliases": ["--mode"], "default": {"value": "full", "value_type": "enum"}, "choices": ["fast", "full"], "takes_value": true, "source_type": "argparse", "source_path": "tools/run.py", "line": 5},
+  {"invocation_key": "tools/run.py", "option": "--offset", "aliases": ["--offset"], "default": {"value": "-1", "value_type": "int"}, "choices": null, "takes_value": true, "source_type": "argparse", "source_path": "tools/run.py", "line": 7}
+]

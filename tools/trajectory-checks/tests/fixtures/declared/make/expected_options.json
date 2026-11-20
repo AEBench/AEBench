@@ -1,0 +1,3 @@
+[
+  {"invocation_key": "make:bench", "option": "var:RUNS", "aliases": ["var:RUNS"], "default": {"value": "10", "value_type": "int"}, "choices": null, "takes_value": true, "source_type": "make_variable", "source_path": "Makefile", "line": 1}
+]

@@ -1,0 +1,9 @@
+[run.instructions]
+path = "README.md"
+
+[upstream]
+url = "https://example.org/owner/repo.git"
+ref = "c0ffee"
+
+[declared]
+lines = ["./tool.sh --k 3"]
