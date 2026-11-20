@@ -26,6 +26,7 @@ from trajectory_checks import (
     oracle_inputs,
     parse,
     structure,
+    writer,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ OUTPUT_FILES = ("calls", "execs", "links", "dispositions", "paths")
 FACTS_FILES = ("call_facts", "exec_facts", "path_facts")
 STRUCTURE_FILES = ("call_structure", "reruns", "file_classes")
 LAYER4_FILES = ("oracle_inputs", "input_states")
+WRITER_FILES = ("last_writers", "input_rewrites", "hunks")
 # The list-valued metrics left out of the layer-4 CSVs, by name (D38).
 LISTS = frozenset(
     "null_phases_passed phases_passed_by_null phases_gained phases_lost "
@@ -45,6 +47,7 @@ BLOCKS = (
     ("structure", "structure"),
     ("oracle_inputs", "oracle_inputs_run"),
     ("state_counts", "state_counts"),
+    ("writer", "writer"),
 )
 # Who owns each --config key; a layer also gets the keys of the layers it
 # lists (match.link rejects any other key, facts.derive too).
@@ -55,6 +58,7 @@ _OWNERS = types.MappingProxyType(
         "structure": (match.DEFAULTS, structure.DEFAULTS),
         "oracle_inputs": (oracle_inputs.DEFAULTS,),
         "input_state": (input_state.DEFAULTS,),
+        "writer": (match.DEFAULTS,),  # layer 5 owns no key (its D36)
     }
 )
 
@@ -235,8 +239,9 @@ def analyse(
         `calls`, `execs`, `links`, `dispositions`, `paths`, `coverage`,
         `call_facts`, `exec_facts`, `path_facts`, `facts`,
         `call_structure`, `reruns`, `file_classes`, `structure`,
-        `oracle_inputs`, `oracle_inputs_run`, `input_states` and
-        `state_counts`.
+        `oracle_inputs`, `oracle_inputs_run`, `input_states`,
+        `state_counts`, `last_writers`, `input_rewrites`, `hunks` and
+        `writer`.
 
     Raises:
         parse.UnsupportedFormatError: The agent format is unknown.
@@ -323,8 +328,38 @@ def analyse(
         final_diff_text=final_diff_text,
         config=routed["structure"],  # snapshot_slop_s is layer 1's
     )
+    notes: list[str] = []  # for oracle_inputs.json, after the scores' (D67)
+    final_files = _final_files(folder, notes)  # read once (layer 5's D37)
     layer4 = _layer4(
-        run_dir, run, calls, execs, linked, baseline, routed, oracle_runs
+        run_dir,
+        run,
+        calls,
+        execs,
+        linked,
+        baseline,
+        routed,
+        oracle_runs,
+        final_files=final_files,
+        final_notes=notes,
+    )
+    written = writer.derive(
+        calls,
+        execs,
+        linked,
+        derived,
+        shaped,
+        run=run,
+        oracle_inputs={
+            "oracle_inputs": layer4["oracle_inputs"],
+            "oracle_inputs_run": layer4["oracle_inputs_run"],
+        },
+        input_states={
+            "input_states": layer4["input_states"],
+            "state_counts": layer4["state_counts"],
+        },
+        final_diff_text=final_diff_text,
+        final_files=final_files,
+        config=routed["writer"],
     )
     return {
         "calls": match.round_floats(calls),
@@ -333,7 +368,26 @@ def analyse(
         **derived,
         **shaped,
         **layer4,
+        **written,
     }
+
+
+def _final_files(monitor: pathlib.Path, notes: list[str]) -> list[dict] | None:
+    """monitor/final_files.json's entries with a path, for layers 4 and 5.
+
+    Malformed entries are skipped with a note.
+    """
+    final_files = _read_json(monitor / "final_files.json", list)
+    if final_files is not None:
+        found = [
+            e
+            for e in final_files
+            if isinstance(e, dict) and isinstance(e.get("path"), str)
+        ]
+        if len(found) < len(final_files):
+            notes.append("final_files.json: malformed entries skipped")
+        final_files = found
+    return final_files
 
 
 def _layer4(
@@ -345,11 +399,15 @@ def _layer4(
     baseline: dict | None,
     routed: dict[str, dict[str, typing.Any]],
     oracle_runs: pathlib.Path | str | None = None,
+    *,
+    final_files: list[dict] | None,
+    final_notes: list[str],
 ) -> dict[str, typing.Any]:
     """Reads layer 4's files and runs oracle_inputs, then input_state.
 
     What a file holds that cannot be used is skipped, noted in
-    oracle_inputs.json's warnings (D67, D68).
+    oracle_inputs.json's warnings (D67, D68); final_files comes from
+    _final_files, its notes after the scores' as before layer 5.
     """
     notes: list[str] = []
     null_manifest = null_score = None
@@ -358,17 +416,8 @@ def _layer4(
         null_manifest = _read_jsonl(folder / "oracle_inputs.jsonl", notes)
         null_score = _read_result(folder / "null_agent_score.json", notes)
     run_score = _read_result(run_dir / "run" / "oracle_result.json", notes)
+    notes += final_notes
     monitor = run_dir / "monitor"
-    final_files = _read_json(monitor / "final_files.json", list)
-    if final_files is not None:
-        found = [
-            e
-            for e in final_files
-            if isinstance(e, dict) and isinstance(e.get("path"), str)
-        ]
-        if len(found) < len(final_files):
-            notes.append("final_files.json: malformed entries skipped")
-        final_files = found
     given = oracle_inputs.derive(
         linked,
         run=run,
@@ -502,14 +551,46 @@ def layer4_rows(result: dict[str, typing.Any]) -> dict[str, dict]:
     }
 
 
-def _write_csv(rows: list[dict[str, typing.Any]], path: pathlib.Path) -> None:
-    """Writes rows as CSV; columns of the first row first, then the rest."""
-    columns = list(rows[0])
+def writer_rows(result: dict[str, typing.Any]) -> dict[str, typing.Any]:
+    """One writer.csv row: facts_row with writer.DICT_FIELDS (D40).
+
+    No metric of layer 5 is a list, so none is dropped as LISTS are.
+    """
+    return facts_row(result["writer"], writer.DICT_FIELDS)
+
+
+def writer_input_rows(
+    result: dict[str, typing.Any],
+) -> list[dict[str, typing.Any]]:
+    """The writer_inputs.csv rows of one run, with INPUT_COLUMNS keys."""
+    rewrites = {r["input_id"]: r for r in result["input_rewrites"]}
+    return [
+        {
+            "run_key": result["writer"]["run_key"],
+            **{k: row[k] for k in writer.INPUT_COLUMNS[1:7]},  # input_id …
+            "M3.3.writer_duration_s": row["writer_duration_s"],
+            "M3.3.root_span_over_s": row["root_span_over_s"],
+            "M2.4.rewrites_over": rewrites[row["input_id"]]["rewrites_over"],
+        }
+        for row in result["last_writers"]
+    ]
+
+
+def _write_csv(
+    rows: list[dict[str, typing.Any]],
+    path: pathlib.Path,
+    columns: typing.Sequence[str] | None = None,
+) -> None:
+    """Writes rows as CSV; columns of the first row first, then the rest.
+
+    `columns`, when given, is the header, so rows may be empty.
+    """
+    columns = list(rows[0] if columns is None else columns)
     columns += sorted({k for r in rows for k in r} - set(columns))
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=columns)
-        writer.writeheader()
-        writer.writerows(rows)
+        table = csv.DictWriter(handle, fieldnames=columns)
+        table.writeheader()
+        table.writerows(rows)
 
 
 def write_outputs(
@@ -526,7 +607,8 @@ def write_outputs(
     """
     folder = pathlib.Path(out_dir)
     folder.mkdir(parents=True, exist_ok=True)
-    for name in OUTPUT_FILES + FACTS_FILES + STRUCTURE_FILES + LAYER4_FILES:
+    names = OUTPUT_FILES + FACTS_FILES + STRUCTURE_FILES + LAYER4_FILES
+    for name in names + WRITER_FILES:
         with (folder / f"{name}.jsonl").open("w", encoding="utf-8") as out:
             for record in result[name]:
                 out.write(json.dumps(record, sort_keys=True) + "\n")
@@ -581,8 +663,8 @@ def main(argv: list[str] | None = None) -> int:
         route_config(config)
     except ValueError as error:
         parser.error(f"--config {args.config}: {error}")
-    names = ("facts", "structure", "oracle_inputs", "state_counts")
-    rows, failed = [], []
+    names = ("facts", "structure", "oracle_inputs", "state_counts", "writer")
+    rows, failed, inputs = [], [], []
     tables: dict[str, list] = {name: [] for name in names}
     for run_dir in _run_dirs(args.paths, args.runs):
         try:  # one run's error, of any kind, fails only that run (D56)
@@ -593,7 +675,9 @@ def main(argv: list[str] | None = None) -> int:
                     result["structure"], structure.DICT_FIELDS
                 ),
                 **layer4_rows(result),
+                "writer": writer_rows(result),
             }
+            input_rows = writer_input_rows(result)
             coverage = csv_row(result["coverage"])
             key = str(result["coverage"]["run_key"])
             write_outputs(result, pathlib.Path(args.out) / key)
@@ -604,6 +688,7 @@ def main(argv: list[str] | None = None) -> int:
         rows.append(coverage)
         for name in names:
             tables[name].append(built[name])
+        inputs += input_rows
     if rows:
         peers = {k: v for k, v in config.items() if k in facts.DEFAULTS}
         _write_csv(rows, pathlib.Path(args.out) / "coverage.csv")
@@ -612,6 +697,12 @@ def main(argv: list[str] | None = None) -> int:
                 facts.peer_ratios(tables[name], peers),
                 pathlib.Path(args.out) / f"{name}.csv",
             )
+        ratios = [c for c in writer.INPUT_COLUMNS if c.startswith("M")]
+        _write_csv(  # PEER2, with its header even with no row (D40)
+            writer.input_peer_ratios(inputs, peers),
+            pathlib.Path(args.out) / "writer_inputs.csv",
+            [*writer.INPUT_COLUMNS, *(f"{c}_peer_ratio" for c in ratios)],
+        )
     for run_dir in failed:
         print(f"failed: {run_dir}", file=sys.stderr)
     return 1 if failed else 0
