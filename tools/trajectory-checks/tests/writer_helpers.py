@@ -149,7 +149,7 @@ RETIRED_RULE_IDS = ("LW7",)
 SPEC_IDS = (
     *(f"W{n:02d}" for n in range(1, 24)),
     "W23b",
-    *(f"W{n:02d}" for n in range(24, 69)),
+    *(f"W{n:02d}" for n in range(24, 71)),
 )
 # Spec §2.2.2's capability pairs: (capability, rule, basis key, the
 # scenario with the capability true, the one with it false). A basis key
