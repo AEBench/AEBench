@@ -81,6 +81,7 @@ def test_analyse_links_the_real_pair(tmp_path: pathlib.Path) -> None:
         "input_rewrites",
         "hunks",
         "writer",
+        *("arg_checks", "chain_nodes", "hop_reads", "faithfulness", "chain"),
     }
     links = [lk for lk in result["links"] if lk["link_type"] == "call_exec"]
     assert len(links) == 1

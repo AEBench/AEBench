@@ -271,9 +271,12 @@ def test_writer_inputs_csv_peer_ratios(
     original = cli.analyse
 
     def analyse(
-        run_dir: Any, config: Any = None, oracle_runs: Any = None
+        run_dir: Any,
+        config: Any = None,
+        oracle_runs: Any = None,
+        declared_input: Any = None,
     ) -> dict:
-        result = original(run_dir, config, oracle_runs)
+        result = original(run_dir, config, oracle_runs, declared_input)
         key = pathlib.Path(run_dir).name
         return {**result, **helpers.run_derive(scenarios[key])}
 
