@@ -1478,11 +1478,16 @@ def _hunks(
 
 
 def _filters(
-    ctx: _Run, rows: list[LastWriter], hunks: list[Hunk], named: bool
+    ctx: _Run,
+    rows: list[LastWriter],
+    hunks: list[Hunk],
+    named: bool,
+    unseen: set[str],
 ) -> None:
     """FLT2, FLT3: sets in_named_under, in_named_over and in_read.
 
-    named is false when the oracle_inputs precondition fails (FLT2 ⊥).
+    named is false when the oracle_inputs precondition fails (FLT2 ⊥);
+    unseen holds the input_ids whose unseen_writer_possible is true.
     """
     named_by = [(r, set(r["writer_named_written"])) for r in rows]
     over = set().union(*(n for r, n in named_by if r["last_writer"]))
@@ -1490,25 +1495,41 @@ def _filters(
     children = collections.defaultdict(list)
     for command, parent in ctx.parents.items():
         children[parent].append(command)
-    read: set[str] = set()
-    todo = [
-        r["writer_command_id"] for r in rows if r["last_writer_type"] == "exec"
-    ]
-    seen: set[str] = set()
-    while todo:  # the writers and their descendants, by LW14's ancestry
-        command = todo.pop()
-        if command is None or command in seen:
-            continue
-        seen.add(command)
-        reads = (ctx.execs.get(command) or {}).get("reads") or ()
-        read.update(match.relative_path(p, ctx.root)[0] for p in reads)
-        todo += children.get(command, [])
+
+    def tree_reads(todo: list[str | None]) -> set[str]:
+        read: set[str] = set()
+        seen: set[str | None] = {None}
+        while todo:  # the writers and their descendants, by LW14's ancestry
+            command = todo.pop()
+            if command in seen:
+                continue
+            seen.add(command)
+            reads = (ctx.execs.get(command or "") or {}).get("reads") or ()
+            read.update(match.relative_path(p, ctx.root)[0] for p in reads)
+            todo += children.get(command, [])
+        return read
+
+    execs = [r for r in rows if r["last_writer_type"] == "exec"]
+    read = tree_reads([r["writer_command_id"] for r in execs])
+    # FLT3 (D53 (3)): false only when no candidate writer read the path.
+    events = [ctx.events[e] for r in rows for e in r["last_writer_candidates"]]
+    ids = [e["writer_id"] for e in events if e["writer_type"] == "exec"]
+    maybe = tree_reads(ids) | read
+    open_ = None in ids or any(
+        r["last_writer_type"] is None
+        or r["later_writer_risk"]
+        or r["state_conflict"]
+        or r["input_id"] in unseen
+        for r in rows
+    )
     for hunk in hunks:
         if named:
             hunk["in_named_over"] = hunk["path"] in over
             hunk["in_named_under"] = hunk["path"] in under
         if ctx.caps["read_tracing"]:
-            hunk["in_read"] = hunk["path"] in read
+            path = hunk["path"]
+            known = path in read or not (open_ or path in maybe)
+            hunk["in_read"] = (path in read) if known else None
 
 
 # W7: run metrics.
@@ -1775,7 +1796,8 @@ def derive(
             None if classes is None else {r["path"]: r for r in classes},
             final_files,
         )
-    _filters(ctx, rows, hunks, labels["oracle_inputs"] != "fails")
+    unseen = {s["input_id"] for s in states if s["unseen_writer_possible"]}
+    _filters(ctx, rows, hunks, labels["oracle_inputs"] != "fails", unseen)
     hunks.sort(key=lambda h: (h["path"], h["hunk_index"]))
     metrics = {
         "M3.3": _m33(rows),
