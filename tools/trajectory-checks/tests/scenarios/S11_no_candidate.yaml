@@ -1,0 +1,13 @@
+name: S11_no_candidate
+description: A shell call with no trace record while the trace is fine -> call unmatched, reason no_candidate (§5.4).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "make all"}
+execs: []
+expect:
+  links: []
+  dispositions:
+    c1: {item_type: call, disposition: unmatched, reason: no_candidate, matched: false, match_under: false}
+  coverage:
+    rates.call_match_rate_under: 0.0
+    rates.call_match_rate_over: 0.0
+    counts.shell_calls: 1

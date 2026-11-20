@@ -1,0 +1,26 @@
+name: S10_noise
+description: Harness noise records (shim probe, Claude env probe, snapshot builder) -> disposition noise, excluded from every rate (§6.3).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "ls"}
+execs:
+  - {command_id: p1, t_start: 50, t_end: 50.1, command: "echo AEBENCH_SHIM_PROBE_OK", noise: shim_probe}
+  - {command_id: p2, t_start: 99.5, t_end: 99.8, command: "env", noise: claude_env_probe}
+  - {command_id: p3, t_start: 99.9, t_end: 100.1, command: "SNAPSHOT_FILE=/run/snap.sh", noise: claude_snapshot}
+  - {command_id: e1, t_start: 100.2, t_end: 100.3, command: "ls"}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c1, command_id: e1, rule: exact}
+  links_exact: true
+  links_absent:
+    - {link_type: exec_parent}
+  dispositions:
+    p1: noise
+    p2: noise
+    p3: noise
+    e1: matched_root
+  coverage:
+    counts.execs_by_disposition.noise: 3
+    counts.execs_by_disposition.matched_root: 1
+    rates.exec_explained_rate_under: 1.0
+    rates.snapshot_time_coverage: 1.0
+    rates.snapshot_count_coverage: 1.0

@@ -1,0 +1,17 @@
+name: S31_prefix_match
+description: Log and trace texts agree only on the first 200 normalized characters -> J1 rule prefix, counted under shell_calls_matched.prefix and only in the over-approximation (§6.4 rule 3, D7).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa tail-from-log"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 100.3, command: "echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa tail-from-trace"}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c1, command_id: e1, rule: prefix}
+  links_exact: true
+  dispositions:
+    c1: {disposition: matched, matched: true, match_under: false}
+  coverage:
+    counts.shell_calls_matched.prefix: 1
+    counts.shell_calls_matched.exact: 0
+    rates.call_match_rate_under: 0.0
+    rates.call_match_rate_over: 1.0

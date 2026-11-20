@@ -1,0 +1,15 @@
+name: S13_outside_window
+description: The only record with the call's text starts 6 s before the call, beyond window_before_s = 5 -> call unmatched, reason outside_window (§6.4).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "make"}
+execs:
+  - {command_id: e1, t_start: 94.0, t_end: 94.5, command: "make"}
+expect:
+  links: []
+  links_absent:
+    - {link_type: call_exec}
+  dispositions:
+    c1: {disposition: unmatched, reason: outside_window, matched: false}
+    e1: unrooted
+  coverage:
+    rates.call_match_rate_under: 0.0

@@ -1,0 +1,20 @@
+name: S30_pipeline_one_root
+description: A pipeline inside one call - overlapping shells with children -> every shell's root is the call and root_ambiguous is false (§6.5, root-level ambiguity).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 120, command: "make -j2 all"}
+execs:
+  - {command_id: e1, t_start: 100.1, t_end: 119.9, command: "make -j2 all"}
+  - {command_id: s1, t_start: 101, t_end: 110, command: "cc -c a.c"}
+  - {command_id: s2, t_start: 102, t_end: 111, command: "cc -c b.c"}
+  - {command_id: s1c, t_start: 103, t_end: 104, command: "as a.s"}
+  - {command_id: s2c, t_start: 110.5, t_end: 110.8, command: "as b.s"}
+expect:
+  links:
+    - {link_type: exec_parent, command_id: s1, parent: e1, root_call_id: c1, root_ambiguous: false, root_candidates: []}
+    - {link_type: exec_parent, command_id: s2, root_call_id: c1, root_ambiguous: false, root_candidates: []}
+    - {link_type: exec_parent, command_id: s1c, root_call_id: c1, root_ambiguous: false, root_candidates: []}
+    - {link_type: exec_parent, command_id: s2c, parent: s2, root_call_id: c1, root_ambiguous: false, root_candidates: []}
+  links_exact: true
+  coverage:
+    rates.root_ambiguous_rate: 0.0
+    rates.exec_explained_rate_under: 1.0

@@ -1,0 +1,20 @@
+name: S06_codex_inner_duplicate
+description: A codex_snapshot_exec record and its exec'd inner record with the same text starting inside the outer's interval -> outer matched, inner wrapper_duplicate (§6.4; decision D25).
+calls:
+  - {call_id: c1, family: codex, raw_name: command_execution, t_start: 100, t_end: 103, command: "pytest -q", background: null}
+execs:
+  - {command_id: outer, t_start: 100.2, t_end: 102.8, command: "pytest -q", wrapper: codex_snapshot_exec}
+  - {command_id: inner, t_start: 100.25, t_end: 102.7, command: "pytest -q", wrapper: codex_direct}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c1, command_id: outer, rule: exact}
+    - {link_type: wrapper_duplicate, command_id: inner, of: outer}
+  links_exact: true
+  links_absent:
+    - {link_type: exec_parent, command_id: inner}
+  dispositions:
+    outer: matched_root
+    inner: wrapper_duplicate
+  coverage:
+    rates.exec_explained_rate_under: 1.0
+    rates.exec_explained_rate_over: 1.0

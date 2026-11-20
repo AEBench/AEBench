@@ -1,0 +1,16 @@
+name: S29_unrooted_no_background
+description: An exec in no exec's interval when no earlier matched command backgrounds anything -> unrooted (§6.5 reparenting step 5).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "make && make test 2>&1 | tee log"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 100.8, command: "make && make test 2>&1 | tee log"}
+  - {command_id: u1, t_start: 500, t_end: 501, command: "python3 x.py"}
+expect:
+  links_absent:
+    - {link_type: exec_parent, command_id: u1}
+  dispositions:
+    u1: {disposition: unrooted, root_under: false}
+  coverage:
+    counts.unrooted_execs: 1
+    counts.execs_reparented: 0
+    rates.exec_explained_rate_over: 0.5

@@ -1,0 +1,18 @@
+name: S38_unattributed_truncated
+description: A final-diff file reported by nobody while two execs had truncated snapshots -> final_writer null, both execs listed as candidates with reason truncated (§6.6 per-path rule 4).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 120, command: "./vendor.sh"}
+  - {call_id: c2, t_start: 200, t_end: 220, command: "./vendor.sh --update"}
+  - {call_id: c3, t_start: 300, t_end: 301, command: "ls"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 119, command: "./vendor.sh", snapshot: {status: truncated, created: [vendor/x1], totals: {created: 500, modified: 0, deleted: 0}}}
+  - {command_id: e2, t_start: 200.2, t_end: 219, command: "./vendor.sh --update", snapshot: {status: truncated, created: [vendor/y1], totals: {created: 400, modified: 0, deleted: 0}}}
+  - {command_id: e3, t_start: 300.2, t_end: 300.3, command: "ls"}
+baseline: {files: {lib/core.c: {}}}
+final_diff: {modified: [lib/core.c], deleted: [], mode_changed: []}
+expect:
+  paths:
+    - {path: lib/core.c, events: [], final_writer: null, final_writer_under: false, final_state: changed, unattributed_candidates: [{command_id: e1, reason: truncated}, {command_id: e2, reason: truncated}]}
+  coverage:
+    counts.paths_unattributed: 1
+    counts.paths_unlisted: 898

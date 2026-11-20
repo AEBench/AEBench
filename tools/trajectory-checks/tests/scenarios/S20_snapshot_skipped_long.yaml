@@ -1,0 +1,20 @@
+name: S20_snapshot_skipped_long
+description: The snapshot of one long command is skipped, short ones are ok -> time-weighted C5 reflects the long one, count-weighted does not (§7.1 C5).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 200, command: "./long.sh"}
+  - {call_id: c2, t_start: 300, t_end: 301, command: "ls"}
+  - {call_id: c3, t_start: 400, t_end: 401, command: "pwd"}
+execs:
+  - {command_id: e1, t_start: 100, t_end: 200, command: "./long.sh", snapshot: {status: skipped, scope: null, skip_reason: "snapshot exceeded 2s", totals: {created: null, modified: null, deleted: null}}}
+  - {command_id: e2, t_start: 300, t_end: 301, command: "ls"}
+  - {command_id: e3, t_start: 400, t_end: 401, command: "pwd"}
+expect:
+  dispositions:
+    e1: {disposition: matched_root, snapshot_ok: false}
+    e2: {disposition: matched_root, snapshot_ok: true}
+  coverage:
+    # 2 s inside ok snapshots / 102 s inside any non-noise exec.
+    rates.snapshot_time_coverage: 0.019608
+    rates.snapshot_count_coverage: 0.666667
+    counts.snapshot_status_counts.skipped: 1
+    counts.snapshot_status_counts.ok: 2

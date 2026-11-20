@@ -1,0 +1,15 @@
+name: S23_trace_missing
+description: No commands.jsonl (trace_ok false, no execs) -> calls unmatched with reason trace_missing; J1-J3 and trace coverage null (§4, S23).
+run: {trace_ok: false}
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "ls"}
+execs: []
+expect:
+  links: []
+  dispositions:
+    c1: {disposition: unmatched, reason: trace_missing, matched: false}
+  coverage:
+    rates.call_match_rate_under: null
+    rates.exec_explained_rate_under: null
+    rates.snapshot_time_coverage: null
+    rates.listed_path_rate: null

@@ -1,0 +1,17 @@
+name: S24_no_baseline
+description: No tracked_files.json -> C0.5 fails with a warning only, paths tracked null, J3 still runs on snapshots (decisions R8, R9).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 102, command: "./fix.sh"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 101.5, command: "./fix.sh", snapshot: {modified: [src/a.c]}}
+baseline: null
+final_diff: {modified: [src/a.c], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c1, command_id: e1, rule: exact}
+    - {link_type: write_event, event_id: w0, path: src/a.c, writer_id: e1, writer_under: true}
+  paths:
+    - {path: src/a.c, tracked: null, events: [w0], final_writer: w0, final_state: changed}
+  coverage:
+    integrity.C0.5: false
+    rates.call_match_rate_under: 1.0

@@ -1,0 +1,17 @@
+name: S28_reparenting_after_unrelated
+description: As S27, but an unrelated agent command without backgrounding ran in between -> the root is still the nohup call (§6.5 reparenting step 1).
+calls:
+  - {call_id: cn, t_start: 100, t_end: 100.5, command: "nohup ./run_all.sh > log 2>&1 &"}
+  - {call_id: c2, t_start: 150, t_end: 151, command: "ls"}
+execs:
+  - {command_id: en, t_start: 100.2, t_end: 100.3, command: "nohup ./run_all.sh > log 2>&1 &"}
+  - {command_id: e2, t_start: 150.2, t_end: 150.3, command: "ls"}
+  - {command_id: n1, t_start: 160, t_end: 900, command: "python3 train.py"}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c2, command_id: e2, rule: exact}
+    - {link_type: exec_parent, command_id: n1, parent: null, root_call_id: cn, rule: reparenting, root_ambiguous: false}
+  dispositions:
+    n1: {disposition: nested, root_under: false}
+  coverage:
+    counts.execs_reparented: 1

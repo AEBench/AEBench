@@ -1,0 +1,19 @@
+name: S02_repeated_command
+description: Same command three times with overlapping windows -> matched in start order, no crossing (queue match, §6.4).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "make test"}
+  - {call_id: c2, t_start: 101, t_end: 102, command: "make test"}
+  - {call_id: c3, t_start: 102, t_end: 103, command: "make test"}
+execs:
+  - {command_id: e1, t_start: 100.1, t_end: 100.6, command: "make test"}
+  - {command_id: e2, t_start: 101.1, t_end: 101.6, command: "make test"}
+  - {command_id: e3, t_start: 102.1, t_end: 102.6, command: "make test"}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c1, command_id: e1, rule: exact, dt_s: 0.1}
+    - {link_type: call_exec, call_id: c2, command_id: e2, rule: exact, dt_s: 0.1}
+    - {link_type: call_exec, call_id: c3, command_id: e3, rule: exact, dt_s: 0.1}
+  links_exact: true
+  coverage:
+    rates.call_match_rate_under: 1.0
+    counts.shell_calls_matched.exact: 3

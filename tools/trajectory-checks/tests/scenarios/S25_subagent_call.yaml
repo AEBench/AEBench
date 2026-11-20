@@ -1,0 +1,14 @@
+name: S25_subagent_call
+description: A sub-agent shell call (actor subagent) is matched like any other call (§5.1 actor).
+calls:
+  - {call_id: c1, actor: subagent, t_start: 100, t_end: 101, command: "pwd"}
+execs:
+  - {command_id: e1, t_start: 100.4, t_end: 100.5, command: "pwd"}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c1, command_id: e1, rule: exact}
+  links_exact: true
+  dispositions:
+    c1: matched
+  coverage:
+    rates.call_match_rate_under: 1.0

@@ -1,0 +1,23 @@
+name: S07_nested_shells
+description: A call runs a script that spawns three nested shells -> each nested, parent = the call's record, rule time_containment (§6.5).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 110, command: "./build.sh"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 109.8, command: "./build.sh"}
+  - {command_id: n1, t_start: 101, t_end: 102, command: "make -C liba"}
+  - {command_id: n2, t_start: 103, t_end: 104, command: "make -C libb"}
+  - {command_id: n3, t_start: 105, t_end: 106, command: "make -C libc"}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c1, command_id: e1, rule: exact}
+    - {link_type: exec_parent, command_id: n1, parent: e1, root_call_id: c1, rule: time_containment, root_ambiguous: false, root_candidates: []}
+    - {link_type: exec_parent, command_id: n2, parent: e1, root_call_id: c1, rule: time_containment, root_ambiguous: false, root_candidates: []}
+    - {link_type: exec_parent, command_id: n3, parent: e1, root_call_id: c1, rule: time_containment, root_ambiguous: false, root_candidates: []}
+  links_exact: true
+  dispositions:
+    n1: {disposition: nested, root_under: true}
+    n2: {disposition: nested, root_under: true}
+    n3: {disposition: nested, root_under: true}
+  coverage:
+    rates.exec_explained_rate_under: 1.0
+    rates.root_ambiguous_rate: 0.0

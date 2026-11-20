@@ -1,0 +1,18 @@
+name: S19_unattributed_no_candidates
+description: A final-diff file reported by no record and no edit call, all snapshots ok -> final_writer null, unattributed_candidates empty (§6.6 per-path rule 4).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "ls"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 100.3, command: "ls"}
+baseline: {files: {README.md: {}}}
+final_diff: {modified: [README.md], deleted: [], mode_changed: []}
+expect:
+  links_absent:
+    - {link_type: write_event}
+  paths:
+    - {path: README.md, in_workspace: true, tracked: true, events: [], final_writer: null, final_writer_under: false, final_state: changed, unattributed_candidates: []}
+  coverage:
+    rates.final_diff_attributed_rate_under: 0.0
+    rates.final_diff_attributed_rate_over: 0.0
+    counts.paths_unattributed: 1
+    counts.final_diff_files: 1

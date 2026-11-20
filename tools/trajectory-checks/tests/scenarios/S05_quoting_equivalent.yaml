@@ -1,0 +1,19 @@
+name: S05_quoting_equivalent
+description: Heredoc and argument quoting differ between log and trace but the shell tokens agree -> rule quoting_equivalent, not prefix (§6.4 rule 2).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "python3 - <<'PY'\nprint('x')\nPY"}
+  - {call_id: c2, t_start: 110, t_end: 111, command: "echo 'a b' > out.txt"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 100.5, command: "python3 - <<\"PY\"\nprint('x')\nPY"}
+  - {command_id: e2, t_start: 110.2, t_end: 110.3, command: "echo \"a b\" > out.txt"}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c1, command_id: e1, rule: quoting_equivalent}
+    - {link_type: call_exec, call_id: c2, command_id: e2, rule: quoting_equivalent}
+  links_exact: true
+  dispositions:
+    c1: {disposition: matched, matched: true, match_under: true}
+  coverage:
+    rates.call_match_rate_under: 1.0
+    counts.shell_calls_matched.quoting_equivalent: 2
+    counts.shell_calls_matched.exact: 0

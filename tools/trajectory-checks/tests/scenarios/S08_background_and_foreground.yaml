@@ -1,0 +1,19 @@
+name: S08_background_and_foreground
+description: A nested shell starts inside a background call's record and a foreground call's record -> parent = innermost (foreground), root_ambiguous with both calls as candidates (§6.5).
+calls:
+  - {call_id: cb, t_start: 100, t_end: 100.5, command: "python3 -m http.server 8000", background: true}
+  - {call_id: cf, t_start: 150, t_end: 152, command: "curl -s localhost:8000/"}
+execs:
+  - {command_id: eb, t_start: 100.2, t_end: 300, command: "python3 -m http.server 8000"}
+  - {command_id: ef, t_start: 150.3, t_end: 151.5, command: "curl -s localhost:8000/"}
+  - {command_id: n1, t_start: 151.0, t_end: 151.2, command: "date"}
+expect:
+  links:
+    - {link_type: call_exec, call_id: cb, command_id: eb, rule: exact}
+    - {link_type: call_exec, call_id: cf, command_id: ef, rule: exact}
+    - {link_type: exec_parent, command_id: n1, parent: ef, root_call_id: cf, rule: time_containment, root_ambiguous: true, root_candidates: [cb, cf]}
+  links_exact: true
+  dispositions:
+    n1: {disposition: nested, root_under: false}
+  coverage:
+    rates.root_ambiguous_rate: 1.0

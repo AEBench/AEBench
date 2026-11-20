@@ -1,0 +1,14 @@
+name: S36_mode_only
+description: Only chmod +x run.sh -> the snapshot's modify becomes op mode, final_state mode_only (§6.6 rule 7).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "chmod +x run.sh"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 100.3, command: "chmod +x run.sh", snapshot: {modified: [run.sh]}}
+baseline: {files: {run.sh: {}}}
+final_diff: {modified: [], deleted: [], mode_changed: [run.sh]}
+expect:
+  links:
+    - {link_type: write_event, event_id: w0, path: run.sh, op: mode, writer_id: e1}
+  links_exact: true
+  paths:
+    - {path: run.sh, events: [w0], final_writer: w0, final_state: mode_only}

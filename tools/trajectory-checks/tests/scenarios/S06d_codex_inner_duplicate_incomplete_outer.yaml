@@ -1,0 +1,16 @@
+name: S06d_codex_inner_duplicate_incomplete_outer
+description: An incomplete outer record extends to the run's end, so an inner record starting after its recorded t_end is still its wrapper_duplicate (§6.4, §6.5; decisions R8, D25).
+run: {t_end: 1000}
+calls:
+  - {call_id: c1, family: codex, raw_name: command_execution, t_start: 100, t_end: 200, command: "./serve.sh", background: null}
+execs:
+  - {command_id: outer, t_start: 100.2, t_end: 101, command: "./serve.sh", wrapper: codex_snapshot_exec, complete: false, exit_code: null}
+  - {command_id: inner, t_start: 105, t_end: 199, command: "./serve.sh", wrapper: codex_direct}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c1, command_id: outer, rule: exact}
+    - {link_type: wrapper_duplicate, command_id: inner, of: outer}
+  links_exact: true
+  dispositions:
+    outer: matched_root
+    inner: wrapper_duplicate
