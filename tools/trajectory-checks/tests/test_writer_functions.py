@@ -319,6 +319,10 @@ RISK_EXECS = {
         "e10", 1.0, 1.0, orphans=[{**_ORPHAN, "inherited_from": "e5"}]
     ),
     "e9": _exec("e9", 5.0, 1.0),
+    "e11": _exec("e11", 1.0, 1.0, orphans=[], ended_at=2.0),
+    "e12": _exec(
+        "e12", 1.0, 1.0, orphans=[], ended_at=3.5, parent_command_id="e11"
+    ),
 }
 RISK_WINDOWS = {
     "e1": (1.0, 4.0),
@@ -329,6 +333,8 @@ RISK_WINDOWS = {
     "e6": (1.0, 4.0),
     "e7": (1.0, 4.0),
     "e10": (1.0, 4.0),
+    "e11": (1.0, 4.0),
+    "e12": (1.0, 4.0),
     "e9": (5.0, 8.0),
     "c1": (0.0, 1001.0),
     "c2": (1.0, 3.0),
@@ -414,6 +420,22 @@ RISKS = (
         5.0,
         True,
         [_risk("e10", "orphaned")],
+    ),
+    (
+        "child ends after its parent, exact basis",
+        _state(detached=["e11", "e12"]),
+        "e9",
+        5.0,
+        True,
+        [_risk("e11", "orphaned"), _risk("e12", "orphaned")],
+    ),
+    (
+        "child ends after its parent, fallback basis",
+        _state(detached=["e11", "e12"]),
+        "e9",
+        5.0,
+        False,
+        [],
     ),
     (
         "unmonitored call open to the run's end",
