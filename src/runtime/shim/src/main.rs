@@ -99,7 +99,7 @@ use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
@@ -107,6 +107,7 @@ const PROTOCOL: u32 = 2;
 const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 const READ_BYTES: usize = 64 * 1024;
 const MAX_ANCESTORS: usize = 64;
+const ORPHAN_SETTLE: Duration = Duration::from_millis(100);
 
 const ENV_SOCKET: &str = "AEBENCH_COMMAND_SOCKET";
 const ENV_REAL_SHELL: &str = "AEBENCH_REAL_SHELL";
@@ -283,6 +284,24 @@ fn adopted() -> Vec<Process> {
                 start_ticks: stat.start_ticks,
                 comm: stat.comm,
             })
+        })
+        .collect()
+}
+
+/// Lists the adopted processes still alive a moment later, so ones already
+/// exiting are not reported.
+fn lasting_orphans() -> Vec<Process> {
+    let first = adopted();
+    if first.is_empty() {
+        return first;
+    }
+    thread::sleep(ORPHAN_SETTLE);
+    adopted()
+        .into_iter()
+        .filter(|later| {
+            first
+                .iter()
+                .any(|early| early.pid == later.pid && early.start_ticks == later.start_ticks)
         })
         .collect()
 }
@@ -480,7 +499,7 @@ fn run_monitored(
         exit_code,
         signal,
         t_exit,
-        orphans: subreaper.then(adopted),
+        orphans: subreaper.then(lasting_orphans),
     }) {
         let _ = stream.write_all(&encode_frame(FrameKind::End, &body));
     }
