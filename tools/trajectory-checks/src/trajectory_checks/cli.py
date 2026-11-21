@@ -207,6 +207,7 @@ def capabilities(
     execs: list[parse.Exec],
     run: typing.Mapping[str, typing.Any],
     monitor_dir: pathlib.Path,
+    start_lines: int = 0,
 ) -> dict[str, bool]:
     """The capabilities of a run: which new monitor data it holds (§5.6).
 
@@ -217,6 +218,8 @@ def capabilities(
         execs: The run's Exec records.
         run: Its RunInfo, without `capabilities`.
         monitor_dir: Its `monitor/` folder.
+        start_lines: The trace's MC-04 start lines; end_reason alone is no
+            evidence of them.
 
     Returns:
         One bool per name of match.CAPABILITIES.
@@ -224,7 +227,8 @@ def capabilities(
     snapshots = [e["snapshot"] for e in execs]
     return {
         "parent_links": any(e["depth"] is not None for e in execs),
-        "start_events": any(e["record_type"] is not None for e in execs),
+        "start_events": start_lines > 0
+        or (run.get("trace_meta") or {}).get("start_events") is True,
         "exact_timing": any(e["ended_at"] is not None for e in execs),
         "content_hashes": any(s["hashes"] is not None for s in snapshots),
         "untracked_visible": any(
@@ -288,7 +292,12 @@ def analyse(
     events = folder / "file_events.jsonl"
     events = events if events.is_file() else None
     notes: list[str] = []  # the trace's layout warnings, for coverage
-    execs = parse.load_execs(trace, family, events, notes) if has_trace else []
+    counts = {"start_lines": 0}
+    execs = (
+        parse.load_execs(trace, family, events, notes, counts)
+        if has_trace
+        else []
+    )
     runtime = result.get("runtime") or {}
     baseline = _read_json(folder / "tracked_files.json")
     meta = _read_json(folder / "trace_meta.json")
@@ -315,7 +324,9 @@ def analyse(
         unattributed_reads=parse.read_events(events)[1] if events else None,
         capabilities={},
     )
-    run["capabilities"] = capabilities(execs, run, folder)
+    run["capabilities"] = capabilities(
+        execs, run, folder, counts["start_lines"]
+    )
     linked = match.link(
         calls,
         execs,

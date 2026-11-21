@@ -854,6 +854,7 @@ def load_execs(
     family: str,
     file_events: pathlib.Path | None = None,
     warnings: list[str] | None = None,
+    counts: dict[str, int] | None = None,
 ) -> list[Exec]:
     """Reads commands.jsonl into Exec records sorted by (t_start, id).
 
@@ -866,6 +867,8 @@ def load_execs(
         file_events: MC-14's file_events.jsonl, or None; when given, every
             exec's reads is a list.
         warnings: When given, the trace's layout warnings are appended.
+        counts: When given, start_lines is set to the number of MC-04
+            start lines, superseded ones included.
 
     Returns:
         One Exec per record with a start time, numbered by sorted position.
@@ -873,6 +876,7 @@ def load_execs(
     execs: list[Exec] = []
     starts: dict[str, Exec] = {}
     misplaced = 0  # MC-10 keys at the record root, not under monitors.timing
+    started = 0  # MC-04 start lines
     with pathlib.Path(trace_path).open(
         encoding="utf-8", errors="replace"
     ) as handle:
@@ -890,6 +894,7 @@ def load_execs(
             if found is None:
                 logger.warning("%s: record without start skipped", trace_path)
             elif found["record_type"] == "start_only":
+                started += 1
                 starts.setdefault(found["command_id"], found)
             else:
                 execs.append(found)
@@ -901,6 +906,8 @@ def load_execs(
         logger.warning("%s: %s", trace_path, text)
         if warnings is not None:
             warnings.append(text)
+    if counts is not None:
+        counts["start_lines"] = started
     ended = {e["command_id"] for e in execs}
     execs += [e for cid, e in starts.items() if cid not in ended]
     reads = read_events(pathlib.Path(file_events))[0] if file_events else None
