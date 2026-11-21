@@ -28,11 +28,13 @@
 //! | 1    | `stdout`       | shim -> server  | raw bytes          |
 //! | 2    | `stderr`       | shim -> server  | raw bytes          |
 //! | 3    | `end`          | shim -> server  | JSON               |
+//! | 5    | `started`      | shim -> server  | JSON               |
 //!
 //! Communication:
 //! ```text
 //! shim -> command_info   what is about to run
 //!      <- decision       the command's id, and whether it may run
+//! shim -> started        the child's pid, once it is running
 //! shim -> stdout         the child's stdout, after it has exited
 //! shim -> stderr         the child's stderr, after it has exited
 //! shim -> end            how the child finished
@@ -46,6 +48,15 @@
 //! | `cwd`      | `string`   | working directory; empty if it cannot be read      |
 //! | `pid`      | `int`      | this process's pid, the root of the `/proc` walk   |
 //! | `env_keys` | `[string]` | environment variable **names** only, never values  |
+//! | `stdout_tty` | `bool`   | stdout is a terminal, so it is not captured        |
+//! | `stderr_tty` | `bool`   | stderr is a terminal, so it is not captured        |
+//! | `protocol` | `int`      | version of this protocol, currently 2              |
+//! | `shim_version` | `string` | the crate version of this binary               |
+//! | `stdio`    | `[string|null]` | where fds 0, 1 and 2 point, e.g. `pipe:[42]` |
+//! | `t_info`   | `float`    | wall clock when this message was built, in seconds |
+//! | `ppid`, `pgid`, `sid` | `int|null` | from `/proc/self/stat`, container pids |
+//! | `start_ticks` | `int|null` | start time in clock ticks, so a reused pid differs |
+//! | `ancestry` | `[object]` | `{pid, start_ticks, comm}` up to pid 1, nearest first |
 //!
 //! ## `decision` — server to shim
 //!
@@ -55,8 +66,17 @@
 //! | `allow`      | `bool`        | `false` means the command must not run        |
 //! | `reason`     | `string`      | shown to the agent on stderr when denied      |
 //! | `exit_code`  | `int`         | what to exit with when denied, normally 126   |
+//! | `subreaper`  | `bool`        | adopt the child's orphans and report them     |
 //!
 //! `command_id` is for the server's own records; the shim does not use it.
+//!
+//! ## `started` — shim to server
+//!
+//! | field               | type       | meaning                                 |
+//! |---------------------|------------|-----------------------------------------|
+//! | `child_pid`         | `int`      | the real shell's pid                    |
+//! | `child_start_ticks` | `int|null` | its start time in clock ticks           |
+//! | `t_spawn`           | `float`    | wall clock right after the spawn        |
 //!
 //! ## `end` — shim to server
 //!
@@ -64,23 +84,30 @@
 //! |-------------|--------------|------------------------------------------------|
 //! | `exit_code` | `int | null` | the child's exit code, `null` if it was killed  |
 //! | `signal`    | `int | null` | the signal that killed it, `null` otherwise     |
+//! | `t_exit`    | `float`      | wall clock when the child exited, in seconds    |
+//! | `orphans`   | `[object] | null` | processes left running; `null` unless a subreaper |
 //!
-//! Byte counts and a duration are absent on purpose: nothing is dropped, so the
-//! server counts what it read and times the command itself.
+//! Byte counts are absent on purpose: nothing is dropped, so the server counts
+//! what it read.
 
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::{CommandExt, ExitStatusExt};
-use std::process::{Child, Command, Stdio};
+use std::path::Path;
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
+const PROTOCOL: u32 = 2;
 const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 const READ_BYTES: usize = 64 * 1024;
+const MAX_ANCESTORS: usize = 64;
+const ORPHAN_SETTLE: Duration = Duration::from_millis(100);
 
 const ENV_SOCKET: &str = "AEBENCH_COMMAND_SOCKET";
 const ENV_REAL_SHELL: &str = "AEBENCH_REAL_SHELL";
@@ -99,7 +126,12 @@ fn main() {
     }
 
     let real_shell = env::var_os(ENV_REAL_SHELL).unwrap_or_else(|| DEFAULT_REAL_SHELL.into());
-    let socket_path = env::var_os(ENV_SOCKET).unwrap_or_else(|| DEFAULT_SOCKET.into());
+    // The installed socket wins, so the override cannot turn monitoring off.
+    let socket_path: OsString = if Path::new(DEFAULT_SOCKET).exists() {
+        DEFAULT_SOCKET.into()
+    } else {
+        env::var_os(ENV_SOCKET).unwrap_or_else(|| DEFAULT_SOCKET.into())
+    };
 
     let Ok(stream) = UnixStream::connect(&socket_path) else {
         exec_real(&real_shell, &argv);
@@ -110,8 +142,8 @@ fn main() {
             let _ = writeln!(io::stderr(), "aeshell: {reason}");
             std::process::exit(exit_code);
         }
-        Ok(Session::Monitored { stream }) => {
-            std::process::exit(run_monitored(stream, &real_shell, &argv));
+        Ok(Session::Monitored { stream, subreaper }) => {
+            std::process::exit(run_monitored(stream, &real_shell, &argv, subreaper));
         }
         Err(_) => exec_real(&real_shell, &argv),
     }
@@ -119,7 +151,7 @@ fn main() {
 
 enum Session {
     Denied { reason: String, exit_code: i32 },
-    Monitored { stream: UnixStream },
+    Monitored { stream: UnixStream, subreaper: bool },
 }
 
 /// The body of the `command_info` message.
@@ -129,11 +161,31 @@ struct CommandInfo {
     cwd: String,
     pid: i64,
     env_keys: Vec<String>,
+    stdout_tty: bool,
+    stderr_tty: bool,
+    protocol: u32,
+    shim_version: &'static str,
+    stdio: [Option<String>; 3],
+    t_info: f64,
+    ppid: Option<i64>,
+    pgid: Option<i64>,
+    sid: Option<i64>,
+    start_ticks: Option<u64>,
+    ancestry: Vec<Process>,
+}
+
+/// A process, identified so that a reused pid differs.
+#[derive(Serialize)]
+struct Process {
+    pid: i64,
+    start_ticks: u64,
+    comm: String,
 }
 
 impl CommandInfo {
     /// Describes a given command into a CommandInfo.
     fn describe(argv: &[OsString]) -> Self {
+        let own = proc_stat("self");
         Self {
             argv: argv
                 .iter()
@@ -149,8 +201,117 @@ impl CommandInfo {
                     value.to_string_lossy().into_owned()
                 })
                 .collect(),
+            stdout_tty: is_tty(libc::STDOUT_FILENO),
+            stderr_tty: is_tty(libc::STDERR_FILENO),
+            protocol: PROTOCOL,
+            shim_version: env!("CARGO_PKG_VERSION"),
+            stdio: [0, 1, 2].map(|fd| {
+                std::fs::read_link(format!("/proc/self/fd/{fd}"))
+                    .ok()
+                    .map(|target| target.to_string_lossy().into_owned())
+            }),
+            t_info: now_secs(),
+            ppid: own.as_ref().map(|stat| stat.ppid),
+            pgid: own.as_ref().map(|stat| stat.pgid),
+            sid: own.as_ref().map(|stat| stat.sid),
+            start_ticks: own.as_ref().map(|stat| stat.start_ticks),
+            ancestry: own.map_or_else(Vec::new, |stat| ancestry(stat.ppid)),
         }
     }
+}
+
+/// The fields of `/proc/<pid>/stat` that place a process in the tree.
+struct ProcStat {
+    comm: String,
+    ppid: i64,
+    pgid: i64,
+    sid: i64,
+    start_ticks: u64,
+    zombie: bool,
+}
+
+/// Reads `/proc/<pid>/stat`, or `None` if the process is gone.
+fn proc_stat(pid: &str) -> Option<ProcStat> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    // comm may hold spaces and ')', so split at the last ')'.
+    let (head, rest) = stat.rsplit_once(')')?;
+    let fields: Vec<&str> = rest.split_whitespace().collect();
+    Some(ProcStat {
+        comm: head.split_once('(')?.1.to_owned(),
+        ppid: fields.get(1)?.parse().ok()?,
+        pgid: fields.get(2)?.parse().ok()?,
+        sid: fields.get(3)?.parse().ok()?,
+        start_ticks: fields.get(19)?.parse().ok()?,
+        zombie: fields.first() == Some(&"Z"),
+    })
+}
+
+/// Walks up from `pid` towards pid 1, nearest first.
+fn ancestry(mut pid: i64) -> Vec<Process> {
+    let mut chain = Vec::new();
+    while pid > 1 && chain.len() < MAX_ANCESTORS {
+        let Some(stat) = proc_stat(&pid.to_string()) else {
+            break;
+        };
+        chain.push(Process {
+            pid,
+            start_ticks: stat.start_ticks,
+            comm: stat.comm,
+        });
+        pid = stat.ppid;
+    }
+    chain
+}
+
+/// Lists the live processes this shim adopted as a subreaper.
+fn adopted() -> Vec<Process> {
+    let Ok(tasks) = std::fs::read_dir("/proc/self/task") else {
+        return Vec::new();
+    };
+    tasks
+        .flatten()
+        .filter_map(|task| std::fs::read_to_string(task.path().join("children")).ok())
+        .flat_map(|children| {
+            children
+                .split_whitespace()
+                .filter_map(|pid| pid.parse::<i64>().ok())
+                .collect::<Vec<_>>()
+        })
+        .filter_map(|pid| {
+            let stat = proc_stat(&pid.to_string())?;
+            (!stat.zombie).then_some(Process {
+                pid,
+                start_ticks: stat.start_ticks,
+                comm: stat.comm,
+            })
+        })
+        .collect()
+}
+
+/// Lists the adopted processes still alive a moment later, so ones already
+/// exiting are not reported.
+fn lasting_orphans() -> Vec<Process> {
+    let first = adopted();
+    if first.is_empty() {
+        return first;
+    }
+    thread::sleep(ORPHAN_SETTLE);
+    adopted()
+        .into_iter()
+        .filter(|later| {
+            first
+                .iter()
+                .any(|early| early.pid == later.pid && early.start_ticks == later.start_ticks)
+        })
+        .collect()
+}
+
+/// The body of the `started` message.
+#[derive(Serialize)]
+struct Started {
+    child_pid: i64,
+    child_start_ticks: Option<u64>,
+    t_spawn: f64,
 }
 
 /// The body of the `end` message.
@@ -158,6 +319,8 @@ impl CommandInfo {
 struct End {
     exit_code: Option<i32>,
     signal: Option<i32>,
+    t_exit: f64,
+    orphans: Option<Vec<Process>>,
 }
 
 /// The body of the `decision` message, reduced to what the shim acts on.
@@ -172,6 +335,8 @@ struct Decision {
     reason: String,
     #[serde(default)]
     exit_code: i32,
+    #[serde(default)]
+    subreaper: bool,
 }
 
 /// Negotiates the command with the server.
@@ -200,11 +365,19 @@ fn negotiate(mut stream: UnixStream, argv: &[OsString]) -> io::Result<Session> {
         });
     }
 
-    Ok(Session::Monitored { stream })
+    Ok(Session::Monitored {
+        stream,
+        subreaper: decision.subreaper,
+    })
 }
 
 /// Runs the real shell, then reports its output and outcome.
-fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) -> i32 {
+fn run_monitored(
+    mut stream: UnixStream,
+    real_shell: &OsStr,
+    argv: &[OsString],
+    subreaper: bool,
+) -> i32 {
     let stdout_tty = is_tty(libc::STDOUT_FILENO);
     let stderr_tty = is_tty(libc::STDERR_FILENO);
 
@@ -227,17 +400,21 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
             Stdio::piped()
         });
 
+    let inherited_sigchld = default_sigchld();
+
     // The child clears its own signal mask: the mask survives both fork and
-    // exec, and the parent is about to block signals around the spawn. Only
-    // async-signal-safe calls are legal between fork and exec, which these are.
+    // exec, and the parent is about to block signals around the spawn. It also
+    // gets back the inherited SIGCHLD action. Only async-signal-safe calls are
+    // legal between fork and exec, which these are.
     //
-    // SAFETY: the closure touches nothing but its own stack and two
-    // async-signal-safe libc calls.
+    // SAFETY: the closure touches nothing but its own stack, a copied action
+    // and three async-signal-safe libc calls.
     unsafe {
-        command.pre_exec(|| {
+        command.pre_exec(move || {
             let mut empty: libc::sigset_t = std::mem::zeroed();
             libc::sigemptyset(&mut empty);
             libc::sigprocmask(libc::SIG_SETMASK, &empty, std::ptr::null_mut());
+            libc::sigaction(libc::SIGCHLD, &inherited_sigchld, std::ptr::null_mut());
             Ok(())
         });
     }
@@ -249,6 +426,12 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
     // started and leave the server with no `end` frame for it.
     let outer_mask = block_forwarded_signals();
     install_signal_forwarders();
+
+    // Orphans of the child then reparent here instead of to pid 1, and are
+    // reaped while the child runs.
+    if subreaper {
+        unsafe { libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) };
+    }
 
     let mut child: Child = match command.spawn() {
         Ok(child) => child,
@@ -263,6 +446,8 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
             if let Ok(body) = serde_json::to_vec(&End {
                 exit_code: Some(127),
                 signal: None,
+                t_exit: now_secs(),
+                orphans: None,
             }) {
                 let _ = stream.write_all(&encode_frame(FrameKind::End, &body));
             }
@@ -275,6 +460,15 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
     CHILD_PID.store(child.id() as i32, Ordering::SeqCst);
     restore_signal_mask(outer_mask);
 
+    let started = Started {
+        child_pid: child.id() as i64,
+        child_start_ticks: proc_stat(&child.id().to_string()).map(|stat| stat.start_ticks),
+        t_spawn: now_secs(),
+    };
+    if let Ok(body) = serde_json::to_vec(&started) {
+        let _ = stream.write_all(&encode_frame(FrameKind::Started, &body));
+    }
+
     // Both pipes must be drained concurrently: a child that fills one while we
     // read the other would block forever.
     let stdout_pump = child
@@ -286,7 +480,19 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
         .take()
         .map(|pipe| spawn_pump(pipe, FrameKind::Stderr));
 
-    let status = child.wait();
+    let status = if subreaper {
+        wait_reaping(child.id() as libc::pid_t)
+    } else {
+        child.wait()
+    };
+    // The pid is free once reaped, so a late signal must not reach its reuse.
+    CHILD_PID.store(0, Ordering::SeqCst);
+    if subreaper {
+        // Nothing else is waited for, so orphans exiting while output drains
+        // are reaped in the background.
+        thread::spawn(reap_orphans);
+    }
+    let t_exit = now_secs();
     let stdout = stdout_pump
         .and_then(|pump| pump.join().ok())
         .unwrap_or_default();
@@ -304,7 +510,12 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
     // away costs the record, never the command.
     let _ = send_output(&mut stream, FrameKind::Stdout, &stdout);
     let _ = send_output(&mut stream, FrameKind::Stderr, &stderr);
-    if let Ok(body) = serde_json::to_vec(&End { exit_code, signal }) {
+    if let Ok(body) = serde_json::to_vec(&End {
+        exit_code,
+        signal,
+        t_exit,
+        orphans: subreaper.then(lasting_orphans),
+    }) {
         let _ = stream.write_all(&encode_frame(FrameKind::End, &body));
     }
 
@@ -312,6 +523,36 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
         (Some(code), _) => code,
         (None, Some(signal)) => 128 + signal,
         _ => 127,
+    }
+}
+
+/// Waits for `pid`, reaping every adopted orphan that exits before it.
+fn wait_reaping(pid: libc::pid_t) -> io::Result<ExitStatus> {
+    loop {
+        let mut status = 0;
+        // SAFETY: `status` is a valid pointer for the duration of the call.
+        let reaped = unsafe { libc::waitpid(-1, &mut status, 0) };
+        if reaped == pid {
+            return Ok(ExitStatus::from_raw(status));
+        }
+        if reaped == -1 {
+            let err = io::Error::last_os_error();
+            // Only EINTR is retried; ECHILD is reported like any other error.
+            if err.kind() != io::ErrorKind::Interrupted {
+                return Err(err);
+            }
+        }
+    }
+}
+
+/// Reaps adopted orphans until none are left.
+fn reap_orphans() {
+    loop {
+        // SAFETY: waitpid accepts a null status pointer.
+        let reaped = unsafe { libc::waitpid(-1, std::ptr::null_mut(), 0) };
+        if reaped == -1 && io::Error::last_os_error().kind() != io::ErrorKind::Interrupted {
+            return;
+        }
     }
 }
 
@@ -365,6 +606,7 @@ enum FrameKind {
     Stderr,
     End,
     Decision,
+    Started,
 }
 
 impl FrameKind {
@@ -375,6 +617,7 @@ impl FrameKind {
             2 => Some(FrameKind::Stderr),
             3 => Some(FrameKind::End),
             4 => Some(FrameKind::Decision),
+            5 => Some(FrameKind::Started),
             _ => None,
         }
     }
@@ -386,6 +629,7 @@ impl FrameKind {
             FrameKind::Stderr => 2,
             FrameKind::End => 3,
             FrameKind::Decision => 4,
+            FrameKind::Started => 5,
         }
     }
 }
@@ -529,6 +773,21 @@ fn install_signal_forwarders() {
     }
 }
 
+/// Sets SIGCHLD to its default, returning the inherited action.
+///
+/// An ignored SIGCHLD makes the kernel reap children itself, so no wait could
+/// ever see the child's status.
+fn default_sigchld() -> libc::sigaction {
+    // SAFETY: both actions are initialised before they are read.
+    unsafe {
+        let mut default: libc::sigaction = std::mem::zeroed();
+        default.sa_sigaction = libc::SIG_DFL;
+        let mut inherited: libc::sigaction = std::mem::zeroed();
+        libc::sigaction(libc::SIGCHLD, &default, &mut inherited);
+        inherited
+    }
+}
+
 /// Blocks every forwarded signal, returning the mask that was in force.
 fn block_forwarded_signals() -> libc::sigset_t {
     // SAFETY: both sets are initialised before they are read, and this runs
@@ -555,4 +814,12 @@ fn restore_signal_mask(previous: libc::sigset_t) {
 
 fn is_tty(fd: libc::c_int) -> bool {
     unsafe { libc::isatty(fd) == 1 }
+}
+
+/// Returns the wall clock in seconds since the epoch.
+fn now_secs() -> f64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs_f64())
+        .unwrap_or_default()
 }

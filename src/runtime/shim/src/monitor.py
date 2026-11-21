@@ -16,6 +16,7 @@ FileStat: TypeAlias = tuple[int, int, int, int]  # (size, mtime_ns, ctime_ns, in
 
 SOCKET_PATH = "/run/aebench/command.sock"
 LOG_BASENAME = "commands.jsonl"
+SCHEMA_VERSION = 2  # Version of each record's shape, read by the trajectory checker
 
 STREAMS_DIRNAME = "stream"
 
@@ -26,12 +27,14 @@ MAX_LISTED_PATHS = 100
 MAX_SNAPSHOT_FILES = 20000  # Limit for full-workspace snapshots only
 TRACKED_FILES_BASENAME = "tracked_files.json"  # Host-provided list of files to track
 SNAPSHOT_BUDGET_SECONDS = 2.0  # Timeout for snapshots; does not fail the command
+SUBREAPER = True  # Shims adopt and report the processes their command leaves running
 
 COMMAND_INFO = 0
 STDOUT = 1
 STDERR = 2
 END = 3
 DECISION = 4
+STARTED = 5
 
 
 async def read_buffer(reader: asyncio.StreamReader, size: int) -> bytes | None:
@@ -86,6 +89,7 @@ class StreamSink:
 		# Keep track of how much will be truncated
 		self.received = 0
 		self.kept = 0
+		self.tty = False
 
 		self.handle: BinaryIO | None = None
 
@@ -121,6 +125,8 @@ class StreamSink:
 			capture = "truncated"
 		elif self.kept:
 			capture = "captured"
+		elif self.tty:
+			capture = "skipped_tty"
 		else:
 			capture = "none"
 
@@ -184,7 +190,8 @@ def run_before_command(ctx: CommandContext) -> None:
 
 
 def run_after_command(ctx: CommandContext) -> None:
-	for monitor in MONITORS:
+	"""Runs every monitor's post-command phase, in reverse registration order."""
+	for monitor in reversed(MONITORS):
 		try:
 			output = monitor.after_command(ctx)
 		except BaseException as exc:
@@ -198,24 +205,34 @@ def run_after_command(ctx: CommandContext) -> None:
 
 
 class CommandTiming(Monitor):
-	"""How long each command took. Duration comes from a monotonic clock."""
+	"""How long each command took from release to end, on a monotonic clock.
+
+	Registered first, so it brackets the snapshots. The broker stamps the
+	release and the end into ctx.state.
+	"""
 
 	name = "timing"
 
 	def before_command(self, ctx: CommandContext) -> None:
-		ctx.state[self.name] = (time.monotonic(), datetime.now(timezone.utc))
+		ctx.state[self.name] = time.monotonic()
 
 	def after_command(self, ctx: CommandContext) -> Record | None:
-		started = ctx.state.get(self.name)
+		before = ctx.state.get(self.name)
+		released = ctx.state.get("released")
 
-		if started is None:
+		if before is None or released is None:
 			return None
 
-		monotonic_start, wall_start = started
+		ended = ctx.state.get("ended")
+		released_at = released[1].isoformat()
 
 		return {
-			"started_at": wall_start.isoformat(),
-			"duration_ms": int((time.monotonic() - monotonic_start) * 1000),
+			"started_at": released_at,
+			"released_at": released_at,
+			"ended_at": ended and ended[1].isoformat(),
+			"duration_ms": ended and int((ended[0] - released[0]) * 1000),
+			"snapshot_before_ms": int((released[0] - before) * 1000),
+			"snapshot_after_ms": ended and int((time.monotonic() - ended[0]) * 1000),
 			# Wall clock covers everything the command spawned
 			"includes_children": True,
 		}
@@ -322,6 +339,68 @@ class FileSnapshot(Monitor):
 		}
 
 
+class ProcessTree:
+	"""Links each command to the nearest recorded command above it.
+
+	Processes are keyed by (pid, start_ticks), so a reused pid never matches.
+	Entries outlive their connection, so a shell can link to a finished parent.
+	"""
+
+	def __init__(self) -> None:
+		self.owners: dict[tuple[object, object], tuple[str, str]] = {}
+		self.lineage: dict[str, tuple[str, int]] = {}
+		self.open: set[str] = set()
+
+	def add(
+		self, pid: object, start_ticks: object, command_id: str, kind: str
+	) -> tuple[str, str] | None:
+		"""Records that a process belongs to a command and returns its owner."""
+		if pid is None or start_ticks is None:
+			return None
+		# An orphan that is itself a shim keeps its own command.
+		if kind == "orphan":
+			return self.owners.setdefault((pid, start_ticks), (command_id, kind))
+		self.owners[(pid, start_ticks)] = (command_id, kind)
+		return command_id, kind
+
+	def link(self, record: Record, ancestry: object) -> None:
+		"""Sets the parent fields of a new command from its reported ancestry."""
+		command_id = str(record["command_id"])
+		self.open.add(command_id)
+		if not isinstance(ancestry, list):
+			# An older shim: the links are unknown, not absent.
+			record.update(
+				parent_command_id=None, root_command_id=None, depth=None, parent_link=None
+			)
+			return
+
+		parent, link = None, "none"
+		for ancestor in ancestry:
+			owner = self.owners.get((ancestor.get("pid"), ancestor.get("start_ticks")))
+			if owner is not None:
+				parent, kind = owner
+				if kind == "orphan":
+					link = "adopted"
+				else:
+					link = "live" if parent in self.open else "closed"
+				break
+
+		root, depth = (command_id, 0)
+		if parent is not None:
+			parent_root, parent_depth = self.lineage[parent]
+			root, depth = parent_root, parent_depth + 1
+
+		self.lineage[command_id] = (root, depth)
+		self.add(record.get("pid"), record.get("start_ticks"), command_id, "shim")
+		record.update(parent_command_id=parent, root_command_id=root, depth=depth, parent_link=link)
+
+	def close(self, command_id: str) -> None:
+		self.open.discard(command_id)
+
+
+PROCESS_TREE = ProcessTree()
+
+
 def write_record(record: Record, log_path: str) -> None:
 	with open(log_path, "a", encoding="utf-8") as file:
 		file.write(json.dumps(record) + "\n")
@@ -343,13 +422,20 @@ async def process_connection(
 	stdout = StreamSink(os.path.join(stream_dir, "stdout.log"))
 	stderr = StreamSink(os.path.join(stream_dir, "stderr.log"))
 
-	record = {
+	shim_clock: dict[str, object] = {"info": None, "spawn": None, "exit": None}
+	record: Record = {
+		"schema_version": SCHEMA_VERSION,
 		"run_id": run_id,
 		"command_id": command_id,
 		"complete": False,
 		"exit_code": None,
 		"signal": None,
 		"return_code": None,
+		"end_reason": None,
+		"child_pid": None,
+		"child_start_ticks": None,
+		"orphans": None,
+		"shim_clock": shim_clock,
 	}
 
 	context = CommandContext(record, output_dir, run_id)
@@ -371,6 +457,15 @@ async def process_connection(
 		record["cwd"] = command_info.get("cwd")
 		record["pid"] = command_info.get("pid")
 		record["env_keys"] = command_info.get("env_keys")
+		record["protocol"] = command_info.get("protocol")
+		record["shim_version"] = command_info.get("shim_version")
+		record["stdio"] = command_info.get("stdio")
+		stdout.tty = bool(command_info.get("stdout_tty"))
+		stderr.tty = bool(command_info.get("stderr_tty"))
+		shim_clock["info"] = command_info.get("t_info")
+		for key in ("ppid", "pgid", "sid", "start_ticks", "ancestry"):
+			record[key] = command_info.get(key)
+		PROCESS_TREE.link(record, command_info.get("ancestry"))
 
 		# pre-command state record
 		run_before_command(context)
@@ -380,8 +475,10 @@ async def process_connection(
 			"allow": True,
 			"reason": "",
 			"exit_code": 126,
+			"subreaper": SUBREAPER,
 		}
 
+		context.state["released"] = (time.monotonic(), datetime.now(timezone.utc))
 		await send_frame(
 			writer,
 			DECISION,
@@ -398,6 +495,16 @@ async def process_connection(
 
 			message_type, payload = frame
 
+			if message_type == STARTED:
+				started = json.loads(payload)
+				record["child_pid"] = started.get("child_pid")
+				record["child_start_ticks"] = started.get("child_start_ticks")
+				shim_clock["spawn"] = started.get("t_spawn")
+				PROCESS_TREE.add(
+					started.get("child_pid"), started.get("child_start_ticks"), command_id, "child"
+				)
+				continue
+
 			if message_type == STDOUT:
 				stdout.write(payload)
 				continue
@@ -410,6 +517,21 @@ async def process_connection(
 			# and also label session complete
 			if message_type == END:
 				end = json.loads(payload)
+				context.state["ended"] = (time.monotonic(), datetime.now(timezone.utc))
+				record["end_reason"] = "end_frame"
+				shim_clock["exit"] = end.get("t_exit")
+				orphans = end.get("orphans")
+				record["orphans"] = orphans
+				for orphan in orphans or []:
+					owner = PROCESS_TREE.add(
+						orphan.get("pid"), orphan.get("start_ticks"), command_id, "orphan"
+					)
+					if owner is not None and owner[0] != command_id:
+						# Nested subreapers list the same process; the first keeps it.
+						if owner[1] == "orphan":
+							orphan["inherited_from"] = owner[0]
+						else:
+							orphan["command_id"] = owner[0]
 
 				exit_code = end.get("exit_code")
 				signal = end.get("signal")
@@ -430,6 +552,11 @@ async def process_connection(
 		record["monitor_error"] = str(exc)
 
 	finally:
+		if "ended" not in context.state:
+			# Timed to the disconnect, so a killed shim still has a duration.
+			context.state["ended"] = (time.monotonic(), datetime.now(timezone.utc))
+			record["end_reason"] = "disconnect"
+		PROCESS_TREE.close(command_id)
 		stdout.close()
 		stderr.close()
 
