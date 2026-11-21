@@ -159,6 +159,19 @@ def test_a_subreaper_shim_reaps_orphans_that_exit(shim: Path, tmp_path: Path) ->
 	assert session.stdout == b"reaped\n"
 
 
+def test_a_subreaper_shim_reaps_orphans_while_output_drains(shim: Path, tmp_path: Path) -> None:
+	# The subshell holds stdout open after the command exits.
+	script = (
+		"pid=$(sleep 0.3 >/dev/null 2>&1 & echo $!); "
+		'(sleep 0.8; cut -d" " -f3 /proc/$pid/stat 2>/dev/null || echo gone) & exit 0'
+	)
+	with FakeBroker(tmp_path / "reaper.sock", Decision(subreaper=True)).start() as broker:
+		assert _run(shim, broker, ["-c", script]) == 0
+
+		session = broker.wait_for_session()
+	assert session.stdout == b"gone\n"
+
+
 @pytest.mark.parametrize(
 	("script", "status", "exit_code", "signal"),
 	[("exit 7", 7, 7, None), ("kill -TERM $$", 128 + 15, None, 15)],
