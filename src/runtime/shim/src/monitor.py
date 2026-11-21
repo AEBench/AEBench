@@ -351,15 +351,15 @@ class ProcessTree:
 		self.lineage: dict[str, tuple[str, int]] = {}
 		self.open: set[str] = set()
 
-	def add(self, pid: object, start_ticks: object, command_id: str, kind: str) -> None:
-		"""Records that a process belongs to a command."""
+	def add(self, pid: object, start_ticks: object, command_id: str, kind: str) -> str | None:
+		"""Records that a process belongs to a command and returns its owner."""
 		if pid is None or start_ticks is None:
-			return
+			return None
 		# An orphan that is itself a shim keeps its own command.
 		if kind == "orphan":
-			self.owners.setdefault((pid, start_ticks), (command_id, kind))
-		else:
-			self.owners[(pid, start_ticks)] = (command_id, kind)
+			return self.owners.setdefault((pid, start_ticks), (command_id, kind))[0]
+		self.owners[(pid, start_ticks)] = (command_id, kind)
+		return command_id
 
 	def link(self, record: Record, ancestry: object) -> None:
 		"""Sets the parent fields of a new command from its reported ancestry."""
@@ -512,9 +512,12 @@ async def process_connection(
 				record["shim_clock"]["exit"] = end.get("t_exit")
 				record["orphans"] = end.get("orphans")
 				for orphan in record["orphans"] or []:
-					PROCESS_TREE.add(
+					owner = PROCESS_TREE.add(
 						orphan.get("pid"), orphan.get("start_ticks"), command_id, "orphan"
 					)
+					# Nested subreapers list the same process; the first owner keeps it.
+					if owner not in (None, command_id):
+						orphan["inherited_from"] = owner
 
 				exit_code = end.get("exit_code")
 				signal = end.get("signal")
