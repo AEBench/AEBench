@@ -51,6 +51,7 @@
 //! | `protocol` | `int`      | version of this protocol, currently 2              |
 //! | `shim_version` | `string` | the crate version of this binary               |
 //! | `stdio`    | `[string|null]` | where fds 0, 1 and 2 point, e.g. `pipe:[42]` |
+//! | `t_info`   | `float`    | wall clock when this message was built, in seconds |
 //!
 //! ## `decision` — server to shim
 //!
@@ -69,9 +70,10 @@
 //! |-------------|--------------|------------------------------------------------|
 //! | `exit_code` | `int | null` | the child's exit code, `null` if it was killed  |
 //! | `signal`    | `int | null` | the signal that killed it, `null` otherwise     |
+//! | `t_exit`    | `float`      | wall clock when the child exited, in seconds    |
 //!
-//! Byte counts and a duration are absent on purpose: nothing is dropped, so the
-//! server counts what it read and times the command itself.
+//! Byte counts are absent on purpose: nothing is dropped, so the server counts
+//! what it read.
 
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -82,6 +84,7 @@ use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
@@ -146,6 +149,7 @@ struct CommandInfo {
     protocol: u32,
     shim_version: &'static str,
     stdio: [Option<String>; 3],
+    t_info: f64,
 }
 
 impl CommandInfo {
@@ -175,6 +179,7 @@ impl CommandInfo {
                     .ok()
                     .map(|target| target.to_string_lossy().into_owned())
             }),
+            t_info: now_secs(),
         }
     }
 }
@@ -184,6 +189,7 @@ impl CommandInfo {
 struct End {
     exit_code: Option<i32>,
     signal: Option<i32>,
+    t_exit: f64,
 }
 
 /// The body of the `decision` message, reduced to what the shim acts on.
@@ -289,6 +295,7 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
             if let Ok(body) = serde_json::to_vec(&End {
                 exit_code: Some(127),
                 signal: None,
+                t_exit: now_secs(),
             }) {
                 let _ = stream.write_all(&encode_frame(FrameKind::End, &body));
             }
@@ -313,6 +320,7 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
         .map(|pipe| spawn_pump(pipe, FrameKind::Stderr));
 
     let status = child.wait();
+    let t_exit = now_secs();
     let stdout = stdout_pump
         .and_then(|pump| pump.join().ok())
         .unwrap_or_default();
@@ -330,7 +338,11 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
     // away costs the record, never the command.
     let _ = send_output(&mut stream, FrameKind::Stdout, &stdout);
     let _ = send_output(&mut stream, FrameKind::Stderr, &stderr);
-    if let Ok(body) = serde_json::to_vec(&End { exit_code, signal }) {
+    if let Ok(body) = serde_json::to_vec(&End {
+        exit_code,
+        signal,
+        t_exit,
+    }) {
         let _ = stream.write_all(&encode_frame(FrameKind::End, &body));
     }
 
@@ -581,4 +593,12 @@ fn restore_signal_mask(previous: libc::sigset_t) {
 
 fn is_tty(fd: libc::c_int) -> bool {
     unsafe { libc::isatty(fd) == 1 }
+}
+
+/// Returns the wall clock in seconds since the epoch.
+fn now_secs() -> f64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs_f64())
+        .unwrap_or_default()
 }

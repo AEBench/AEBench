@@ -379,6 +379,7 @@ async def process_connection(
 		record["stdio"] = command_info.get("stdio")
 		stdout.tty = bool(command_info.get("stdout_tty"))
 		stderr.tty = bool(command_info.get("stderr_tty"))
+		record["shim_clock"] = {"info": command_info.get("t_info")}
 
 		# pre-command state record
 		run_before_command(context)
@@ -390,6 +391,7 @@ async def process_connection(
 			"exit_code": 126,
 		}
 
+		record["released_at"] = datetime.now(timezone.utc).isoformat()
 		await send_frame(
 			writer,
 			DECISION,
@@ -418,6 +420,8 @@ async def process_connection(
 			# and also label session complete
 			if message_type == END:
 				end = json.loads(payload)
+				record["ended_at"] = datetime.now(timezone.utc).isoformat()
+				record["shim_clock"]["exit"] = end.get("t_exit")
 
 				exit_code = end.get("exit_code")
 				signal = end.get("signal")
