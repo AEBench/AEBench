@@ -267,6 +267,15 @@ def content_compare(
     return "equal" if one == two else "differs"
 
 
+def own_orphans(e: typing.Mapping[str, typing.Any]) -> list:
+    """EVD8: an exec's orphans less those an inner command listed first."""
+    return [
+        o
+        for o in e.get("orphans") or ()
+        if not (isinstance(o, dict) and "inherited_from" in o)
+    ]
+
+
 def detached_execs(
     execs: list[parse.Exec],
     links: list[match.Link],
@@ -279,7 +288,7 @@ def detached_execs(
     lists = (isinstance(e["orphans"], list) for e in live if e["complete"])
     if parents and all(lists):  # an incomplete exec is detached anyway
         ids = [
-            e["command_id"] for e in live if e["orphans"] or not e["complete"]
+            e["command_id"] for e in live if own_orphans(e) or not e["complete"]
         ]
         return ids, "exact"
     suspects = {
