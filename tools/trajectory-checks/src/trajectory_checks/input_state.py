@@ -304,10 +304,18 @@ def detached_execs(
     lists = (isinstance(e["orphans"], list) for e in live if e["complete"])
     if parents and all(lists):  # an incomplete exec is detached anyway
         by_id = {e["command_id"]: e for e in execs}
+        late = set()  # a child ending after its parent, and that launcher
+        for e in live if capabilities.get("exact_timing") else ():
+            p = by_id.get(e["parent_command_id"])
+            ends = (e["ended_at"], p and p["ended_at"])
+            if None not in ends and ends[0] > ends[1]:
+                late |= {e["command_id"], p["command_id"]}
         ids = [
             e["command_id"]
             for e in live
-            if own_orphans(e, by_id) or not e["complete"]
+            if own_orphans(e, by_id)
+            or not e["complete"]
+            or e["command_id"] in late
         ]
         return ids, "exact"
     suspects = {
