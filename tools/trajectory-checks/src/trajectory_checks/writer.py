@@ -554,7 +554,11 @@ def later_writer_risk(
             continue
         if not e["complete"] and i in late:
             found.setdefault(i, ("exec", "incomplete"))
-        elif e["complete"] and orphans_exact and input_state.own_orphans(e):
+        elif (
+            e["complete"]
+            and orphans_exact
+            and input_state.own_orphans(e, execs)
+        ):
             if i in windows and windows[i][0] < bound:
                 found.setdefault(i, ("exec", "orphaned"))
     for i in state["unmonitored_calls"]:

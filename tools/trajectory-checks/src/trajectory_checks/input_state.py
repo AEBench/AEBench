@@ -267,12 +267,28 @@ def content_compare(
     return "equal" if one == two else "differs"
 
 
-def own_orphans(e: typing.Mapping[str, typing.Any]) -> list:
-    """EVD8: an exec's orphans less those an inner command listed first."""
+def own_orphans(
+    e: typing.Mapping[str, typing.Any],
+    execs: typing.Mapping[str, typing.Mapping[str, typing.Any]],
+) -> list:
+    """EVD8: an exec's orphans less those an inner command listed first.
+
+    An entry's inherited_from counts only when execs[inherited_from] lists
+    the same (pid, start_ticks) in its own orphans.
+    """
+
+    def listed(o: dict) -> bool:
+        inner = execs.get(str(o["inherited_from"])) or {}
+        mine = (o.get("pid"), o.get("start_ticks"))
+        return any(
+            isinstance(x, dict) and (x.get("pid"), x.get("start_ticks")) == mine
+            for x in inner.get("orphans") or ()
+        )
+
     return [
         o
         for o in e.get("orphans") or ()
-        if not (isinstance(o, dict) and "inherited_from" in o)
+        if not (isinstance(o, dict) and "inherited_from" in o and listed(o))
     ]
 
 
@@ -287,8 +303,11 @@ def detached_execs(
     parents = bool(capabilities.get("parent_links"))
     lists = (isinstance(e["orphans"], list) for e in live if e["complete"])
     if parents and all(lists):  # an incomplete exec is detached anyway
+        by_id = {e["command_id"]: e for e in execs}
         ids = [
-            e["command_id"] for e in live if own_orphans(e) or not e["complete"]
+            e["command_id"]
+            for e in live
+            if own_orphans(e, by_id) or not e["complete"]
         ]
         return ids, "exact"
     suspects = {
