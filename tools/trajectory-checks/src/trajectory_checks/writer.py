@@ -545,6 +545,7 @@ def later_writer_risk(
     found: dict[str, tuple[str, str]] = {}
     bound = windows[writer_id][1] if writer_id in windows else math.inf
     late = {i for i, w in windows.items() if w[1] >= window_lo}
+    outlived = input_state.outlived(execs.values(), execs)
     for i in state["blind_execs"]:
         if i in late:
             found.setdefault(i, ("exec", "blind_snapshot"))
@@ -557,7 +558,7 @@ def later_writer_risk(
         elif (
             e["complete"]
             and orphans_exact
-            and input_state.own_orphans(e, execs)
+            and (input_state.own_orphans(e, execs) or i in outlived)
         ):
             if i in windows and windows[i][0] < bound:
                 found.setdefault(i, ("exec", "orphaned"))

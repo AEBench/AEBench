@@ -292,6 +292,20 @@ def own_orphans(
     ]
 
 
+def outlived(
+    children: typing.Iterable[typing.Mapping[str, typing.Any]],
+    execs: typing.Mapping[str, typing.Mapping[str, typing.Any]],
+) -> set[str]:
+    """EVD8: each child ending after its parent, and that launcher."""
+    late = set()
+    for e in children:
+        p = execs.get(e.get("parent_command_id")) or {}
+        ends = (e.get("ended_at"), p.get("ended_at"))
+        if None not in ends and ends[0] > ends[1]:
+            late |= {e["command_id"], p["command_id"]}
+    return late
+
+
 def detached_execs(
     execs: list[parse.Exec],
     links: list[match.Link],
@@ -304,12 +318,7 @@ def detached_execs(
     lists = (isinstance(e["orphans"], list) for e in live if e["complete"])
     if parents and all(lists):  # an incomplete exec is detached anyway
         by_id = {e["command_id"]: e for e in execs}
-        late = set()  # a child ending after its parent, and that launcher
-        for e in live if capabilities.get("exact_timing") else ():
-            p = by_id.get(e["parent_command_id"])
-            ends = (e["ended_at"], p and p["ended_at"])
-            if None not in ends and ends[0] > ends[1]:
-                late |= {e["command_id"], p["command_id"]}
+        late = outlived(live, by_id) if capabilities.get("exact_timing") else ()
         ids = [
             e["command_id"]
             for e in live
