@@ -430,6 +430,7 @@ async def process_connection(
 		"exit_code": None,
 		"signal": None,
 		"return_code": None,
+		"end_reason": None,
 		"child_pid": None,
 		"child_start_ticks": None,
 		"orphans": None,
@@ -516,6 +517,7 @@ async def process_connection(
 			if message_type == END:
 				end = json.loads(payload)
 				context.state["ended"] = (time.monotonic(), datetime.now(timezone.utc))
+				record["end_reason"] = "end_frame"
 				record["shim_clock"]["exit"] = end.get("t_exit")
 				record["orphans"] = end.get("orphans")
 				for orphan in record["orphans"] or []:
@@ -548,6 +550,10 @@ async def process_connection(
 		record["monitor_error"] = str(exc)
 
 	finally:
+		if "ended" not in context.state:
+			# Timed to the disconnect, so a killed shim still has a duration.
+			context.state["ended"] = (time.monotonic(), datetime.now(timezone.utc))
+			record["end_reason"] = "disconnect"
 		PROCESS_TREE.close(command_id)
 		stdout.close()
 		stderr.close()
