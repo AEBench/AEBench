@@ -137,6 +137,15 @@ def test_a_subreaper_shim_reports_what_its_command_left_running(shim: Path, tmp_
 	assert orphan["start_ticks"] > 0
 
 
+def test_an_orphan_that_exits_at_once_is_not_reported(shim: Path, tmp_path: Path) -> None:
+	with FakeBroker(tmp_path / "reaper.sock", Decision(subreaper=True)).start() as broker:
+		assert _run(shim, broker, ["-c", "sleep 0.03 >/dev/null 2>&1 &"]) == 0
+
+		end = broker.wait_for_session().end
+	assert end is not None
+	assert end["orphans"] == []
+
+
 def test_without_a_subreaper_orphans_are_unknown(shim: Path, broker: FakeBroker) -> None:
 	assert _run(shim, broker, ["-c", "nohup sleep 1 >/dev/null 2>&1 &"]) == 0
 
