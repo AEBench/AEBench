@@ -104,8 +104,8 @@ Defaults (spec §2.2.2's table):
   layer 4's LWR4; ``observable`` true; ``late_write`` false; ...).
   ``state_counts.preconditions.oracle_inputs`` is the oracle block's
   label (``fails`` without the block); ``bases.detached`` ``exact``
-  when ``parent_links`` holds and every non-noise exec has an
-  ``orphans`` list, else ``fallback``.
+  when ``parent_links`` holds and every complete non-noise exec has
+  an ``orphans`` list, else ``fallback``.
 - ``final_diff``, ``final_files``: null; ``config``: {}.
 """
 
@@ -919,7 +919,7 @@ def _layer4(
     detached = (
         "exact"
         if caps["parent_links"]
-        and all(isinstance(e["orphans"], list) for e in live)
+        and all(isinstance(e["orphans"], list) for e in live if e["complete"])
         else "fallback"
     )
     label = (

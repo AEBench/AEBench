@@ -301,6 +301,27 @@ def test_detached_exact() -> None:
     assert (list(ids), basis) == (["e2", "e3"], "exact")
 
 
+def test_detached_exact_incomplete_without_orphans() -> None:
+    """EVD8 exact: an incomplete exec needs no orphans list.
+
+    A killed command never writes its end record, so its orphans are
+    null; it is detached by being incomplete, and the basis stays exact.
+    Rules: EVD8.
+    """
+    execs = _execs(
+        {"command_id": "e1", "command": "./serve.sh &", "orphans": []},
+        {"command_id": "e2", "command": "./train.py", "complete": False},
+        {
+            "command_id": "e3",
+            "command": "./x.sh",
+            "orphans": [{"pid": 7, "comm": "x"}],
+        },
+    )
+    caps = _caps(parent_links=True)
+    ids, basis = _module().detached_execs(execs, [], capabilities=caps)
+    assert (list(ids), basis) == (["e2", "e3"], "exact")
+
+
 def test_detached_partial_orphans() -> None:
     """parent_links with some orphans null: the fallback plus adopted parents.
 
