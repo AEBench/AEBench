@@ -376,6 +376,7 @@ async def process_connection(
 		record["env_keys"] = command_info.get("env_keys")
 		record["protocol"] = command_info.get("protocol")
 		record["shim_version"] = command_info.get("shim_version")
+		record["stdio"] = command_info.get("stdio")
 		stdout.tty = bool(command_info.get("stdout_tty"))
 		stderr.tty = bool(command_info.get("stderr_tty"))
 

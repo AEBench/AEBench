@@ -50,6 +50,7 @@
 //! | `stderr_tty` | `bool`   | stderr is a terminal, so it is not captured        |
 //! | `protocol` | `int`      | version of this protocol, currently 2              |
 //! | `shim_version` | `string` | the crate version of this binary               |
+//! | `stdio`    | `[string|null]` | where fds 0, 1 and 2 point, e.g. `pipe:[42]` |
 //!
 //! ## `decision` — server to shim
 //!
@@ -144,6 +145,7 @@ struct CommandInfo {
     stderr_tty: bool,
     protocol: u32,
     shim_version: &'static str,
+    stdio: [Option<String>; 3],
 }
 
 impl CommandInfo {
@@ -168,6 +170,11 @@ impl CommandInfo {
             stderr_tty: is_tty(libc::STDERR_FILENO),
             protocol: PROTOCOL,
             shim_version: env!("CARGO_PKG_VERSION"),
+            stdio: [0, 1, 2].map(|fd| {
+                std::fs::read_link(format!("/proc/self/fd/{fd}"))
+                    .ok()
+                    .map(|target| target.to_string_lossy().into_owned())
+            }),
         }
     }
 }
