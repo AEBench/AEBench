@@ -16,6 +16,7 @@ FileStat: TypeAlias = tuple[int, int, int, int]  # (size, mtime_ns, ctime_ns, in
 
 SOCKET_PATH = "/run/aebench/command.sock"
 LOG_BASENAME = "commands.jsonl"
+SCHEMA_VERSION = 2  # Version of each record's shape, read by the trajectory checker
 
 STREAMS_DIRNAME = "stream"
 
@@ -420,6 +421,7 @@ async def process_connection(
 	stderr = StreamSink(os.path.join(stream_dir, "stderr.log"))
 
 	record = {
+		"schema_version": SCHEMA_VERSION,
 		"run_id": run_id,
 		"command_id": command_id,
 		"complete": False,
