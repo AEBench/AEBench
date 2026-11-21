@@ -325,6 +325,61 @@ class FileSnapshot(Monitor):
 		}
 
 
+class ProcessTree:
+	"""Links each command to the nearest recorded command above it.
+
+	Processes are keyed by (pid, start_ticks), so a reused pid never matches.
+	Entries outlive their connection, so a shell can link to a finished parent.
+	"""
+
+	def __init__(self) -> None:
+		self.owners: dict[tuple[object, object], tuple[str, str]] = {}
+		self.lineage: dict[str, tuple[str, int]] = {}
+		self.open: set[str] = set()
+
+	def add(self, pid: object, start_ticks: object, command_id: str, kind: str) -> None:
+		"""Records that a process belongs to a command."""
+		if pid is not None and start_ticks is not None:
+			self.owners[(pid, start_ticks)] = (command_id, kind)
+
+	def link(self, record: Record, ancestry: object) -> None:
+		"""Sets the parent fields of a new command from its reported ancestry."""
+		command_id = str(record["command_id"])
+		self.open.add(command_id)
+		if not isinstance(ancestry, list):
+			# An older shim: the links are unknown, not absent.
+			record.update(
+				parent_command_id=None, root_command_id=None, depth=None, parent_link=None
+			)
+			return
+
+		parent, link = None, "none"
+		for ancestor in ancestry:
+			owner = self.owners.get((ancestor.get("pid"), ancestor.get("start_ticks")))
+			if owner is not None:
+				parent, kind = owner
+				if kind == "orphan":
+					link = "adopted"
+				else:
+					link = "live" if parent in self.open else "closed"
+				break
+
+		root, depth = (command_id, 0)
+		if parent is not None:
+			parent_root, parent_depth = self.lineage[parent]
+			root, depth = parent_root, parent_depth + 1
+
+		self.lineage[command_id] = (root, depth)
+		self.add(record.get("pid"), record.get("start_ticks"), command_id, "shim")
+		record.update(parent_command_id=parent, root_command_id=root, depth=depth, parent_link=link)
+
+	def close(self, command_id: str) -> None:
+		self.open.discard(command_id)
+
+
+PROCESS_TREE = ProcessTree()
+
+
 def write_record(record: Record, log_path: str) -> None:
 	with open(log_path, "a", encoding="utf-8") as file:
 		file.write(json.dumps(record) + "\n")
@@ -380,6 +435,9 @@ async def process_connection(
 		stdout.tty = bool(command_info.get("stdout_tty"))
 		stderr.tty = bool(command_info.get("stderr_tty"))
 		record["shim_clock"] = {"info": command_info.get("t_info")}
+		for key in ("ppid", "pgid", "sid", "start_ticks", "ancestry"):
+			record[key] = command_info.get(key)
+		PROCESS_TREE.link(record, command_info.get("ancestry"))
 
 		# pre-command state record
 		run_before_command(context)
@@ -442,6 +500,7 @@ async def process_connection(
 		record["monitor_error"] = str(exc)
 
 	finally:
+		PROCESS_TREE.close(command_id)
 		stdout.close()
 		stderr.close()
 

@@ -52,6 +52,9 @@
 //! | `shim_version` | `string` | the crate version of this binary               |
 //! | `stdio`    | `[string|null]` | where fds 0, 1 and 2 point, e.g. `pipe:[42]` |
 //! | `t_info`   | `float`    | wall clock when this message was built, in seconds |
+//! | `ppid`, `pgid`, `sid` | `int|null` | from `/proc/self/stat`, container pids |
+//! | `start_ticks` | `int|null` | start time in clock ticks, so a reused pid differs |
+//! | `ancestry` | `[object]` | `{pid, start_ticks, comm}` up to pid 1, nearest first |
 //!
 //! ## `decision` — server to shim
 //!
@@ -91,6 +94,7 @@ use serde::{Deserialize, Serialize};
 const PROTOCOL: u32 = 2;
 const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 const READ_BYTES: usize = 64 * 1024;
+const MAX_ANCESTORS: usize = 64;
 
 const ENV_SOCKET: &str = "AEBENCH_COMMAND_SOCKET";
 const ENV_REAL_SHELL: &str = "AEBENCH_REAL_SHELL";
@@ -150,11 +154,25 @@ struct CommandInfo {
     shim_version: &'static str,
     stdio: [Option<String>; 3],
     t_info: f64,
+    ppid: Option<i64>,
+    pgid: Option<i64>,
+    sid: Option<i64>,
+    start_ticks: Option<u64>,
+    ancestry: Vec<Ancestor>,
+}
+
+/// One process above this shell, nearest first.
+#[derive(Serialize)]
+struct Ancestor {
+    pid: i64,
+    start_ticks: u64,
+    comm: String,
 }
 
 impl CommandInfo {
     /// Describes a given command into a CommandInfo.
     fn describe(argv: &[OsString]) -> Self {
+        let own = proc_stat("self");
         Self {
             argv: argv
                 .iter()
@@ -180,8 +198,54 @@ impl CommandInfo {
                     .map(|target| target.to_string_lossy().into_owned())
             }),
             t_info: now_secs(),
+            ppid: own.as_ref().map(|stat| stat.ppid),
+            pgid: own.as_ref().map(|stat| stat.pgid),
+            sid: own.as_ref().map(|stat| stat.sid),
+            start_ticks: own.as_ref().map(|stat| stat.start_ticks),
+            ancestry: own.map_or_else(Vec::new, |stat| ancestry(stat.ppid)),
         }
     }
+}
+
+/// The fields of `/proc/<pid>/stat` that place a process in the tree.
+struct ProcStat {
+    comm: String,
+    ppid: i64,
+    pgid: i64,
+    sid: i64,
+    start_ticks: u64,
+}
+
+/// Reads `/proc/<pid>/stat`, or `None` if the process is gone.
+fn proc_stat(pid: &str) -> Option<ProcStat> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    // comm may hold spaces and ')', so split at the last ')'.
+    let (head, rest) = stat.rsplit_once(')')?;
+    let fields: Vec<&str> = rest.split_whitespace().collect();
+    Some(ProcStat {
+        comm: head.split_once('(')?.1.to_owned(),
+        ppid: fields.get(1)?.parse().ok()?,
+        pgid: fields.get(2)?.parse().ok()?,
+        sid: fields.get(3)?.parse().ok()?,
+        start_ticks: fields.get(19)?.parse().ok()?,
+    })
+}
+
+/// Walks up from `pid` towards pid 1, nearest first.
+fn ancestry(mut pid: i64) -> Vec<Ancestor> {
+    let mut chain = Vec::new();
+    while pid > 1 && chain.len() < MAX_ANCESTORS {
+        let Some(stat) = proc_stat(&pid.to_string()) else {
+            break;
+        };
+        chain.push(Ancestor {
+            pid,
+            start_ticks: stat.start_ticks,
+            comm: stat.comm,
+        });
+        pid = stat.ppid;
+    }
+    chain
 }
 
 /// The body of the `end` message.
