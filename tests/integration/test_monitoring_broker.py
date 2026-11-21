@@ -485,8 +485,39 @@ def test_an_orphaned_shim_keeps_its_own_command(broker: BrokerProcess) -> None:
 
 	assert _wait_for(lambda: broker.command_count() == 3)
 	inner = _record_for(broker, inner_argv)
-	assert inner["parent_command_id"] == _record_for(broker, detached_argv)["command_id"]
+	detached = _record_for(broker, detached_argv)
+	assert inner["parent_command_id"] == detached["command_id"]
 	assert inner["depth"] == 2
+	# The detached shim stays the launch's own orphan, linked to its command.
+	(orphan,) = _record_for(broker, launch_argv)["orphans"]
+	assert orphan == {**orphans[0], "command_id": detached["command_id"]}
+
+
+def test_an_orphan_that_is_a_recorded_child_links_to_its_command(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	launch_argv = ["/bin/bash", "-c", "(bash ./bench.sh > driver.log 2>&1 &); sleep 90"]
+	bench_argv = ["/bin/bash", "./bench.sh"]
+
+	launch = _open_command(
+		socket_path, {"argv": launch_argv, "pid": 100, "start_ticks": 1, "ancestry": []}
+	)
+	bench = _open_command(socket_path, {"argv": bench_argv, "pid": 500, "start_ticks": 3})
+	started = {"child_pid": 501, "child_start_ticks": 4, "t_spawn": 1700000000.0}
+	bench.sendall(_frame(_STARTED, json.dumps(started).encode("utf-8")))
+	# Nothing answers `started`, so give the broker a moment to read it.
+	time.sleep(0.2)
+	orphans = [{"pid": 501, "start_ticks": 4, "comm": "bash"}]
+	end = {"exit_code": 0, "signal": None, "orphans": orphans}
+	launch.sendall(_frame(_END, json.dumps(end).encode("utf-8")))
+	launch.close()
+	assert _wait_for(lambda: broker.command_count() == 1)
+	bench.close()
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	bench_id = _record_for(broker, bench_argv)["command_id"]
+	(orphan,) = _record_for(broker, launch_argv)["orphans"]
+	assert orphan == {**orphans[0], "command_id": bench_id}
 
 
 def test_an_orphan_listed_by_two_commands_is_marked_inherited(broker: BrokerProcess) -> None:
