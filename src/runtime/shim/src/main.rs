@@ -400,17 +400,21 @@ fn run_monitored(
             Stdio::piped()
         });
 
+    let inherited_sigchld = default_sigchld();
+
     // The child clears its own signal mask: the mask survives both fork and
-    // exec, and the parent is about to block signals around the spawn. Only
-    // async-signal-safe calls are legal between fork and exec, which these are.
+    // exec, and the parent is about to block signals around the spawn. It also
+    // gets back the inherited SIGCHLD action. Only async-signal-safe calls are
+    // legal between fork and exec, which these are.
     //
-    // SAFETY: the closure touches nothing but its own stack and two
-    // async-signal-safe libc calls.
+    // SAFETY: the closure touches nothing but its own stack, a copied action
+    // and three async-signal-safe libc calls.
     unsafe {
-        command.pre_exec(|| {
+        command.pre_exec(move || {
             let mut empty: libc::sigset_t = std::mem::zeroed();
             libc::sigemptyset(&mut empty);
             libc::sigprocmask(libc::SIG_SETMASK, &empty, std::ptr::null_mut());
+            libc::sigaction(libc::SIGCHLD, &inherited_sigchld, std::ptr::null_mut());
             Ok(())
         });
     }
@@ -748,6 +752,21 @@ fn install_signal_forwarders() {
             // and all four of these can be caught, so this cannot fail.
             libc::sigaction(signal, &action, std::ptr::null_mut());
         }
+    }
+}
+
+/// Sets SIGCHLD to its default, returning the inherited action.
+///
+/// An ignored SIGCHLD makes the kernel reap children itself, so no wait could
+/// ever see the child's status.
+fn default_sigchld() -> libc::sigaction {
+    // SAFETY: both actions are initialised before they are read.
+    unsafe {
+        let mut default: libc::sigaction = std::mem::zeroed();
+        default.sa_sigaction = libc::SIG_DFL;
+        let mut inherited: libc::sigaction = std::mem::zeroed();
+        libc::sigaction(libc::SIGCHLD, &default, &mut inherited);
+        inherited
     }
 }
 
