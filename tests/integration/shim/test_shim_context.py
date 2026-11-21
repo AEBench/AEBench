@@ -213,6 +213,36 @@ def test_a_subreaper_shim_forwards_a_signal_to_its_command(shim: Path, tmp_path:
 	assert end["signal"] == 15
 
 
+def test_a_signal_after_the_command_exits_keeps_its_exit_status(shim: Path, tmp_path: Path) -> None:
+	with FakeBroker(tmp_path / "reaper.sock", Decision(subreaper=True)).start() as broker:
+		env = {
+			"PATH": _clean_path(),
+			"AEBENCH_REAL_SHELL": REAL_SHELL,
+			"AEBENCH_COMMAND_SOCKET": str(broker.socket_path),
+		}
+		# The background job holds stdout, so the shim outlives its command.
+		process = subprocess.Popen(
+			[str(shim), "-c", "(sleep 0.8; echo done) & exit 3"],
+			stdin=subprocess.DEVNULL,
+			stdout=subprocess.PIPE,
+			stderr=subprocess.DEVNULL,
+			env=env,
+		)
+		deadline = time.monotonic() + 10
+		while not broker.sessions or broker.sessions[0].started is None:
+			assert time.monotonic() < deadline
+			time.sleep(0.02)
+		time.sleep(0.3)
+		process.send_signal(signal.SIGTERM)
+
+		stdout, _ = process.communicate(timeout=10)
+		end = broker.wait_for_session().end
+	assert process.returncode == 3
+	assert stdout == b"done\n"
+	assert end is not None
+	assert end["exit_code"] == 3
+
+
 def _ignore_sigchld() -> None:
 	signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
