@@ -305,6 +305,7 @@ def _state(**lists: list[str]) -> dict:
     }
 
 
+_ORPHAN = {"pid": 7, "start_ticks": 50}
 RISK_EXECS = {
     "e1": _exec("e1", 1.0, 1.0),
     "e2": _exec("e2", 1.0, 1.0),
@@ -312,7 +313,11 @@ RISK_EXECS = {
     "e4": _exec("e4", 1.0, 8.0, complete=False),
     "e5": _exec("e5", 1.0, 1.0, orphans=[]),
     "e6": _exec("e6", 1.0, 1.0, orphans=[4242]),
-    "e7": _exec("e7", 1.0, 1.0, orphans=[{"pid": 7, "inherited_from": "e6"}]),
+    "e7": _exec("e7", 1.0, 1.0, orphans=[{**_ORPHAN, "inherited_from": "e8"}]),
+    "e8": _exec("e8", 1.0, 1.0, orphans=[_ORPHAN]),
+    "e10": _exec(
+        "e10", 1.0, 1.0, orphans=[{**_ORPHAN, "inherited_from": "e5"}]
+    ),
     "e9": _exec("e9", 5.0, 1.0),
 }
 RISK_WINDOWS = {
@@ -323,6 +328,7 @@ RISK_WINDOWS = {
     "e5": (1.0, 4.0),
     "e6": (1.0, 4.0),
     "e7": (1.0, 4.0),
+    "e10": (1.0, 4.0),
     "e9": (5.0, 8.0),
     "c1": (0.0, 1001.0),
     "c2": (1.0, 3.0),
@@ -400,6 +406,14 @@ RISKS = (
         5.0,
         True,
         [],
+    ),
+    (
+        "inherited_from a command without the orphan, exact basis",
+        _state(detached=["e10"]),
+        "e9",
+        5.0,
+        True,
+        [_risk("e10", "orphaned")],
     ),
     (
         "unmonitored call open to the run's end",

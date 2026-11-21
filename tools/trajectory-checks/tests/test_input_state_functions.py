@@ -322,6 +322,43 @@ def test_detached_exact_inherited_orphans() -> None:
     assert (list(ids), basis) == (["e2"], "exact")
 
 
+def test_detached_exact_unconfirmed_inherited_orphan() -> None:
+    """EVD8 exact: inherited_from counts only when that command lists it.
+
+    e1's orphan is e2's own shim (a recorded command, so it carries
+    command_id); e2 lists no orphans, so e1 keeps it. e3 names a command
+    that lists another start_ticks, and e4 one that does not exist.
+    Rules: EVD8.
+    """
+    shim = {"pid": 7, "start_ticks": 50, "comm": "bash", "command_id": "e2"}
+    execs = _execs(
+        {
+            "command_id": "e1",
+            "command": "./run.sh",
+            "orphans": [{**shim, "inherited_from": "e2"}],
+        },
+        {"command_id": "e2", "command": "./x.sh", "orphans": []},
+        {
+            "command_id": "e3",
+            "command": "./y.sh",
+            "orphans": [{"pid": 8, "start_ticks": 60, "inherited_from": "e5"}],
+        },
+        {
+            "command_id": "e4",
+            "command": "./z.sh",
+            "orphans": [{"pid": 9, "start_ticks": 70, "inherited_from": "e9"}],
+        },
+        {
+            "command_id": "e5",
+            "command": "./w.sh",
+            "orphans": [{"pid": 8, "start_ticks": 61}],
+        },
+    )
+    caps = _caps(parent_links=True)
+    ids, basis = _module().detached_execs(execs, [], capabilities=caps)
+    assert (list(ids), basis) == (["e1", "e3", "e4", "e5"], "exact")
+
+
 def test_detached_exact_incomplete_without_orphans() -> None:
     """EVD8 exact: an incomplete exec needs no orphans list.
 
