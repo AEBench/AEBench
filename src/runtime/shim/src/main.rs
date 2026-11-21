@@ -28,11 +28,13 @@
 //! | 1    | `stdout`       | shim -> server  | raw bytes          |
 //! | 2    | `stderr`       | shim -> server  | raw bytes          |
 //! | 3    | `end`          | shim -> server  | JSON               |
+//! | 5    | `started`      | shim -> server  | JSON               |
 //!
 //! Communication:
 //! ```text
 //! shim -> command_info   what is about to run
 //!      <- decision       the command's id, and whether it may run
+//! shim -> started        the child's pid, once it is running
 //! shim -> stdout         the child's stdout, after it has exited
 //! shim -> stderr         the child's stderr, after it has exited
 //! shim -> end            how the child finished
@@ -66,6 +68,14 @@
 //! | `exit_code`  | `int`         | what to exit with when denied, normally 126   |
 //!
 //! `command_id` is for the server's own records; the shim does not use it.
+//!
+//! ## `started` — shim to server
+//!
+//! | field               | type       | meaning                                 |
+//! |---------------------|------------|-----------------------------------------|
+//! | `child_pid`         | `int`      | the real shell's pid                    |
+//! | `child_start_ticks` | `int|null` | its start time in clock ticks           |
+//! | `t_spawn`           | `float`    | wall clock right after the spawn        |
 //!
 //! ## `end` — shim to server
 //!
@@ -248,6 +258,14 @@ fn ancestry(mut pid: i64) -> Vec<Ancestor> {
     chain
 }
 
+/// The body of the `started` message.
+#[derive(Serialize)]
+struct Started {
+    child_pid: i64,
+    child_start_ticks: Option<u64>,
+    t_spawn: f64,
+}
+
 /// The body of the `end` message.
 #[derive(Serialize)]
 struct End {
@@ -372,6 +390,15 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
     CHILD_PID.store(child.id() as i32, Ordering::SeqCst);
     restore_signal_mask(outer_mask);
 
+    let started = Started {
+        child_pid: child.id() as i64,
+        child_start_ticks: proc_stat(&child.id().to_string()).map(|stat| stat.start_ticks),
+        t_spawn: now_secs(),
+    };
+    if let Ok(body) = serde_json::to_vec(&started) {
+        let _ = stream.write_all(&encode_frame(FrameKind::Started, &body));
+    }
+
     // Both pipes must be drained concurrently: a child that fills one while we
     // read the other would block forever.
     let stdout_pump = child
@@ -467,6 +494,7 @@ enum FrameKind {
     Stderr,
     End,
     Decision,
+    Started,
 }
 
 impl FrameKind {
@@ -477,6 +505,7 @@ impl FrameKind {
             2 => Some(FrameKind::Stderr),
             3 => Some(FrameKind::End),
             4 => Some(FrameKind::Decision),
+            5 => Some(FrameKind::Started),
             _ => None,
         }
     }
@@ -488,6 +517,7 @@ impl FrameKind {
             FrameKind::Stderr => 2,
             FrameKind::End => 3,
             FrameKind::Decision => 4,
+            FrameKind::Started => 5,
         }
     }
 }

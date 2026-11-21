@@ -32,6 +32,7 @@ STDOUT = 1
 STDERR = 2
 END = 3
 DECISION = 4
+STARTED = 5
 
 
 async def read_buffer(reader: asyncio.StreamReader, size: int) -> bytes | None:
@@ -465,6 +466,15 @@ async def process_connection(
 				break
 
 			message_type, payload = frame
+
+			if message_type == STARTED:
+				started = json.loads(payload)
+				record["child_pid"] = started.get("child_pid")
+				record["shim_clock"]["spawn"] = started.get("t_spawn")
+				PROCESS_TREE.add(
+					started.get("child_pid"), started.get("child_start_ticks"), command_id, "child"
+				)
+				continue
 
 			if message_type == STDOUT:
 				stdout.write(payload)
