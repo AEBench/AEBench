@@ -39,12 +39,24 @@ def _wait_for(predicate: object, *, timeout: float = 10.0) -> bool:
 	return False
 
 
-def _run_one_command(socket_path: Path, argv: list[str]) -> None:
+def _run_one_command(
+	socket_path: Path,
+	argv: list[str],
+	*,
+	info: dict[str, object] | None = None,
+	stdout: bytes = b"hello\n",
+) -> None:
 	"""Plays one command through the protocol the way the shim does."""
 	client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 	client.connect(str(socket_path))
 	try:
-		info = {"argv": argv, "cwd": "/repo", "pid": os.getpid(), "env_keys": ["PATH"]}
+		info = {
+			"argv": argv,
+			"cwd": "/repo",
+			"pid": os.getpid(),
+			"env_keys": ["PATH"],
+			**(info or {}),
+		}
 		client.sendall(_frame(_COMMAND_INFO, json.dumps(info).encode("utf-8")))
 
 		header = client.recv(_HEADER.size)
@@ -53,10 +65,17 @@ def _run_one_command(socket_path: Path, argv: list[str]) -> None:
 		assert kind == _DECISION
 		assert decision["allow"] is True
 
-		client.sendall(_frame(_STDOUT, b"hello\n"))
+		if stdout:
+			client.sendall(_frame(_STDOUT, stdout))
 		client.sendall(_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8")))
 	finally:
 		client.close()
+
+
+def _records(broker: BrokerProcess) -> list[dict[str, object]]:
+	"""Returns every record in the trace, in the order written."""
+	lines = broker.trace_path.read_text(encoding="utf-8").splitlines()
+	return [json.loads(line) for line in lines]
 
 
 @pytest.fixture(name="broker")
@@ -147,6 +166,23 @@ def test_a_command_is_recorded_with_its_output(broker: BrokerProcess) -> None:
 	assert record["monitors"]["timing"]["duration_ms"] >= 0
 	captured = broker.trace_dir / record["stdout"]["path"]
 	assert captured.read_bytes() == b"hello\n"
+
+
+def test_a_tty_stream_is_recorded_as_skipped(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+
+	_run_one_command(
+		socket_path,
+		["/bin/bash", "-c", "ls"],
+		info={"stdout_tty": True, "stderr_tty": False},
+		stdout=b"",
+	)
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	(record,) = _records(broker)
+	assert record["stdout"]["capture"] == "skipped_tty"
+	assert record["stderr"]["capture"] == "none"
 
 
 def test_concurrent_shells_each_get_a_record(broker: BrokerProcess) -> None:
