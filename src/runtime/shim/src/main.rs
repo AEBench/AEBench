@@ -46,6 +46,8 @@
 //! | `cwd`      | `string`   | working directory; empty if it cannot be read      |
 //! | `pid`      | `int`      | this process's pid, the root of the `/proc` walk   |
 //! | `env_keys` | `[string]` | environment variable **names** only, never values  |
+//! | `stdout_tty` | `bool`   | stdout is a terminal, so it is not captured        |
+//! | `stderr_tty` | `bool`   | stderr is a terminal, so it is not captured        |
 //!
 //! ## `decision` — server to shim
 //!
@@ -129,6 +131,8 @@ struct CommandInfo {
     cwd: String,
     pid: i64,
     env_keys: Vec<String>,
+    stdout_tty: bool,
+    stderr_tty: bool,
 }
 
 impl CommandInfo {
@@ -149,6 +153,8 @@ impl CommandInfo {
                     value.to_string_lossy().into_owned()
                 })
                 .collect(),
+            stdout_tty: is_tty(libc::STDOUT_FILENO),
+            stderr_tty: is_tty(libc::STDERR_FILENO),
         }
     }
 }

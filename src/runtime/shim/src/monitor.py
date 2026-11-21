@@ -86,6 +86,7 @@ class StreamSink:
 		# Keep track of how much will be truncated
 		self.received = 0
 		self.kept = 0
+		self.tty = False
 
 		self.handle: BinaryIO | None = None
 
@@ -121,6 +122,8 @@ class StreamSink:
 			capture = "truncated"
 		elif self.kept:
 			capture = "captured"
+		elif self.tty:
+			capture = "skipped_tty"
 		else:
 			capture = "none"
 
@@ -371,6 +374,8 @@ async def process_connection(
 		record["cwd"] = command_info.get("cwd")
 		record["pid"] = command_info.get("pid")
 		record["env_keys"] = command_info.get("env_keys")
+		stdout.tty = bool(command_info.get("stdout_tty"))
+		stderr.tty = bool(command_info.get("stderr_tty"))
 
 		# pre-command state record
 		run_before_command(context)
