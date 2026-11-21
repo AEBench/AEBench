@@ -228,10 +228,49 @@ def test_release_and_end_times_are_recorded(broker: BrokerProcess) -> None:
 
 	assert _wait_for(lambda: broker.command_count() == 1)
 	(record,) = _records(broker)
-	released = datetime.fromisoformat(record["released_at"])
-	ended = datetime.fromisoformat(record["ended_at"])
+	timing = record["monitors"]["timing"]
+	released = datetime.fromisoformat(timing["released_at"])
+	ended = datetime.fromisoformat(timing["ended_at"])
 	assert released <= ended
+	assert "released_at" not in record
+	assert "ended_at" not in record
 	assert record["shim_clock"]["info"] == 1700000000.5
+
+
+def test_timing_runs_from_release_to_end(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+
+	client = _open_command(socket_path, {"argv": ["/bin/bash", "-c", "sleep"], "pid": 100})
+	time.sleep(0.2)
+	client.sendall(_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8")))
+	client.close()
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	(record,) = _records(broker)
+	timing = record["monitors"]["timing"]
+	released = datetime.fromisoformat(timing["released_at"])
+	ended = datetime.fromisoformat(timing["ended_at"])
+	assert timing["started_at"] == timing["released_at"]
+	assert timing["duration_ms"] >= 200
+	assert abs(timing["duration_ms"] - (ended - released).total_seconds() * 1000) <= 2
+	assert isinstance(timing["snapshot_before_ms"], int) and timing["snapshot_before_ms"] >= 0
+	assert isinstance(timing["snapshot_after_ms"], int) and timing["snapshot_after_ms"] >= 0
+
+
+def test_a_record_without_an_end_has_no_end_time(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+
+	_open_command(socket_path, {"argv": ["/bin/bash", "-c", "sleep"], "pid": 100}).close()
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	(record,) = _records(broker)
+	timing = record["monitors"]["timing"]
+	assert timing["started_at"] == timing["released_at"]
+	assert timing["ended_at"] is None
+	assert timing["duration_ms"] is None
+	assert timing["snapshot_after_ms"] is None
 
 
 def _open_command(socket_path: Path, info: dict[str, object]) -> socket.socket:
