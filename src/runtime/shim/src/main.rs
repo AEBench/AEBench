@@ -481,7 +481,11 @@ fn run_monitored(
         .map(|pipe| spawn_pump(pipe, FrameKind::Stderr));
 
     let status = if subreaper {
-        wait_reaping(child.id() as libc::pid_t)
+        let status = wait_reaping(child.id() as libc::pid_t);
+        // Nothing else is waited for, so orphans exiting while output drains
+        // are reaped in the background.
+        thread::spawn(reap_orphans);
+        status
     } else {
         child.wait()
     };
@@ -534,6 +538,17 @@ fn wait_reaping(pid: libc::pid_t) -> io::Result<ExitStatus> {
             if err.kind() != io::ErrorKind::Interrupted {
                 return Err(err);
             }
+        }
+    }
+}
+
+/// Reaps adopted orphans until none are left.
+fn reap_orphans() {
+    loop {
+        // SAFETY: waitpid accepts a null status pointer.
+        let reaped = unsafe { libc::waitpid(-1, std::ptr::null_mut(), 0) };
+        if reaped == -1 && io::Error::last_os_error().kind() != io::ErrorKind::Interrupted {
+            return;
         }
     }
 }
