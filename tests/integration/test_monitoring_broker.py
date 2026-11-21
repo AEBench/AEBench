@@ -409,6 +409,7 @@ def test_a_shell_under_a_killed_shim_links_through_the_real_shell(
 	assert _wait_for(lambda: broker.command_count() == 2)
 	parent = _record_for(broker, outer_argv)
 	assert parent["child_pid"] == 200
+	assert parent["child_start_ticks"] == 7
 	assert parent["shim_clock"]["spawn"] == 1700000000.0
 	child = _record_for(broker, inner_argv)
 	assert child["parent_command_id"] == parent["command_id"]
@@ -589,6 +590,26 @@ def test_an_interrupted_shell_still_leaves_a_record(broker: BrokerProcess) -> No
 	record = json.loads(broker.trace_path.read_text(encoding="utf-8").splitlines()[0])
 	assert record["complete"] is False
 	assert record["exit_code"] is None
+
+
+def test_a_record_without_an_end_has_the_same_keys(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	ended_argv = ["/bin/bash", "-c", "ls"]
+	killed_argv = ["/bin/bash", "-c", "sleep"]
+
+	_run_one_command(socket_path, ended_argv)
+	_open_command(socket_path, {"argv": killed_argv, "pid": 100}).close()
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	ended = _record_for(broker, ended_argv)
+	killed = _record_for(broker, killed_argv)
+	assert set(killed) == set(ended)
+	assert set(killed["shim_clock"]) == set(ended["shim_clock"])
+	assert killed["orphans"] is None
+	assert killed["child_pid"] is None
+	assert killed["child_start_ticks"] is None
+	assert killed["shim_clock"]["exit"] is None
 
 
 def test_a_command_that_edits_a_tracked_file_is_attributed_the_change(tmp_path: Path) -> None:
