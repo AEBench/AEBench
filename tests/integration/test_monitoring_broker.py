@@ -199,6 +199,18 @@ def test_the_shim_version_is_recorded(broker: BrokerProcess) -> None:
 	assert record["shim_version"] == "0.2.0"
 
 
+def test_the_stdio_targets_are_recorded(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	stdio = ["/dev/null", "/repo/log", "pipe:[42]"]
+
+	_run_one_command(socket_path, ["/bin/bash", "./run.sh"], info={"stdio": stdio})
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	(record,) = _records(broker)
+	assert record["stdio"] == stdio
+
+
 def test_concurrent_shells_each_get_a_record(broker: BrokerProcess) -> None:
 	# A parallel build execs one shell per recipe line; a broker that served
 	# them one at a time would deadlock the first `make -j`.

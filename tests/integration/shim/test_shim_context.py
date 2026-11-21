@@ -69,6 +69,17 @@ def test_piped_streams_are_not_reported_as_ttys(shim: Path, broker: FakeBroker) 
 	assert info["stderr_tty"] is False
 
 
+def test_stdio_targets_are_reported(shim: Path, broker: FakeBroker, tmp_path: Path) -> None:
+	log = tmp_path / "out.log"
+	with log.open("w") as handle:
+		assert _run(shim, broker, ["-c", "true"], stdout=handle) == 0
+
+	stdin, stdout, stderr = broker.wait_for_session().command_info["stdio"]
+	assert stdin == "/dev/null"
+	assert stdout == str(log)
+	assert stderr.startswith("pipe:[")
+
+
 def test_the_protocol_and_shim_version_are_reported(shim: Path, broker: FakeBroker) -> None:
 	manifest = tomllib.loads((shim.parents[2] / "Cargo.toml").read_text(encoding="utf-8"))
 
