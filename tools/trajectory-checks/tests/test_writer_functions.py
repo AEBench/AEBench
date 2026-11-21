@@ -312,6 +312,7 @@ RISK_EXECS = {
     "e4": _exec("e4", 1.0, 8.0, complete=False),
     "e5": _exec("e5", 1.0, 1.0, orphans=[]),
     "e6": _exec("e6", 1.0, 1.0, orphans=[4242]),
+    "e7": _exec("e7", 1.0, 1.0, orphans=[{"pid": 7, "inherited_from": "e6"}]),
     "e9": _exec("e9", 5.0, 1.0),
 }
 RISK_WINDOWS = {
@@ -321,6 +322,7 @@ RISK_WINDOWS = {
     "e4": (1.0, 11.0),
     "e5": (1.0, 4.0),
     "e6": (1.0, 4.0),
+    "e7": (1.0, 4.0),
     "e9": (5.0, 8.0),
     "c1": (0.0, 1001.0),
     "c2": (1.0, 3.0),
@@ -386,6 +388,14 @@ RISKS = (
     (
         "empty orphans, exact basis",
         _state(detached=["e5"]),
+        "e9",
+        5.0,
+        True,
+        [],
+    ),
+    (
+        "only inherited orphans, exact basis",
+        _state(detached=["e7"]),
         "e9",
         5.0,
         True,

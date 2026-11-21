@@ -301,6 +301,27 @@ def test_detached_exact() -> None:
     assert (list(ids), basis) == (["e2", "e3"], "exact")
 
 
+def test_detached_exact_inherited_orphans() -> None:
+    """EVD8 exact: an orphan an inner command listed first counts there.
+
+    The outer exec's entry carries inherited_from, so only the inner exec
+    is detached by it.
+    Rules: EVD8.
+    """
+    orphan = {"pid": 7, "comm": "x", "start_ticks": 50}
+    execs = _execs(
+        {
+            "command_id": "e1",
+            "command": "./run.sh",
+            "orphans": [{**orphan, "inherited_from": "e2"}],
+        },
+        {"command_id": "e2", "command": "./x.sh", "orphans": [orphan]},
+    )
+    caps = _caps(parent_links=True)
+    ids, basis = _module().detached_execs(execs, [], capabilities=caps)
+    assert (list(ids), basis) == (["e2"], "exact")
+
+
 def test_detached_exact_incomplete_without_orphans() -> None:
     """EVD8 exact: an incomplete exec needs no orphans list.
 
