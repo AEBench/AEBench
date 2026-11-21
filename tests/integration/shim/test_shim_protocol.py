@@ -58,4 +58,6 @@ def test_cat_reports_every_expected_message(
 
 	assert session.stdout == STDIN_TEXT.encode()
 	assert session.stderr == b""
-	assert session.end == {"exit_code": 0, "signal": None}
+	assert session.end is not None
+	assert session.end["exit_code"] == 0
+	assert session.end["signal"] is None

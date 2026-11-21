@@ -11,6 +11,7 @@ import os
 import socket
 import struct
 import time
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -209,6 +210,20 @@ def test_the_stdio_targets_are_recorded(broker: BrokerProcess) -> None:
 	assert _wait_for(lambda: broker.command_count() == 1)
 	(record,) = _records(broker)
 	assert record["stdio"] == stdio
+
+
+def test_release_and_end_times_are_recorded(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+
+	_run_one_command(socket_path, ["/bin/bash", "-c", "ls"], info={"t_info": 1700000000.5})
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	(record,) = _records(broker)
+	released = datetime.fromisoformat(record["released_at"])
+	ended = datetime.fromisoformat(record["ended_at"])
+	assert released <= ended
+	assert record["shim_clock"]["info"] == 1700000000.5
 
 
 def test_concurrent_shells_each_get_a_record(broker: BrokerProcess) -> None:

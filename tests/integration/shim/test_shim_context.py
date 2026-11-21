@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import pty
 import subprocess
+import time
 from pathlib import Path
 from typing import IO, Any
 
@@ -78,6 +79,17 @@ def test_stdio_targets_are_reported(shim: Path, broker: FakeBroker, tmp_path: Pa
 	assert stdin == "/dev/null"
 	assert stdout == str(log)
 	assert stderr.startswith("pipe:[")
+
+
+def test_the_shim_clock_brackets_the_command(shim: Path, broker: FakeBroker) -> None:
+	before = time.time()
+	assert _run(shim, broker, ["-c", "sleep 0.2"]) == 0
+	after = time.time()
+
+	session = broker.wait_for_session()
+	assert session.end is not None
+	assert before <= session.command_info["t_info"] <= session.end["t_exit"] <= after
+	assert session.end["t_exit"] - session.command_info["t_info"] >= 0.2
 
 
 def test_the_protocol_and_shim_version_are_reported(shim: Path, broker: FakeBroker) -> None:
