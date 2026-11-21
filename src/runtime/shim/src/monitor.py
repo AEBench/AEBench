@@ -189,7 +189,8 @@ def run_before_command(ctx: CommandContext) -> None:
 
 
 def run_after_command(ctx: CommandContext) -> None:
-	for monitor in MONITORS:
+	"""Runs every monitor's post-command phase, in reverse registration order."""
+	for monitor in reversed(MONITORS):
 		try:
 			output = monitor.after_command(ctx)
 		except BaseException as exc:
@@ -203,24 +204,34 @@ def run_after_command(ctx: CommandContext) -> None:
 
 
 class CommandTiming(Monitor):
-	"""How long each command took. Duration comes from a monotonic clock."""
+	"""How long each command took from release to end, on a monotonic clock.
+
+	Registered first, so it brackets the snapshots. The broker stamps the
+	release and the end into ctx.state.
+	"""
 
 	name = "timing"
 
 	def before_command(self, ctx: CommandContext) -> None:
-		ctx.state[self.name] = (time.monotonic(), datetime.now(timezone.utc))
+		ctx.state[self.name] = time.monotonic()
 
 	def after_command(self, ctx: CommandContext) -> Record | None:
-		started = ctx.state.get(self.name)
+		before = ctx.state.get(self.name)
+		released = ctx.state.get("released")
 
-		if started is None:
+		if before is None or released is None:
 			return None
 
-		monotonic_start, wall_start = started
+		ended = ctx.state.get("ended")
+		released_at = released[1].isoformat()
 
 		return {
-			"started_at": wall_start.isoformat(),
-			"duration_ms": int((time.monotonic() - monotonic_start) * 1000),
+			"started_at": released_at,
+			"released_at": released_at,
+			"ended_at": ended and ended[1].isoformat(),
+			"duration_ms": ended and int((ended[0] - released[0]) * 1000),
+			"snapshot_before_ms": int((released[0] - before) * 1000),
+			"snapshot_after_ms": ended and int((time.monotonic() - ended[0]) * 1000),
 			# Wall clock covers everything the command spawned
 			"includes_children": True,
 		}
@@ -457,7 +468,7 @@ async def process_connection(
 			"subreaper": SUBREAPER,
 		}
 
-		record["released_at"] = datetime.now(timezone.utc).isoformat()
+		context.state["released"] = (time.monotonic(), datetime.now(timezone.utc))
 		await send_frame(
 			writer,
 			DECISION,
@@ -495,7 +506,7 @@ async def process_connection(
 			# and also label session complete
 			if message_type == END:
 				end = json.loads(payload)
-				record["ended_at"] = datetime.now(timezone.utc).isoformat()
+				context.state["ended"] = (time.monotonic(), datetime.now(timezone.utc))
 				record["shim_clock"]["exit"] = end.get("t_exit")
 				record["orphans"] = end.get("orphans")
 				for orphan in record["orphans"] or []:
