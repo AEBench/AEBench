@@ -359,6 +359,35 @@ def test_detached_exact_unconfirmed_inherited_orphan() -> None:
     assert (list(ids), basis) == (["e1", "e3", "e4", "e5"], "exact")
 
 
+def test_detached_exact_child_outlives_parent() -> None:
+    """EVD8 exact with exact_timing: a child that ends after its parent.
+
+    e2 ends after its parent e1 (a `( ... &)` the text does not show):
+    both are detached, e1 as the launcher. e3 ends inside e1, e4 has no
+    ended_at. Without exact_timing, and on the fallback basis, neither
+    counts.
+    Rules: EVD8.
+    """
+    rows = (
+        {"command_id": "e1", "command": "./run.sh", "ended_at": 20.0},
+        {"command_id": "e2", "parent_command_id": "e1", "ended_at": 30.0},
+        {"command_id": "e3", "parent_command_id": "e1", "ended_at": 15.0},
+        {"command_id": "e4", "parent_command_id": "e1"},
+    )
+    rows = tuple({"command": "./x.sh", **r, "orphans": []} for r in rows)
+    module = _module()
+    caps = _caps(parent_links=True, exact_timing=True)
+    ids, basis = module.detached_execs(_execs(*rows), [], capabilities=caps)
+    assert (list(ids), basis) == (["e1", "e2"], "exact")
+    caps = _caps(parent_links=True)
+    ids, basis = module.detached_execs(_execs(*rows), [], capabilities=caps)
+    assert (list(ids), basis) == ([], "exact")
+    rows = tuple({**r, "orphans": None} for r in rows)
+    caps = _caps(parent_links=True, exact_timing=True)
+    ids, basis = module.detached_execs(_execs(*rows), [], capabilities=caps)
+    assert (list(ids), basis) == ([], "fallback")
+
+
 def test_detached_exact_incomplete_without_orphans() -> None:
     """EVD8 exact: an incomplete exec needs no orphans list.
 
