@@ -95,6 +95,7 @@ class Decision:
 	reason: str = ""
 	exit_code: int = 126
 	command_id: str = "cmd-0001"
+	subreaper: bool = False
 
 	def payload(self) -> bytes:
 		"""Returns the JSON body of the ``decision`` frame."""
@@ -104,6 +105,7 @@ class Decision:
 				"allow": self.allow,
 				"reason": self.reason,
 				"exit_code": self.exit_code,
+				"subreaper": self.subreaper,
 			}
 		).encode("utf-8")
 

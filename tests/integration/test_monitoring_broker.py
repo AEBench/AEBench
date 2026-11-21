@@ -47,8 +47,13 @@ def _run_one_command(
 	*,
 	info: dict[str, object] | None = None,
 	stdout: bytes = b"hello\n",
-) -> None:
-	"""Plays one command through the protocol the way the shim does."""
+	end: dict[str, object] | None = None,
+) -> dict[str, object]:
+	"""Plays one command through the protocol the way the shim does.
+
+	Returns:
+		The decision the broker sent.
+	"""
 	client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 	client.connect(str(socket_path))
 	try:
@@ -69,9 +74,11 @@ def _run_one_command(
 
 		if stdout:
 			client.sendall(_frame(_STDOUT, stdout))
-		client.sendall(_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8")))
+		end = {"exit_code": 0, "signal": None, **(end or {})}
+		client.sendall(_frame(_END, json.dumps(end).encode("utf-8")))
 	finally:
 		client.close()
+	return decision
 
 
 def _records(broker: BrokerProcess) -> list[dict[str, object]]:
@@ -356,6 +363,79 @@ def test_a_shell_under_a_killed_shim_links_through_the_real_shell(
 	child = _record_for(broker, inner_argv)
 	assert child["parent_command_id"] == parent["command_id"]
 	assert child["parent_link"] == "closed"
+
+
+def test_a_shell_started_by_an_orphan_is_linked_as_adopted(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	launch_argv = ["/bin/bash", "-c", "nohup ./run.sh > log 2>&1 &"]
+	later_argv = ["/bin/bash", "-c", "python3 eval.py"]
+	orphans = [{"pid": 500, "start_ticks": 3, "comm": "run.sh"}]
+
+	decision = _run_one_command(
+		socket_path,
+		launch_argv,
+		info={"pid": 100, "start_ticks": 1, "ancestry": []},
+		end={"orphans": orphans},
+	)
+	assert decision["subreaper"] is True
+	assert _wait_for(lambda: broker.command_count() == 1)
+	_run_one_command(
+		socket_path,
+		later_argv,
+		info={
+			"pid": 600,
+			"start_ticks": 8,
+			"ancestry": [{"pid": 500, "start_ticks": 3, "comm": "run.sh"}],
+		},
+	)
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	launch = _record_for(broker, launch_argv)
+	assert launch["orphans"] == orphans
+	later = _record_for(broker, later_argv)
+	assert later["parent_command_id"] == launch["command_id"]
+	assert later["parent_link"] == "adopted"
+
+
+def test_an_orphaned_shim_keeps_its_own_command(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	launch_argv = ["/bin/bash", "-c", "nohup bash -c ./run.sh &"]
+	detached_argv = ["/bin/bash", "-c", "./run.sh"]
+	inner_argv = ["/bin/bash", "-c", "python3 eval.py"]
+
+	launch = _open_command(
+		socket_path, {"argv": launch_argv, "pid": 100, "start_ticks": 1, "ancestry": []}
+	)
+	_run_one_command(
+		socket_path,
+		detached_argv,
+		info={
+			"pid": 500,
+			"start_ticks": 3,
+			"ancestry": [{"pid": 100, "start_ticks": 1, "comm": "aeshell"}],
+		},
+	)
+	orphans = [{"pid": 500, "start_ticks": 3, "comm": "aeshell"}]
+	end = {"exit_code": 0, "signal": None, "orphans": orphans}
+	launch.sendall(_frame(_END, json.dumps(end).encode("utf-8")))
+	launch.close()
+	assert _wait_for(lambda: broker.command_count() == 2)
+	_run_one_command(
+		socket_path,
+		inner_argv,
+		info={
+			"pid": 600,
+			"start_ticks": 8,
+			"ancestry": [{"pid": 500, "start_ticks": 3, "comm": "aeshell"}],
+		},
+	)
+
+	assert _wait_for(lambda: broker.command_count() == 3)
+	inner = _record_for(broker, inner_argv)
+	assert inner["parent_command_id"] == _record_for(broker, detached_argv)["command_id"]
+	assert inner["depth"] == 2
 
 
 def test_a_record_without_ancestry_leaves_its_links_unknown(broker: BrokerProcess) -> None:

@@ -17,7 +17,7 @@ import pytest
 import tomllib
 
 from .conftest import REAL_SHELL, _clean_path
-from .fake_broker import FakeBroker
+from .fake_broker import Decision, FakeBroker
 
 pytestmark = pytest.mark.shim
 
@@ -121,6 +121,26 @@ def test_the_started_frame_names_the_real_shell_a_nested_shell_runs_under(
 	assert outer.started["child_pid"] == inner["ppid"]
 	assert outer.started["child_start_ticks"] == inner["ancestry"][0]["start_ticks"]
 	assert before <= outer.started["t_spawn"] <= inner["t_info"]
+
+
+def test_a_subreaper_shim_reports_what_its_command_left_running(shim: Path, tmp_path: Path) -> None:
+	with FakeBroker(tmp_path / "reaper.sock", Decision(subreaper=True)).start() as broker:
+		started = time.monotonic()
+		assert _run(shim, broker, ["-c", "nohup sleep 3 >/dev/null 2>&1 &"]) == 0
+		assert time.monotonic() - started < 3
+
+		end = broker.wait_for_session().end
+	assert end is not None
+	assert [orphan["comm"] for orphan in end["orphans"]] == ["sleep"]
+	assert end["orphans"][0]["start_ticks"] > 0
+
+
+def test_without_a_subreaper_orphans_are_unknown(shim: Path, broker: FakeBroker) -> None:
+	assert _run(shim, broker, ["-c", "nohup sleep 1 >/dev/null 2>&1 &"]) == 0
+
+	end = broker.wait_for_session().end
+	assert end is not None
+	assert end["orphans"] is None
 
 
 def test_the_protocol_and_shim_version_are_reported(shim: Path, broker: FakeBroker) -> None:
