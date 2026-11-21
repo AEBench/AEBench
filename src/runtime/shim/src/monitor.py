@@ -428,6 +428,10 @@ async def process_connection(
 		"exit_code": None,
 		"signal": None,
 		"return_code": None,
+		"child_pid": None,
+		"child_start_ticks": None,
+		"orphans": None,
+		"shim_clock": {"info": None, "spawn": None, "exit": None},
 	}
 
 	context = CommandContext(record, output_dir, run_id)
@@ -454,7 +458,7 @@ async def process_connection(
 		record["stdio"] = command_info.get("stdio")
 		stdout.tty = bool(command_info.get("stdout_tty"))
 		stderr.tty = bool(command_info.get("stderr_tty"))
-		record["shim_clock"] = {"info": command_info.get("t_info")}
+		record["shim_clock"]["info"] = command_info.get("t_info")
 		for key in ("ppid", "pgid", "sid", "start_ticks", "ancestry"):
 			record[key] = command_info.get(key)
 		PROCESS_TREE.link(record, command_info.get("ancestry"))
@@ -490,6 +494,7 @@ async def process_connection(
 			if message_type == STARTED:
 				started = json.loads(payload)
 				record["child_pid"] = started.get("child_pid")
+				record["child_start_ticks"] = started.get("child_start_ticks")
 				record["shim_clock"]["spawn"] = started.get("t_spawn")
 				PROCESS_TREE.add(
 					started.get("child_pid"), started.get("child_start_ticks"), command_id, "child"
