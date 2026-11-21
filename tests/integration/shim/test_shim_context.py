@@ -92,6 +92,23 @@ def test_the_shim_clock_brackets_the_command(shim: Path, broker: FakeBroker) -> 
 	assert session.end["t_exit"] - session.command_info["t_info"] >= 0.2
 
 
+def test_a_nested_shell_reports_the_outer_shim_among_its_ancestors(
+	shim: Path, broker: FakeBroker
+) -> None:
+	# The trailing `true` stops bash from exec'ing the inner shim in place.
+	assert _run(shim, broker, ["-c", f"{shim} -c true; true"]) == 0
+
+	outer = broker.wait_for_session(0).command_info
+	inner = broker.wait_for_session(1).command_info
+	ancestry = inner["ancestry"]
+	assert inner["ppid"] == ancestry[0]["pid"]
+	assert ancestry[0]["comm"] == "bash"
+	assert {"pid": outer["pid"], "start_ticks": outer["start_ticks"]} in [
+		{"pid": entry["pid"], "start_ticks": entry["start_ticks"]} for entry in ancestry
+	]
+	assert isinstance(inner["pgid"], int) and isinstance(inner["sid"], int)
+
+
 def test_the_protocol_and_shim_version_are_reported(shim: Path, broker: FakeBroker) -> None:
 	manifest = tomllib.loads((shim.parents[2] / "Cargo.toml").read_text(encoding="utf-8"))
 

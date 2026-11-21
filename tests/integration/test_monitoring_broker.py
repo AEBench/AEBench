@@ -226,6 +226,113 @@ def test_release_and_end_times_are_recorded(broker: BrokerProcess) -> None:
 	assert record["shim_clock"]["info"] == 1700000000.5
 
 
+def _open_command(socket_path: Path, info: dict[str, object]) -> socket.socket:
+	"""Starts a command and returns its connection, still open."""
+	client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+	client.connect(str(socket_path))
+	info = {"cwd": "/repo", "env_keys": [], **info}
+	client.sendall(_frame(_COMMAND_INFO, json.dumps(info).encode("utf-8")))
+	length, _kind = _HEADER.unpack(client.recv(_HEADER.size))
+	client.recv(length)
+	return client
+
+
+def _record_for(broker: BrokerProcess, argv: list[str]) -> dict[str, object]:
+	(record,) = [record for record in _records(broker) if record["argv"] == argv]
+	return record
+
+
+def test_a_nested_shell_is_linked_to_the_open_command_above_it(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	outer_argv = ["/bin/bash", "-c", "make"]
+	inner_argv = ["/bin/bash", "-c", "cc -c a.c"]
+
+	outer = _open_command(
+		socket_path, {"argv": outer_argv, "pid": 100, "start_ticks": 5, "ancestry": []}
+	)
+	ancestry = [
+		{"pid": 300, "start_ticks": 9, "comm": "make"},
+		{"pid": 200, "start_ticks": 7, "comm": "bash"},
+		{"pid": 100, "start_ticks": 5, "comm": "aeshell"},
+	]
+	_run_one_command(
+		socket_path, inner_argv, info={"pid": 400, "start_ticks": 11, "ancestry": ancestry}
+	)
+	outer.sendall(_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8")))
+	outer.close()
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	parent = _record_for(broker, outer_argv)
+	child = _record_for(broker, inner_argv)
+	assert parent["parent_command_id"] is None
+	assert parent["parent_link"] == "none"
+	assert parent["depth"] == 0
+	assert child["parent_command_id"] == parent["command_id"]
+	assert child["root_command_id"] == parent["command_id"]
+	assert child["parent_link"] == "live"
+	assert child["depth"] == 1
+
+
+def test_a_reused_pid_is_not_taken_for_a_finished_parent(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	first_argv = ["/bin/bash", "-c", "first"]
+	later_argv = ["/bin/bash", "-c", "later"]
+
+	_run_one_command(socket_path, first_argv, info={"pid": 100, "start_ticks": 5, "ancestry": []})
+	_run_one_command(
+		socket_path,
+		later_argv,
+		info={
+			"pid": 400,
+			"start_ticks": 20,
+			"ancestry": [{"pid": 100, "start_ticks": 19, "comm": "x"}],
+		},
+	)
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	assert _record_for(broker, later_argv)["parent_command_id"] is None
+
+
+def test_a_shell_started_after_its_parent_finished_is_linked_as_closed(
+	broker: BrokerProcess,
+) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	first_argv = ["/bin/bash", "-c", "first"]
+	later_argv = ["/bin/bash", "-c", "later"]
+
+	_run_one_command(socket_path, first_argv, info={"pid": 100, "start_ticks": 5, "ancestry": []})
+	assert _wait_for(lambda: broker.command_count() == 1)
+	_run_one_command(
+		socket_path,
+		later_argv,
+		info={
+			"pid": 400,
+			"start_ticks": 20,
+			"ancestry": [{"pid": 100, "start_ticks": 5, "comm": "aeshell"}],
+		},
+	)
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	later = _record_for(broker, later_argv)
+	assert later["parent_command_id"] == _record_for(broker, first_argv)["command_id"]
+	assert later["parent_link"] == "closed"
+
+
+def test_a_record_without_ancestry_leaves_its_links_unknown(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+
+	_run_one_command(socket_path, ["/bin/bash", "-c", "ls"])
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	(record,) = _records(broker)
+	assert record["parent_link"] is None
+	assert record["root_command_id"] is None
+
+
 def test_concurrent_shells_each_get_a_record(broker: BrokerProcess) -> None:
 	# A parallel build execs one shell per recipe line; a broker that served
 	# them one at a time would deadlock the first `make -j`.
