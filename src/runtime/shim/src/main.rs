@@ -96,7 +96,7 @@ use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -423,8 +423,8 @@ fn run_monitored(
     let outer_mask = block_forwarded_signals();
     install_signal_forwarders();
 
-    // Orphans of the child then reparent here instead of to pid 1. They are
-    // never reaped here: only the child's status is waited for.
+    // Orphans of the child then reparent here instead of to pid 1, and are
+    // reaped while the child runs.
     if subreaper {
         unsafe { libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) };
     }
@@ -476,7 +476,11 @@ fn run_monitored(
         .take()
         .map(|pipe| spawn_pump(pipe, FrameKind::Stderr));
 
-    let status = child.wait();
+    let status = if subreaper {
+        wait_reaping(child.id() as libc::pid_t)
+    } else {
+        child.wait()
+    };
     let t_exit = now_secs();
     let stdout = stdout_pump
         .and_then(|pump| pump.join().ok())
@@ -508,6 +512,25 @@ fn run_monitored(
         (Some(code), _) => code,
         (None, Some(signal)) => 128 + signal,
         _ => 127,
+    }
+}
+
+/// Waits for `pid`, reaping every adopted orphan that exits before it.
+fn wait_reaping(pid: libc::pid_t) -> io::Result<ExitStatus> {
+    loop {
+        let mut status = 0;
+        // SAFETY: `status` is a valid pointer for the duration of the call.
+        let reaped = unsafe { libc::waitpid(-1, &mut status, 0) };
+        if reaped == pid {
+            return Ok(ExitStatus::from_raw(status));
+        }
+        if reaped == -1 {
+            let err = io::Error::last_os_error();
+            // Only EINTR is retried; ECHILD is reported like any other error.
+            if err.kind() != io::ErrorKind::Interrupted {
+                return Err(err);
+            }
+        }
     }
 }
 
