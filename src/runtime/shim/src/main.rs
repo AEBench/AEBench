@@ -481,16 +481,17 @@ fn run_monitored(
         .map(|pipe| spawn_pump(pipe, FrameKind::Stderr));
 
     let status = if subreaper {
-        let status = wait_reaping(child.id() as libc::pid_t);
-        // Nothing else is waited for, so orphans exiting while output drains
-        // are reaped in the background.
-        thread::spawn(reap_orphans);
-        status
+        wait_reaping(child.id() as libc::pid_t)
     } else {
         child.wait()
     };
     // The pid is free once reaped, so a late signal must not reach its reuse.
     CHILD_PID.store(0, Ordering::SeqCst);
+    if subreaper {
+        // Nothing else is waited for, so orphans exiting while output drains
+        // are reaped in the background.
+        thread::spawn(reap_orphans);
+    }
     let t_exit = now_secs();
     let stdout = stdout_pump
         .and_then(|pump| pump.join().ok())
