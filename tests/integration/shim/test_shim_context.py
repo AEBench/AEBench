@@ -9,11 +9,11 @@ from __future__ import annotations
 import os
 import pty
 import subprocess
-import tomllib
 from pathlib import Path
 from typing import IO, Any
 
 import pytest
+import tomllib
 
 from .conftest import REAL_SHELL, _clean_path
 from .fake_broker import FakeBroker

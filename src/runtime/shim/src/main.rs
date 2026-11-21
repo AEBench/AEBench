@@ -48,6 +48,8 @@
 //! | `env_keys` | `[string]` | environment variable **names** only, never values  |
 //! | `stdout_tty` | `bool`   | stdout is a terminal, so it is not captured        |
 //! | `stderr_tty` | `bool`   | stderr is a terminal, so it is not captured        |
+//! | `protocol` | `int`      | version of this protocol, currently 2              |
+//! | `shim_version` | `string` | the crate version of this binary               |
 //!
 //! ## `decision` — server to shim
 //!
@@ -81,6 +83,7 @@ use std::thread;
 
 use serde::{Deserialize, Serialize};
 
+const PROTOCOL: u32 = 2;
 const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 const READ_BYTES: usize = 64 * 1024;
 
@@ -133,6 +136,8 @@ struct CommandInfo {
     env_keys: Vec<String>,
     stdout_tty: bool,
     stderr_tty: bool,
+    protocol: u32,
+    shim_version: &'static str,
 }
 
 impl CommandInfo {
@@ -155,6 +160,8 @@ impl CommandInfo {
                 .collect(),
             stdout_tty: is_tty(libc::STDOUT_FILENO),
             stderr_tty: is_tty(libc::STDERR_FILENO),
+            protocol: PROTOCOL,
+            shim_version: env!("CARGO_PKG_VERSION"),
         }
     }
 }
