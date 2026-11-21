@@ -262,6 +262,33 @@ def test_new_format_trace_alone(tmp_path: pathlib.Path) -> None:
     assert result["execs"][0]["orphans"] == [{"pid": 140, "comm": "python3"}]
 
 
+def test_timing_at_record_root_in_coverage_warnings(
+    tmp_path: pathlib.Path,
+) -> None:
+    """MC-10 keys at the record root: coverage says why exact_timing is off.
+
+    The trace's warning reaches coverage.warnings; the fixture as recorded,
+    with them under monitors.timing, gives none.
+    """
+    run_dir = _make_new_run(tmp_path / "root", extras=False)
+    trace = run_dir / "monitor" / "commands.jsonl"
+    records = [json.loads(x) for x in trace.read_text().splitlines()]
+    for record in records:
+        timing = record["monitors"]["timing"]
+        for key in ("released_at", "ended_at"):
+            if key in timing:
+                record[key] = timing.pop(key)
+    trace.write_text("".join(json.dumps(r) + "\n" for r in records))
+    coverage = cli.analyse(run_dir)["coverage"]
+    assert coverage["capabilities"]["exact_timing"] is False
+    found = [w for w in coverage["warnings"] if "monitors.timing" in w]
+    assert len(found) == 1, coverage["warnings"]
+    plain = cli.analyse(_make_new_run(tmp_path / "plain", extras=False))
+    assert not any(
+        "monitors.timing" in w for w in plain["coverage"]["warnings"]
+    )
+
+
 def test_new_format_run_with_every_file(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
