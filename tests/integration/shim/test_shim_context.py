@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import pty
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import IO, Any
 
@@ -66,3 +67,13 @@ def test_piped_streams_are_not_reported_as_ttys(shim: Path, broker: FakeBroker) 
 	info = broker.wait_for_session().command_info
 	assert info["stdout_tty"] is False
 	assert info["stderr_tty"] is False
+
+
+def test_the_protocol_and_shim_version_are_reported(shim: Path, broker: FakeBroker) -> None:
+	manifest = tomllib.loads((shim.parents[2] / "Cargo.toml").read_text(encoding="utf-8"))
+
+	assert _run(shim, broker, ["-c", "true"]) == 0
+
+	info = broker.wait_for_session().command_info
+	assert info["protocol"] == 2
+	assert info["shim_version"] == manifest["package"]["version"]
