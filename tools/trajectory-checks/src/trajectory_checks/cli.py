@@ -234,6 +234,7 @@ def capabilities(
         "final_content": run["final_diff_content"] is not None,
         "oracle_reads": run["oracle_reads"] is not None,
         "egress_log": (monitor_dir / "egress.jsonl").is_file(),
+        "stdio": any(e["stdio"] is not None for e in execs),
     }
 
 

@@ -104,6 +104,7 @@ class Exec(typing.TypedDict):
     snapshot_after_s: float | None
     reads: list[str] | None  # MC-14
     orphans: list[dict] | None  # MC-01: {pid, comm} left running
+    stdio: list[str | None] | None  # targets of fds 0, 1, 2
 
 
 def _by_name(table: dict[str, str]) -> typing.Mapping[str, str]:
@@ -810,6 +811,7 @@ def _exec(record: dict, family: str) -> Exec | None:
     code = record.get("return_code", record.get("exit_code"))
     ended_at = parse_time(timing.get("ended_at"))
     released_at = parse_time(timing.get("released_at"))
+    stdio = record.get("stdio")
     if released_at is None and ended_at is not None:
         released_at = t_start  # MC-10 moves started_at to the release
     return Exec(
@@ -843,6 +845,7 @@ def _exec(record: dict, family: str) -> Exec | None:
         orphans=record["orphans"]
         if isinstance(record.get("orphans"), list)
         else None,
+        stdio=stdio if isinstance(stdio, list) and len(stdio) == 3 else None,
     )
 
 

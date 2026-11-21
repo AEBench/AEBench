@@ -160,7 +160,7 @@ SCOPES = ("writer", "chain_under", "chain_over", "before_writer", "run")
 BASES = (  # §6.14: (bases key, capability)
     ("chain", "read_tracing"),
     ("nesting", "parent_links"),
-    ("pipes", "parent_links"),
+    ("pipes", "stdio"),
     ("timing", "exact_timing"),
     ("versions", "content_hashes"),
     ("delta", "final_content"),
@@ -211,6 +211,7 @@ _PARTIAL = types.MappingProxyType(  # PRE3: a record lacking the field
         "exact_timing": lambda e: None in (e["ended_at"], e["released_at"]),
         "content_hashes": lambda e: (e["snapshot"] or {}).get("hashes") is None,
         "start_events": lambda e: e["record_type"] is None,
+        "stdio": lambda e: e["stdio"] is None,
     }
 )
 _MARKERS = types.MappingProxyType(  # CT2: effective values (holds, violated)
@@ -578,8 +579,6 @@ class _Run:
         exact = {
             "chain": labels["reads"] != "fails",
             "delta": given["final_files"] is not None,
-            "pipes": not partial["parent_links"]
-            and all(e["pgid"] is not None for e in self.live),
         }
         self.bases = {
             key: "exact"
@@ -932,17 +931,29 @@ def _edges(ctx: _Run, node: str, window_end: float) -> list[dict]:
     return out
 
 
+def _pipe(fd: str | None) -> bool:
+    """An fd target that is an anonymous pipe, as `pipe:[N]`."""
+    return isinstance(fd, str) and fd.startswith("pipe:[")
+
+
 def _siblings(ctx: _Run, cid: str) -> list[str]:
-    """CH5: the pipeline members of an exec (exact by pgid, else J2)."""
-    e = ctx.execs[cid]
+    """CH5: the pipeline neighbours of an exec (exact by stdio, else J2).
+
+    Exact: an exec whose stdout pipe is this one's stdin, or the reverse;
+    a shared pgid is no evidence (without job control, all children of
+    one shell share it).
+    """
     if ctx.bases["pipes"] == "exact":
+        fd0, fd1 = (ctx.execs[cid]["stdio"] or (None, None))[:2]
         return [
             o["command_id"]
             for o in ctx.live
             if o["command_id"] != cid
-            and o["pgid"] is not None
-            and (o["pgid"], o["parent_command_id"])
-            == (e["pgid"], e["parent_command_id"])
+            and o["stdio"] is not None
+            and (
+                (_pipe(fd1) and o["stdio"][0] == fd1)
+                or (_pipe(fd0) and o["stdio"][1] == fd0)
+            )
         ]
     parent = ctx.parents.get(cid)
     if parent not in ctx.execs or not any(

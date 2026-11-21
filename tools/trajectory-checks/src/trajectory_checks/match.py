@@ -175,7 +175,7 @@ DEFAULTS = types.MappingProxyType(
 CAPABILITIES = (
     *("parent_links", "start_events", "exact_timing", "content_hashes"),
     *("untracked_visible", "read_tracing", "final_content", "oracle_reads"),
-    "egress_log",
+    *("egress_log", "stdio"),
 )
 KNOWN_SCHEMA_VERSIONS = (1, 2)  # MC-21: absent means 1
 # (label, rate key, threshold, metrics voided) of spec §7.2.
