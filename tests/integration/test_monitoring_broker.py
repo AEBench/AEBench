@@ -488,6 +488,38 @@ def test_an_orphaned_shim_keeps_its_own_command(broker: BrokerProcess) -> None:
 	assert inner["depth"] == 2
 
 
+def test_an_orphan_listed_by_two_commands_is_marked_inherited(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	verify_argv = ["/bin/bash", "-c", "./verify.sh"]
+	dafny_argv = ["/bin/bash", "-c", "dafny verify a.dfy"]
+	z3 = {"pid": 700, "start_ticks": 12, "comm": "z3"}
+
+	verify = _open_command(
+		socket_path, {"argv": verify_argv, "pid": 100, "start_ticks": 1, "ancestry": []}
+	)
+	_run_one_command(
+		socket_path,
+		dafny_argv,
+		info={
+			"pid": 300,
+			"start_ticks": 4,
+			"ancestry": [{"pid": 100, "start_ticks": 1, "comm": "aeshell"}],
+		},
+		end={"orphans": [z3]},
+	)
+	assert _wait_for(lambda: broker.command_count() == 1)
+	end = {"exit_code": 0, "signal": None, "orphans": [z3]}
+	verify.sendall(_frame(_END, json.dumps(end).encode("utf-8")))
+	verify.close()
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	dafny = _record_for(broker, dafny_argv)
+	assert dafny["orphans"] == [z3]
+	(inherited,) = _record_for(broker, verify_argv)["orphans"]
+	assert inherited == {**z3, "inherited_from": dafny["command_id"]}
+
+
 def test_a_record_without_ancestry_leaves_its_links_unknown(broker: BrokerProcess) -> None:
 	socket_path = broker.socket_path
 	assert socket_path is not None
