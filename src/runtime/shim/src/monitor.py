@@ -422,7 +422,8 @@ async def process_connection(
 	stdout = StreamSink(os.path.join(stream_dir, "stdout.log"))
 	stderr = StreamSink(os.path.join(stream_dir, "stderr.log"))
 
-	record = {
+	shim_clock: dict[str, object] = {"info": None, "spawn": None, "exit": None}
+	record: Record = {
 		"schema_version": SCHEMA_VERSION,
 		"run_id": run_id,
 		"command_id": command_id,
@@ -434,7 +435,7 @@ async def process_connection(
 		"child_pid": None,
 		"child_start_ticks": None,
 		"orphans": None,
-		"shim_clock": {"info": None, "spawn": None, "exit": None},
+		"shim_clock": shim_clock,
 	}
 
 	context = CommandContext(record, output_dir, run_id)
@@ -461,7 +462,7 @@ async def process_connection(
 		record["stdio"] = command_info.get("stdio")
 		stdout.tty = bool(command_info.get("stdout_tty"))
 		stderr.tty = bool(command_info.get("stderr_tty"))
-		record["shim_clock"]["info"] = command_info.get("t_info")
+		shim_clock["info"] = command_info.get("t_info")
 		for key in ("ppid", "pgid", "sid", "start_ticks", "ancestry"):
 			record[key] = command_info.get(key)
 		PROCESS_TREE.link(record, command_info.get("ancestry"))
@@ -498,7 +499,7 @@ async def process_connection(
 				started = json.loads(payload)
 				record["child_pid"] = started.get("child_pid")
 				record["child_start_ticks"] = started.get("child_start_ticks")
-				record["shim_clock"]["spawn"] = started.get("t_spawn")
+				shim_clock["spawn"] = started.get("t_spawn")
 				PROCESS_TREE.add(
 					started.get("child_pid"), started.get("child_start_ticks"), command_id, "child"
 				)
@@ -518,9 +519,10 @@ async def process_connection(
 				end = json.loads(payload)
 				context.state["ended"] = (time.monotonic(), datetime.now(timezone.utc))
 				record["end_reason"] = "end_frame"
-				record["shim_clock"]["exit"] = end.get("t_exit")
-				record["orphans"] = end.get("orphans")
-				for orphan in record["orphans"] or []:
+				shim_clock["exit"] = end.get("t_exit")
+				orphans = end.get("orphans")
+				record["orphans"] = orphans
+				for orphan in orphans or []:
 					owner = PROCESS_TREE.add(
 						orphan.get("pid"), orphan.get("start_ticks"), command_id, "orphan"
 					)
