@@ -269,19 +269,37 @@ def test_timing_runs_from_release_to_end(broker: BrokerProcess) -> None:
 	assert isinstance(timing["snapshot_after_ms"], int) and timing["snapshot_after_ms"] >= 0
 
 
-def test_a_record_without_an_end_has_no_end_time(broker: BrokerProcess) -> None:
+def test_a_record_without_an_end_is_timed_to_the_disconnect(broker: BrokerProcess) -> None:
 	socket_path = broker.socket_path
 	assert socket_path is not None
 
-	_open_command(socket_path, {"argv": ["/bin/bash", "-c", "sleep"], "pid": 100}).close()
+	client = _open_command(socket_path, {"argv": ["/bin/bash", "-c", "sleep"], "pid": 100})
+	time.sleep(0.2)
+	client.close()
 
 	assert _wait_for(lambda: broker.command_count() == 1)
 	(record,) = _records(broker)
 	timing = record["monitors"]["timing"]
+	released = datetime.fromisoformat(timing["released_at"])
+	ended = datetime.fromisoformat(timing["ended_at"])
+	assert record["complete"] is False
+	assert record["end_reason"] == "disconnect"
 	assert timing["started_at"] == timing["released_at"]
-	assert timing["ended_at"] is None
-	assert timing["duration_ms"] is None
-	assert timing["snapshot_after_ms"] is None
+	assert timing["duration_ms"] >= 200
+	assert abs(timing["duration_ms"] - (ended - released).total_seconds() * 1000) <= 2
+	assert isinstance(timing["snapshot_after_ms"], int)
+
+
+def test_a_record_with_an_end_frame_says_so(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+
+	_run_one_command(socket_path, ["/bin/bash", "-c", "ls"])
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	(record,) = _records(broker)
+	assert record["complete"] is True
+	assert record["end_reason"] == "end_frame"
 
 
 def _open_command(socket_path: Path, info: dict[str, object]) -> socket.socket:
