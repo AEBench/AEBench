@@ -6,12 +6,13 @@ when present, holds the read events of that trace (MC-14).
 """
 
 import json
+import logging
 import pathlib
 
 import conftest
 import pytest
 
-from trajectory_checks import parse
+from trajectory_checks import cli, parse
 
 TRACE_FIXTURES = sorted(conftest.TRACE_FIXTURES_DIR.glob("*.jsonl"))
 NEW_FORMAT = conftest.TRACE_FIXTURES_DIR / "claude_new_format.jsonl"
@@ -214,3 +215,53 @@ def test_no_file_events_gives_reads_none() -> None:
     """Without file_events.jsonl, reads is None (not recorded)."""
     records = parse.load_execs(NEW_FORMAT, "claude")
     assert [r["reads"] for r in records] == [None] * 4
+
+
+def _timing_at_root(raw: dict) -> dict:
+    """The record with MC-10's released_at and ended_at at its root."""
+    record = json.loads(json.dumps(raw))
+    timing = record["monitors"]["timing"]
+    for key in ("released_at", "ended_at"):
+        if key in timing:
+            record[key] = timing.pop(key)
+    return record
+
+
+def test_timing_under_monitors_gives_exact_timing() -> None:
+    """MC-10: released_at and ended_at under monitors.timing are read.
+
+    The record with both turns exact_timing on; no layout warning.
+    """
+    (record,) = [
+        r
+        for r in parse.load_execs(NEW_FORMAT, "claude")
+        if r["command_id"].startswith("a")
+    ]
+    assert record["released_at"] is not None
+    assert record["ended_at"] is not None
+    run = {"final_diff_content": None, "oracle_reads": None}
+    caps = cli.capabilities([record], run, NEW_FORMAT.parent)
+    assert caps["exact_timing"] is True
+
+
+def test_timing_at_record_root_warns(
+    tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """MC-10 keys at the record root are not read, and say so once."""
+    lines = NEW_FORMAT.read_text(encoding="utf-8").splitlines()
+    trace = tmp_path / NEW_FORMAT.name
+    trace.write_text(
+        "".join(
+            json.dumps(_timing_at_root(json.loads(x))) + "\n" for x in lines
+        ),
+        encoding="utf-8",
+    )
+    with caplog.at_level(logging.WARNING, logger=parse.logger.name):
+        records = parse.load_execs(trace, "claude")
+    assert [r["ended_at"] for r in records] == [None] * 4
+    logged = [r.getMessage() for r in caplog.records]
+    assert len(logged) == 1 and "monitors.timing" in logged[0], logged
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger=parse.logger.name):
+        parse.load_execs(NEW_FORMAT, "claude")
+    assert caplog.records == []
