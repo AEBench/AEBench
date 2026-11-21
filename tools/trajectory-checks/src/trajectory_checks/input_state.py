@@ -276,7 +276,8 @@ def detached_execs(
     """EVD8: detached exec ids in exec seq order, and the basis."""
     live = sorted((e for e in execs if e["noise"] is None), key=_seq)
     parents = bool(capabilities.get("parent_links"))
-    if parents and all(isinstance(e["orphans"], list) for e in live):
+    lists = (isinstance(e["orphans"], list) for e in live if e["complete"])
+    if parents and all(lists):  # an incomplete exec is detached anyway
         ids = [
             e["command_id"] for e in live if e["orphans"] or not e["complete"]
         ]
