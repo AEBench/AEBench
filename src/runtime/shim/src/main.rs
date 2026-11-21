@@ -66,6 +66,7 @@
 //! | `allow`      | `bool`        | `false` means the command must not run        |
 //! | `reason`     | `string`      | shown to the agent on stderr when denied      |
 //! | `exit_code`  | `int`         | what to exit with when denied, normally 126   |
+//! | `subreaper`  | `bool`        | adopt the child's orphans and report them     |
 //!
 //! `command_id` is for the server's own records; the shim does not use it.
 //!
@@ -84,6 +85,7 @@
 //! | `exit_code` | `int | null` | the child's exit code, `null` if it was killed  |
 //! | `signal`    | `int | null` | the signal that killed it, `null` otherwise     |
 //! | `t_exit`    | `float`      | wall clock when the child exited, in seconds    |
+//! | `orphans`   | `[object] | null` | processes left running; `null` unless a subreaper |
 //!
 //! Byte counts are absent on purpose: nothing is dropped, so the server counts
 //! what it read.
@@ -139,8 +141,8 @@ fn main() {
             let _ = writeln!(io::stderr(), "aeshell: {reason}");
             std::process::exit(exit_code);
         }
-        Ok(Session::Monitored { stream }) => {
-            std::process::exit(run_monitored(stream, &real_shell, &argv));
+        Ok(Session::Monitored { stream, subreaper }) => {
+            std::process::exit(run_monitored(stream, &real_shell, &argv, subreaper));
         }
         Err(_) => exec_real(&real_shell, &argv),
     }
@@ -148,7 +150,7 @@ fn main() {
 
 enum Session {
     Denied { reason: String, exit_code: i32 },
-    Monitored { stream: UnixStream },
+    Monitored { stream: UnixStream, subreaper: bool },
 }
 
 /// The body of the `command_info` message.
@@ -168,12 +170,12 @@ struct CommandInfo {
     pgid: Option<i64>,
     sid: Option<i64>,
     start_ticks: Option<u64>,
-    ancestry: Vec<Ancestor>,
+    ancestry: Vec<Process>,
 }
 
-/// One process above this shell, nearest first.
+/// A process, identified so that a reused pid differs.
 #[derive(Serialize)]
-struct Ancestor {
+struct Process {
     pid: i64,
     start_ticks: u64,
     comm: String,
@@ -224,6 +226,7 @@ struct ProcStat {
     pgid: i64,
     sid: i64,
     start_ticks: u64,
+    zombie: bool,
 }
 
 /// Reads `/proc/<pid>/stat`, or `None` if the process is gone.
@@ -238,17 +241,18 @@ fn proc_stat(pid: &str) -> Option<ProcStat> {
         pgid: fields.get(2)?.parse().ok()?,
         sid: fields.get(3)?.parse().ok()?,
         start_ticks: fields.get(19)?.parse().ok()?,
+        zombie: fields.first() == Some(&"Z"),
     })
 }
 
 /// Walks up from `pid` towards pid 1, nearest first.
-fn ancestry(mut pid: i64) -> Vec<Ancestor> {
+fn ancestry(mut pid: i64) -> Vec<Process> {
     let mut chain = Vec::new();
     while pid > 1 && chain.len() < MAX_ANCESTORS {
         let Some(stat) = proc_stat(&pid.to_string()) else {
             break;
         };
-        chain.push(Ancestor {
+        chain.push(Process {
             pid,
             start_ticks: stat.start_ticks,
             comm: stat.comm,
@@ -256,6 +260,31 @@ fn ancestry(mut pid: i64) -> Vec<Ancestor> {
         pid = stat.ppid;
     }
     chain
+}
+
+/// Lists the live processes this shim adopted as a subreaper.
+fn adopted() -> Vec<Process> {
+    let Ok(tasks) = std::fs::read_dir("/proc/self/task") else {
+        return Vec::new();
+    };
+    tasks
+        .flatten()
+        .filter_map(|task| std::fs::read_to_string(task.path().join("children")).ok())
+        .flat_map(|children| {
+            children
+                .split_whitespace()
+                .filter_map(|pid| pid.parse::<i64>().ok())
+                .collect::<Vec<_>>()
+        })
+        .filter_map(|pid| {
+            let stat = proc_stat(&pid.to_string())?;
+            (!stat.zombie).then_some(Process {
+                pid,
+                start_ticks: stat.start_ticks,
+                comm: stat.comm,
+            })
+        })
+        .collect()
 }
 
 /// The body of the `started` message.
@@ -272,6 +301,7 @@ struct End {
     exit_code: Option<i32>,
     signal: Option<i32>,
     t_exit: f64,
+    orphans: Option<Vec<Process>>,
 }
 
 /// The body of the `decision` message, reduced to what the shim acts on.
@@ -286,6 +316,8 @@ struct Decision {
     reason: String,
     #[serde(default)]
     exit_code: i32,
+    #[serde(default)]
+    subreaper: bool,
 }
 
 /// Negotiates the command with the server.
@@ -314,11 +346,19 @@ fn negotiate(mut stream: UnixStream, argv: &[OsString]) -> io::Result<Session> {
         });
     }
 
-    Ok(Session::Monitored { stream })
+    Ok(Session::Monitored {
+        stream,
+        subreaper: decision.subreaper,
+    })
 }
 
 /// Runs the real shell, then reports its output and outcome.
-fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) -> i32 {
+fn run_monitored(
+    mut stream: UnixStream,
+    real_shell: &OsStr,
+    argv: &[OsString],
+    subreaper: bool,
+) -> i32 {
     let stdout_tty = is_tty(libc::STDOUT_FILENO);
     let stderr_tty = is_tty(libc::STDERR_FILENO);
 
@@ -364,6 +404,12 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
     let outer_mask = block_forwarded_signals();
     install_signal_forwarders();
 
+    // Orphans of the child then reparent here instead of to pid 1. They are
+    // never reaped here: only the child's status is waited for.
+    if subreaper {
+        unsafe { libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) };
+    }
+
     let mut child: Child = match command.spawn() {
         Ok(child) => child,
         Err(err) => {
@@ -378,6 +424,7 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
                 exit_code: Some(127),
                 signal: None,
                 t_exit: now_secs(),
+                orphans: None,
             }) {
                 let _ = stream.write_all(&encode_frame(FrameKind::End, &body));
             }
@@ -433,6 +480,7 @@ fn run_monitored(mut stream: UnixStream, real_shell: &OsStr, argv: &[OsString]) 
         exit_code,
         signal,
         t_exit,
+        orphans: subreaper.then(adopted),
     }) {
         let _ = stream.write_all(&encode_frame(FrameKind::End, &body));
     }

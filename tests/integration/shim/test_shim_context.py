@@ -131,8 +131,10 @@ def test_a_subreaper_shim_reports_what_its_command_left_running(shim: Path, tmp_
 
 		end = broker.wait_for_session().end
 	assert end is not None
-	assert [orphan["comm"] for orphan in end["orphans"]] == ["sleep"]
-	assert end["orphans"][0]["start_ticks"] > 0
+	(orphan,) = end["orphans"]
+	# Listed at once, so the forked job may not have exec'd sleep yet.
+	assert orphan["comm"] in {"bash", "nohup", "sleep"}
+	assert orphan["start_ticks"] > 0
 
 
 def test_without_a_subreaper_orphans_are_unknown(shim: Path, broker: FakeBroker) -> None:

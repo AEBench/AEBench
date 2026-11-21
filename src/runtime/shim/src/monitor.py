@@ -26,6 +26,7 @@ MAX_LISTED_PATHS = 100
 MAX_SNAPSHOT_FILES = 20000  # Limit for full-workspace snapshots only
 TRACKED_FILES_BASENAME = "tracked_files.json"  # Host-provided list of files to track
 SNAPSHOT_BUDGET_SECONDS = 2.0  # Timeout for snapshots; does not fail the command
+SUBREAPER = True  # Shims adopt and report the processes their command leaves running
 
 COMMAND_INFO = 0
 STDOUT = 1
@@ -340,7 +341,12 @@ class ProcessTree:
 
 	def add(self, pid: object, start_ticks: object, command_id: str, kind: str) -> None:
 		"""Records that a process belongs to a command."""
-		if pid is not None and start_ticks is not None:
+		if pid is None or start_ticks is None:
+			return
+		# An orphan that is itself a shim keeps its own command.
+		if kind == "orphan":
+			self.owners.setdefault((pid, start_ticks), (command_id, kind))
+		else:
 			self.owners[(pid, start_ticks)] = (command_id, kind)
 
 	def link(self, record: Record, ancestry: object) -> None:
@@ -448,6 +454,7 @@ async def process_connection(
 			"allow": True,
 			"reason": "",
 			"exit_code": 126,
+			"subreaper": SUBREAPER,
 		}
 
 		record["released_at"] = datetime.now(timezone.utc).isoformat()
@@ -490,6 +497,11 @@ async def process_connection(
 				end = json.loads(payload)
 				record["ended_at"] = datetime.now(timezone.utc).isoformat()
 				record["shim_clock"]["exit"] = end.get("t_exit")
+				record["orphans"] = end.get("orphans")
+				for orphan in record["orphans"] or []:
+					PROCESS_TREE.add(
+						orphan.get("pid"), orphan.get("start_ticks"), command_id, "orphan"
+					)
 
 				exit_code = end.get("exit_code")
 				signal = end.get("signal")
