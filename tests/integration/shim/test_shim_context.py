@@ -200,6 +200,41 @@ def test_a_subreaper_shim_forwards_a_signal_to_its_command(shim: Path, tmp_path:
 	assert end["signal"] == 15
 
 
+def _ignore_sigchld() -> None:
+	signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+
+
+def test_an_ignored_sigchld_neither_hangs_nor_hides_the_exit_status(
+	shim: Path, tmp_path: Path
+) -> None:
+	script = "grep SigIgn /proc/self/status; sleep 1.5 >/dev/null 2>&1 & exit 5"
+	with FakeBroker(tmp_path / "reaper.sock", Decision(subreaper=True)).start() as broker:
+		env = {
+			"PATH": _clean_path(),
+			"AEBENCH_REAL_SHELL": REAL_SHELL,
+			"AEBENCH_COMMAND_SOCKET": str(broker.socket_path),
+		}
+		started = time.monotonic()
+		process = subprocess.run(
+			[str(shim), "-c", script],
+			stdin=subprocess.DEVNULL,
+			capture_output=True,
+			env=env,
+			preexec_fn=_ignore_sigchld,
+			timeout=60,
+			check=False,
+		)
+		assert time.monotonic() - started < 1.2
+		end = broker.wait_for_session().end
+
+	assert process.returncode == 5
+	assert end is not None
+	assert end["exit_code"] == 5
+	# The command still inherits the ignored SIGCHLD.
+	ignored = int(process.stdout.split()[1], 16)
+	assert ignored & 1 << (signal.SIGCHLD - 1)
+
+
 def test_without_a_subreaper_orphans_are_unknown(shim: Path, broker: FakeBroker) -> None:
 	assert _run(shim, broker, ["-c", "nohup sleep 1 >/dev/null 2>&1 &"]) == 0
 
