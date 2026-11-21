@@ -494,6 +494,8 @@ def _capability_fields(caps: Mapping[str, bool], start: float) -> dict:
         fields["snapshot"] = {"hashes": {}}
     if caps["start_events"]:
         fields["record_type"] = "closed"
+    if caps["stdio"]:
+        fields["stdio"] = ["/dev/null", "/dev/null", "/dev/null"]
     return fields
 
 
@@ -639,6 +641,7 @@ CAPABILITY_FIELDS = (
     ("exact_timing", ("released_at", "ended_at", "snapshot_after_s")),
     ("content_hashes", ("snapshot.hashes",)),
     ("start_events", ("record_type",)),
+    ("stdio", ("stdio",)),
 )
 
 
@@ -789,7 +792,7 @@ def test_changed_pipe_sibling_program_blocks_built() -> None:
 
     Rules: CH5, FA4.
     """
-    raw = helpers.read_raw(helpers.SCENARIOS_DIR / "H47a_pipes_pgid.yaml")
+    raw = helpers.read_raw(helpers.SCENARIOS_DIR / "H47a_pipes_stdio.yaml")
     raw["calls"].append({"call_id": "c0", "tool_type": "edit", "t_start": 5.0})
     raw["links"].append(
         {"link_type": "write_event", "path": "gen.sh", "writer_id": "c0"}

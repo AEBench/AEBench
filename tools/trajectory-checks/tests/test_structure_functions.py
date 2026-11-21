@@ -909,7 +909,7 @@ def test_csv_row_columns() -> None:
     role_dicts = 2 * 9 * 3
     assert len(metric_columns) == scalars + class_dicts + role_dicts
     assert len([k for k in row if k.startswith("preconditions.")]) == 8
-    assert len([k for k in row if k.startswith("capabilities.")]) == 9
+    assert len([k for k in row if k.startswith("capabilities.")]) == 10
     assert len([k for k in row if k.startswith("bases.")]) == 3
 
 

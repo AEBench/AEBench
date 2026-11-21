@@ -5,7 +5,7 @@ description: >
   is exact, with no PRE8 warning.
 rules: [PRE8, RR5, RR6]
 run:
-  capabilities: {parent_links: true, start_events: true, exact_timing: true, content_hashes: true, untracked_visible: true, read_tracing: true, final_content: true, oracle_reads: true, egress_log: true}
+  capabilities: {parent_links: true, start_events: true, exact_timing: true, content_hashes: true, untracked_visible: true, read_tracing: true, final_content: true, oracle_reads: true, egress_log: true, stdio: true}
   final_diff_content: /runs/r/monitor/final.diff
   oracle_reads: /runs/r/run/oracle_inputs.jsonl
 calls:
@@ -30,7 +30,7 @@ expect:
   reruns:
     - {key_type: shape, prev_call_id: c1, call_id: c2, untracked_writes_between: 0, unchanged_under: true}
   structure:
-    capabilities: {parent_links: true, start_events: true, exact_timing: true, content_hashes: true, untracked_visible: true, read_tracing: true, final_content: true, oracle_reads: true, egress_log: true}
+    capabilities: {parent_links: true, start_events: true, exact_timing: true, content_hashes: true, untracked_visible: true, read_tracing: true, final_content: true, oracle_reads: true, egress_log: true, stdio: true}
     bases: {writes_between: exact, gap: exact, unchanged_under: exact}
     preconditions.final_content: holds
     preconditions.untracked_visible: holds

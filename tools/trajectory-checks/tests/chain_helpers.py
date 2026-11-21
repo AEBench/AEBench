@@ -100,7 +100,7 @@ SPEC_IDS = (
 CAPABILITY_PAIRS = (
     ("read_tracing", "chain", "H45a", "H45b", "CH7"),
     ("parent_links", "nesting", "H46a", "H46b", "CH2"),
-    ("parent_links", "pipes", "H47a", "H47b", "CH5"),
+    ("stdio", "pipes", "H47a", "H47b", "CH5"),
     ("exact_timing", "timing", "H48a", "H48b", "TM1"),
     ("content_hashes", "versions", "H49a", "H49b", "RD4"),
     ("final_content", "delta", "H50a", "H50b", "FA4"),
@@ -115,7 +115,7 @@ BASIS_CAPABILITY = types.MappingProxyType(
     {
         "chain": "read_tracing",
         "nesting": "parent_links",
-        "pipes": "parent_links",
+        "pipes": "stdio",
         "timing": "exact_timing",
         "versions": "content_hashes",
         "delta": "final_content",

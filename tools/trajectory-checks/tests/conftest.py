@@ -135,7 +135,7 @@ NEW_EXEC_FIELDS = (
     *("env_keys", "schema_version", "parent_command_id", "root_command_id"),
     *("depth", "ppid", "pgid", "sid", "parent_link", "record_type"),
     *("released_at", "ended_at", "snapshot_before_s", "snapshot_after_s"),
-    *("reads", "orphans"),
+    *("reads", "orphans", "stdio"),
 )
 EXEC_FIELDS = EXEC_FIELDS | frozenset(NEW_EXEC_FIELDS)
 NEW_SNAPSHOT_FIELDS = (
@@ -160,7 +160,7 @@ PARENT_LINKS = frozenset({"live", "closed", "adopted", "none"})
 CAPABILITIES = (
     *("parent_links", "start_events", "exact_timing", "content_hashes"),
     *("untracked_visible", "read_tracing", "final_content", "oracle_reads"),
-    "egress_log",
+    *("egress_log", "stdio"),
 )
 RUN_INFO_FIELDS = frozenset(
     {

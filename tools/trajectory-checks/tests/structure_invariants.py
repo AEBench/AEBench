@@ -32,7 +32,7 @@ PRECONDITION_LABELS = (
 CAPABILITIES = (
     *("parent_links", "start_events", "exact_timing", "content_hashes"),
     *("untracked_visible", "read_tracing", "final_content", "oracle_reads"),
-    "egress_log",
+    *("egress_log", "stdio"),
 )
 M21_KEYS = (
     *("shell_calls", "act_calls", "observe_calls", "shape_classes"),

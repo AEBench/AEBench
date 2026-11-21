@@ -256,6 +256,7 @@ def test_new_format_trace_alone(tmp_path: pathlib.Path) -> None:
         "exact_timing": True,
         "content_hashes": True,
         "untracked_visible": True,
+        "stdio": True,
     }
     assert [e["reads"] for e in result["execs"]] == [None] * 4
     assert result["execs"][0]["orphans"] == [{"pid": 140, "comm": "python3"}]

@@ -21,7 +21,7 @@ NEW_RECORD_KEYS = (
     *("event", "end_reason", "schema_version", "parent_command_id"),
     *("root_command_id", "depth", "ppid", "pgid", "sid", "parent_link"),
     *("start_ticks", "ancestry", "ancestors", "child_pid", "orphans"),
-    "host_pid",
+    *("host_pid", "stdio"),
 )
 NEW_TIMING_KEYS = (
     *("released_at", "ended_at", "snapshot_before_ms"),

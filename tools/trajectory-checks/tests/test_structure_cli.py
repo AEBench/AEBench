@@ -302,7 +302,7 @@ def test_structure_csv_columns(tmp_path: pathlib.Path) -> None:
 
     assert under("preconditions.") == list(LABELS)
     names = under("capabilities.")
-    assert names == sorted(names) and len(names) == 9
+    assert names == sorted(names) and len(names) == 10
     assert under("bases.") == ["gap", "unchanged_under", "writes_between"]
     assert under("M4.2.changed_by_class.") == list(CLASSES)
     assert under("M4.2.baseline_by_class.") == list(CLASSES)

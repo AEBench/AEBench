@@ -11,7 +11,7 @@ links:
   - {link_type: call_exec, call_id: c1, command_id: e1}
 expect:
   facts:
-    capabilities: {parent_links: false, start_events: true, exact_timing: true, content_hashes: true, untracked_visible: true, read_tracing: true, final_content: true, oracle_reads: true, egress_log: true}
+    capabilities: {parent_links: false, start_events: true, exact_timing: true, content_hashes: true, untracked_visible: true, read_tracing: true, final_content: true, oracle_reads: true, egress_log: true, stdio: false}
     bases: {timing: exact, depth: fallback, running_at_stop: exact}
     preconditions.untracked_visible: holds
     M1.1.command_time_under_s: 0.4

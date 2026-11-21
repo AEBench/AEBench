@@ -59,7 +59,7 @@ expect:
     schema_version: "1"
     run_key: art__agent__1
     bases: {writes_between: fallback, gap: fallback, unchanged_under: fallback}
-    capabilities: {parent_links: false, start_events: false, exact_timing: false, content_hashes: false, untracked_visible: false, read_tracing: false, final_content: false, oracle_reads: false, egress_log: false}
+    capabilities: {parent_links: false, start_events: false, exact_timing: false, content_hashes: false, untracked_visible: false, read_tracing: false, final_content: false, oracle_reads: false, egress_log: false, stdio: false}
     preconditions: {log: holds, C1_under: holds, final_diff: holds, C6: holds, C7_under: holds, untracked_visible: fails, tracked_files: holds, final_content: fails}
     M2.1: {shell_calls: 6, act_calls: 6, observe_calls: 0, shape_classes: 5, repeated_shapes_all: 1, repeat_max_all: 2, repeated_shapes_act: 1, repeat_max_act: 2, exact_repeat_max_act: 2, program_classes_act: 3, repeated_programs_act: 1, program_repeat_max_act: 4}
     M2.2: {shape_reruns: 1, reruns_after_failure_under: 1, reruns_after_failure_over: 1, reruns_after_success_under: 0, reruns_after_success_over: 0, reruns_after_unknown: 0, reruns_after_failure_unchanged_under: 0, reruns_after_failure_unchanged_over: 1, reruns_after_success_unchanged_under: 0, reruns_after_success_unchanged_over: 0}

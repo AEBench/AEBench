@@ -591,7 +591,7 @@ expect:
       writer_roots: []
   counts:
     bases: {content_hash: fallback, detached: fallback, observable: fallback, shim: fallback, timing: fallback, unmonitored: fallback}
-    capabilities: {content_hashes: false, egress_log: false, exact_timing: false, final_content: false, oracle_reads: true, parent_links: false, read_tracing: false, start_events: false, untracked_visible: false}
+    capabilities: {content_hashes: false, egress_log: false, exact_timing: false, final_content: false, oracle_reads: true, parent_links: false, read_tracing: false, start_events: false, stdio: false, untracked_visible: false}
     preconditions: {content: holds, log: holds, oracle_inputs: holds, trace: holds}
     run_key: art__agent__1
     family: claude
