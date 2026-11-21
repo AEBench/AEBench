@@ -77,6 +77,7 @@ use std::ffi::{OsStr, OsString};
 use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::{CommandExt, ExitStatusExt};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::thread;
@@ -104,7 +105,12 @@ fn main() {
     }
 
     let real_shell = env::var_os(ENV_REAL_SHELL).unwrap_or_else(|| DEFAULT_REAL_SHELL.into());
-    let socket_path = env::var_os(ENV_SOCKET).unwrap_or_else(|| DEFAULT_SOCKET.into());
+    // The installed socket wins, so the override cannot turn monitoring off.
+    let socket_path: OsString = if Path::new(DEFAULT_SOCKET).exists() {
+        DEFAULT_SOCKET.into()
+    } else {
+        env::var_os(ENV_SOCKET).unwrap_or_else(|| DEFAULT_SOCKET.into())
+    };
 
     let Ok(stream) = UnixStream::connect(&socket_path) else {
         exec_real(&real_shell, &argv);
