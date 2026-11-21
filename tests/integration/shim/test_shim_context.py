@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import pty
+import signal
 import subprocess
 import time
 from pathlib import Path
@@ -144,6 +145,59 @@ def test_an_orphan_that_exits_at_once_is_not_reported(shim: Path, tmp_path: Path
 		end = broker.wait_for_session().end
 	assert end is not None
 	assert end["orphans"] == []
+
+
+def test_a_subreaper_shim_reaps_orphans_that_exit(shim: Path, tmp_path: Path) -> None:
+	script = (
+		"pid=$(sleep 0.1 >/dev/null 2>&1 & echo $!); sleep 0.6; "
+		"if kill -0 $pid 2>/dev/null; then echo zombie; else echo reaped; fi"
+	)
+	with FakeBroker(tmp_path / "reaper.sock", Decision(subreaper=True)).start() as broker:
+		assert _run(shim, broker, ["-c", script]) == 0
+
+		session = broker.wait_for_session()
+	assert session.stdout == b"reaped\n"
+
+
+@pytest.mark.parametrize(
+	("script", "status", "exit_code", "signal"),
+	[("exit 7", 7, 7, None), ("kill -TERM $$", 128 + 15, None, 15)],
+)
+def test_a_subreaper_shim_reproduces_the_exit_status(
+	shim: Path, tmp_path: Path, script: str, status: int, exit_code: int | None, signal: int | None
+) -> None:
+	with FakeBroker(tmp_path / "reaper.sock", Decision(subreaper=True)).start() as broker:
+		assert _run(shim, broker, ["-c", f"(sleep 0.1 >/dev/null 2>&1 &); {script}"]) == status
+
+		end = broker.wait_for_session().end
+	assert end is not None
+	assert (end["exit_code"], end["signal"]) == (exit_code, signal)
+
+
+def test_a_subreaper_shim_forwards_a_signal_to_its_command(shim: Path, tmp_path: Path) -> None:
+	with FakeBroker(tmp_path / "reaper.sock", Decision(subreaper=True)).start() as broker:
+		env = {
+			"PATH": _clean_path(),
+			"AEBENCH_REAL_SHELL": REAL_SHELL,
+			"AEBENCH_COMMAND_SOCKET": str(broker.socket_path),
+		}
+		process = subprocess.Popen(
+			[str(shim), "-c", "sleep 5 >/dev/null 2>&1; true"],
+			stdin=subprocess.DEVNULL,
+			stdout=subprocess.DEVNULL,
+			stderr=subprocess.DEVNULL,
+			env=env,
+		)
+		deadline = time.monotonic() + 10
+		while not broker.sessions or broker.sessions[0].started is None:
+			assert time.monotonic() < deadline
+			time.sleep(0.02)
+		process.send_signal(signal.SIGTERM)
+
+		assert process.wait(timeout=10) == 128 + 15
+		end = broker.wait_for_session().end
+	assert end is not None
+	assert end["signal"] == 15
 
 
 def test_without_a_subreaper_orphans_are_unknown(shim: Path, broker: FakeBroker) -> None:
