@@ -870,6 +870,7 @@ def load_execs(
     """
     execs: list[Exec] = []
     starts: dict[str, Exec] = {}
+    misplaced = 0  # MC-10 keys at the record root, not under monitors.timing
     with pathlib.Path(trace_path).open(
         encoding="utf-8", errors="replace"
     ) as handle:
@@ -878,6 +879,11 @@ def load_execs(
                 record = _obj(json.loads(line))
             except json.JSONDecodeError:
                 continue
+            timing = _obj(_obj(record.get("monitors")).get("timing"))
+            misplaced += any(
+                k in record and k not in timing
+                for k in ("released_at", "ended_at")
+            )
             found = _exec(record, family)
             if found is None:
                 logger.warning("%s: record without start skipped", trace_path)
@@ -885,6 +891,13 @@ def load_execs(
                 starts.setdefault(found["command_id"], found)
             else:
                 execs.append(found)
+    if misplaced:
+        logger.warning(
+            "%s: %d records hold released_at or ended_at at the root, "
+            "not under monitors.timing; they are not read",
+            trace_path,
+            misplaced,
+        )
     ended = {e["command_id"] for e in execs}
     execs += [e for cid, e in starts.items() if cid not in ended]
     reads = read_events(pathlib.Path(file_events))[0] if file_events else None
