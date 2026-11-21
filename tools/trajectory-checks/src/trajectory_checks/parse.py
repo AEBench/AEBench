@@ -853,6 +853,7 @@ def load_execs(
     trace_path: pathlib.Path,
     family: str,
     file_events: pathlib.Path | None = None,
+    warnings: list[str] | None = None,
 ) -> list[Exec]:
     """Reads commands.jsonl into Exec records sorted by (t_start, id).
 
@@ -864,6 +865,7 @@ def load_execs(
         family: The agent family, which selects the wrappers and noise.
         file_events: MC-14's file_events.jsonl, or None; when given, every
             exec's reads is a list.
+        warnings: When given, the trace's layout warnings are appended.
 
     Returns:
         One Exec per record with a start time, numbered by sorted position.
@@ -892,12 +894,13 @@ def load_execs(
             else:
                 execs.append(found)
     if misplaced:
-        logger.warning(
-            "%s: %d records hold released_at or ended_at at the root, "
-            "not under monitors.timing; they are not read",
-            trace_path,
-            misplaced,
+        text = (
+            f"{misplaced} records hold released_at or ended_at at the root, "
+            "not under monitors.timing; they are not read"
         )
+        logger.warning("%s: %s", trace_path, text)
+        if warnings is not None:
+            warnings.append(text)
     ended = {e["command_id"] for e in execs}
     execs += [e for cid, e in starts.items() if cid not in ended]
     reads = read_events(pathlib.Path(file_events))[0] if file_events else None

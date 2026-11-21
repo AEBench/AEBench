@@ -287,7 +287,8 @@ def analyse(
     folder = run_dir / "monitor"
     events = folder / "file_events.jsonl"
     events = events if events.is_file() else None
-    execs = parse.load_execs(trace, family, events) if has_trace else []
+    notes: list[str] = []  # the trace's layout warnings, for coverage
+    execs = parse.load_execs(trace, family, events, notes) if has_trace else []
     runtime = result.get("runtime") or {}
     baseline = _read_json(folder / "tracked_files.json")
     meta = _read_json(folder / "trace_meta.json")
@@ -323,6 +324,7 @@ def analyse(
         final_diff=_read_json(folder / "tracked_files_diff.json"),
         config=routed["match"],
     )
+    linked["coverage"]["warnings"] += notes
     diff_path = (monitor.get("system_files") or {}).get("diff_path")
     derived = facts.derive(
         calls,
