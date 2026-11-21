@@ -489,6 +489,8 @@ fn run_monitored(
     } else {
         child.wait()
     };
+    // The pid is free once reaped, so a late signal must not reach its reuse.
+    CHILD_PID.store(0, Ordering::SeqCst);
     let t_exit = now_secs();
     let stdout = stdout_pump
         .and_then(|pump| pump.join().ok())
