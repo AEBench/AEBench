@@ -47,7 +47,7 @@ def test_cat_reports_every_expected_message(
 
 	# The full conversation. cat writes nothing to stderr, and an empty stream
 	# is sent as no frame at all rather than an empty one.
-	assert session.kind_names == ["command_info", "stdout", "end"]
+	assert session.kind_names == ["command_info", "started", "stdout", "end"]
 
 	info = session.command_info
 	assert info["argv"] == [str(shim), "-c", "cat"]

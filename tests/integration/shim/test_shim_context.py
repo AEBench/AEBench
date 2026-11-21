@@ -109,6 +109,20 @@ def test_a_nested_shell_reports_the_outer_shim_among_its_ancestors(
 	assert isinstance(inner["pgid"], int) and isinstance(inner["sid"], int)
 
 
+def test_the_started_frame_names_the_real_shell_a_nested_shell_runs_under(
+	shim: Path, broker: FakeBroker
+) -> None:
+	before = time.time()
+	assert _run(shim, broker, ["-c", f"{shim} -c true; true"]) == 0
+
+	outer = broker.wait_for_session(0)
+	inner = broker.wait_for_session(1).command_info
+	assert outer.started is not None
+	assert outer.started["child_pid"] == inner["ppid"]
+	assert outer.started["child_start_ticks"] == inner["ancestry"][0]["start_ticks"]
+	assert before <= outer.started["t_spawn"] <= inner["t_info"]
+
+
 def test_the_protocol_and_shim_version_are_reported(shim: Path, broker: FakeBroker) -> None:
 	manifest = tomllib.loads((shim.parents[2] / "Cargo.toml").read_text(encoding="utf-8"))
 

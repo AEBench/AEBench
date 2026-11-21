@@ -13,6 +13,7 @@ One shell invocation is one connection::
 
     shim -> command_info
          <- decision
+    shim -> started                (once the child is running)
     shim -> stdout / stderr        (once, after the child has exited)
     shim -> end
 """
@@ -33,12 +34,14 @@ STDOUT = 1
 STDERR = 2
 END = 3
 DECISION = 4
+STARTED = 5
 
 FRAME_NAMES = {
 	COMMAND_INFO: "command_info",
 	STDOUT: "stdout",
 	STDERR: "stderr",
 	END: "end",
+	STARTED: "started",
 	DECISION: "decision",
 }
 
@@ -145,6 +148,15 @@ class Session:
 	def stderr(self) -> bytes:
 		"""Returns the captured stderr, concatenated across frames."""
 		return b"".join(self.payloads(STDERR))
+
+	@property
+	def started(self) -> dict[str, Any] | None:
+		"""Returns the decoded ``started`` body, or ``None`` if it never arrived."""
+		payloads = self.payloads(STARTED)
+		if not payloads:
+			return None
+		decoded: dict[str, Any] = json.loads(payloads[0])
+		return decoded
 
 	@property
 	def end(self) -> dict[str, Any] | None:
@@ -265,6 +277,7 @@ __all__ = [
 	"DECISION",
 	"END",
 	"FRAME_NAMES",
+	"STARTED",
 	"STDERR",
 	"STDOUT",
 	"BrokerError",

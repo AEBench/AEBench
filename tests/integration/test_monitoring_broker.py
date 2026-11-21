@@ -25,6 +25,7 @@ _COMMAND_INFO = 0
 _STDOUT = 1
 _END = 3
 _DECISION = 4
+_STARTED = 5
 
 
 def _frame(kind: int, payload: bytes) -> bytes:
@@ -319,6 +320,42 @@ def test_a_shell_started_after_its_parent_finished_is_linked_as_closed(
 	later = _record_for(broker, later_argv)
 	assert later["parent_command_id"] == _record_for(broker, first_argv)["command_id"]
 	assert later["parent_link"] == "closed"
+
+
+def test_a_shell_under_a_killed_shim_links_through_the_real_shell(
+	broker: BrokerProcess,
+) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	outer_argv = ["/bin/bash", "-c", "./experiment.sh"]
+	inner_argv = ["/bin/bash", "-c", "python3 eval.py"]
+
+	outer = _open_command(
+		socket_path, {"argv": outer_argv, "pid": 100, "start_ticks": 5, "ancestry": []}
+	)
+	started = {"child_pid": 200, "child_start_ticks": 7, "t_spawn": 1700000000.0}
+	outer.sendall(_frame(_STARTED, json.dumps(started).encode("utf-8")))
+	# Killed before it could send `end`, as `kill -9` would do.
+	outer.close()
+	assert _wait_for(lambda: broker.command_count() == 1)
+
+	_run_one_command(
+		socket_path,
+		inner_argv,
+		info={
+			"pid": 400,
+			"start_ticks": 9,
+			"ancestry": [{"pid": 200, "start_ticks": 7, "comm": "bash"}],
+		},
+	)
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	parent = _record_for(broker, outer_argv)
+	assert parent["child_pid"] == 200
+	assert parent["shim_clock"]["spawn"] == 1700000000.0
+	child = _record_for(broker, inner_argv)
+	assert child["parent_command_id"] == parent["command_id"]
+	assert child["parent_link"] == "closed"
 
 
 def test_a_record_without_ancestry_leaves_its_links_unknown(broker: BrokerProcess) -> None:
