@@ -262,6 +262,48 @@ def test_new_format_trace_alone(tmp_path: pathlib.Path) -> None:
     assert result["execs"][0]["orphans"] == [{"pid": 140, "comm": "python3"}]
 
 
+def _without_start_lines(run_dir: pathlib.Path) -> None:
+    """The run's trace with MC-04's start lines dropped (end_reason kept)."""
+    trace = run_dir / "monitor" / "commands.jsonl"
+    lines = trace.read_text().splitlines(keepends=True)
+    trace.write_text(
+        "".join(x for x in lines if json.loads(x).get("event") != "start")
+    )
+
+
+def _stop_bases(result: dict) -> list[str | None]:
+    """The four bases that rest on start_events, in layer order."""
+    return [
+        result["facts"]["bases"]["running_at_stop"],
+        result["state_counts"]["bases"]["unmonitored"],
+        result["writer"]["bases"]["unrecorded_risk"],
+        result["chain"]["bases"]["records_at_stop"],
+    ]
+
+
+def test_end_reason_alone_is_no_start_events(tmp_path: pathlib.Path) -> None:
+    """MC-04: end_reason on every record, no start line: capability off.
+
+    The four bases resting on start_events stay fallback; a start line,
+    even one an end record supersedes, or trace_meta's start_events flag
+    turns it on.
+    """
+    run_dir = _make_new_run(tmp_path / "ends", extras=False)
+    _without_start_lines(run_dir)
+    result = cli.analyse(run_dir)
+    assert result["coverage"]["capabilities"]["start_events"] is False
+    assert _stop_bases(result) == ["fallback"] * 4
+    flagged = _make_new_run(tmp_path / "meta", extras=False)
+    _without_start_lines(flagged)
+    (flagged / "monitor" / "trace_meta.json").write_text(
+        json.dumps({"run_token": NEW_TOKEN, "start_events": True})
+    )
+    caps = cli.analyse(flagged)["coverage"]["capabilities"]
+    assert caps["start_events"] is True
+    caps = cli.analyse(_make_new_run(tmp_path / "starts", extras=False))
+    assert caps["coverage"]["capabilities"]["start_events"] is True
+
+
 def test_timing_at_record_root_in_coverage_warnings(
     tmp_path: pathlib.Path,
 ) -> None:
