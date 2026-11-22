@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import IO, Any
 
 import pytest
-import tomllib
 
 from .conftest import REAL_SHELL, _clean_path
 from .fake_broker import Decision, FakeBroker
@@ -284,13 +283,3 @@ def test_without_a_subreaper_orphans_are_unknown(shim: Path, broker: FakeBroker)
 	end = broker.wait_for_session().end
 	assert end is not None
 	assert end["orphans"] is None
-
-
-def test_the_protocol_and_shim_version_are_reported(shim: Path, broker: FakeBroker) -> None:
-	manifest = tomllib.loads((shim.parents[2] / "Cargo.toml").read_text(encoding="utf-8"))
-
-	assert _run(shim, broker, ["-c", "true"]) == 0
-
-	info = broker.wait_for_session().command_info
-	assert info["protocol"] == 2
-	assert info["shim_version"] == manifest["package"]["version"]

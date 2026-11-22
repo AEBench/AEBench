@@ -194,20 +194,6 @@ def test_a_tty_stream_is_recorded_as_skipped(broker: BrokerProcess) -> None:
 	assert record["stderr"]["capture"] == "none"
 
 
-def test_the_shim_version_is_recorded(broker: BrokerProcess) -> None:
-	socket_path = broker.socket_path
-	assert socket_path is not None
-
-	_run_one_command(
-		socket_path, ["/bin/bash", "-c", "ls"], info={"protocol": 2, "shim_version": "0.2.0"}
-	)
-
-	assert _wait_for(lambda: broker.command_count() == 1)
-	(record,) = _records(broker)
-	assert record["protocol"] == 2
-	assert record["shim_version"] == "0.2.0"
-
-
 def test_every_record_carries_the_schema_version(broker: BrokerProcess) -> None:
 	socket_path = broker.socket_path
 	assert socket_path is not None

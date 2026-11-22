@@ -50,8 +50,6 @@
 //! | `env_keys` | `[string]` | environment variable **names** only, never values  |
 //! | `stdout_tty` | `bool`   | stdout is a terminal, so it is not captured        |
 //! | `stderr_tty` | `bool`   | stderr is a terminal, so it is not captured        |
-//! | `protocol` | `int`      | version of this protocol, currently 2              |
-//! | `shim_version` | `string` | the crate version of this binary               |
 //! | `stdio`    | `[string|null]` | where fds 0, 1 and 2 point, e.g. `pipe:[42]` |
 //! | `t_info`   | `float`    | wall clock when this message was built, in seconds |
 //! | `ppid`, `pgid`, `sid` | `int|null` | from `/proc/self/stat`, container pids |
@@ -103,7 +101,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-const PROTOCOL: u32 = 2;
 const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 const READ_BYTES: usize = 64 * 1024;
 const MAX_ANCESTORS: usize = 64;
@@ -163,8 +160,6 @@ struct CommandInfo {
     env_keys: Vec<String>,
     stdout_tty: bool,
     stderr_tty: bool,
-    protocol: u32,
-    shim_version: &'static str,
     stdio: [Option<String>; 3],
     t_info: f64,
     ppid: Option<i64>,
@@ -203,8 +198,6 @@ impl CommandInfo {
                 .collect(),
             stdout_tty: is_tty(libc::STDOUT_FILENO),
             stderr_tty: is_tty(libc::STDERR_FILENO),
-            protocol: PROTOCOL,
-            shim_version: env!("CARGO_PKG_VERSION"),
             stdio: [0, 1, 2].map(|fd| {
                 std::fs::read_link(format!("/proc/self/fd/{fd}"))
                     .ok()
