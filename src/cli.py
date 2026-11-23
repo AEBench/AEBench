@@ -336,15 +336,10 @@ def _case_init(args: argparse.Namespace) -> int:
 		raise SystemExit("case init requires --id when no source is provided")
 	if not args.blank and not args.source:
 		raise SystemExit("case init requires a source unless --blank is used")
-	bundle_dir = create_case_bundle(
-		new_case_dir(
-			case_id,
-			project_state=context.project_state,
-			target_dir=_optional_path(args.target_dir),
-		),
-		CaseInitOptions(case_id=case_id),
-		overwrite=False,
+	bundle_dir = new_case_dir(
+		case_id, project_state=context.project_state, target_dir=_optional_path(args.target_dir)
 	)
+	create_case_bundle(bundle_dir, CaseInitOptions(case_id=case_id), overwrite=False)
 	print(f"Initialized case bundle: {bundle_dir}")
 	return 0
 
