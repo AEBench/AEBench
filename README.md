@@ -1,117 +1,141 @@
 # AEBench
 
-AEBench is a benchmark that measures how well AI coding agents reproduce the
-results of published systems research papers. Conferences run an Artifact
-Evaluation (AE) process, in which reviewers download a paper's code (its
-*artifact*), follow its README, and check that the paper's results come out.
-AEBench gives the same task to an agent. For why the benchmark exists, see
-[WHY.md](WHY.md).
+## 1. Overview
 
-Each benchmark task is a **case**: one paper's artifact pinned to an upstream
-commit, plus an **oracle** that checks the agent's work. A run goes like this:
+AEBench is a benchmark that evaluates how well AI coding agents reproduce the results of published systems research papers. Many systems conferences run an Artifact Evaluation (AE) process, where reviewers download a paper's code and data (the *artifact*), follow its instructions, and check whether the paper's results hold. AEBench gives the same task to an agent and scores how far the agent gets. For more context on why this benchmark exists, see [WHY.md](WHY.md).
 
-1. AEBench clones the artifact and starts a Docker container with the agent CLI
-   (Claude Code, Codex, and others) inside.
-2. The agent reads the artifact's instructions and tries to set up, build, and
-   run its experiments, with no human help.
-3. The oracle scores the workspace the agent left behind, one point per phase:
+Each benchmark task is a *case*. A case pins one paper's artifact to an upstream commit and includes an *oracle* that checks the agent's work. When users run a case, AEBench:
+
+1. clones the artifact and starts a Docker container with the agent's command-line tool (e.g., Claude Code or Codex) installed;
+2. prompts the agent to set up, build, and run the artifact's experiments by following the artifact's instructions, without human help;
+3. runs the oracle on the workspace the agent leaves behind and awards one point for each phase that passes:
 
 | Phase | Passes when |
 | --- | --- |
 | `env_setup` | the artifact's dependencies are installed |
 | `artifact_build` | the artifact builds |
 | `benchmark_prep` | the inputs and benchmarks the experiments need are ready |
-| `experiment_runs` | the experiments ran and their results match the paper's within tolerance |
+| `experiment_runs` | the experiments ran and their results match the paper's within the case's tolerance |
 
-A score of 4/4 is a full reproduction, and 0/4 means no phase passed.
+A score of 4/4 is a full reproduction, while 0/4 means that no phase passed.
 
-## Requirements
+## 2. Getting Started
 
-- Linux on x86_64 or arm64.
-- Docker, with your user allowed to run `docker` without `sudo`.
-- `git` and [uv](https://docs.astral.sh/uv/). uv installs Python 3.10 or newer
-  if you do not have it.
-- Credentials for at least one agent (see [Agents](#agents)).
-- Disk space. The agent image is several GB, and each run keeps its workspace,
-  its outputs, and a Docker image of the container after the agent finishes
-  (see [Disk usage](#disk-usage)).
+To get started, users should clone this repository, install its dependencies, and build the Docker image that agents run in, by following these steps:
 
-Many artifacts need hours of CPU time and plenty of memory. A disposable cloud
-machine works well. The team uses
-[Chameleon Cloud](https://www.chameleoncloud.org/) instances, so some guides
-show `cc@<floating-ip>` addresses.
-
-## Install
-
+1. Clone the AEBench repository:
 ```bash
 git clone https://github.com/AEBench/AEBench.git
 cd AEBench
+```
 
+The repository structure should look similar to the one below:
+```plaintext
+AEBench/
+  ├── README.md
+  ├── Dockerfile        # the image agents run in
+  ├── aebench.toml      # marks the repository root as an AEBench workspace
+  ├── cases.json        # the catalog of official cases
+  ├── agents/           # one directory per agent harness
+  ├── cases/            # one directory per case
+  ├── docs/
+  ├── src/              # the AEBench command-line tool and runtime
+  └── tests/
+```
+The `cases` directory contains the benchmark itself, while the `agents` directory holds the scripts that start each supported agent.
+
+2. Install the Python dependencies with [uv](https://docs.astral.sh/uv/):
+```bash
 uv sync
+```
+
+3. Build the Docker image that agents run in:
+```bash
 docker build -t aebench-agent:latest .
+```
+
+4. Check that the `aebench` command-line tool works:
+```bash
 uv run aebench --help
 ```
 
-The image holds the agent CLIs and AEBench's in-container tooling. **Rebuild it
-after every `git pull`**: a run uses the image as it was last built, not the
-code in your checkout.
+If successful, users should see a message similar to
+```text
+usage: aebench [-h] {init,run,case,runtime,agent,trace,audit-trace} ...
 
-Run every command from the repository root. AEBench finds its case catalog by
-walking up from the current directory to `aebench.toml` or `cases.json`.
+AEBench benchmark, case, and runtime CLI.
+```
 
-## Run your first case
+> [!NOTE]
+> AEBench requires the following dependencies:
+> * Linux on x86_64 or arm64
+> * Docker, with the current user allowed to run `docker` without `sudo`
+> * `git`
+> * [uv](https://docs.astral.sh/uv/), which also installs Python >=3.10 if needed
+> * Credentials for at least one agent (see "[Agents](README.md#4-agents)")
+>
+> Many artifacts need hours of CPU time, a lot of memory, and tens of GB of disk space. We recommend running AEBench on a disposable machine, such as a cloud instance. We run AEBench on [Chameleon Cloud](https://www.chameleoncloud.org/) instances, which is why some guides use `cc@<floating-ip>` addresses.
 
-This example uses Claude Code with an Anthropic API key. `asplos24_gaia` makes
-a good first case: its time limit is one hour and it needs nothing beyond the
-container.
+> [!NOTE]
+> Users should run every `aebench` command from the repository root, since AEBench finds its case catalog by walking up from the current directory to `aebench.toml` or `cases.json`. Also, users should rebuild the Docker image (step 3) after every `git pull`, since a run uses the image as it was last built, not the code in the checkout.
 
+## 3. Running example: reproducing GAIA
+
+To illustrate how AEBench works, we walk users through running a single case, `asplos24_gaia`. GAIA is a carbon-aware job scheduler from ASPLOS 2024. Its artifact is pure Python and its experiments are a deterministic simulation, so the case has the shortest time limit in the benchmark (1 hour) and needs nothing beyond the container. We use Claude Code with an Anthropic API key.
+
+1. Ensure that the dependencies are installed and the Docker image is built (see "[Getting Started](README.md#2-getting-started)" above).
+
+2. Check that the case loads correctly:
+```bash
+uv run aebench case validate asplos24_gaia
+```
+which should yield
+```text
+Case bundle is valid: /path/to/AEBench/cases/asplos24_gaia
+```
+
+3. Provide the agent's credentials:
 ```bash
 export ANTHROPIC_API_KEY=...
+```
 
+4. Run the case:
+```bash
 uv run aebench case run asplos24_gaia \
   --agent claude \
   --model claude-opus-5-5
 ```
+Note that `--agent` and `--model` are required for every run. AEBench passes `--model` to the agent unchanged, so users should choose a model that their account can access.
 
-Before the agent starts, AEBench prints the run's output directory:
-
+Before the agent starts, AEBench prints the directory where it saves the run's data:
 ```text
-Output: /home/<you>/.cache/aebench/case-runs/asplos24_gaia/<timestamp>
+Output: /home/<user>/.cache/aebench/case-runs/asplos24_gaia/<timestamp>
 ```
 
-When the run ends, it prints the case status and the oracle score. The output
-directory holds the agent's log (`runner_output.log`), the prompt it was
-given, and the result (`case_result.json`).
+5. Wait for the run to finish. The agent installs GAIA's dependencies, runs its four figure scripts, and leaves the resulting CSV files under `results/simulation/pai_1k/`. The oracle then compares these files against the paper's reference values. At the end, AEBench prints the case status and the oracle score, similar to
+```text
+Case status: success
+Oracle score: 4
+```
 
-`--agent` and `--model` are required on every run. AEBench passes `--model` to
-the agent CLI unchanged, so use a model your account can access.
-
-## Choosing a case
-
-`cases.json` lists the official cases, and each one lives in
-`cases/<case_id>/`. Its `case.toml` describes the paper, the claim to
-reproduce, the time limit (`[run.runtime] timeout_ms`), and what the case
-needs from the host. Before you run a case, check `case.toml` for these
-settings:
-
-| Setting in `case.toml` | Add to the command | Effect |
-| --- | --- | --- |
-| `[run.artifact_requirements] docker = true` | `--allow-host-docker` | Gives the agent control of the host's Docker daemon |
-| `[run.runtime] mode = "local"` | `--allow-unsafe-local` | Runs the agent directly on the host, without a container |
-
-Both options give the agent control of the machine, so use them only on a
-disposable one. Time limits range from 1 hour to 96 hours.
-
-To check that a case loads:
-
+6. Inspect what the agent did. The output directory contains the agent's log (`runner_output.log`), the prompt the agent received, and the result (`case_result.json`). For a more readable view, users can export the run as a website and open it in a browser:
 ```bash
-uv run aebench case validate asplos24_gaia
+uv run aebench trace export ~/.cache/aebench/case-runs/asplos24_gaia/<timestamp> \
+  --output-dir /tmp/aebench-traces
+uv run aebench trace serve /tmp/aebench-traces --port 8766
+```
+and open `http://127.0.0.1:8766`. The website shows the prompt, every tool call the agent made along with its output, and the oracle's verdict for each phase. To view a run from a remote machine, see [docs/howtos/view_agent_trace.md](docs/howtos/view_agent_trace.md).
+
+7. Optionally, run the oracle again on the agent's workspace, or on a workspace users prepared by hand:
+```bash
+uv run aebench case oracle asplos24_gaia \
+  --workspace-dir /path/to/artifact/workspace \
+  --output-dir /tmp/aebench-gaia-oracle
 ```
 
-## Agents
+## 4. Agents
 
-Each agent is a directory under [`agents/`](agents/). `uv run aebench agent
-list` shows the agents it finds.
+Each agent harness is a directory under [`agents/`](agents/). AEBench currently ships the following harnesses:
 
 | `--agent` | Agent | Credential |
 | --- | --- | --- |
@@ -122,84 +146,121 @@ list` shows the agents it finds.
 | `deepseek` | DeepSeek Flash through the DSH CLI | `DEEPSEEK_API_KEY`, or a file named by `AEBENCH_DEEPSEEK_API_KEY_FILE` |
 | `zcode` | GLM-5.3-Flash through ZCode | `ZAI_CODING_PLAN_KEY`, or a file named by `AEBENCH_ZAI_CODING_PLAN_KEY_FILE` |
 
-[docs/howtos/add_agent.md](docs/howtos/add_agent.md) covers how to set up
-subscription logins and copy them to a remote machine. It also explains how to
-add an agent, which needs no change to AEBench's code.
-
-## Looking at a run
-
-The trace viewer turns a run's output directory into a website. The site shows
-the prompt, every tool call and its output, and the oracle's verdict:
-
+Users can list the harnesses AEBench finds, and check their configuration, by running
 ```bash
-uv run aebench trace export ~/.cache/aebench/case-runs/asplos24_gaia/<timestamp> \
-  --output-dir /tmp/aebench-traces
-uv run aebench trace serve /tmp/aebench-traces --port 8766
+uv run aebench agent list
 ```
 
-Then open `http://127.0.0.1:8766`. For a remote machine, use an SSH tunnel, as
-[docs/howtos/view_agent_trace.md](docs/howtos/view_agent_trace.md) describes.
+To set up subscription logins and copy them to a remote machine, or to add a new harness (which requires no change to AEBench's code), see [docs/howtos/add_agent.md](docs/howtos/add_agent.md).
 
-To score a workspace again, or to score one you set up by hand, run the oracle
-alone:
+## 5. Choosing and running other cases
 
-```bash
-uv run aebench case oracle asplos24_gaia \
-  --workspace-dir /path/to/artifact/workspace \
-  --output-dir /tmp/aebench-gaia-oracle
-```
+`cases.json` lists the official cases, and each case lives in `cases/<case_id>/`. A case's `case.toml` describes the paper, the claim to reproduce, the time limit (`[run.runtime] timeout_ms`), and what the case needs from the host. Time limits range from 1 hour to 96 hours.
 
-### Disk usage
+Before running a case, users should check its `case.toml` for the following settings, which require an extra option:
 
-A run leaves three things behind by default:
+| Setting in `case.toml` | Option to add | Effect |
+| --- | --- | --- |
+| `[run.artifact_requirements] docker = true` | `--allow-host-docker` | Gives the agent control of the host's Docker daemon |
+| `[run.runtime] mode = "local"` | `--allow-unsafe-local` | Runs the agent directly on the host, without a container |
 
-- its output directory, under `~/.cache/aebench/case-runs/`;
-- the artifact workspace the agent worked in, under `/tmp/aebench-workspaces/`;
-- a Docker image of the container after the agent finished.
+> [!NOTE]
+> Both options give the agent control of the host machine. We recommend using them only on a disposable machine.
 
-Pass `--cleanup-workspace` to remove the workspace and `--delete-image` to
-remove the image. Otherwise, check `docker images` and the workspace
-directory between runs.
+`uv run aebench case run --help` lists every option. [docs/howtos/run_benchmark.md](docs/howtos/run_benchmark.md) describes them in detail, including:
+* `aebench case monitor`, which additionally records every shell command the agent runs;
+* the environment variables that change where workspaces, outputs, and sockets live;
+* the user configuration file;
+* options that need host setup beyond Docker.
 
-## More run options
+## 6. Adding a new case
 
-`aebench case run --help` lists every option.
-[docs/howtos/run_benchmark.md](docs/howtos/run_benchmark.md) covers them in
-detail. It explains:
-
-- `aebench case monitor`, which also records every shell command the agent
-  runs;
-- the environment variables that move workspaces, outputs, and sockets;
-- the user config file.
-
-Some options need host setup beyond Docker, and that guide also lists those
-steps.
-
-One case runs per command. `aebench run`, `aebench case export`,
-`aebench case summarize`, and `aebench runtime run` appear in `--help`, but
-they exit with "unavailable in this checkout".
-
-## Adding a case
-
+To add a new case, users should create a case directory, generate starter oracle files, and validate the result:
 ```bash
 uv run aebench case init --blank --id my-case --target-dir cases/my-case
 uv run aebench case template cases/my-case
 uv run aebench case validate cases/my-case
 ```
 
-[docs/howtos/add_case.md](docs/howtos/add_case.md) walks through `case.toml`,
-registering the case in `cases.json`, preparing reference data, and writing the
-oracle. Use an existing case such as `cases/osdi24_kondo/` as a model.
+The generated files are templates. Users then need to fill in the upstream metadata in `case.toml`, register the case in `cases.json`, prepare the oracle's reference data, and implement one oracle per phase. [docs/howtos/add_case.md](docs/howtos/add_case.md) walks through each of these steps. We recommend using an existing case, such as `cases/osdi24_kondo/`, as a model.
 
-## Development
+## 7. Development
 
+This section is for users who want to change AEBench itself, for example to fix a bug in the runtime, support a new kind of oracle check, or change how runs are recorded. Adding a case or an agent does not require changing AEBench's code (see "[Adding a new case](README.md#6-adding-a-new-case)" and "[Agents](README.md#4-agents)").
+
+### 7.1 Code layout
+
+The command-line tool and the runtime live under `src/`:
+```plaintext
+src/
+  ├── cli.py              # the `aebench` command and its subcommands
+  ├── models.py           # case.toml schema, run options, and result types
+  ├── config.py           # settings and AEBENCH_* environment variables
+  ├── prompting.py        # renders the prompt the agent receives
+  ├── evaluator/          # loading and validating cases, the oracle framework
+  │   ├── authoring/      # `aebench case init` and `case template`
+  │   └── oracles/        # base classes and checks that case oracles build on
+  ├── runtime/            # running a case end to end
+  │   ├── case_runner.py  # one run: workspace, agent, oracle, results
+  │   ├── backend.py      # the Docker and local backends that execute commands
+  │   ├── agent_runner.py # starts an agent harness inside the backend
+  │   ├── agent_support/  # scripts copied into the container for every run
+  │   └── shim/           # the shell wrapper that records the agent's commands
+  ├── trace_viewer/       # `aebench trace export` and `trace serve`
+  └── trajectory_audit/   # `aebench audit-trace`
+```
+The architecture notes in [docs/architecture/](docs/architecture/) describe how these pieces fit together. In particular, [runtime.md](docs/architecture/runtime.md) covers the run lifecycle and [oracle.md](docs/architecture/oracle.md) the oracle framework.
+
+### 7.2 Setting up a development environment
+
+Install the development dependencies (linters, type checkers, and `pytest`):
 ```bash
 uv sync --dev
-uv run python -m pytest tests/unit tests/functional
-uv run ruff check src tests
-uv run ruff format --check src tests
 ```
 
-[docs/howtos/testing.md](docs/howtos/testing.md) describes the test tiers. Some
-need Docker or a Rust toolchain. [docs/README.md](docs/README.md) indexes the
-architecture notes on the runtime, the oracles, and the glossary.
+> [!NOTE]
+> Changes under `src/runtime/` that affect what runs inside the container (e.g., `agent_support/` or `shim/`) only take effect after users rebuild the Docker image:
+> ```bash
+> docker build -t aebench-agent:latest .
+> ```
+
+### 7.3 Checking a change
+
+Every pull request runs the following checks, and users should run them locally before opening one:
+```bash
+uv run ruff check src tests
+uv run ruff format --check src tests
+MYPYPATH=src uv run mypy --explicit-package-bases src
+uv run python -m pytest tests/unit tests/functional
+```
+
+The code uses tabs for indentation and a line length of 100, which `uv run ruff format src tests` applies automatically. `mypy` runs in strict mode.
+
+### 7.4 Tests
+
+The test suite is split into tiers:
+* `tests/unit/` tests isolated logic without filesystem or subprocess calls;
+* `tests/functional/` tests a whole component against the real filesystem, without agents or Docker;
+* `tests/integration/` tests several components together, including the shell wrapper, which requires a Rust toolchain (`cargo`) and is skipped without one.
+
+For example, to run the integration tests, or a single test:
+```bash
+uv run python -m pytest tests/integration/
+uv run python -m pytest tests/unit/test_loader.py -k missing
+```
+
+See [docs/howtos/testing.md](docs/howtos/testing.md) for more details on each tier and the available `pytest` markers.
+
+## 8. Known issues
+
+### 8.1 Commands that appear in `--help` but are unavailable
+
+AEBench currently runs one case per command. The commands `aebench run`, `aebench case export`, `aebench case summarize`, and `aebench runtime run` appear in `--help`, but exit with a message such as "benchmark runner is unavailable in this checkout".
+
+### 8.2 Disk usage
+
+By default, every run leaves behind its output directory (under `~/.cache/aebench/case-runs/`), the artifact workspace the agent worked in (under `/tmp/aebench-workspaces/`), and a Docker image of the agent's container after the agent finished. Over several runs, these can fill the disk. To remove the workspace and the image after a run, users can pass `--cleanup-workspace` and `--delete-image`, respectively. Otherwise, we recommend checking `docker images` and the workspace directory between runs.
+
+### 8.3 Unregistered cases
+
+A few directories under `cases/` (`atc25_sieve`, `eurosys25_visualinux`, and `osdi25_verified_storage`) are not listed in `cases.json` yet. Users can still validate or run them by path, e.g., `uv run aebench case validate cases/atc25_sieve`.
