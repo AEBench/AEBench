@@ -50,6 +50,7 @@ class TraceFormat(str, Enum):
 
 	CLAUDE_CODE = "claude_code"
 	CODEX = "codex"
+	DSH = "dsh"
 	RAW = "raw"
 
 
