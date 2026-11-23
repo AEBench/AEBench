@@ -1,255 +1,205 @@
 # AEBench
 
-AEBench is a benchmark for evaluating AI agents on Artifact Evaluation (AE) tasks. It packages official AE cases as versioned cases, runs them through a shared runtime, and records benchmark-level results in a reproducible way. For context on why this benchmark exists, see [WHY.md](WHY.md).
+AEBench is a benchmark that measures how well AI coding agents reproduce the
+results of published systems research papers. Conferences run an Artifact
+Evaluation (AE) process, in which reviewers download a paper's code (its
+*artifact*), follow its README, and check that the paper's results come out.
+AEBench gives the same task to an agent. For why the benchmark exists, see
+[WHY.md](WHY.md).
 
-## Overview
+Each benchmark task is a **case**: one paper's artifact pinned to an upstream
+commit, plus an **oracle** that checks the agent's work. A run goes like this:
 
-The current repository is organized around three layers:
+1. AEBench clones the artifact and starts a Docker container with the agent CLI
+   (Claude Code, Codex, and others) inside.
+2. The agent reads the artifact's instructions and tries to set up, build, and
+   run its experiments, with no human help.
+3. The oracle scores the workspace the agent left behind, one point per phase:
 
-- `cases.json`: the versioned catalog of official case ids
-- `cases/<case_id>/`: case content for each official case
-- `src/`: the runtime, CLI, reporting, and Docker execution logic
+| Phase | Passes when |
+| --- | --- |
+| `env_setup` | the artifact's dependencies are installed |
+| `artifact_build` | the artifact builds |
+| `benchmark_prep` | the inputs and benchmarks the experiments need are ready |
+| `experiment_runs` | the experiments ran and their results match the paper's within tolerance |
 
-Each case identifies the artifact instructions and contains an oracle entrypoint and reference data. A Codex or Claude Code harness can run one case, after which the AEBench oracle scores the result. Commands that run multiple cases or use the JSONL runtime remain unavailable.
+A score of 4/4 is a full reproduction, and 0/4 means no phase passed.
 
-## Quick Start
+## Requirements
 
-Requirements:
+- Linux on x86_64 or arm64.
+- Docker, with your user allowed to run `docker` without `sudo`.
+- `git` and [uv](https://docs.astral.sh/uv/). uv installs Python 3.10 or newer
+  if you do not have it.
+- Credentials for at least one agent (see [Agents](#agents)).
+- Disk space. The agent image is several GB, and each run keeps its workspace,
+  its outputs, and a Docker image of the container after the agent finishes
+  (see [Disk usage](#disk-usage)).
 
-- Python 3.11+
-- [uv](https://docs.astral.sh/uv/) for dependency management
-- Docker for isolated agent runs
+Many artifacts need hours of CPU time and plenty of memory. A disposable cloud
+machine works well. The team uses
+[Chameleon Cloud](https://www.chameleoncloud.org/) instances, so some guides
+show `cc@<floating-ip>` addresses.
 
-Install the project:
+## Install
 
 ```bash
 git clone https://github.com/AEBench/AEBench.git
 cd AEBench
 
-uv sync --dev
+uv sync
 docker build -t aebench-agent:latest .
+uv run aebench --help
 ```
 
-Run the CLI through `uv` with `src` on `PYTHONPATH`:
+The image holds the agent CLIs and AEBench's in-container tooling. **Rebuild it
+after every `git pull`**: a run uses the image as it was last built, not the
+code in your checkout.
+
+Run every command from the repository root. AEBench finds its case catalog by
+walking up from the current directory to `aebench.toml` or `cases.json`.
+
+## Run your first case
+
+This example uses Claude Code with an Anthropic API key. `asplos24_gaia` makes
+a good first case: its time limit is one hour and it needs nothing beyond the
+container.
 
 ```bash
-PYTHONPATH=src uv run aebench --help
-PYTHONPATH=src uv run aebench case --help
+export ANTHROPIC_API_KEY=...
+
+uv run aebench case run asplos24_gaia \
+  --agent claude \
+  --model claude-opus-5-5
 ```
 
-## Current Case Workflows
+Before the agent starts, AEBench prints the run's output directory:
 
-Initialize a workspace:
-
-```bash
-PYTHONPATH=src uv run aebench init
+```text
+Output: /home/<you>/.cache/aebench/case-runs/asplos24_gaia/<timestamp>
 ```
 
-Create or template a case bundle:
+When the run ends, it prints the case status and the oracle score. The output
+directory holds the agent's log (`runner_output.log`), the prompt it was
+given, and the result (`case_result.json`).
+
+`--agent` and `--model` are required on every run. AEBench passes `--model` to
+the agent CLI unchanged, so use a model your account can access.
+
+## Choosing a case
+
+`cases.json` lists the official cases, and each one lives in
+`cases/<case_id>/`. Its `case.toml` describes the paper, the claim to
+reproduce, the time limit (`[run.runtime] timeout_ms`), and what the case
+needs from the host. Before you run a case, check `case.toml` for these
+settings:
+
+| Setting in `case.toml` | Add to the command | Effect |
+| --- | --- | --- |
+| `[run.artifact_requirements] docker = true` | `--allow-host-docker` | Gives the agent control of the host's Docker daemon |
+| `[run.runtime] mode = "local"` | `--allow-unsafe-local` | Runs the agent directly on the host, without a container |
+
+Both options give the agent control of the machine, so use them only on a
+disposable one. Time limits range from 1 hour to 96 hours.
+
+To check that a case loads:
 
 ```bash
-PYTHONPATH=src uv run aebench case init --blank --id my-case --target-dir cases/my-case
-PYTHONPATH=src uv run aebench case template cases/my-case
+uv run aebench case validate asplos24_gaia
 ```
 
-Validate a registered case:
+## Agents
+
+Each agent is a directory under [`agents/`](agents/). `uv run aebench agent
+list` shows the agents it finds.
+
+| `--agent` | Agent | Credential |
+| --- | --- | --- |
+| `claude` | Claude Code | `ANTHROPIC_API_KEY` |
+| `claude_non_api` | Claude Code with a Claude subscription | `CLAUDE_CODE_OAUTH_TOKEN`, or a file named by `AEBENCH_CLAUDE_OAUTH_TOKEN_FILE` |
+| `codex` | Codex CLI | `OPENAI_API_KEY` or `CODEX_API_KEY` |
+| `codex_non_api` | Codex CLI with a ChatGPT subscription | `~/.codex/auth.json`, or a file named by `AEBENCH_CODEX_AUTH_FILE` |
+| `deepseek` | DeepSeek Flash through the DSH CLI | `DEEPSEEK_API_KEY`, or a file named by `AEBENCH_DEEPSEEK_API_KEY_FILE` |
+| `zcode` | GLM-5.3-Flash through ZCode | `ZAI_CODING_PLAN_KEY`, or a file named by `AEBENCH_ZAI_CODING_PLAN_KEY_FILE` |
+
+[docs/howtos/add_agent.md](docs/howtos/add_agent.md) covers how to set up
+subscription logins and copy them to a remote machine. It also explains how to
+add an agent, which needs no change to AEBench's code.
+
+## Looking at a run
+
+The trace viewer turns a run's output directory into a website. The site shows
+the prompt, every tool call and its output, and the oracle's verdict:
 
 ```bash
-PYTHONPATH=src uv run aebench case validate osdi24_anvil
+uv run aebench trace export ~/.cache/aebench/case-runs/asplos24_gaia/<timestamp> \
+  --output-dir /tmp/aebench-traces
+uv run aebench trace serve /tmp/aebench-traces --port 8766
 ```
 
-Run only the oracle against an existing artifact workspace:
+Then open `http://127.0.0.1:8766`. For a remote machine, use an SSH tunnel, as
+[docs/howtos/view_agent_trace.md](docs/howtos/view_agent_trace.md) describes.
+
+To score a workspace again, or to score one you set up by hand, run the oracle
+alone:
 
 ```bash
-PYTHONPATH=src uv run aebench case oracle osdi24_anvil \
+uv run aebench case oracle asplos24_gaia \
   --workspace-dir /path/to/artifact/workspace \
-  --output-dir /tmp/aebench-osdi24-anvil-oracle
+  --output-dir /tmp/aebench-gaia-oracle
 ```
 
-Standalone oracle runs are the main way to audit a case after manually building and running the upstream artifact.
+### Disk usage
 
-For a ChatGPT subscription, run `codex login` on your local computer. Copy
-`~/.codex/auth.json` to the Chameleon instance, restrict access to the copy,
-and run a case:
+A run leaves three things behind by default:
+
+- its output directory, under `~/.cache/aebench/case-runs/`;
+- the artifact workspace the agent worked in, under `/tmp/aebench-workspaces/`;
+- a Docker image of the container after the agent finished.
+
+Pass `--cleanup-workspace` to remove the workspace and `--delete-image` to
+remove the image. Otherwise, check `docker images` and the workspace
+directory between runs.
+
+## More run options
+
+`aebench case run --help` lists every option.
+[docs/howtos/run_benchmark.md](docs/howtos/run_benchmark.md) covers them in
+detail. It explains:
+
+- `aebench case monitor`, which also records every shell command the agent
+  runs;
+- the environment variables that move workspaces, outputs, and sockets;
+- the user config file.
+
+Some options need host setup beyond Docker, and that guide also lists those
+steps.
+
+One case runs per command. `aebench run`, `aebench case export`,
+`aebench case summarize`, and `aebench runtime run` appear in `--help`, but
+they exit with "unavailable in this checkout".
+
+## Adding a case
 
 ```bash
-scp ~/.codex/auth.json cc@<floating-ip>:~/codex_auth.json
-
-# On the Chameleon instance
-mkdir -p ~/.config/aebench
-chmod 700 ~/.config/aebench
-install -m 600 ~/codex_auth.json ~/.config/aebench/codex_auth.json
-rm ~/codex_auth.json
-export AEBENCH_CODEX_AUTH_FILE=~/.config/aebench/codex_auth.json
-
-uv run aebench case run osdi24_kondo \
-  --agent codex_non_api \
-  --model gpt-5.5
+uv run aebench case init --blank --id my-case --target-dir cases/my-case
+uv run aebench case template cases/my-case
+uv run aebench case validate cases/my-case
 ```
 
-For a Claude subscription, run `claude setup-token` on your local computer.
-Save the printed token in `~/.config/aebench/claude_oauth_token`, copy the file
-to the Chameleon instance, restrict access to the copy, and run a case:
+[docs/howtos/add_case.md](docs/howtos/add_case.md) walks through `case.toml`,
+registering the case in `cases.json`, preparing reference data, and writing the
+oracle. Use an existing case such as `cases/osdi24_kondo/` as a model.
+
+## Development
 
 ```bash
-scp ~/.config/aebench/claude_oauth_token cc@<floating-ip>:~/claude_oauth_token
-
-# On the Chameleon instance
-mkdir -p ~/.config/aebench
-chmod 700 ~/.config/aebench
-install -m 600 ~/claude_oauth_token ~/.config/aebench/claude_oauth_token
-rm ~/claude_oauth_token
-export AEBENCH_CLAUDE_OAUTH_TOKEN_FILE=~/.config/aebench/claude_oauth_token
-
-uv run aebench case run osdi24_kondo \
-  --agent claude_non_api \
-  --model claude-opus-4-8
-```
-
-If the case sets `[run.artifact_requirements] docker = true`, add
-`--allow-host-docker`. This option gives the agent control of the Chameleon
-instance's Docker daemon. Use it only on a disposable instance.
-
-The following workflows are not available in this checkout even though their subcommands appear in `--help`:
-
-- `aebench run`
-- `aebench case export`
-- `aebench case summarize`
-- `aebench runtime run`
-
-For the current oracle workflow and the unavailable runner commands, see [docs/howtos/run_benchmark.md](docs/howtos/run_benchmark.md).
-
-
-## Adding a New Artifact or "Cases"
-
-New benchmark cases are added as cases rather than through the legacy benchmark-workspace layout.
-
-Common entrypoints:
-
-```bash
-PYTHONPATH=src uv run aebench init
-PYTHONPATH=src uv run aebench case init --blank --id my-case --target-dir cases/my-case
-PYTHONPATH=src uv run aebench case template cases/my-case
-PYTHONPATH=src uv run aebench case validate cases/my-case
-```
-
-For the first-time authoring walkthrough, including `case.toml` fields, registry behavior, and oracle implementation, see [docs/howtos/add_case.md](docs/howtos/add_case.md).
-
-### Authoring Entry Points
-
-Initialize a workspace:
-
-```bash
-PYTHONPATH=src uv run aebench init
-```
-
-Create a new empty case:
-
-```bash
-PYTHONPATH=src uv run aebench case init --blank --id my-case --target-dir cases/my-case
-```
-
-Create a starter case from a source-like identifier:
-
-```bash
-PYTHONPATH=src uv run aebench case init ./path/to/artifact --id my-case --target-dir cases/my-case
-PYTHONPATH=src uv run aebench case init https://github.com/org/repo.git --id my-case --ref main --target-dir cases/my-case
-```
-
-The current scaffold writes local template files. Fill in the real `case.toml` upstream metadata and oracle logic before submitting a case.
-
-### Common Commands
-
-Validate a case and run its oracle:
-
-```bash
-PYTHONPATH=src uv run aebench case validate cases/my-case
-PYTHONPATH=src uv run aebench case oracle cases/my-case \
-  --workspace-dir /path/to/artifact/workspace \
-  --output-dir /tmp/aebench-my-case-oracle
-```
-
-`aebench run` and `aebench case export` currently raise "unavailable in this checkout".
-
-### `case.toml`
-
-Minimal example:
-
-```toml
-id = "demo-case"
-
-[case_brief]
-core_claim = "Summarize the clean-baseline claim this case should validate."
-acceptable_evidence = "Describe what should count as success for this case."
-allowed_tolerance = "n/a"
-
-[run]
-id = "demo-case"
-
-[run.instructions]
-path = "README.md"
-
-[run.runtime]
-mode = "docker"
-timeout_ms = 120000
-gpu = false
-interactive = false
-
-[run.prompt]
-profile = "artifact-eval-v1"
-
-[oracle]
-expected_score = 4
-phases = ["env_setup", "artifact_build", "benchmark_prep", "experiment_runs"]
-score_mode = "phase_count"
-
-[upstream]
-source_type = "git"
-url = "https://github.com/org/repo.git"
-ref = "deadbeef..."
-```
-
-## Agent Harnesses
-
-Each agent harness is a directory under [`agents/`](agents/): an `agent.sh`
-that starts the agent CLI, an `agent.toml` declaring what it needs, and an
-`install.sh` that installs the CLI into the runtime image. Available harnesses:
-
-- `codex`
-- `codex_non_api`
-- `claude`
-- `claude_non_api`
-- `deepseek` (DeepSeek Flash through DSH)
-- `zcode` (GLM-5.3-Flash through Z.AI Coding Plan)
-
-Select the harness and model for each run with `--agent` and `--model`, and
-list the harnesses found with `aebench agent list`. See
-[docs/howtos/add_agent.md](docs/howtos/add_agent.md) for authentication and
-for adding another harness, which needs no change to AEBench's code.
-
-
-## Runtime Backends
-
-Add or modify a runtime backend only when command execution or isolation requirements change.
-
-- `LocalRuntime`
-  Runs commands directly on the host. Used when `runtime.mode = "local"`.
-- `DockerRuntime`
-  Manages the container, workspace mounts, and snapshots. Used when `runtime.mode = "docker"`.
-
-Shell harnesses use the selected backend to run commands. Keep runtime-specific operations in the backend.
-
-## Development and Testing
-
-Useful commands:
-
-```bash
-PYTHONPATH=src uv run python -m pytest tests/unit tests/functional
-PYTHONPATH=src uv run python -m pytest tests/unit/
-PYTHONPATH=src uv run python -m pytest tests/functional/
-PYTHONPATH=src uv run python -m pytest tests/integration/
-PYTHONPATH=src uv run python -m pytest -m sanity
-PYTHONPATH=src uv run python -m pytest --collect-only -q
+uv sync --dev
+uv run python -m pytest tests/unit tests/functional
 uv run ruff check src tests
 uv run ruff format --check src tests
 ```
+
+[docs/howtos/testing.md](docs/howtos/testing.md) describes the test tiers. Some
+need Docker or a Rust toolchain. [docs/README.md](docs/README.md) indexes the
+architecture notes on the runtime, the oracles, and the glossary.
