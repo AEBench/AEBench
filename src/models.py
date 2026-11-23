@@ -571,9 +571,16 @@ class UpstreamConfig(_Model):
 	ref: str | None = None
 	requested_ref: str | None = None
 	resolved_at: str | None = None
-	artifact_mode: ArtifactMode | None = None
+	artifact_mode: ArtifactMode = ArtifactMode.UPSTREAM
 	overlay_artifact: bool = False
 	notes: str | None = None
+
+	@property
+	def uses_local_artifact(self) -> bool:
+		"""Whether the case's local artifact/ directory feeds the task source."""
+		return self.artifact_mode == ArtifactMode.LOCAL or (
+			self.artifact_mode == ArtifactMode.OVERLAY and self.overlay_artifact
+		)
 
 
 class PaperConfig(_Model):

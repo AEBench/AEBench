@@ -5,9 +5,10 @@ from pathlib import Path
 
 import pytest
 
+from evaluator.authoring.case_spec import write_case_spec
 from evaluator.authoring.validate import validate_case_bundle
 from evaluator.loader import load_case_spec
-from models import LocalSource, OverlaySource, UpstreamSourceType
+from models import LocalSource, OverlaySource, UpstreamConfig, UpstreamSourceType
 from project_config import ArtifactMode
 from runtime.cases import task_from_case
 
@@ -126,3 +127,12 @@ def test_validate_and_runtime_agree_on_local_artifact(
 		runtime_ok = True
 	assert issues <= {"missing_artifact_dir"}
 	assert ("missing_artifact_dir" not in issues) == runtime_ok
+
+
+def test_unset_artifact_mode_is_upstream(tmp_path: Path) -> None:
+	assert UpstreamConfig().artifact_mode == ArtifactMode.UPSTREAM
+	assert not UpstreamConfig().uses_local_artifact
+	case_dir = _copy_case(tmp_path)
+	case = load_case_spec(case_dir)
+	write_case_spec(case, case_dir)
+	assert 'artifact_mode = "upstream"' in (case_dir / "case.toml").read_text(encoding="utf-8")
