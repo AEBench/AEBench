@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
+from constants import CASE_MANIFEST_FILENAME
 from models import UpstreamConfig, UpstreamSourceType
 from project_config import (
 	BundleRegistry,
@@ -73,14 +74,45 @@ def register_case(
 	_write_registry(registry_path, registry)
 
 
-def resolve_case_dir(
-	case_id: str,
-	*,
-	project_state: ProjectState,
-	target_root: Path | None = None,
+class CaseResolutionError(ValueError):
+	"""A case reference names no existing case bundle."""
+
+
+def resolve_case_ref(case_ref: str, *, project_state: ProjectState) -> Path:
+	"""Resolves a user case reference to an existing case directory.
+
+	Tries, in order: a path relative to the current directory (or absolute), a
+	registered id via its cases.json path, a path relative to the project root,
+	and an unregistered id under the cases dir.
+
+	Raises:
+		CaseResolutionError: If no candidate contains a case manifest.
+	"""
+	root = project_state.root
+	entry = project_state.registry.cases.get(case_ref)
+	candidates = [
+		Path(case_ref).expanduser(),
+		*([entry.resolve(root)] if entry is not None else []),
+		root / case_ref,
+		project_state.config.resolve_bundles_dir(root) / case_ref,
+	]
+	for candidate in candidates:
+		if (candidate / CASE_MANIFEST_FILENAME).is_file():
+			return candidate.resolve()
+	if entry is not None:
+		raise CaseResolutionError(
+			f"cannot resolve case reference: {case_ref} "
+			f"(registered at {entry.path}, which has no {CASE_MANIFEST_FILENAME})"
+		)
+	raise CaseResolutionError(f"cannot resolve case reference: {case_ref}")
+
+
+def new_case_dir(
+	case_id: str, *, project_state: ProjectState, target_dir: Path | None = None
 ) -> Path:
-	if target_root is not None:
-		return target_root.expanduser().resolve()
+	"""Returns where `case init` creates a case: target_dir, else the cases dir."""
+	if target_dir is not None:
+		return target_dir.expanduser().resolve()
 	return project_state.config.resolve_bundles_dir(project_state.root) / case_id
 
 
@@ -142,10 +174,12 @@ def _write_registry(path: Path, registry: BundleRegistry) -> None:
 
 
 __all__ = [
+	"CaseResolutionError",
 	"WorkspaceInitResult",
 	"infer_upstream_config",
 	"initialize_user_config",
 	"initialize_workspace",
+	"new_case_dir",
 	"register_case",
-	"resolve_case_dir",
+	"resolve_case_ref",
 ]

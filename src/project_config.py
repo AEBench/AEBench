@@ -116,6 +116,9 @@ class BundleRegistryCase(_Model):
 		_require_relative(self.path, "registry case path")
 		return self
 
+	def resolve(self, project_root: Path) -> Path:
+		return (project_root / self.path).resolve()
+
 
 class BundleRegistry(BaseModel):
 	model_config = ConfigDict(extra="forbid", populate_by_name=True)
