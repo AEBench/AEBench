@@ -28,6 +28,8 @@ _LEGACY_TRACE_FORMATS = {
 _RAW_CHUNK_LINES = 200
 # Formats parsed into the viewer's message blocks, so the summary reads them the same way.
 _MESSAGE_BLOCK_FORMATS = {"claude_code", "dsh"}
+# DSH tools the viewer has a special display for, under the names it knows.
+_DSH_TOOL_NAMES = {"bash": "Bash"}
 # DSH cache counters, under the names the summary reads.
 _DSH_USAGE_ALIASES = {
 	"cacheReadTokens": "cache_read_input_tokens",
@@ -319,6 +321,8 @@ def _dsh_event(
 	if event_type == "session":
 		raw = {"session_id": session_id, "cwd": payload.get("cwd")}
 		event.update(type="system", subtype="init", raw=_redact_value(raw, secrets))
+	elif event_type in {"thinking", "text"} and not text.strip():
+		return None
 	elif event_type == "thinking":
 		event.update(type="assistant", blocks=[{"type": "thinking", "thinking": text}])
 	elif event_type == "text":
@@ -331,7 +335,7 @@ def _dsh_event(
 		block = {
 			"type": "tool_use",
 			"id": payload.get("callId"),
-			"name": payload.get("tool"),
+			"name": _DSH_TOOL_NAMES.get(str(payload.get("tool")), payload.get("tool")),
 			"input": _redact_value(arguments, secrets),
 		}
 		event.update(type="assistant", blocks=[block])
