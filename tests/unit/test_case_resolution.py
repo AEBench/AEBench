@@ -129,3 +129,11 @@ def test_case_init_places_a_new_case_in_the_cases_dir_or_target_dir(workspace: P
 
 	assert (workspace / "cases" / "fresh" / "case.toml").is_file()
 	assert (workspace / "drafts" / "new" / "case.toml").is_file()
+
+
+def test_case_init_prints_the_new_case_dir(
+	workspace: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+	assert cli_main(["case", "init", "--blank", "--id", "fresh"]) == 0
+
+	assert f"Initialized case bundle: {workspace / 'cases' / 'fresh'}\n" in capsys.readouterr().out
