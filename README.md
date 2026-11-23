@@ -1,5 +1,9 @@
 # AEBench
 
+<p align="center">
+<a href="#1-overview">Overview</a> | <a href="#2-requirements">Requirements</a> | <a href="#3-getting-started">Getting started</a> | <a href="#4-running-example-reproducing-gaia">Running example</a> | <a href="#5-choosing-and-running-other-cases">Other cases</a> | <a href="#6-adding-a-new-case">Adding a case</a> | <a href="#7-development">Development</a> | <a href="#8-known-issues">Known issues</a>
+</p>
+
 ## 1. Overview
 
 AEBench is a framework that evaluates how well AI coding agents reproduce the results of published systems research papers. Many Computer Science conferences run an Artifact Evaluation (AE) process, where reviewers download a paper's code and data (the *artifact*), follow its instructions, and check whether the paper's results hold. AEBench gives the same task to an agent and scores how far the agent gets. For more context on why this benchmark exists, see [WHY.md](WHY.md).
@@ -19,68 +23,54 @@ Each benchmark task is a *case*. A case represents a paper's artifact at a parti
 
 A score of 4/4 indicates all derived checks passed successfully and results are likely reproduced, while 0/4 means that no phase passed.
 
-Users who want to run a case should start with "[Requirements](README.md#2-requirements)" and "[Getting Started](README.md#3-getting-started)", then follow the "[Running example](README.md#4-running-example-reproducing-gaia)". Users who want to add a case or an agent should see "[Adding a new case](README.md#7-adding-a-new-case)" and "[Agents](README.md#5-agents)". Users who want to change AEBench itself should see "[Development](README.md#8-development)".
+Users who want to run a case should start with "[Requirements](README.md#2-requirements)" and "[Getting Started](README.md#3-getting-started)", then follow the "[Running example](README.md#4-running-example-reproducing-gaia)". Users who want to add a case or an agent should see "[Adding a new case](README.md#6-adding-a-new-case)" and "[Agents](README.md#24-agents)". Users who want to change AEBench itself should see "[Development](README.md#7-development)".
 
 ## 2. Requirements
 
-### 2.1 Platform compatibility
+AEBench was developed and tested with the requirements below. Older versions and smaller machines might work as well, but we have not tested them.
 
-AEBench was developed and tested on x86_64 bare-metal machines running Ubuntu 24.04 LTS (Linux 6.8). It should run on any recent Linux distribution that supports Docker. The Docker image also builds for arm64, but we have not tested AEBench on arm64 machines, nor on macOS or Windows.
+### 2.1 Platform
 
-### 2.2 Software dependencies
+* x86_64 bare-metal machine running Ubuntu 24.04.4 LTS (Linux 6.8)
 
-| Dependency | Used for | Tested with | Minimum (estimated) |
-| --- | --- | --- | --- |
-| Linux | host operating system | Ubuntu 24.04.4 LTS, kernel 6.8 | Ubuntu 22.04 LTS or equivalent |
-| Docker Engine | running agents in isolated containers | 29.8.2 | 24.0 |
-| `git` | cloning AEBench and the artifacts | 2.43.0 | 2.34 |
-| [uv](https://docs.astral.sh/uv/) | installing AEBench's Python dependencies | 0.12.23 | 0.8 |
-| Python | running the `aebench` command-line tool | 3.12.3 | 3.10 |
-| Rust toolchain (`cargo`) | only for running the shell-wrapper tests (see "[Tests](README.md#84-tests)") | 1.83 (in the Docker image) | 1.83 |
+The Docker image also builds for arm64, but we have not tested AEBench on arm64 machines, nor on macOS or Windows.
 
-Installation commands in this section assume Ubuntu. Users on other distributions should adjust them accordingly.
+### 2.2 Software
 
-To install `git` and uv:
-```bash
-sudo apt install git
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-uv installs a suitable Python version automatically if the system does not have one.
-
-To install Docker, users should follow the [official instructions for Ubuntu](https://docs.docker.com/engine/install/ubuntu/). AEBench calls `docker` without `sudo`, so users then need to add themselves to the `docker` group, and log out and back in for the change to take effect:
-```bash
-sudo usermod -aG docker "$USER"
-```
-
-Users can check that the dependencies were installed successfully by running
-```bash
-docker --version
-git --version
-uv --version
-docker run --rm hello-world
-```
-which should yield output similar to
-```text
-Docker version 29.8.2, build 7fc2dff
-git version 2.43.0
-uv 0.12.23 (x86_64-unknown-linux-gnu)
-...
-Hello from Docker!
-...
-```
+* Docker Engine 29.8.2, with the current user in the `docker` group (`sudo usermod -aG docker "$USER"`, then log out and back in), since AEBench calls `docker` without `sudo`
+* `git` 2.43.0
+* [`uv`](https://docs.astral.sh/uv/) 0.12.23, which also installs Python if needed
+* Python 3.12.3
+* Rust 1.83 (`cargo`), only for running the shell-wrapper tests (see "[Tests](README.md#74-tests)")
 
 ### 2.3 Hardware
 
-AEBench itself is lightweight, but the artifacts it runs are not: many need hours of CPU time, a lot of memory, and tens of GB of disk space. The Docker image that agents run in is about 9 GB on its own, and every run leaves files behind (see "[Disk usage](README.md#92-disk-usage)").
+* 64 CPU cores, 187 GB of RAM, and 210 GB of disk space ([Chameleon Cloud](https://www.chameleoncloud.org/) bare-metal instances, which is why some guides use `cc@<floating-ip>` addresses)
 
-We tested AEBench on [Chameleon Cloud](https://www.chameleoncloud.org/) bare-metal instances with 64 CPU cores, 187 GB of RAM, and 210 GB of disk space, which is why some guides use `cc@<floating-ip>` addresses. We recommend at least 8 CPU cores, 32 GB of RAM, and 100 GB of free disk space. Individual cases may need more; users should check the artifact's own instructions before running a case.
+AEBench itself is lightweight, but many artifacts need hours of CPU time, a lot of memory, and tens of GB of disk space. The Docker image that agents run in is about 9 GB on its own, and every run leaves files behind (see "[Disk usage](README.md#82-disk-usage)"). Individual cases may need more; users should check the artifact's own instructions before running a case.
 
 > [!NOTE]
-> Agents run with broad permissions inside their container, and some cases give them control of the host (see "[Choosing and running other cases](README.md#6-choosing-and-running-other-cases)"). We recommend running AEBench on a disposable machine, such as a cloud instance, rather than on a personal workstation.
+> Agents run with broad permissions inside their container, and some cases give them control of the host (see "[Choosing and running other cases](README.md#5-choosing-and-running-other-cases)"). We recommend running AEBench on a disposable machine, such as a cloud instance, rather than on a personal workstation.
 
-### 2.4 Agent credentials
+### 2.4 Agents
 
-Users need credentials for at least one supported agent, such as an Anthropic or OpenAI API key, or a Claude or ChatGPT subscription. See "[Agents](README.md#5-agents)" for the full list.
+Users need credentials for at least one supported agent. Each agent harness is a directory under [`agents/`](agents/). AEBench currently includes the following harnesses:
+
+| `--agent` | Agent | Credential |
+| --- | --- | --- |
+| `claude` | Claude Code | `ANTHROPIC_API_KEY` |
+| `claude_non_api` | Claude Code with a Claude subscription | `CLAUDE_CODE_OAUTH_TOKEN`, or a file named by `AEBENCH_CLAUDE_OAUTH_TOKEN_FILE` |
+| `codex` | Codex CLI | `OPENAI_API_KEY` or `CODEX_API_KEY` |
+| `codex_non_api` | Codex CLI with a ChatGPT subscription | `~/.codex/auth.json`, or a file named by `AEBENCH_CODEX_AUTH_FILE` |
+| `deepseek` | DeepSeek Flash through the DSH CLI | `DEEPSEEK_API_KEY`, or a file named by `AEBENCH_DEEPSEEK_API_KEY_FILE` |
+| `zcode` | GLM-5.3-Flash through ZCode | `ZAI_CODING_PLAN_KEY`, or a file named by `AEBENCH_ZAI_CODING_PLAN_KEY_FILE` |
+
+Users can list the harnesses AEBench finds, and check their configuration, by running
+```bash
+uv run aebench agent list
+```
+
+To set up subscription logins and copy them to a remote machine, or to add a new harness (which requires no change to AEBench's code), see [docs/howtos/add_agent.md](docs/howtos/add_agent.md).
 
 ## 3. Getting Started
 
@@ -107,7 +97,7 @@ AEBench/
 ```
 The `cases` directory contains the benchmark itself, while the `agents` directory holds the scripts that start each supported agent.
 
-2. Install the Python dependencies with [uv](https://docs.astral.sh/uv/):
+2. Install the Python dependencies with [`uv`](https://docs.astral.sh/uv/):
 ```bash
 uv sync
 ```
@@ -186,27 +176,7 @@ uv run aebench case oracle asplos24_gaia \
   --output-dir /tmp/aebench-gaia-oracle
 ```
 
-## 5. Agents
-
-Each agent harness is a directory under [`agents/`](agents/). AEBench currently includes the following harnesses:
-
-| `--agent` | Agent | Credential |
-| --- | --- | --- |
-| `claude` | Claude Code | `ANTHROPIC_API_KEY` |
-| `claude_non_api` | Claude Code with a Claude subscription | `CLAUDE_CODE_OAUTH_TOKEN`, or a file named by `AEBENCH_CLAUDE_OAUTH_TOKEN_FILE` |
-| `codex` | Codex CLI | `OPENAI_API_KEY` or `CODEX_API_KEY` |
-| `codex_non_api` | Codex CLI with a ChatGPT subscription | `~/.codex/auth.json`, or a file named by `AEBENCH_CODEX_AUTH_FILE` |
-| `deepseek` | DeepSeek Flash through the DSH CLI | `DEEPSEEK_API_KEY`, or a file named by `AEBENCH_DEEPSEEK_API_KEY_FILE` |
-| `zcode` | GLM-5.3-Flash through ZCode | `ZAI_CODING_PLAN_KEY`, or a file named by `AEBENCH_ZAI_CODING_PLAN_KEY_FILE` |
-
-Users can list the harnesses AEBench finds, and check their configuration, by running
-```bash
-uv run aebench agent list
-```
-
-To set up subscription logins and copy them to a remote machine, or to add a new harness (which requires no change to AEBench's code), see [docs/howtos/add_agent.md](docs/howtos/add_agent.md).
-
-## 6. Choosing and running other cases
+## 5. Choosing and running other cases
 
 `cases.json` lists the official cases, and each case lives in `cases/<case_id>/`. A case's `case.toml` describes the paper, the claim to reproduce, the time limit (`[run.runtime] timeout_ms`), and what the case needs from the host. Time limits range from 1 hour to 96 hours.
 
@@ -226,7 +196,7 @@ Before running a case, users should check its `case.toml` for the following sett
 * the user configuration file;
 * options that need host setup beyond Docker.
 
-## 7. Adding a new case
+## 6. Adding a new case
 
 To add a new case, users should create a case directory, generate starter oracle files, and validate the result:
 ```bash
@@ -237,11 +207,11 @@ uv run aebench case validate cases/my-case
 
 The generated files are templates. Users then need to fill in the upstream metadata in `case.toml`, register the case in `cases.json`, prepare the oracle's reference data, and implement one oracle per phase. [docs/howtos/add_case.md](docs/howtos/add_case.md) walks through each of these steps. We recommend using an existing case, such as `cases/osdi24_kondo/`, as a model.
 
-## 8. Development
+## 7. Development
 
-This section is for users who want to change AEBench itself, for example to fix a bug in the runtime, support a new kind of oracle check, or change how runs are recorded. Adding a case or an agent does not require changing AEBench's code (see "[Adding a new case](README.md#7-adding-a-new-case)" and "[Agents](README.md#5-agents)").
+This section is for users who want to change AEBench itself, for example to fix a bug in the runtime, support a new kind of oracle check, or change how runs are recorded. Adding a case or an agent does not require changing AEBench's code (see "[Adding a new case](README.md#6-adding-a-new-case)" and "[Agents](README.md#24-agents)").
 
-### 8.1 Code layout
+### 7.1 Code layout
 
 The command-line tool and the runtime live under `src/`:
 ```plaintext
@@ -264,7 +234,7 @@ src/
 ```
 The architecture notes in [docs/architecture/](docs/architecture/) describe how these pieces fit together. In particular, [runtime.md](docs/architecture/runtime.md) covers the run lifecycle and [oracle.md](docs/architecture/oracle.md) the oracle framework.
 
-### 8.2 Setting up a development environment
+### 7.2 Setting up a development environment
 
 Install the development dependencies (linters, type checkers, and `pytest`):
 ```bash
@@ -277,7 +247,7 @@ uv sync --dev
 > docker build -t aebench-agent:latest .
 > ```
 
-### 8.3 Checking a change
+### 7.3 Checking a change
 
 Every pull request runs the following checks, and users should run them locally before opening one:
 ```bash
@@ -289,7 +259,7 @@ uv run python -m pytest tests/unit tests/functional
 
 The code uses tabs for indentation and a line length of 100, which `uv run ruff format src tests` applies automatically. `mypy` runs in strict mode.
 
-### 8.4 Tests
+### 7.4 Tests
 
 The test suite is split into tiers:
 * `tests/unit/` tests isolated logic without filesystem or subprocess calls;
@@ -304,16 +274,16 @@ uv run python -m pytest tests/unit/test_loader.py -k missing
 
 See [docs/howtos/testing.md](docs/howtos/testing.md) for more details on each tier and the available `pytest` markers.
 
-## 9. Known issues
+## 8. Known issues
 
-### 9.1 Commands that appear in `--help` but are unavailable
+### 8.1 Commands that appear in `--help` but are unavailable
 
 AEBench currently runs one case per command. The commands `aebench run`, `aebench case export`, `aebench case summarize`, and `aebench runtime run` appear in `--help`, but exit with a message such as "benchmark runner is unavailable in this checkout".
 
-### 9.2 Disk usage
+### 8.2 Disk usage
 
 By default, every run leaves behind its output directory (under `~/.cache/aebench/case-runs/`), the artifact workspace the agent worked in (under `/tmp/aebench-workspaces/`), and a Docker image of the agent's container after the agent finished. Over several runs, these can fill the disk. To remove the workspace and the image after a run, users can pass `--cleanup-workspace` and `--delete-image`, respectively. Otherwise, we recommend checking `docker images` and the workspace directory between runs.
 
-### 9.3 Unregistered cases
+### 8.3 Unregistered cases
 
 A few directories under `cases/` (`atc25_sieve`, `eurosys25_visualinux`, and `osdi25_verified_storage`) are not listed in `cases.json` yet. Users can still validate or run them by path, e.g., `uv run aebench case validate cases/atc25_sieve`.
