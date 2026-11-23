@@ -11,6 +11,7 @@ _DSH_LOG = (
 	'[2026-11-20T01:00:00Z] {"type":"session","sessionId":"dsh-1","cwd":"/repo"}\n'
 	'[2026-11-20T01:00:01Z] {"type":"status","phase":"turn_start","turn":1}\n'
 	'[2026-11-20T01:00:02Z] {"type":"thinking","text":"Read the README first."}\n'
+	'[2026-11-20T01:00:02Z] {"type":"thinking","text":""}\n'
 	'[2026-11-20T01:00:03Z] {"type":"text","text":"Inspecting the artifact."}\n'
 	'[2026-11-20T01:00:04Z] {"type":"tool_call","callId":"call-1","tool":"bash",'
 	'"input":{"command":"echo secret-value","description":"Print"}}\n'
@@ -51,7 +52,7 @@ def test_parse_dsh_trace_maps_events_onto_message_blocks(tmp_path: Path) -> None
 		{
 			"type": "tool_use",
 			"id": "call-1",
-			"name": "bash",
+			"name": "Bash",
 			"input": {"command": "echo [REDACTED:TEST_TOKEN]", "description": "Print"},
 		}
 	]
