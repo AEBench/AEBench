@@ -6,6 +6,7 @@ from pathlib import Path
 
 from constants import ARTIFACT_DIRNAME, OraclePhaseName
 from models import (
+	ArtifactMode,
 	CaseConfig,
 	OracleFailureMode,
 	OracleInput,
@@ -15,7 +16,6 @@ from models import (
 	OracleStatus,
 	UpstreamConfig,
 )
-from project_config import ArtifactMode
 
 from .loader import CaseBundleError, load_case_spec
 

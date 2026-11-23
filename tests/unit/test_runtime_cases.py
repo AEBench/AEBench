@@ -8,8 +8,7 @@ import pytest
 from evaluator.authoring.case_spec import write_case_spec
 from evaluator.authoring.validate import validate_case_bundle
 from evaluator.loader import load_case_spec
-from models import LocalSource, OverlaySource, UpstreamConfig, UpstreamSourceType
-from project_config import ArtifactMode
+from models import ArtifactMode, LocalSource, OverlaySource, UpstreamConfig, UpstreamSourceType
 from runtime.cases import task_from_case
 
 _FIXTURE = (

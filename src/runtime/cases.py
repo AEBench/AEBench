@@ -7,6 +7,7 @@ from pathlib import Path
 from evaluator import artifact_dir_for, local_artifact_error
 from models import (
 	ArchiveSource,
+	ArtifactMode,
 	BenchSource,
 	CaseConfig,
 	GitSource,
@@ -16,7 +17,6 @@ from models import (
 	UpstreamConfig,
 	UpstreamSourceType,
 )
-from project_config import ArtifactMode
 
 
 def task_from_case(case_dir: Path, case: CaseConfig) -> TaskConfig:

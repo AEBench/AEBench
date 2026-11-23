@@ -19,12 +19,20 @@ from constants import (
 	TRANSCRIPT_BASENAME,
 	OraclePhaseName,
 )
-from project_config import ArtifactMode
 from utils import safe_name
 
 
 class _Model(BaseModel):
 	model_config = ConfigDict(extra="forbid")
+
+
+class ArtifactMode(str, Enum):
+	"""Select local artifacts, an upstream checkout, or an upstream overlay."""
+
+	LOCAL = "local"
+	UPSTREAM = "upstream"
+	# Case bundles may include local artifacts in an overlay when enabled.
+	OVERLAY = "overlay"
 
 
 class SourceType(str, Enum):
