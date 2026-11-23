@@ -28,6 +28,11 @@ _LEGACY_TRACE_FORMATS = {
 _RAW_CHUNK_LINES = 200
 # Formats parsed into the viewer's message blocks, so the summary reads them the same way.
 _MESSAGE_BLOCK_FORMATS = {"claude_code", "dsh"}
+# DSH cache counters, under the names the summary reads.
+_DSH_USAGE_ALIASES = {
+	"cacheReadTokens": "cache_read_input_tokens",
+	"cacheWriteTokens": "cache_write_input_tokens",
+}
 
 
 def export_trace_site(run_dir: Path, output_dir: Path) -> Path:
@@ -259,23 +264,38 @@ def parse_dsh_trace(
 
 	secret_values = secrets or {}
 	events: list[dict[str, Any]] = []
+	usage: dict[str, int] = {}
 	session_id = "default"
 	turns = 0
+	stop_reason: str | None = None
 	for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
 		timestamp, _, payload = split_trace_line(raw_line)
 		if payload is None:
 			continue
-		if payload.get("type") == "session":
-			session_id = str(payload.get("sessionId") or "default")
-		elif payload.get("type") == "status" and payload.get("phase") == "turn_start":
-			turns += 1
+		# Read run-wide fields from any event, so they survive DSH moving them.
+		session_id = str(payload.get("sessionId") or session_id)
+		if isinstance(turn := payload.get("turn"), int):
+			turns = max(turns, turn)
+		if isinstance(raw_usage := payload.get("usage"), dict):
+			for key, value in raw_usage.items():
+				if isinstance(value, int):
+					name = _dsh_usage_key(str(key))
+					usage[name] = usage.get(name, 0) + value
+		if isinstance(reason := payload.get("reason"), dict) and reason.get("kind"):
+			stop_reason = str(reason["kind"])
 		event = _dsh_event(payload, timestamp, session_id, secret_values)
-		if event is not None:
-			if event["type"] == "result":
-				event["num_turns"] = turns
-			events.append(event)
-	# DSH reports no token usage.
-	return events, {}
+		if event is None:
+			continue
+		if event["type"] == "result":
+			event["num_turns"] = turns
+			event["stop_reason"] = event.get("stop_reason") or stop_reason
+		events.append(event)
+	return events, usage
+
+
+def _dsh_usage_key(key: str) -> str:
+	"""Names a DSH usage counter the way the summary reads it (inputTokens -> input_tokens)."""
+	return _DSH_USAGE_ALIASES.get(key) or re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower()
 
 
 def _dsh_event(
@@ -284,14 +304,17 @@ def _dsh_event(
 	session_id: str,
 	secrets: Mapping[str, str],
 ) -> dict[str, Any] | None:
-	"""Maps one DSH event onto a viewer event, or None for progress events."""
+	"""Maps one DSH event onto a viewer event, or None for progress events.
+
+	Events this version does not know are kept as system events rather than dropped.
+	"""
 	event: dict[str, Any] = {
 		"ts": timestamp,
 		"session_id": session_id,
 		"session_idx": 0,
 		"parent_tool_use_id": None,
 	}
-	event_type = payload.get("type")
+	event_type = str(payload.get("type") or "unknown")
 	text = _redact(str(payload.get("text") or ""), secrets)
 	if event_type == "session":
 		raw = {"session_id": session_id, "cwd": payload.get("cwd")}
@@ -301,25 +324,44 @@ def _dsh_event(
 	elif event_type == "text":
 		event.update(type="assistant", blocks=[{"type": "text", "text": text}])
 	elif event_type == "tool_call":
+		arguments = payload.get("input")
+		# DSH keeps arguments that JSON cannot round-trip as their raw text.
+		if not isinstance(arguments, dict):
+			arguments = {"arguments": arguments} if arguments not in (None, "") else {}
 		block = {
 			"type": "tool_use",
 			"id": payload.get("callId"),
 			"name": payload.get("tool"),
-			"input": _redact_value(payload.get("input") or {}, secrets),
+			"input": _redact_value(arguments, secrets),
 		}
 		event.update(type="assistant", blocks=[block])
 	elif event_type == "tool_result":
+		content = str(payload.get("result") or "")
+		error = payload.get("error")
+		if isinstance(error, dict):
+			detail = " ".join(str(error[key]) for key in ("name", "code") if error.get(key))
+			detail += f": {error['reason']}" if error.get("reason") else ""
+			content = f"{content}\n{detail}" if content else detail
+		# "completed" only means the tool returned; a shell command in it may still have failed.
 		block = {
 			"type": "tool_result",
 			"tool_use_id": payload.get("callId"),
-			"content": _redact(str(payload.get("result") or ""), secrets),
-			"is_error": payload.get("status") != "completed",
+			"content": _redact(content, secrets),
+			"is_error": payload.get("status") != "completed" or isinstance(error, dict),
 		}
 		event.update(type="user", blocks=[block])
 	elif event_type == "final":
 		event.update(type="result", result_text=text)
-	else:
+	elif event_type == "error":
+		# A run that fails outside a turn ends on an error event instead of final.
+		message = _redact(str(payload.get("message") or ""), secrets)
+		event.update(
+			type="result", result_text=message, stop_reason=str(payload.get("code") or "error")
+		)
+	elif event_type == "status":
 		return None
+	else:
+		event.update(type="system", subtype=event_type, raw=_redact_value(payload, secrets))
 	return event
 
 
