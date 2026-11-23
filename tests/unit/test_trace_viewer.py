@@ -426,6 +426,53 @@ def test_export_trace_site_reads_dsh_runs(tmp_path: Path) -> None:
 	assert record["summary"]["num_turns"] == 1
 
 
+def test_parse_dsh_trace_reads_fields_newer_dsh_versions_add(tmp_path: Path) -> None:
+	trace = tmp_path / "runner_output.log"
+	trace.write_text(
+		'{"type":"session","sessionId":"dsh-2","cwd":"/repo"}\n'
+		'{"type":"status","phase":"turn_start","turn":1}\n'
+		'{"type":"tool_call","callId":"c1","tool":"bash","input":"1e400"}\n'
+		'{"type":"tool_result","callId":"c1","status":"error","result":"",'
+		'"error":{"name":"ToolError","code":"AUTO_REVIEW_DENIED","reason":"not allowed"}}\n'
+		'{"type":"status","phase":"step_end","turn":1,"step":1,'
+		'"usage":{"inputTokens":10,"outputTokens":4,"cacheReadTokens":6}}\n'
+		'{"type":"status","phase":"step_end","turn":2,"step":1,'
+		'"usage":{"inputTokens":5,"outputTokens":1}}\n'
+		'{"type":"plan_update","steps":["a","b"]}\n'
+		'{"type":"final","sessionId":"dsh-2","reason":{"kind":"completed"},"text":"Done."}\n',
+		encoding="utf-8",
+	)
+
+	events, usage = parse_dsh_trace(trace)
+
+	assert events[1]["blocks"][0]["input"] == {"arguments": "1e400"}
+	result = events[2]["blocks"][0]
+	assert result["is_error"] is True
+	assert result["content"] == "ToolError AUTO_REVIEW_DENIED: not allowed"
+	assert events[3]["type"] == "system"
+	assert events[3]["subtype"] == "plan_update"
+	assert events[3]["raw"] == {"type": "plan_update", "steps": ["a", "b"]}
+	assert events[4]["type"] == "result"
+	assert events[4]["stop_reason"] == "completed"
+	assert events[4]["num_turns"] == 2
+	assert usage == {"input_tokens": 15, "output_tokens": 5, "cache_read_input_tokens": 6}
+
+
+def test_parse_dsh_trace_ends_a_failed_run_on_its_error_event(tmp_path: Path) -> None:
+	trace = tmp_path / "runner_output.log"
+	trace.write_text(
+		'{"type":"session","sessionId":"dsh-3","cwd":"/repo"}\n'
+		'{"type":"error","code":"SESSION_NOT_FOUND","message":"no stored session"}\n',
+		encoding="utf-8",
+	)
+
+	events, _ = parse_dsh_trace(trace)
+
+	assert events[-1]["type"] == "result"
+	assert events[-1]["stop_reason"] == "SESSION_NOT_FOUND"
+	assert events[-1]["result_text"] == "no stored session"
+
+
 def test_dsh_runs_without_a_recorded_trace_format_are_read_as_dsh(tmp_path: Path) -> None:
 	run_dir = tmp_path / "run"
 	_write_run(run_dir, _DSH_LOG, agent_kind="deepseek")
