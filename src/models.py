@@ -53,25 +53,6 @@ class PromptProfile(str, Enum):
 	ARTIFACT_EVAL_DOCKER_V1 = "artifact-eval-docker-v1"
 
 
-class LiveViewMode(str, Enum):
-	AUTO = "auto"
-	COMPACT = "compact"
-	RAW = "raw"
-
-
-class LiveLayoutMode(str, Enum):
-	AUTO = "auto"
-	SINGLE = "single"
-	SPLIT = "split"
-	TRIPLE = "triple"
-
-
-class UiMode(str, Enum):
-	RICH = "rich"
-	TEXTUAL = "textual"
-	NONE = "none"
-
-
 class LocalSource(_Model):
 	type: Literal[SourceType.LOCAL] = SourceType.LOCAL
 	path: str
