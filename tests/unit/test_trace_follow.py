@@ -9,7 +9,11 @@ import pytest
 from cli import cli_main
 from trace_viewer import follow_trace
 
+from .test_trace_viewer import _DSH_LOG, _ZCODE_LOG
+
 _CLAUDE_LINES = (
+	# Claude may report its rate limit before the session starts.
+	'[2026-11-21T09:11:46Z] {"type":"rate_limit_event","rate_limit_info":{"status":"allowed"}}\n'
 	'[2026-11-21T09:11:47Z] {"type":"system","subtype":"init","cwd":"/repo","session_id":"s1"}\n'
 	'[2026-11-21T09:11:50Z] {"type":"assistant","session_id":"s1","message":{"content":['
 	'{"type":"thinking","thinking":""},'
@@ -74,6 +78,72 @@ def test_follow_trace_curates_claude_events(
 		"09:12:04  error  File not found",
 		"09:12:10  text   I'll now run figure 8 with key [REDACTED:TEST_TOKEN]",
 		"09:20:00  done   success, 3 turns",
+	]
+
+
+def test_follow_trace_reads_dsh_runs_with_the_dsh_parser(
+	tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+	monkeypatch.setenv("TEST_TOKEN", "secret-value")
+	monkeypatch.setenv("COLUMNS", "120")
+
+	follow_trace(_finished_run(tmp_path, _DSH_LOG), poll_seconds=0.01)
+
+	assert capsys.readouterr().out.splitlines() == [
+		"          out    [llm-deepseek-api-key] model listing loaded 2 model(s)",
+		"01:00:03  text   Inspecting the artifact.",
+		"01:00:04  Bash   echo [REDACTED:TEST_TOKEN]",
+		"01:00:06  read   missing.txt",
+		"01:00:07  error  no such file",
+		"01:00:09  done   finished, 1 turns",
+	]
+
+
+def test_follow_trace_reads_zcode_runs_with_the_zcode_parser(
+	tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+	monkeypatch.setenv("TEST_TOKEN", "secret-value")
+	monkeypatch.setenv("COLUMNS", "120")
+
+	follow_trace(_finished_run(tmp_path, _ZCODE_LOG), poll_seconds=0.01)
+
+	assert capsys.readouterr().out.splitlines() == [
+		"02:00:00  out    ZCode Built-in skipped (not-due)",
+		"          text   Inspecting.",
+		"          Bash   echo [REDACTED:TEST_TOKEN]",
+		"          WebFetch u",
+		"          error  TOOL_EXECUTION_FAILED: Unsupported content type",
+		"          text   All done.",
+		"          done   success, 2 turns",
+	]
+
+
+def test_follow_trace_uses_the_recorded_trace_format(
+	tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+	monkeypatch.setenv("COLUMNS", "120")
+	run_dir = _finished_run(tmp_path, '{"type":"text","text":"hello"}\n')
+	(run_dir / "result.jsonl").write_text('{"trace_format":"raw"}\n', encoding="utf-8")
+
+	follow_trace(run_dir, poll_seconds=0.01)
+
+	assert capsys.readouterr().out.splitlines() == [
+		'          out    {"type":"text","text":"hello"}'
+	]
+
+
+def test_follow_trace_prints_logs_of_unknown_formats_raw(
+	tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+	monkeypatch.setenv("COLUMNS", "120")
+	log = 'starting\n{"kind":"step","n":1}\n{"type":"progress","n":2}\n'
+
+	follow_trace(_finished_run(tmp_path, log), poll_seconds=0.01)
+
+	assert capsys.readouterr().out.splitlines() == [
+		"          out    starting",
+		'          out    {"kind":"step","n":1}',
+		'          out    {"type":"progress","n":2}',
 	]
 
 
