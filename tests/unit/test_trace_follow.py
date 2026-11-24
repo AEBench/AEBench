@@ -3,11 +3,15 @@ from __future__ import annotations
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Callable
 
 import pytest
 
+import trace_viewer
 from cli import cli_main
-from trace_viewer import follow_trace
+from project_config import load_project_config
+from trace_viewer import follow, follow_latest, follow_trace
 
 from .test_trace_viewer import _DSH_LOG, _ZCODE_LOG
 
@@ -212,3 +216,123 @@ def test_trace_follow_command_prints_a_finished_run(
 
 	assert cli_main(["trace", "follow", str(run_dir)]) == 0
 	assert capsys.readouterr().out.splitlines() == ["02:38:39  out    hello"]
+
+
+class _Stopped(Exception):
+	pass
+
+
+def _follow_latest_in_thread(
+	runs_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[threading.Thread, Callable[[], None]]:
+	"""Starts follow_latest, which never returns, and a function that stops it."""
+	stop = threading.Event()
+
+	def sleep(seconds: float) -> None:
+		if stop.is_set():
+			raise _Stopped
+		time.sleep(seconds)
+
+	monkeypatch.setattr(follow, "time", SimpleNamespace(sleep=sleep))
+
+	def run() -> None:
+		try:
+			follow_latest(runs_dir, poll_seconds=0.01)
+		except _Stopped:
+			pass
+
+	thread = threading.Thread(target=run)
+	thread.start()
+
+	def stopper() -> None:
+		stop.set()
+		thread.join(timeout=5)
+
+	return thread, stopper
+
+
+def _start_run(runs_dir: Path, case: str, run_id: str, text: str) -> Path:
+	run_dir = runs_dir / case / run_id
+	run_dir.mkdir(parents=True)
+	(run_dir / "runner_output.log").write_text(f"[2026-11-24T10:00:00Z] {text}\n", encoding="utf-8")
+	return run_dir
+
+
+def test_follow_latest_skips_runs_that_finished_before_it_started(
+	tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+	monkeypatch.setenv("COLUMNS", "120")
+	old = _start_run(tmp_path, "case_a", "2026-11-24_09-00-00_000000", "old run")
+	(old / "case_result.json").write_text("{}", encoding="utf-8")
+	(tmp_path / "case_a" / "monitor").mkdir()
+	thread, stop = _follow_latest_in_thread(tmp_path, monkeypatch)
+
+	time.sleep(0.1)
+	_start_run(tmp_path, "case_b", "2026-11-24_10-00-00_000000", "new run")
+	time.sleep(0.2)
+	stop()
+
+	assert not thread.is_alive()
+	captured = capsys.readouterr()
+	assert captured.out.splitlines() == [
+		"=== case_b/2026-11-24_10-00-00_000000",
+		"10:00:00  out    new run",
+	]
+	assert "Waiting for a run" in captured.err
+
+
+def test_follow_latest_prints_each_run_under_a_header(
+	tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+	monkeypatch.setenv("COLUMNS", "120")
+	thread, stop = _follow_latest_in_thread(tmp_path, monkeypatch)
+
+	first = _start_run(tmp_path, "case_b", "2026-11-24_10-00-00_000000", "first run")
+	time.sleep(0.1)
+	(first / "case_result.json").write_text("{}", encoding="utf-8")
+	time.sleep(0.1)
+	_start_run(tmp_path, "case_a", "2026-11-24_11-00-00_000000", "second run")
+	time.sleep(0.2)
+	stop()
+
+	assert not thread.is_alive()
+	assert capsys.readouterr().out.splitlines() == [
+		"=== case_b/2026-11-24_10-00-00_000000",
+		"10:00:00  out    first run",
+		"=== case_a/2026-11-24_11-00-00_000000",
+		"10:00:00  out    second run",
+	]
+
+
+def test_follow_latest_moves_to_a_newer_run_when_one_starts(
+	tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+	monkeypatch.setenv("COLUMNS", "120")
+	# A run that stopped without a case result, e.g. after a crash.
+	_start_run(tmp_path, "case_a", "2026-11-24_09-00-00_000000", "stuck run")
+	thread, stop = _follow_latest_in_thread(tmp_path, monkeypatch)
+
+	time.sleep(0.1)
+	_start_run(tmp_path, "case_b", "2026-11-24_10-00-00_000000", "new run")
+	time.sleep(0.2)
+	stop()
+
+	assert not thread.is_alive()
+	assert capsys.readouterr().out.splitlines() == [
+		"=== case_a/2026-11-24_09-00-00_000000",
+		"10:00:00  out    stuck run",
+		"=== case_b/2026-11-24_10-00-00_000000",
+		"10:00:00  out    new run",
+	]
+
+
+def test_trace_follow_without_a_run_dir_follows_the_workspace_runs(
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	followed: list[Path] = []
+	monkeypatch.setattr(trace_viewer, "follow_latest", followed.append)
+
+	assert cli_main(["trace", "follow"]) == 0
+
+	state = load_project_config(Path.cwd())
+	assert followed == [state.config.resolve_case_runs_dir(state.root)]
