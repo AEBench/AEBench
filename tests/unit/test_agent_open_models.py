@@ -15,7 +15,7 @@ from runtime.agents import load_agent, resolve_secrets
 	("name", "key", "file_env", "trace_format"),
 	[
 		("deepseek", "DEEPSEEK_API_KEY", "AEBENCH_DEEPSEEK_API_KEY_FILE", "dsh"),
-		("zcode", "ZAI_CODING_PLAN_KEY", "AEBENCH_ZAI_CODING_PLAN_KEY_FILE", "raw"),
+		("zcode", "ZAI_CODING_PLAN_KEY", "AEBENCH_ZAI_CODING_PLAN_KEY_FILE", "zcode"),
 	],
 )
 def test_open_model_credentials(
