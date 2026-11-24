@@ -95,6 +95,7 @@
       claude_code: 'Claude Code',
       codex: 'Codex CLI',
       dsh: 'DSH',
+      zcode: 'ZCode',
       opencode: 'OpenCode',
     };
     return value ? names[String(value).toLowerCase()] || String(value) : '';

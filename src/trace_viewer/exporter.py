@@ -24,16 +24,25 @@ _LEGACY_TRACE_FORMATS = {
 	"codex": "codex",
 	"codex_non_api": "codex",
 	"deepseek": "dsh",
+	"zcode": "zcode",
 }
 _RAW_CHUNK_LINES = 200
 # Formats parsed into the viewer's message blocks, so the summary reads them the same way.
-_MESSAGE_BLOCK_FORMATS = {"claude_code", "dsh"}
+_MESSAGE_BLOCK_FORMATS = {"claude_code", "dsh", "zcode"}
 # DSH tools the viewer has a special display for, under the names it knows.
 _DSH_TOOL_NAMES = {"bash": "Bash"}
-# DSH cache counters, under the names the summary reads.
-_DSH_USAGE_ALIASES = {
+# DSH and ZCode cache counters, under the names the summary reads.
+_CAMEL_USAGE_ALIASES = {
 	"cacheReadTokens": "cache_read_input_tokens",
 	"cacheWriteTokens": "cache_write_input_tokens",
+}
+# ZCode events that only report progress or bookkeeping, which the viewer leaves out.
+_ZCODE_PROGRESS_EVENTS = {
+	"checkpoint.created",
+	"session.titleUpdated",
+	"session.updated",
+	"streamRecovery.updated",
+	"turn.started",
 }
 
 
@@ -51,6 +60,7 @@ def export_trace_site(run_dir: Path, output_dir: Path) -> Path:
 		"claude_code": parse_claude_trace,
 		"codex": parse_codex_trace,
 		"dsh": parse_dsh_trace,
+		"zcode": parse_zcode_trace,
 	}.get(trace_format, parse_raw_trace)
 	events, usage = parser(run_dir / RUNNER_LOG, secrets=secrets)
 	record = _build_record(
@@ -281,7 +291,7 @@ def parse_dsh_trace(
 		if isinstance(raw_usage := payload.get("usage"), dict):
 			for key, value in raw_usage.items():
 				if isinstance(value, int):
-					name = _dsh_usage_key(str(key))
+					name = _usage_key(str(key))
 					usage[name] = usage.get(name, 0) + value
 		if isinstance(reason := payload.get("reason"), dict) and reason.get("kind"):
 			stop_reason = str(reason["kind"])
@@ -295,9 +305,9 @@ def parse_dsh_trace(
 	return events, usage
 
 
-def _dsh_usage_key(key: str) -> str:
-	"""Names a DSH usage counter the way the summary reads it (inputTokens -> input_tokens)."""
-	return _DSH_USAGE_ALIASES.get(key) or re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower()
+def _usage_key(key: str) -> str:
+	"""Names a DSH or ZCode usage counter the way the summary reads it (inputTokens -> input_tokens)."""
+	return _CAMEL_USAGE_ALIASES.get(key) or re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower()
 
 
 def _dsh_event(
@@ -367,6 +377,141 @@ def _dsh_event(
 	else:
 		event.update(type="system", subtype=event_type, raw=_redact_value(payload, secrets))
 	return event
+
+
+def parse_zcode_trace(
+	path: Path, *, secrets: Mapping[str, str] | None = None
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+	"""Reads ZCode's stream-json events into the message blocks the viewer renders.
+
+	ZCode streams each reply in small deltas; they are joined into one block per
+	reasoning or text run of each reply.
+	"""
+	if not path.is_file():
+		raise ValueError(f"runner log does not exist: {path}")
+
+	secret_values = secrets or {}
+	events: list[dict[str, Any]] = []
+	usage: dict[str, int] = {}
+	# Reply id -> (delta kind, joined parts, timestamp of the first part).
+	pending: dict[str, tuple[str, list[str], str | None]] = {}
+	replies: set[str] = set()
+	session_id: str | None = None
+	stop_reason: str | None = None
+
+	def emit(event_type: str, timestamp: str | None, **fields: Any) -> None:
+		events.append(
+			{
+				"type": event_type,
+				"ts": timestamp,
+				"session_id": session_id,
+				"session_idx": 0,
+				"parent_tool_use_id": None,
+				**fields,
+			}
+		)
+
+	def flush(reply: str) -> None:
+		if reply not in pending:
+			return
+		kind, parts, timestamp = pending.pop(reply)
+		text = _redact("".join(parts), secret_values)
+		if not text.strip():
+			return
+		block = (
+			{"type": "thinking", "thinking": text}
+			if kind == "reasoning_delta"
+			else {"type": "text", "text": text}
+		)
+		emit("assistant", timestamp, blocks=[block])
+
+	for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+		timestamp, _, payload = split_trace_line(raw_line)
+		if payload is None:
+			continue
+		if session_id is None:
+			session_id = str(payload.get("sessionId") or "default")
+			emit("system", timestamp, subtype="init", raw={"session_id": session_id})
+		event_type = str(payload.get("type") or "unknown")
+		body = _as_dict(payload.get("payload"))
+		kind = str(body.get("kind") or "")
+
+		if event_type == "model.streaming":
+			reply = str(body.get("assistantMessageId") or "")
+			replies.add(reply)
+			# Tool input deltas are repeated whole in the tool_call that follows.
+			if kind.endswith("_delta") and kind != "tool_input_delta":
+				if pending.get(reply, (kind,))[0] != kind:
+					flush(reply)
+				pending.setdefault(reply, (kind, [], timestamp))[1].append(
+					str(body.get("delta") or "")
+				)
+				continue
+			flush(reply)
+			if kind == "tool_call":
+				arguments = body.get("input")
+				if not isinstance(arguments, dict):
+					arguments = {"arguments": arguments} if arguments not in (None, "") else {}
+				block = {
+					"type": "tool_use",
+					"id": body.get("toolCallId"),
+					"name": body.get("toolName"),
+					"input": _redact_value(arguments, secret_values),
+				}
+				emit("assistant", timestamp, blocks=[block])
+			continue
+
+		for reply in list(pending):
+			flush(reply)
+		if event_type == "tool.updated":
+			if kind not in {"result", "error"}:
+				continue
+			result = _as_dict(body.get("result"))
+			content = result.get("content", "")
+			if not isinstance(content, str):
+				content = json.dumps(content, ensure_ascii=False)
+			error = body.get("error")
+			if isinstance(error, dict):
+				detail = ": ".join(str(error[key]) for key in ("code", "message") if error.get(key))
+				content = f"{content}\n{detail}" if content else detail
+			block = {
+				"type": "tool_result",
+				"tool_use_id": body.get("toolCallId"),
+				"content": _redact(content, secret_values),
+				"is_error": kind == "error" or result.get("success") is False,
+			}
+			emit("user", timestamp, blocks=[block])
+		elif event_type == "turn.completed":
+			stop_reason = str(body.get("resultType") or stop_reason or "") or None
+			if isinstance(raw_usage := body.get("usage"), dict):
+				for key, value in raw_usage.items():
+					if isinstance(value, int):
+						name = _usage_key(str(key))
+						usage[name] = usage.get(name, 0) + value
+		elif event_type == "turn.failed":
+			error = _as_dict(body.get("error"))
+			emit(
+				"result",
+				timestamp,
+				result_text=_redact(str(error.get("message") or ""), secret_values),
+				stop_reason=str(error.get("code") or "error"),
+			)
+		elif event_type == "result":
+			# The closing summary line; its usage repeats what the turns reported.
+			text = _redact(str(payload.get("response") or ""), secret_values)
+			emit("result", timestamp, result_text=text, stop_reason=stop_reason)
+		elif event_type not in _ZCODE_PROGRESS_EVENTS:
+			emit("system", timestamp, subtype=event_type, raw=_redact_value(payload, secret_values))
+	for reply in list(pending):
+		flush(reply)
+	for event in events:
+		if event["type"] == "result":
+			event["num_turns"] = len(replies)
+	return events, usage
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+	return value if isinstance(value, dict) else {}
 
 
 def _build_record(
