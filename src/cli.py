@@ -105,6 +105,10 @@ def _build_parser() -> argparse.ArgumentParser:
 	)
 	trace_follow.add_argument("run_dir", nargs="?")
 
+	sub.add_parser(
+		"shell", help="Open AEBench in tmux: the agent's live trace, output, and a prompt."
+	)
+
 	audit_p = sub.add_parser("audit-trace", help="Audit an aeshell commands.jsonl trace.")
 	audit_p.add_argument("trace_path")
 	audit_p.add_argument("--instructions", default=None)
@@ -188,6 +192,7 @@ def cli_main(argv: list[str] | None = None) -> int:
 			"runtime": _handle_runtime,
 			"agent": _handle_agent,
 			"trace": _handle_trace,
+			"shell": _open_shell,
 			"audit-trace": _audit_trace,
 		}[args.command](args)
 	except KeyboardInterrupt:
@@ -276,6 +281,12 @@ def _handle_trace(args: argparse.Namespace) -> int:
 		return 0
 	print("usage: aebench trace {export,serve,follow}", file=sys.stderr)
 	return 1
+
+
+def _open_shell(_args: argparse.Namespace) -> int:
+	import shell
+
+	return shell.launch_shell(Path("~/.cache/aebench/shell").expanduser())
 
 
 def _init_workspace(args: argparse.Namespace) -> int:
