@@ -100,8 +100,10 @@ def _build_parser() -> argparse.ArgumentParser:
 	trace_serve.add_argument("site_dir")
 	trace_serve.add_argument("--host", default="127.0.0.1")
 	trace_serve.add_argument("--port", type=int, default=8000)
-	trace_follow = trace_sub.add_parser("follow", help="Print a run's agent events as they happen.")
-	trace_follow.add_argument("run_dir")
+	trace_follow = trace_sub.add_parser(
+		"follow", help="Print a run's agent events as they happen (default: the newest run)."
+	)
+	trace_follow.add_argument("run_dir", nargs="?")
 
 	audit_p = sub.add_parser("audit-trace", help="Audit an aeshell commands.jsonl trace.")
 	audit_p.add_argument("trace_path")
@@ -264,9 +266,13 @@ def _handle_trace(args: argparse.Namespace) -> int:
 		serve_trace_site(Path(args.site_dir), host=args.host, port=args.port)
 		return 0
 	if trace_command == "follow":
-		from trace_viewer import follow_trace
+		from trace_viewer import follow_latest, follow_trace
 
-		follow_trace(Path(args.run_dir))
+		if args.run_dir is not None:
+			follow_trace(Path(args.run_dir))
+			return 0
+		state = _build_context().project_state
+		follow_latest(state.config.resolve_case_runs_dir(state.root))
 		return 0
 	print("usage: aebench trace {export,serve,follow}", file=sys.stderr)
 	return 1

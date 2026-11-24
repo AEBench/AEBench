@@ -33,8 +33,46 @@ _DETECT_LINES = 20
 Show = Callable[[str | None, str, Any], None]
 
 
-def follow_trace(run_dir: Path, *, poll_seconds: float = 0.5) -> None:
-	"""Prints the run's agent log, then follows it until the case result appears."""
+def follow_latest(runs_dir: Path, *, poll_seconds: float = 0.5) -> None:
+	"""Follows the newest run under runs_dir, and each run started after it.
+
+	A run that finished before this started is not replayed. A newer run takes
+	over from one that is still going, so a run that died without a result does
+	not hold the view.
+	"""
+	print(f"Waiting for a run under {runs_dir}", file=sys.stderr, flush=True)
+	followed: Path | None = None
+	while True:
+		newest = _newest_run(runs_dir)
+		if newest is None or newest == followed or (newest / CASE_RESULT).is_file():
+			time.sleep(poll_seconds)
+			continue
+		followed = newest
+		print(f"=== {newest.parent.name}/{newest.name}", flush=True)
+		follow_trace(
+			newest, poll_seconds=poll_seconds, stop=lambda: _newest_run(runs_dir) != newest
+		)
+
+
+def _newest_run(runs_dir: Path) -> Path | None:
+	# Run directories are named by their start time, so the newest sorts last.
+	logs = runs_dir.glob(f"*/*/{RUNNER_LOG}")
+	return max((log.parent for log in logs), key=lambda run: run.name, default=None)
+
+
+def follow_trace(
+	run_dir: Path,
+	*,
+	poll_seconds: float = 0.5,
+	stop: Callable[[], bool] | None = None,
+) -> None:
+	"""Prints the run's agent log, then follows it until the case result appears.
+
+	Args:
+		run_dir: The run's directory.
+		poll_seconds: How long to wait for new output.
+		stop: Checked while waiting; following ends when it returns True.
+	"""
 	run_dir = run_dir.expanduser()
 	log_path = run_dir / RUNNER_LOG
 	if not log_path.is_file():
@@ -48,7 +86,7 @@ def follow_trace(run_dir: Path, *, poll_seconds: float = 0.5) -> None:
 		clock = timestamp[11:19] if timestamp else ""
 		print(f"{clock:<8}  {label:<6} {' '.join(str(summary).split())}"[:width], flush=True)
 
-	lines = _tail_lines(run_dir, poll_seconds)
+	lines = _tail_lines(run_dir, poll_seconds, stop or (lambda: False))
 	trace_format, first = _trace_format_of(run_dir, lines, show, secrets)
 	reader = trace_reader(trace_format)
 	if trace_format == "codex":
@@ -64,7 +102,7 @@ def follow_trace(run_dir: Path, *, poll_seconds: float = 0.5) -> None:
 			show(event.get("ts"), label, summary)
 
 
-def _tail_lines(run_dir: Path, poll_seconds: float) -> Iterator[str]:
+def _tail_lines(run_dir: Path, poll_seconds: float, stop: Callable[[], bool]) -> Iterator[str]:
 	"""Yields the log's lines as they are written, until the case result appears."""
 	pending = ""
 	with (run_dir / RUNNER_LOG).open(encoding="utf-8", errors="replace") as handle:
@@ -77,6 +115,8 @@ def _tail_lines(run_dir: Path, poll_seconds: float) -> Iterator[str]:
 			if finished:
 				return
 			if not chunk:
+				if stop():
+					return
 				time.sleep(poll_seconds)
 
 
