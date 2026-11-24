@@ -22,7 +22,6 @@ import pytest
 
 from runtime import btrfs
 from runtime.agent_runner import (
-	AEBENCH_SUBDIR,
 	TOOL_HOOK_SETTINGS,
 	WORKDIR_SNAPSHOT_HOOK,
 	install_workdir_snapshot_hook,
@@ -180,30 +179,34 @@ def _agent(tmp_path: Path, tool_hooks: ToolHookFormat | None) -> AgentDefinition
 
 
 def test_the_hook_is_installed_as_a_pre_tool_use_hook_on_every_tool(tmp_path: Path) -> None:
-	(tmp_path / AEBENCH_SUBDIR).mkdir()
-	install_workdir_snapshot_hook(
+	hooks_dir = tmp_path / "tool-hooks"
+	settings_path = install_workdir_snapshot_hook(
 		_agent(tmp_path, ToolHookFormat.CLAUDE_CODE),
-		tmp_path,
-		"/run/aebench-agent",
+		hooks_dir,
+		"/run/aebench-hooks",
 		runtime_socket_path="/run/aebench/command.sock",
 	)
 
-	settings = json.loads((tmp_path / AEBENCH_SUBDIR / TOOL_HOOK_SETTINGS).read_text())
+	assert settings_path == f"/run/aebench-hooks/{TOOL_HOOK_SETTINGS}"
+	settings = json.loads((hooks_dir / TOOL_HOOK_SETTINGS).read_text())
+	assert settings["disableAllHooks"] is False
 	[group] = settings["hooks"]["PreToolUse"]
 	assert group["matcher"] == "*"
 	[hook] = group["hooks"]
 	assert hook["type"] == "command"
 	assert hook["command"].startswith(
-		f"python3 /run/aebench-agent/{AEBENCH_SUBDIR}/{WORKDIR_SNAPSHOT_HOOK} "
-		"/run/aebench/command.sock "
+		f"python3 /run/aebench-hooks/{WORKDIR_SNAPSHOT_HOOK} /run/aebench/command.sock "
 	)
-	assert (tmp_path / AEBENCH_SUBDIR / WORKDIR_SNAPSHOT_HOOK).read_text() == HOOK.read_text()
+	assert (hooks_dir / WORKDIR_SNAPSHOT_HOOK).read_text() == HOOK.read_text()
 
 
 def test_an_agent_without_tool_hooks_cannot_install_the_hook(tmp_path: Path) -> None:
 	with pytest.raises(ValueError, match="tool_hooks"):
 		install_workdir_snapshot_hook(
-			_agent(tmp_path, None), tmp_path, "/run/aebench-agent", runtime_socket_path="/x"
+			_agent(tmp_path, None),
+			tmp_path / "tool-hooks",
+			"/run/aebench-hooks",
+			runtime_socket_path="/x",
 		)
 
 

@@ -37,6 +37,10 @@ class RunSession:
 	# socket, and is the only part of the monitoring layer the agent can see.
 	host_command_socket_dir: Path | None = None
 	runtime_command_socket_dir: str | None = None
+	# Set only with workdir snapshots: the harness's tool hook and its settings,
+	# mounted read-only so the agent cannot change or disable them.
+	host_tool_hooks_dir: Path | None = None
+	runtime_tool_hooks_dir: str | None = None
 
 	@property
 	def task_id(self) -> str:

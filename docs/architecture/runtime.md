@@ -105,6 +105,10 @@ workspace = btrfs subvolume <btrfs root>/ae_workspace_<case>_<rand>/workspace
   and numbered in the order taken, while the event loop keeps serving shells.
   Each snapshot is written to `workdir_snapshots.jsonl` in the trace before
   its requester is answered.
+- The hook script and its settings are written to `<tmp root>/tool-hooks` and
+  mounted read-only at `/run/aebench-hooks`, outside the writable support
+  directory. The container has no `CAP_SYS_ADMIN`, so the agent cannot remount
+  it to edit or remove the hook, even with sudo.
 - The hook blocks the tool until its snapshot exists, and fails closed: when
   the broker is unreachable or the snapshot fails, it denies the call and
   returns `continue: false`, which ends the session. The case runner then

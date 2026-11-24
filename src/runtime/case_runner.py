@@ -40,6 +40,7 @@ from trajectory_audit.service import AuditService
 from utils import safe_name
 
 from .agent_runner import (
+	RUNTIME_TOOL_HOOKS_DIR,
 	check_agent_requirements,
 	clear_agent_support_dir,
 	install_workdir_snapshot_hook,
@@ -73,7 +74,12 @@ from .reporting import (
 	write_task_report,
 )
 from .session import RunSession
-from .workspace import SNAPSHOTS_DIRNAME, cleanup_workspace, create_workspace
+from .workspace import (
+	SNAPSHOTS_DIRNAME,
+	TOOL_HOOKS_DIRNAME,
+	cleanup_workspace,
+	create_workspace,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +99,8 @@ class _CaseRunner:
 		self.options = options
 		self.monitor_commands = options.monitor_commands or options.trajectory_audit
 		self.workdir_snapshots = options.workdir_snapshots
+		# Runtime path of the tool hook settings, set when workdir snapshots install the hook.
+		self.tool_hook_settings: str | None = None
 		self.save_path = save_path
 		self.on_output_dir = on_output_dir
 
@@ -273,6 +281,18 @@ class _CaseRunner:
 				safe_id=safe_name(self.case.id)
 			)
 
+			# Written before the container starts, which mounts it read-only. Kept out
+			# of the support directory, which the container mounts writable.
+			host_tool_hooks_dir: Path | None = None
+			if self.workdir_snapshots:
+				host_tool_hooks_dir = self.workspace_root.parent / TOOL_HOOKS_DIRNAME
+				self.tool_hook_settings = install_workdir_snapshot_hook(
+					self.agent_definition,
+					host_tool_hooks_dir,
+					RUNTIME_TOOL_HOOKS_DIR,
+					runtime_socket_path=f"{RUNTIME_SOCKET_DIR}/{COMMAND_SOCKET_BASENAME}",
+				)
+
 			self.session = RunSession(
 				run_spec=self.task,
 				prompt=prompt,
@@ -295,6 +315,10 @@ class _CaseRunner:
 				runtime_backend=self.runtime,
 				host_command_socket_dir=(None if self.monitor is None else self.monitor.socket_dir),
 				runtime_command_socket_dir=(None if self.monitor is None else RUNTIME_SOCKET_DIR),
+				host_tool_hooks_dir=host_tool_hooks_dir,
+				runtime_tool_hooks_dir=(
+					None if host_tool_hooks_dir is None else RUNTIME_TOOL_HOOKS_DIR
+				),
 			)
 
 			self.runtime.prepare(self.session)
@@ -307,12 +331,6 @@ class _CaseRunner:
 				# leaving the run with an empty trace.
 				verify_monitoring(self.runtime, self.monitor)
 				if self.workdir_snapshots:
-					install_workdir_snapshot_hook(
-						self.agent_definition,
-						self.agent_support_dir,
-						runtime_agent_support_dir,
-						runtime_socket_path=f"{RUNTIME_SOCKET_DIR}/{COMMAND_SOCKET_BASENAME}",
-					)
 					# Snapshot 0: the workspace before the agent touches it. Also proves
 					# the broker can snapshot before any agent time is spent.
 					self.monitor.request_workdir_snapshot("initial")
@@ -353,7 +371,7 @@ class _CaseRunner:
 					timeout_seconds=self.task.runtime.timeout_ms / 1000,
 					output_path=self.paths.runner_log_path,
 					shell_path=(REAL_SHELL_PATH if self.monitor is not None else "bash"),
-					tool_hooks=self.workdir_snapshots,
+					tool_hook_settings=self.tool_hook_settings,
 				)
 			finally:
 				self.agent_finished = datetime.now(timezone.utc)
