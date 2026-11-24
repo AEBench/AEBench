@@ -2,15 +2,13 @@ import argparse
 import asyncio
 import json
 import os
-import queue
 import signal as signallib
 import socket as socketlib
 import struct
 import sys
-import threading
 import time
 import uuid
-from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, BinaryIO, TypeAlias
@@ -337,10 +335,10 @@ class FileSnapshot(Monitor):
 class WorkdirSnapshotter:
 	"""Takes btrfs snapshots of the workspace subvolume, one at a time, in request order.
 
-	A single worker thread drains the queue, so snapshots are serialized and
-	numbered in the order they are taken, while the event loop keeps serving the
-	shim's connections. Each snapshot is appended to the index before its
-	requester is answered.
+	A single-worker executor runs the requests in submission order, so snapshots
+	are serialized and numbered in the order they are taken, while the event loop
+	keeps serving the shim's connections. Each snapshot is appended to the index
+	before its requester is answered.
 	"""
 
 	def __init__(self, subvolume: str, snapshot_dir: str, index_path: str) -> None:
@@ -353,45 +351,30 @@ class WorkdirSnapshotter:
 		self.subvolume = subvolume
 		self.snapshot_dir = snapshot_dir
 		self.index_path = index_path
-		self._queue: queue.Queue[tuple[Record, Callable[[Record], None]] | None] = queue.Queue()
 		self._next_seq = 0
-		self._thread = threading.Thread(target=self._work, name="workdir-snapshots", daemon=True)
+		self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="workdir-snapshots")
 
 	def start(self) -> None:
 		os.makedirs(self.snapshot_dir, exist_ok=True)
-		self._thread.start()
 
 	def stop(self) -> None:
-		"""Finishes the requests already queued, then ends the worker."""
-		self._queue.put(None)
-		self._thread.join()
+		"""Finishes the requests already submitted, then ends the worker."""
+		self._executor.shutdown(wait=True)
 
 	async def request(self, fields: Record) -> Record:
-		"""Queues one snapshot and waits until it is taken, or has failed."""
-		loop = asyncio.get_running_loop()
-		done: asyncio.Future[Record] = loop.create_future()
-
-		def answer(entry: Record) -> None:
-			loop.call_soon_threadsafe(done.set_result, entry)
-
+		"""Submits one snapshot and waits until it is taken, or has failed."""
 		requested = dict(fields)
 		requested["requested_at"] = datetime.now(timezone.utc).isoformat()
-		self._queue.put((requested, answer))
-		return await done
+		return await asyncio.wrap_future(self._executor.submit(self._take_and_index, requested))
 
-	def _work(self) -> None:
-		while True:
-			item = self._queue.get()
-			if item is None:
-				return
-			fields, answer = item
-			entry = self._take(fields)
-			try:
-				write_record(entry, self.index_path)
-			except OSError as exc:
-				entry["ok"] = False
-				entry["error"] = f"could not write the snapshot index: {exc}"
-			answer(entry)
+	def _take_and_index(self, fields: Record) -> Record:
+		entry = self._take(fields)
+		try:
+			write_record(entry, self.index_path)
+		except OSError as exc:
+			entry["ok"] = False
+			entry["error"] = f"could not write the snapshot index: {exc}"
+		return entry
 
 	def _take(self, fields: Record) -> Record:
 		seq = self._next_seq
