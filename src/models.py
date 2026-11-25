@@ -334,12 +334,27 @@ class SystemFilesCheck(_Model):
 	etc_count: int = 0
 
 
+class WorkdirSnapshotsInfo(_Model):
+	"""Btrfs snapshots of the workspace, one before each agent tool call."""
+
+	# workdir_snapshots.jsonl: one line per snapshot, with the tool call it preceded.
+	index_path: str
+	# Kept after the run; snapshot N is <snapshot_dir>/<N as 6 digits>.
+	snapshot_dir: str
+	count: int = 0
+	tool_count: int = 0
+	failed_count: int = 0
+	# The snapshot taken after the agent exited, holding its last tool call's effects.
+	final_ok: bool = False
+
+
 class CommandMonitorInfo(_Model):
 	run_token: str
 	trace_path: str
 	command_count: int = 0
 	tracked_files: TrackedFilesCheck | None = None
 	system_files: SystemFilesCheck | None = None
+	workdir_snapshots: WorkdirSnapshotsInfo | None = None
 
 
 class RunResult(_Model):
@@ -401,6 +416,8 @@ class RunOptions(_Model):
 	skip_incompatible: bool = False
 	monitor_commands: bool = False
 	monitor_socket_root: str | None = None
+	# Snapshot the workspace (btrfs) before every agent tool call; case monitor only.
+	workdir_snapshots: bool = False
 	trajectory_audit: bool = False
 	oracle_fail_fast: bool = False
 

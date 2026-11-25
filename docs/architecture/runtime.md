@@ -80,6 +80,44 @@ or the probe fails, the run errors out rather than continuing unmonitored.
 The trace sits beside the run output directories rather than inside one, so
 `RunResult.command_monitor` carries the token that links a run to its trace.
 
+### Workdir snapshots
+
+`case monitor --workdir-snapshots` records the workspace itself, as it was
+before each of the agent's tool calls:
+
+```text
+workspace = btrfs subvolume <btrfs root>/ae_workspace_<case>_<rand>/workspace
+  -> broker started with --snapshot-subvolume / --snapshot-dir
+  -> host asks for snapshot 0 (kind "initial") over the command socket
+  -> agent runs; Claude Code's PreToolUse hook (matcher "*") runs
+     agent_support/workdir_snapshot_hook.py before every tool call
+       -> frame 5 WORKDIR_SNAPSHOT {kind: "tool", tool_use_id, tool_name, session_id,
+                                    agent_id, agent_type}  (agent_* only in subagents)
+       <- frame 6 WORKDIR_SNAPSHOT_DONE {ok, seq, snapshot, error}
+  -> BrokerProcess.stop() sends SIGTERM; the broker takes the final snapshot
+     (kind "final"), then exits (status 3 if it failed; SIGKILL after 60s)
+```
+
+- The snapshot request shares the shim's socket; the broker dispatches each
+  connection on its first frame. The hook sends the tool call's metadata only,
+  never its input; the broker records the request as it arrives.
+- One worker thread takes the snapshots from a queue, so they are serialized
+  and numbered in the order taken, while the event loop keeps serving shells.
+  Each snapshot is written to `workdir_snapshots.jsonl` in the trace before
+  its requester is answered.
+- The hook script and its settings are written to `<tmp root>/tool-hooks` and
+  mounted read-only at `/run/aebench-hooks`, outside the writable support
+  directory. The container has no `CAP_SYS_ADMIN`, so the agent cannot remount
+  it to edit or remove the hook, even with sudo.
+- The hook blocks the tool until its snapshot exists, and fails closed: when
+  the broker is unreachable or the snapshot fails, it denies the call and
+  returns `continue: false`, which ends the session. The case runner then
+  records the failed snapshots as the run's error.
+- Snapshots use the btrfs ioctls directly (`runtime/btrfs.py`), unprivileged.
+- Only calls Claude makes are snapshotted: a `make -j` tool call gets one
+  snapshot, not one per shell `make` starts. Processes the agent leaves running
+  after it exits can still write after the final snapshot.
+
 ### Coverage limits
 
 Read the trace as a record of shell invocations, not of every command:
