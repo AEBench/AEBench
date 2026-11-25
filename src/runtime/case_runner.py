@@ -534,6 +534,7 @@ class _CaseRunner:
 				run_token=monitor.trace_dir.name,
 				trace_path=str(monitor.trace_path),
 				command_count=monitor.command_count(),
+				in_flight_at_stop=monitor.in_flight_count(),
 			)
 		except BaseException as exc:
 			self._record_error(f"{type(exc).__name__} tearing down command monitoring: {exc}")
