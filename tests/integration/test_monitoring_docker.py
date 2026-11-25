@@ -36,13 +36,15 @@ def _require_docker_image() -> None:
 
 
 def _records(broker: BrokerProcess) -> list[dict[str, Any]]:
+	"""The end records; each command also has a start line."""
 	if not broker.trace_path.is_file():
 		return []
-	return [
+	lines = [
 		json.loads(line)
 		for line in broker.trace_path.read_text(encoding="utf-8").splitlines()
 		if line.strip()
 	]
+	return [record for record in lines if record.get("event") != "start"]
 
 
 def _wait_for_records(broker: BrokerProcess, count: int, *, timeout: float = 15.0) -> None:
