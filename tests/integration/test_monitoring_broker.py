@@ -884,7 +884,7 @@ def _unpack(root: Path, count: int) -> None:
 
 def test_a_big_new_untracked_folder_is_summarised(tmp_path: Path) -> None:
 	def unpack(workspace: Path) -> None:
-		_unpack(workspace / "vendor" / "pkg", 2100)
+		_unpack(workspace / "data" / "traces", 2100)
 		(workspace / "evaluation" / "logs").mkdir(parents=True)
 		(workspace / "evaluation" / "logs" / "a.log").write_bytes(b"ok\n")
 
@@ -894,7 +894,7 @@ def test_a_big_new_untracked_folder_is_summarised(tmp_path: Path) -> None:
 	unpacked, later = _snapshots_around(tmp_path, {"run.sh": b"echo\n"}, [unpack, touch])
 
 	assert unpacked["collapsed_untracked"] == [
-		{"dir": "vendor", "files": 2100, "created": 2100, "modified": 0, "deleted": 0}
+		{"dir": "data", "files": 2100, "created": 2100, "modified": 0, "deleted": 0}
 	]
 	assert unpacked["created_untracked"] == ["evaluation/logs/a.log"]
 	assert unpacked["total_created_untracked"] == 1
@@ -909,17 +909,17 @@ def test_a_big_new_untracked_folder_is_summarised(tmp_path: Path) -> None:
 
 def test_deleting_a_big_untracked_folder_is_summarised(tmp_path: Path) -> None:
 	def unpack(workspace: Path) -> None:
-		_unpack(workspace / "vendor" / "pkg", 2100)
+		_unpack(workspace / "data" / "traces", 2100)
 
 	def remove(workspace: Path) -> None:
-		shutil.rmtree(workspace / "vendor")
+		shutil.rmtree(workspace / "data")
 		(workspace / "gone.txt").write_bytes(b"x\n")
 
 	_, removed = _snapshots_around(tmp_path, {"run.sh": b"echo\n"}, [unpack, remove])
 
 	# The folder is gone from the after picture, so the before count decides.
 	assert removed["collapsed_untracked"] == [
-		{"dir": "vendor", "files": 0, "created": 0, "modified": 0, "deleted": 2100}
+		{"dir": "data", "files": 0, "created": 0, "modified": 0, "deleted": 2100}
 	]
 	assert removed["deleted_untracked"] == []
 	assert removed["created_untracked"] == ["gone.txt"]
