@@ -16,7 +16,6 @@ FileStat: TypeAlias = tuple[int, int, int, int]  # (size, mtime_ns, ctime_ns, in
 
 SOCKET_PATH = "/run/aebench/command.sock"
 LOG_BASENAME = "commands.jsonl"
-SCHEMA_VERSION = 2  # Version of each record's shape, read by the trajectory checker
 
 STREAMS_DIRNAME = "stream"
 
@@ -424,7 +423,6 @@ async def process_connection(
 
 	shim_clock: dict[str, object] = {"info": None, "spawn": None, "exit": None}
 	record: Record = {
-		"schema_version": SCHEMA_VERSION,
 		"run_id": run_id,
 		"command_id": command_id,
 		"complete": False,
