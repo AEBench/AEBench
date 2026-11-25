@@ -10,6 +10,7 @@ import struct
 import sys
 import time
 import uuid
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +30,8 @@ MAX_STREAM_BYTES = 16 * 1024 * 1024
 
 MAX_LISTED_PATHS = 100
 MAX_SNAPSHOT_FILES = 20000  # Limit for full-workspace snapshots only
+MAX_UNTRACKED_FILES = 100_000  # Memory guard for the untracked walk
+COLLAPSE_UNTRACKED_FILES = 2_000  # Untracked-only folders above this are summarised
 TRACKED_FILES_BASENAME = "tracked_files.json"  # Host-provided list of files to track
 SNAPSHOT_BUDGET_SECONDS = 2.0  # Timeout for snapshots; does not fail the command
 MAX_HASH_BYTES = 64 * 1024 * 1024  # Larger changed files get a null hash
@@ -265,13 +268,19 @@ class FileSnapshot(Monitor):
 			with open(tracked_files, encoding="utf-8") as handle:
 				self.tracked = list(json.load(handle)["files"])
 		self.tracked_set = frozenset(self.tracked or ())
+		# Every folder holding a tracked file, at any depth
+		self.tracked_dirs = frozenset(
+			parent for rel in self.tracked_set for parent in _parents(rel)
+		)
 
-	def _snapshot(self) -> tuple[dict[str, FileStat] | None, str | None]:
+	def _snapshot(self) -> tuple[dict[str, FileStat] | None, str | None, str | None]:
+		"""(picture, reason it is None, reason its untracked part is unknown)."""
 		if self.tracked is not None:
 			return self._snapshot_tracked()
-		return self._snapshot_walk()
+		found, reason = self._snapshot_walk()
+		return found, reason, None
 
-	def _snapshot_tracked(self) -> tuple[dict[str, FileStat] | None, str | None]:
+	def _snapshot_tracked(self) -> tuple[dict[str, FileStat] | None, str | None, str | None]:
 		"""Maps each tracked file still present, then every untracked one, to its FileStat."""
 		assert self.tracked is not None
 		found: dict[str, FileStat] = {}
@@ -279,7 +288,7 @@ class FileSnapshot(Monitor):
 
 		for rel in self.tracked:
 			if time.monotonic() >= deadline:
-				return None, f"snapshot exceeded {SNAPSHOT_BUDGET_SECONDS:g}s"
+				return None, f"snapshot exceeded {SNAPSHOT_BUDGET_SECONDS:g}s", None
 
 			try:
 				# Using lstat to tracked symlink is the link itself.
@@ -290,13 +299,16 @@ class FileSnapshot(Monitor):
 
 			found[rel] = (stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_ino)
 
-		return self._walk_untracked(found, deadline)
+		untracked, reason = self._walk_untracked(deadline)
+		if untracked is None:
+			# The tracked part stays exact; only the untracked part is unknown.
+			return found, None, reason
+		found.update(untracked)
+		return found, None, None
 
-	def _walk_untracked(
-		self, found: dict[str, FileStat], deadline: float
-	) -> tuple[dict[str, FileStat] | None, str | None]:
-		"""Adds the files outside the tracked list to `found`, skipping .git."""
-		untracked = 0
+	def _walk_untracked(self, deadline: float) -> tuple[dict[str, FileStat] | None, str | None]:
+		"""Maps the files outside the tracked list to their FileStat, skipping .git."""
+		found: dict[str, FileStat] = {}
 		for directory, subdirectories, filenames in os.walk(self.workspace):
 			kept = []
 			for name in subdirectories:
@@ -311,7 +323,7 @@ class FileSnapshot(Monitor):
 
 			for filename in filenames:
 				if time.monotonic() >= deadline:
-					return None, f"snapshot exceeded {SNAPSHOT_BUDGET_SECONDS:g}s"
+					return None, f"untracked walk exceeded {SNAPSHOT_BUDGET_SECONDS:g}s"
 
 				path = os.path.join(directory, filename)
 				rel = os.path.relpath(path, self.workspace)
@@ -323,9 +335,8 @@ class FileSnapshot(Monitor):
 					continue
 
 				found[rel] = (stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_ino)
-				untracked += 1
-				if untracked > MAX_SNAPSHOT_FILES:
-					return None, f"workspace exceeds {MAX_SNAPSHOT_FILES} untracked files"
+				if len(found) > MAX_UNTRACKED_FILES:
+					return None, f"workspace exceeds {MAX_UNTRACKED_FILES} untracked files"
 
 		return found, None
 
@@ -413,8 +424,8 @@ class FileSnapshot(Monitor):
 		if self.name not in ctx.state:
 			return None
 
-		before, before_reason = ctx.state[self.name]
-		after, after_reason = self._snapshot()
+		before, before_reason, before_untracked = ctx.state[self.name]
+		after, after_reason, after_untracked = self._snapshot()
 
 		if before is None or after is None:
 			# Explains reason for skipped
@@ -424,35 +435,122 @@ class FileSnapshot(Monitor):
 		deleted = sorted(set(before) - set(after))
 		modified = sorted(name for name in set(before) & set(after) if before[name] != after[name])
 
+		untracked_skipped = before_untracked or after_untracked
+		collapsed: list[Record] | None = None
 		if self.tracked is None:
 			result: Record = {"scope": "workspace"}
-			lists = {"created": created, "modified": modified, "deleted": deleted}
+			lists: dict[str, list[str] | None] = {
+				"created": created,
+				"modified": modified,
+				"deleted": deleted,
+			}
 		else:
 			# Untracked paths go only in the *_untracked lists, so created,
 			# modified and deleted keep meaning tracked files, as the checker reads them.
 			result = {"scope": "tracked+untracked"}
 			lists = {}
-			for op, names in (("created", created), ("modified", modified), ("deleted", deleted)):
+			changes = {"created": created, "modified": modified, "deleted": deleted}
+			for op, names in changes.items():
 				lists[op] = [name for name in names if name in self.tracked_set]
-				lists[f"{op}_untracked"] = [name for name in names if name not in self.tracked_set]
+			if untracked_skipped is None:
+				untracked = {
+					op: [name for name in names if name not in self.tracked_set]
+					for op, names in changes.items()
+				}
+				collapsed = self._collapse(untracked, before, after)
+			for op in changes:
+				lists[f"{op}_untracked"] = None if untracked_skipped else untracked[op]
 
-		listed = {op: names[:MAX_LISTED_PATHS] for op, names in lists.items()}
+		listed = {
+			op: None if names is None else names[:MAX_LISTED_PATHS] for op, names in lists.items()
+		}
 		changed = [
 			name
 			for op in ("created", "modified", "created_untracked", "modified_untracked")
-			for name in listed.get(op, ())
+			for name in listed.get(op) or ()
 		]
 		hashes, hash_skipped = self._hashes(changed)
 
 		result["watched"] = len(after)
-		for op, names in lists.items():
-			result[f"total_{op}"] = len(names)
+		for op, paths in lists.items():
+			result[f"total_{op}"] = None if paths is None else len(paths)
 		result.update(listed)
-		result["truncated"] = any(len(names) > MAX_LISTED_PATHS for names in lists.values())
+		if self.tracked is not None:
+			result["collapsed_untracked"] = collapsed
+			result["untracked_skipped"] = untracked_skipped
+		result["truncated"] = any(
+			names is not None and len(names) > MAX_LISTED_PATHS for names in lists.values()
+		)
 		result["sizes"] = {name: after[name][0] for name in changed}
 		result["hashes"] = hashes
 		result["hash_skipped"] = hash_skipped
 		return result
+
+	def _collapse(
+		self,
+		untracked: dict[str, list[str]],
+		before: dict[str, FileStat],
+		after: dict[str, FileStat],
+	) -> list[Record]:
+		"""Moves changes under big untracked-only folders out of `untracked` into summaries.
+
+		A folder holding a tracked file is never summarised; its changes stay listed.
+		"""
+		candidates = {
+			parent
+			for names in untracked.values()
+			for name in names
+			for parent in _parents(name)
+			if parent not in self.tracked_dirs
+		}
+		if not candidates:
+			return []
+
+		after_counts = self._dir_counts(after, candidates)
+		counts = dict(after_counts)
+		if untracked["deleted"]:
+			# A folder emptied by this command is sized by what it held before.
+			for parent, count in self._dir_counts(before, candidates).items():
+				counts[parent] = max(counts.get(parent, 0), count)
+		big = {parent for parent, count in counts.items() if count > COLLAPSE_UNTRACKED_FILES}
+		if not big:
+			return []
+
+		summaries: dict[str, dict[str, int]] = {}
+		for op, names in untracked.items():
+			kept = []
+			for name in names:
+				# Parents come shortest first, so this is the topmost big folder.
+				top = next((parent for parent in _parents(name) if parent in big), None)
+				if top is None:
+					kept.append(name)
+					continue
+				summary = summaries.setdefault(top, {"created": 0, "modified": 0, "deleted": 0})
+				summary[op] += 1
+			names[:] = kept
+		return [
+			{"dir": top, "files": after_counts.get(top, 0), **summaries[top]}
+			for top in sorted(summaries)
+		]
+
+	def _dir_counts(self, picture: dict[str, FileStat], dirs: set[str]) -> dict[str, int]:
+		"""Untracked files in `picture` under each of `dirs`, recursively."""
+		counts: dict[str, int] = {}
+		for name in picture:
+			if name in self.tracked_set:
+				continue
+			for parent in _parents(name):
+				if parent in dirs:
+					counts[parent] = counts.get(parent, 0) + 1
+		return counts
+
+
+def _parents(rel: str) -> Iterator[str]:
+	"""Each folder above a workspace-relative path, shortest first, never the root."""
+	cut = rel.find("/")
+	while cut != -1:
+		yield rel[:cut]
+		cut = rel.find("/", cut + 1)
 
 
 class ProcessTree:

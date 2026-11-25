@@ -7,17 +7,20 @@ so this exercises the supervisor and the broker exactly as a run would.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
+import shutil
 import socket
 import struct
 import time
 from datetime import datetime
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
-from runtime.monitoring import BrokerProcess
+from runtime.monitoring import BROKER_SCRIPT, BrokerProcess, write_tracked_files
 
 pytestmark = pytest.mark.sanity
 
@@ -758,11 +761,14 @@ def test_stopping_releases_the_socket_and_keeps_the_trace(tmp_path: Path) -> Non
 	assert broker.command_count() == 1
 
 
-def _snapshot_around(tmp_path: Path, files: dict[str, bytes], command: object) -> dict[str, object]:
-	"""Runs `command` as one shell's command over a workspace holding `files`."""
+def _snapshots_around(
+	tmp_path: Path, files: dict[str, bytes], commands: list[object]
+) -> list[dict[str, object]]:
+	"""Runs each of `commands` as one shell's command over a workspace holding `files`."""
 	workspace = tmp_path / "workspace"
 	workspace.mkdir()
 	for rel, data in files.items():
+		(workspace / rel).parent.mkdir(parents=True, exist_ok=True)
 		(workspace / rel).write_bytes(data)
 	broker = BrokerProcess(
 		trace_dir=tmp_path / "trace",
@@ -772,22 +778,31 @@ def _snapshot_around(tmp_path: Path, files: dict[str, bytes], command: object) -
 	broker.start()
 	try:
 		assert broker.socket_path is not None
-		client = _open_command(broker.socket_path, {"argv": ["/bin/bash", "-c", "x"], "pid": 1})
-		try:
-			assert callable(command)
-			command(workspace)
-			client.sendall(
-				_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8"))
-			)
-		finally:
-			client.close()
-		assert _wait_for(lambda: broker.command_count() == 1)
-		(record,) = _records(broker)
-		monitors = record["monitors"]
-		assert isinstance(monitors, dict)
-		return monitors["file_snapshot"]
+		for count, command in enumerate(commands, start=1):
+			client = _open_command(broker.socket_path, {"argv": ["/bin/bash", "-c", "x"], "pid": 1})
+			try:
+				assert callable(command)
+				command(workspace)
+				client.sendall(
+					_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8"))
+				)
+			finally:
+				client.close()
+			assert _wait_for(lambda count=count: broker.command_count() == count)
+		snapshots = []
+		for record in _records(broker):
+			monitors = record["monitors"]
+			assert isinstance(monitors, dict)
+			snapshots.append(monitors["file_snapshot"])
+		return snapshots
 	finally:
 		broker.stop()
+
+
+def _snapshot_around(tmp_path: Path, files: dict[str, bytes], command: object) -> dict[str, object]:
+	"""Runs `command` as one shell's command over a workspace holding `files`."""
+	(snapshot,) = _snapshots_around(tmp_path, files, [command])
+	return snapshot
 
 
 def test_trace_meta_is_written_at_start(broker: BrokerProcess) -> None:
@@ -806,6 +821,8 @@ def test_a_new_untracked_file_is_listed_as_created_untracked(tmp_path: Path) -> 
 	assert snapshot["modified_untracked"] == []
 	assert snapshot["deleted_untracked"] == []
 	assert snapshot["created"] == []
+	assert snapshot["collapsed_untracked"] == []
+	assert snapshot["untracked_skipped"] is None
 
 
 def test_a_copy_is_hashed_with_its_source_content(tmp_path: Path) -> None:
@@ -855,3 +872,109 @@ def test_a_symlink_is_hashed_by_its_target_text_and_not_followed(tmp_path: Path)
 	assert isinstance(hashes, dict)
 	assert hashes["link"] == hashlib.sha256(os.fsencode(str(outside))).hexdigest()
 	assert hashes["link"] != hashlib.sha256(outside.read_bytes()).hexdigest()
+
+
+def _unpack(root: Path, count: int) -> None:
+	"""Writes `count` small files under `root`, spread over a few subfolders."""
+	for index in range(count):
+		folder = root / f"d{index % 7}"
+		folder.mkdir(parents=True, exist_ok=True)
+		(folder / f"f{index}.c").write_bytes(b"x\n")
+
+
+def test_a_big_new_untracked_folder_is_summarised(tmp_path: Path) -> None:
+	def unpack(workspace: Path) -> None:
+		_unpack(workspace / "data" / "traces", 2100)
+		(workspace / "evaluation" / "logs").mkdir(parents=True)
+		(workspace / "evaluation" / "logs" / "a.log").write_bytes(b"ok\n")
+
+	def touch(workspace: Path) -> None:
+		(workspace / "b.txt").write_bytes(b"b\n")
+
+	unpacked, later = _snapshots_around(tmp_path, {"run.sh": b"echo\n"}, [unpack, touch])
+
+	assert unpacked["collapsed_untracked"] == [
+		{"dir": "data", "files": 2100, "created": 2100, "modified": 0, "deleted": 0}
+	]
+	assert unpacked["created_untracked"] == ["evaluation/logs/a.log"]
+	assert unpacked["total_created_untracked"] == 1
+	assert unpacked["hashes"] == {"evaluation/logs/a.log": hashlib.sha256(b"ok\n").hexdigest()}
+	assert unpacked["sizes"] == {"evaluation/logs/a.log": 3}
+	assert unpacked["truncated"] is False
+	assert unpacked["untracked_skipped"] is None
+
+	assert later["created_untracked"] == ["b.txt"]
+	assert later["collapsed_untracked"] == []
+
+
+def test_deleting_a_big_untracked_folder_is_summarised(tmp_path: Path) -> None:
+	def unpack(workspace: Path) -> None:
+		_unpack(workspace / "data" / "traces", 2100)
+
+	def remove(workspace: Path) -> None:
+		shutil.rmtree(workspace / "data")
+		(workspace / "gone.txt").write_bytes(b"x\n")
+
+	_, removed = _snapshots_around(tmp_path, {"run.sh": b"echo\n"}, [unpack, remove])
+
+	# The folder is gone from the after picture, so the before count decides.
+	assert removed["collapsed_untracked"] == [
+		{"dir": "data", "files": 0, "created": 0, "modified": 0, "deleted": 2100}
+	]
+	assert removed["deleted_untracked"] == []
+	assert removed["created_untracked"] == ["gone.txt"]
+	assert removed["truncated"] is False
+	assert removed["untracked_skipped"] is None
+
+
+def test_a_folder_holding_a_tracked_file_is_never_summarised(tmp_path: Path) -> None:
+	def unpack(workspace: Path) -> None:
+		_unpack(workspace / "lib", 2100)
+
+	snapshot = _snapshot_around(tmp_path, {"lib/keep.c": b"keep\n"}, unpack)
+
+	assert snapshot["collapsed_untracked"] == []
+	assert snapshot["total_created_untracked"] == 2100
+	created = snapshot["created_untracked"]
+	assert isinstance(created, list)
+	assert len(created) == 100
+	assert all(name.startswith("lib/") for name in created)
+	assert snapshot["truncated"] is True
+
+
+def _load_monitor() -> ModuleType:
+	spec = importlib.util.spec_from_file_location("aeshell_monitor", BROKER_SCRIPT)
+	assert spec is not None and spec.loader is not None
+	module = importlib.util.module_from_spec(spec)
+	spec.loader.exec_module(module)
+	return module
+
+
+def test_a_too_large_untracked_walk_keeps_the_tracked_changes(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	monitor = _load_monitor()
+	monkeypatch.setattr(monitor, "MAX_UNTRACKED_FILES", 50)
+	workspace = tmp_path / "workspace"
+	workspace.mkdir()
+	(workspace / "run.sh").write_bytes(b"echo\n")
+	trace = tmp_path / "trace"
+	trace.mkdir()
+	snapshot = monitor.FileSnapshot(workspace, write_tracked_files(workspace, trace))
+	ctx = monitor.CommandContext({}, str(trace), "run")
+
+	snapshot.before_command(ctx)
+	(workspace / "run.sh").write_bytes(b"echo faked\n")
+	_unpack(workspace / "out", 60)
+	result = snapshot.after_command(ctx)
+
+	assert "skipped" not in result
+	assert result["scope"] == "tracked+untracked"
+	assert result["modified"] == ["run.sh"]
+	assert result["total_modified"] == 1
+	assert result["hashes"] == {"run.sh": hashlib.sha256(b"echo faked\n").hexdigest()}
+	for op in ("created", "modified", "deleted"):
+		assert result[f"{op}_untracked"] is None
+		assert result[f"total_{op}_untracked"] is None
+	assert result["collapsed_untracked"] is None
+	assert result["untracked_skipped"] == "workspace exceeds 50 untracked files"
