@@ -98,7 +98,6 @@ class PathFacts(typing.TypedDict):
 class RunFacts(typing.TypedDict):
     """facts.json (spec §5.4)."""
 
-    schema_version: str
     run_key: str | None
     family: str | None
     capabilities: dict[str, bool]  # copied from layer 1's RunInfo
@@ -1493,7 +1492,6 @@ def derive(
             metrics[block].update(dict.fromkeys(names))
         warnings.append(f"{_failure(label, coverage, cfg)}: {voids} null")
     facts = RunFacts(
-        schema_version="1",
         run_key=run["run_key"],
         family=run["family"],
         capabilities=capabilities,

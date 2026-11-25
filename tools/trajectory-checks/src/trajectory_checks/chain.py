@@ -118,7 +118,6 @@ class InputVerdict(typing.TypedDict):
 class RunChain(typing.TypedDict):
     """chain.json (spec §5.8)."""
 
-    schema_version: str
     run_key: str | None
     family: str | None
     inputs: dict[str, bool]
@@ -1855,7 +1854,6 @@ def derive(
     reads = [r for i in live for r in _read_rows(i)]
     verdicts = [_verdict(ctx, item, rows) for item in items]
     block = RunChain(
-        schema_version="1",
         run_key=run["run_key"],
         family=run["family"],
         inputs={k: given[v] is not None for k, v in _INPUTS.items()},

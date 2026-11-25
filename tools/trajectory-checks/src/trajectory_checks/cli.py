@@ -301,7 +301,6 @@ def analyse(
     runtime = result.get("runtime") or {}
     baseline = _read_json(folder / "tracked_files.json")
     meta = _read_json(folder / "trace_meta.json")
-    versions = [e["schema_version"] for e in execs]
     run = match.RunInfo(
         t_start=parse.parse_time(result.get("started_at")),
         t_end=parse.parse_time(result.get("finished_at")),
@@ -311,8 +310,6 @@ def analyse(
         family=family,
         log_ok=log_ok,
         monitor_version=(meta or {}).get("broker_version"),
-        schema_version=(meta or {}).get("schema_version")
-        or next((v for v in versions if v is not None), None),
         trace_meta=meta,
         final_diff_content=_file(folder / "final.diff"),
         final_workspace=_file(folder / "final_workspace.tar.zst"),

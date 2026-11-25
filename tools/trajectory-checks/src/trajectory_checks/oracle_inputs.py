@@ -78,7 +78,6 @@ class OracleInput(typing.TypedDict):
 class OracleInputsBlock(typing.TypedDict):
     """oracle_inputs.json (spec §0.3)."""
 
-    schema_version: str
     run_key: str | None
     family: str | None
     capabilities: dict[str, bool]
@@ -817,7 +816,6 @@ def derive(
     elif run_score is None:
         warnings.append("input run_score missing: M3.5 run fields null")
     block = {
-        "schema_version": "1",
         "run_key": run.get("run_key"),
         "family": run.get("family"),
         "capabilities": dict(sorted(coverage["capabilities"].items())),

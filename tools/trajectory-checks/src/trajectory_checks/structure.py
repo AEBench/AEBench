@@ -81,7 +81,6 @@ class FileClass(typing.TypedDict):
 class RunStructure(typing.TypedDict):
     """structure.json (spec §5.4)."""
 
-    schema_version: str
     run_key: str | None
     family: str | None
     preconditions: dict[str, str]  # label -> holds, vacuous, fails
@@ -1063,7 +1062,6 @@ def derive(
         metrics, labels, linked["coverage"], cfg["join_rate_warn"]
     )
     structure = RunStructure(
-        schema_version="1",
         run_key=run_info.get("run_key"),
         family=run_info.get("family"),
         preconditions=labels,

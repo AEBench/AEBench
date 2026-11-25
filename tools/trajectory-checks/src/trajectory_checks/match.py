@@ -29,7 +29,6 @@ class RunInfo(typing.TypedDict):
     family: str | None
     log_ok: bool | None
     monitor_version: str | None  # MC-09
-    schema_version: int | None  # MC-21
     trace_meta: dict | None  # MC-09
     final_diff_content: str | None  # MC-03
     final_workspace: str | None
@@ -127,7 +126,6 @@ class PathSummary(typing.TypedDict):
 class Coverage(typing.TypedDict):
     """coverage.json (spec §7.1)."""
 
-    schema_version: str
     run_key: str | None
     family: str | None
     inputs: dict[str, bool]
@@ -177,7 +175,6 @@ CAPABILITIES = (
     *("untracked_visible", "read_tracing", "final_content", "oracle_reads"),
     *("egress_log", "stdio"),
 )
-KNOWN_SCHEMA_VERSIONS = (1, 2)  # MC-21: absent means 1
 # (label, rate key, threshold, metrics voided) of spec §7.2.
 PRECONDITIONS = (
     ("C1_under", "call_match_rate_under", ">=", "M1, M2, M5.2, M6.1"),
@@ -1047,12 +1044,6 @@ def link(
                 f"logged {log_code}, exec {k['command_id']} {code}"
             )
     warnings += trace_warnings
-    versions = {run["schema_version"], *(e["schema_version"] for e in execs)}
-    for version in sorted(versions - {None, *KNOWN_SCHEMA_VERSIONS}, key=str):
-        warnings.append(
-            f"schema_version {version} unknown: known fields read, "
-            "others ignored"
-        )
     trace_reason = {None: "trace_missing", False: "trace_mismatched"}
     prefixes = {
         e["command_norm"][: cfg["prefix_chars"]]
@@ -1141,7 +1132,6 @@ def link(
     )
     states, pre_warnings = _preconditions(rates, dens, cfg)
     coverage = Coverage(
-        schema_version="1",
         run_key=run["run_key"],
         family=run["family"] or (calls[0]["family"] if calls else None),
         inputs={
