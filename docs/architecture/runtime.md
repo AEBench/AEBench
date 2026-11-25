@@ -95,7 +95,7 @@ workspace = btrfs subvolume <btrfs root>/ae_workspace_<case>_<rand>/workspace
                                     agent_id, agent_type}  (agent_* only in subagents)
        <- frame 6 WORKDIR_SNAPSHOT_DONE {ok, seq, snapshot, error}
   -> BrokerProcess.stop() sends SIGTERM; the broker takes the final snapshot
-     (kind "final"), then exits (status 3 if it failed; SIGKILL after 60s)
+     (kind "final"), then exits (status 3 if it failed; SIGKILL after 330s)
 ```
 
 - The snapshot request shares the shim's socket; the broker dispatches each
