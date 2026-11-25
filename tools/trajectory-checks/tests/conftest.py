@@ -165,7 +165,7 @@ CAPABILITIES = (
 RUN_INFO_FIELDS = frozenset(
     {
         *("t_start", "t_end", "workspace_root", "trace_ok", "run_key"),
-        *("family", "log_ok", "monitor_version"),
+        *("family", "log_ok"),
         *("trace_meta", "final_diff_content", "final_workspace"),
         *("oracle_reads", "case_image_digest", "commit", "shim_intact"),
         *("unattributed_reads", "capabilities"),
