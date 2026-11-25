@@ -29,6 +29,7 @@ SPEC_IDS = (
     *("P37", "P37b", "P38", "P39", "P40", "P40b"),
     *("P41", "P42", "P43", "P44"),  # cycle-1 critic: A1, A5
     *("P45", "P45b"),  # cycle 2: late writes after the final diff (D73)
+    *("P46", "P47"),  # partial snapshots: blind for the paths they cover
 )
 
 
@@ -45,7 +46,7 @@ def _test_rules() -> dict[str, set[str]]:
 
 
 def test_scenarios_exist() -> None:
-    """Exactly the scenarios P01 to P45b of spec §2.2.2."""
+    """The scenarios P01 to P45b of spec §2.2.2, then P46 and P47."""
     ids = [path.stem.split("_", 1)[0] for path in SCENARIOS]
     assert sorted(ids) == sorted(SPEC_IDS)
 

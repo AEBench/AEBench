@@ -1,0 +1,16 @@
+name: S52b_untracked_skipped_before
+description: S52 with the skipped untracked walk before the untracked write -> e1 ended before e2 started, so it cannot have written out.csv after e2 and both final writers are under (§6.6, per-path rule 2).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 110, command: "./build.sh"}
+  - {call_id: c2, t_start: 200, t_end: 210, command: "python3 eval.py > out.csv"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 109, command: "./build.sh", snapshot: {scope: tracked, modified: [lib/core.c], untracked_skipped: "too many"}}
+  - {command_id: e2, t_start: 200.2, t_end: 209, command: "python3 eval.py > out.csv", snapshot: {scope: tracked, created_untracked: [out.csv], modified_untracked: [], deleted_untracked: [], collapsed_untracked: []}}
+baseline: {files: {lib/core.c: {}}}
+final_diff: {modified: [lib/core.c], deleted: [], mode_changed: []}
+expect:
+  paths:
+    - {path: lib/core.c, events: [w0], final_writer: w0, final_writer_under: true, final_state: changed}
+    - {path: out.csv, events: [w1], final_writer: w1, final_writer_under: true, final_state: untracked}
+  coverage:
+    counts.snapshot_untracked_skipped: 1

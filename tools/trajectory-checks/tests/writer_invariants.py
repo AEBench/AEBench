@@ -538,6 +538,8 @@ def _evidence_checks(
     )
     lists = {
         "blind_snapshot": ("blind_execs", "exec"),
+        "collapsed": ("blind_execs", "exec"),
+        "untracked_skipped": ("blind_execs", "exec"),
         "incomplete": ("detached_execs", "exec"),
         "orphaned": ("detached_execs", "exec"),
         "unrecorded": ("unmonitored_calls", "call"),

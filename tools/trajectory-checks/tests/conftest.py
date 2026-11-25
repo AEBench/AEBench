@@ -140,7 +140,7 @@ NEW_EXEC_FIELDS = (
 EXEC_FIELDS = EXEC_FIELDS | frozenset(NEW_EXEC_FIELDS)
 NEW_SNAPSHOT_FIELDS = (
     *("hashes", "created_untracked", "modified_untracked"),
-    "deleted_untracked",
+    *("deleted_untracked", "collapsed_untracked", "untracked_skipped"),
 )
 SNAPSHOT_FIELDS = frozenset(
     {

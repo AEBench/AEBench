@@ -1,0 +1,21 @@
+name: G80_collapsed_in_gap
+description: >
+  G40 with the act call collapsing an untracked folder: its counted
+  writes are untracked writes in the gap, so the rerun is not unchanged
+  under; the gap is still observed.
+rules: [RR5, RR6]
+run: {capabilities: {untracked_visible: true}}
+calls:
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: cp -r in out, t_start: 20, t_end: 21}
+  - {call_id: c3, command: ./run.sh, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9, snapshot: {created_untracked: [], modified_untracked: [], deleted_untracked: []}}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 20.2, snapshot: {created_untracked: [], modified_untracked: [], deleted_untracked: [], collapsed_untracked: [{dir: out, files: 2100, created: 2100, modified: 0, deleted: 0}]}}
+  - {command_id: e3, call: c3, t_start: 30.1, t_end: 31.9, snapshot: {created_untracked: [], modified_untracked: [], deleted_untracked: []}}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c3, act_calls_between: 1, untracked_writes_between: 2100, gap_observed: true, unchanged_under: false, unchanged_over: true}
+  structure:
+    bases.unchanged_under: exact
+    M2.2.reruns_after_success_unchanged_under: 0

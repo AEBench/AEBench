@@ -20,6 +20,8 @@ NOISE_COUNT_KEYS = (
     "execs_by_disposition",
     "execs_total",
     "snapshot_status_counts",
+    "snapshot_collapsed",
+    "snapshot_untracked_skipped",
 )
 
 
@@ -544,7 +546,7 @@ NEW_EXEC_FIELDS = (
 )
 NEW_SNAPSHOT_FIELDS = (
     *("hashes", "created_untracked", "modified_untracked"),
-    "deleted_untracked",
+    *("deleted_untracked", "collapsed_untracked", "untracked_skipped"),
 )
 
 

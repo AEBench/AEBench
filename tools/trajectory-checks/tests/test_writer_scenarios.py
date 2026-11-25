@@ -333,6 +333,11 @@ def _rename_map(scenario: Mapping[str, Any]) -> dict[str, str]:
             r"^diff --git a/(\S+) b/", scenario["final_diff_text"] or "", re.M
         )
     )
+    names |= {  # a collapsed folder is a path too
+        c["dir"]
+        for e in scenario["execs"]
+        for c in (e.get("snapshot") or {}).get("collapsed_untracked") or ()
+    }
     names = {n for n in names if not n.startswith("/")}
     mapping = {}
     for name in names:

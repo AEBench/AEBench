@@ -150,6 +150,7 @@ SPEC_IDS = (
     *(f"W{n:02d}" for n in range(1, 24)),
     "W23b",
     *(f"W{n:02d}" for n in range(24, 71)),
+    *("W71", "W72", "W73"),  # partial snapshots: collapsed, untracked_skipped
 )
 # Spec §2.2.2's capability pairs: (capability, rule, basis key, the
 # scenario with the capability true, the one with it false). A basis key
@@ -198,7 +199,10 @@ HUNK_TYPES = (
     *("comparison_relaxed", "check_removed", "pure_deletion"),
     *("pure_addition", "general"),
 )
-RISK_REASONS = ("blind_snapshot", "incomplete", "orphaned", "unrecorded")
+RISK_REASONS = (
+    *("blind_snapshot", "collapsed", "untracked_skipped"),
+    *("incomplete", "orphaned", "unrecorded"),
+)
 NOT_UNDER_REASONS = (
     *("no_writer", "invisible", "input_not_under", "several_candidates"),
     *("root_uncertain", "later_writer_risk", "state_conflict"),
