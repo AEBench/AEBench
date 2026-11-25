@@ -280,12 +280,12 @@ def _snapshot_of(tmp_path: pathlib.Path, **fields: object) -> dict:
 
 def test_collapsed_untracked_read(tmp_path: pathlib.Path) -> None:
     """A collapsed folder is kept with its counts; status stays ok."""
-    entry = {"dir": "vendor/", "files": 2100, "created": 0}
+    entry = {"dir": "data/", "files": 2100, "created": 0}
     entry |= {"modified": 5, "deleted": 0}
     snapshot = _snapshot_of(tmp_path, collapsed_untracked=[entry])
     assert snapshot["status"] == "ok"
     assert snapshot["collapsed_untracked"] == [
-        {"dir": "vendor", "files": 2100, "created": 0}
+        {"dir": "data", "files": 2100, "created": 0}
         | {"modified": 5, "deleted": 0}
     ]
     assert snapshot["untracked_skipped"] is None
@@ -306,8 +306,8 @@ _COUNTS = {"files": 1, "created": 1, "modified": 0, "deleted": 0}
 @pytest.mark.parametrize(
     "value",
     [
-        "vendor",
-        {"dir": "vendor"},
+        "data",
+        {"dir": "data"},
         [_COUNTS],
         [{"dir": ""} | _COUNTS],
         [{"dir": 3} | _COUNTS],
@@ -316,7 +316,7 @@ _COUNTS = {"files": 1, "created": 1, "modified": 0, "deleted": 0}
         [{"dir": "v"} | _COUNTS | {"created": -1}],
         [{"dir": "/abs"} | _COUNTS],
         [{"dir": "../up"} | _COUNTS],
-        [{"dir": "v"} | _COUNTS, "vendor"],
+        [{"dir": "v"} | _COUNTS, "data"],
     ],
 )
 def test_collapsed_untracked_malformed_is_none(

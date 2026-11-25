@@ -2,11 +2,11 @@ name: S53_unattributed_partial
 description: Without a baseline the tracked state of a final-diff path is unknown, so a command whose untracked walk was skipped stays a candidate for it, next to a truncated one; a collapsed folder elsewhere does not make its command a candidate (§6.6, per-path rule 4).
 calls:
   - {call_id: c1, t_start: 100, t_end: 110, command: "./build.sh"}
-  - {call_id: c2, t_start: 200, t_end: 210, command: "./vendor.sh"}
+  - {call_id: c2, t_start: 200, t_end: 210, command: "./data.sh"}
   - {call_id: c3, t_start: 300, t_end: 310, command: "./big.sh"}
 execs:
   - {command_id: e1, t_start: 100.2, t_end: 109, command: "./build.sh", snapshot: {scope: tracked, untracked_skipped: "too many"}}
-  - {command_id: e2, t_start: 200.2, t_end: 209, command: "./vendor.sh", snapshot: {scope: tracked, created_untracked: [], modified_untracked: [], deleted_untracked: [], collapsed_untracked: [{dir: vendor, files: 2100, created: 3, modified: 0, deleted: 0}]}}
+  - {command_id: e2, t_start: 200.2, t_end: 209, command: "./data.sh", snapshot: {scope: tracked, created_untracked: [], modified_untracked: [], deleted_untracked: [], collapsed_untracked: [{dir: data, files: 2100, created: 3, modified: 0, deleted: 0}]}}
   - {command_id: e3, t_start: 300.2, t_end: 309, command: "./big.sh", snapshot: {status: truncated, totals: {created: 500, modified: 0, deleted: 0}}}
 final_diff: {modified: [lib/core.c], deleted: [], mode_changed: []}
 expect:

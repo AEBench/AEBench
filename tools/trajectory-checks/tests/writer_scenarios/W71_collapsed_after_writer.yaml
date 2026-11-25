@@ -1,28 +1,28 @@
 id: W71
 title: A command that collapsed the input's folder runs after the last writer
 description: >
-  LW9: e2's snapshot lists vendor as a collapsed untracked folder, so it
-  may have written vendor/x without listing it. Layer 4 lists it in the
+  LW9: e2's snapshot lists data as a collapsed untracked folder, so it
+  may have written data/x without listing it. Layer 4 lists it in the
   input's blind_execs; the risk names the narrower reason collapsed.
 rules: [LW9]
 calls:
   - {call_id: c1, seq: 0, command: ./fetch.sh, t_start: 9.5, t_end: 11.0}
-  - {call_id: c2, seq: 1, command: ./vendor.sh, t_start: 49.5, t_end: 51.0}
+  - {call_id: c2, seq: 1, command: ./data.sh, t_start: 49.5, t_end: 51.0}
 execs:
   - {command_id: e1, command: ./fetch.sh, t_start: 10.0, duration_s: 1.0}
-  - {command_id: e2, command: ./vendor.sh, t_start: 50.0, duration_s: 1.0,
-     snapshot: {collapsed_untracked: [{dir: vendor, files: 2100, created: 0,
+  - {command_id: e2, command: ./data.sh, t_start: 50.0, duration_s: 1.0,
+     snapshot: {collapsed_untracked: [{dir: data, files: 2100, created: 0,
                                        modified: 5, deleted: 0}]}}
 links:
   - {link_type: call_exec, call_id: c1, command_id: e1}
   - {link_type: call_exec, call_id: c2, command_id: e2}
-  - {link_type: write_event, event_id: w0, path: vendor/x, writer_id: e1,
+  - {link_type: write_event, event_id: w0, path: data/x, writer_id: e1,
      op: create}
 paths:
-  - {path: vendor/x, events: [w0], final_writer: w0, tracked: false,
+  - {path: data/x, events: [w0], final_writer: w0, tracked: false,
      final_state: untracked, final_writer_under: false}
 oracle_inputs:
-  - {input_id: i0, path: vendor/x}
+  - {input_id: i0, path: data/x}
 input_states:
   - {input_id: i0, states_over: [command_written], grading_exists: true,
      tracked: false, content_source: final_workspace, blind_execs: [e2],
