@@ -1,0 +1,16 @@
+name: S50_untracked_created
+description: New untracked files listed only in the snapshot's *_untracked lists are write events like tracked ones -> the creating exec is the final writer, a later modify wins, and a deleted untracked file has a delete event (§6.6, MC-05).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 110, command: "python3 eval.py > sloc.csv"}
+  - {call_id: c2, t_start: 200, t_end: 210, command: "echo x >> sloc.csv"}
+  - {call_id: c3, t_start: 300, t_end: 310, command: "rm tmp.log"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 109, command: "python3 eval.py > sloc.csv", snapshot: {scope: tracked+untracked, created_untracked: [sloc.csv, tmp.log], modified_untracked: [], deleted_untracked: []}}
+  - {command_id: e2, t_start: 200.2, t_end: 209, command: "echo x >> sloc.csv", snapshot: {scope: tracked+untracked, created_untracked: [], modified_untracked: [sloc.csv], deleted_untracked: []}}
+  - {command_id: e3, t_start: 300.2, t_end: 309, command: "rm tmp.log", snapshot: {scope: tracked+untracked, created_untracked: [], modified_untracked: [], deleted_untracked: [tmp.log]}}
+baseline: {files: {lib/core.c: {}}}
+final_diff: {modified: [], deleted: [], mode_changed: []}
+expect:
+  paths:
+    - {path: sloc.csv, events: [w0, w2], final_writer: w2, final_writer_under: true, final_state: untracked}
+    - {path: tmp.log, events: [w1, w3], final_writer: w3, final_writer_under: true, final_state: untracked}
