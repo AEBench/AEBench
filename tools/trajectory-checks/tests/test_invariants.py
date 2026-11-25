@@ -537,7 +537,7 @@ def test_oracle_catches_reparenting_to_non_background_root() -> None:
 # ---- Universal records (D26, D28): old fields only give the fallback. -----
 
 NEW_EXEC_FIELDS = (
-    *("schema_version", "parent_command_id", "root_command_id", "depth"),
+    *("parent_command_id", "root_command_id", "depth"),
     *("ppid", "pgid", "sid", "parent_link", "record_type", "released_at"),
     *("ended_at", "snapshot_before_s", "snapshot_after_s", "reads"),
     "orphans",

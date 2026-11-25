@@ -56,7 +56,6 @@ expect:
     data/traces/trace.txt: {file_class: data, class_rule: FC8, extension: .txt, mode_source: baseline, binary_content: null}
     outputs/verification.md: {file_class: docs, class_rule: FC6, extension: .md, mode_source: null, binary_content: null}
   structure:
-    schema_version: "1"
     run_key: art__agent__1
     bases: {writes_between: fallback, gap: fallback, unchanged_under: fallback}
     capabilities: {parent_links: false, start_events: false, exact_timing: false, content_hashes: false, untracked_visible: false, read_tracing: false, final_content: false, oracle_reads: false, egress_log: false, stdio: false}

@@ -519,10 +519,7 @@ def _metric_checks(
     for warning in run["warnings"]:
         if not warning.startswith(("precondition ", "input ")):
             problems.append(f"warning form: {warning!r}")
-    if (
-        run["schema_version"] != "1"
-        or run["run_key"] != scenario["run"]["run_key"]
-    ):
+    if run["run_key"] != scenario["run"]["run_key"]:
         problems.append("writer.json identity")
     return problems
 

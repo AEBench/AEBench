@@ -192,7 +192,7 @@ VERDICT_FIELDS = frozenset(
 )
 RUN_FIELDS = frozenset(
     {
-        *("schema_version", "run_key", "family", "inputs", "capabilities"),
+        *("run_key", "family", "inputs", "capabilities"),
         *("bases", "preconditions", "metrics", "warnings"),
     }
 )
@@ -275,7 +275,7 @@ DECLARED_OPTION_FIELDS = frozenset(
 )
 DECLARED_META_FIELDS = frozenset(
     {
-        *("schema_version", "artifact", "commit", "commit_source"),
+        *("artifact", "commit", "commit_source"),
         *("instructions", "source_url", "files_read", "spec", "warnings"),
     }
 )
@@ -499,7 +499,6 @@ def _declared(raw: Any, run_commit: str) -> dict[str, Any] | None:
         row.update(item)
         options.append(row)
     meta = {
-        "schema_version": "1",
         "artifact": "art",
         "commit": run_commit,
         "commit_source": "checkout",
@@ -639,7 +638,6 @@ def _writer_result(
         hunk.update(copy.deepcopy(dict(item)))
         hunks.append(hunk)
     block = {
-        "schema_version": "1",
         "run_key": run["run_key"],
         "family": run["family"],
         "capabilities": dict(run["capabilities"]),

@@ -19,7 +19,7 @@ NEW_FORMAT = conftest.TRACE_FIXTURES_DIR / "claude_new_format.jsonl"
 OLD_FORMAT = [p for p in TRACE_FIXTURES if p != NEW_FORMAT]
 # Trace keys that decision D26 reads, at the top level of a record.
 NEW_RECORD_KEYS = (
-    *("event", "end_reason", "schema_version", "parent_command_id"),
+    *("event", "end_reason", "parent_command_id"),
     *("root_command_id", "depth", "ppid", "pgid", "sid", "parent_link"),
     *("start_ticks", "ancestry", "ancestors", "child_pid", "orphans"),
     *("host_pid", "stdio"),

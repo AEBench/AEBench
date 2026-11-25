@@ -74,7 +74,7 @@ def test_fixture(name: str) -> None:
     assert meta["files_read"] == files_read
     assert sorted(meta["warnings"]) == sorted([*warnings, REF])
     assert set(meta) == helpers.DECLARED_META_FIELDS
-    assert (meta["schema_version"], meta["artifact"]) == ("1", "fixture")
+    assert meta["artifact"] == "fixture"
     assert (meta["commit"], meta["commit_source"]) == ("c0ffee", "case_ref")
     assert meta["instructions"] == "README.md"
     assert meta["source_url"] == "https://example.org/owner/repo.git"

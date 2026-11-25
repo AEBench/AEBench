@@ -62,7 +62,7 @@ def test_write_outputs_writes_structure_files(tmp_path: pathlib.Path) -> None:
             record = json.loads(line)
             assert list(record) == sorted(record)
     structure = json.loads((folders[0] / "structure.json").read_text())
-    assert structure["schema_version"] == "1"
+    assert "run_key" in structure
 
 
 def test_main_writes_structure_csv(tmp_path: pathlib.Path) -> None:

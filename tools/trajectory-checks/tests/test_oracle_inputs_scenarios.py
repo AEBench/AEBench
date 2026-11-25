@@ -100,7 +100,6 @@ def test_record_fields(path: pathlib.Path) -> None:
         assert set(row) == helpers.ROW_FIELDS, sorted(set(row))
     block = result["oracle_inputs_run"]
     assert set(block) == helpers.BLOCK_FIELDS
-    assert block["schema_version"] == "1"
     assert block["run_key"] == scenario["run"]["run_key"]
     assert block["family"] == scenario["run"]["family"]
     assert (

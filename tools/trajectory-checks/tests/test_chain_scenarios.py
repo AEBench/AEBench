@@ -200,7 +200,6 @@ def test_record_fields(path: pathlib.Path) -> None:
             assert row["faithful"] in helpers.VERDICTS
         run = result["chain"]
         assert set(run) == helpers.RUN_FIELDS
-        assert run["schema_version"] == "1"
         assert run["run_key"] == scenario["run"]["run_key"]
         assert run["capabilities"] == scenario["run"]["capabilities"]
         assert set(run["bases"]) == set(helpers.BASES_KEYS)

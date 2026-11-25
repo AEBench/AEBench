@@ -527,7 +527,6 @@ def _run_facts(
         or coverage["rates"].get("untracked_visible")
     )
     facts = {
-        "schema_version": "1",
         "run_key": run.get("run_key"),
         "family": run.get("family"),
         "capabilities": capabilities,

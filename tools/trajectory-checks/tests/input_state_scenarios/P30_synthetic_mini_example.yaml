@@ -595,7 +595,6 @@ expect:
     preconditions: {content: holds, log: holds, oracle_inputs: holds, trace: holds}
     run_key: art__agent__1
     family: claude
-    schema_version: '1'
     M3.2:
       absent_over: 0
       absent_under: 0
