@@ -191,14 +191,11 @@ def test_no_baseline_commit_writes_nothing(tmp_path: Path) -> None:
 	assert not (trace / FINAL_DIFF_BASENAME).exists()
 
 
-def test_trace_meta_names_the_broker_version_and_run_token(tmp_path: Path) -> None:
+def test_trace_meta_names_the_run_token_and_no_version(tmp_path: Path) -> None:
 	trace = tmp_path / "a1b2c3d4"
 	trace.mkdir()
 
 	write_trace_meta(trace)
 
 	meta = json.loads((trace / TRACE_META_BASENAME).read_text(encoding="utf-8"))
-	assert meta["broker_version"]
-	assert meta["run_token"] == "a1b2c3d4"
-	assert meta["start_events"] is False
-	assert "schema_version" not in meta
+	assert meta == {"run_token": "a1b2c3d4", "start_events": False}

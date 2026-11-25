@@ -792,9 +792,7 @@ def _snapshot_around(tmp_path: Path, files: dict[str, bytes], command: object) -
 
 def test_trace_meta_is_written_at_start(broker: BrokerProcess) -> None:
 	meta = json.loads((broker.trace_dir / "trace_meta.json").read_text(encoding="utf-8"))
-	assert meta["broker_version"]
-	assert meta["run_token"] == broker.trace_dir.name
-	assert meta["start_events"] is False
+	assert meta == {"run_token": broker.trace_dir.name, "start_events": False}
 
 
 def test_a_new_untracked_file_is_listed_as_created_untracked(tmp_path: Path) -> None:
