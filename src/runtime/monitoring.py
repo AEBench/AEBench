@@ -7,7 +7,9 @@ Two things are done here:
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
+import importlib.metadata
 import json
 import logging
 import os
@@ -16,11 +18,14 @@ import socket
 import stat
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 
-from models import SystemFilesCheck, TrackedFilesCheck
+from models import FinalContentInfo, SystemFilesCheck, TrackedFilesCheck
+from trace_viewer.exporter import redact_secrets
 
 from .backend import BenchRuntime
 
@@ -38,6 +43,35 @@ BROKER_LOG_BASENAME = "broker.log"
 # agent's container. monitor.py mirrors TRACKED_FILES_BASENAME.
 TRACKED_FILES_BASENAME = "tracked_files.json"
 TRACKED_FILES_DIFF_BASENAME = "tracked_files_diff.json"
+TRACE_META_BASENAME = "trace_meta.json"
+
+# The workspace as the agent left it, taken after the container stops and
+# before the oracle mounts the workspace read-write.
+FINAL_DIFF_BASENAME = "final.diff"
+FINAL_FILES_BASENAME = "final_files.json"
+FINAL_WORKSPACE_BASENAME = "final_workspace.tar.zst"
+# Written instead when no zstd binary is on PATH.
+FINAL_WORKSPACE_GZIP_BASENAME = "final_workspace.tar.gz"
+MAX_DIFF_FILE_BYTES = 10 * 1024 * 1024
+MAX_WORKSPACE_ARCHIVE_BYTES = 2 * 1024 * 1024 * 1024
+# Matched against basenames; such files are left out of the diff and archive.
+SECRET_FILE_PATTERNS = (".env*", "*.pem", "id_*")
+# The workspace's repository is the agent's: none of its config, hooks or
+# attributes may run anything on the host.
+_SAFE_GIT_OPTIONS = (
+	"-c",
+	"core.fsmonitor=false",
+	"-c",
+	"core.hooksPath=/dev/null",
+	"-c",
+	"safe.directory=*",
+	"-c",
+	"core.attributesFile=/dev/null",
+)
+_SAFE_DIFF_OPTIONS = ("--no-ext-diff", "--no-textconv", "--no-renames", "--no-color")
+# Stored as bytes, so final.diff reproduces each file exactly.
+_RAW_ATTRIBUTES = "* -text -ident -filter -working-tree-encoding\n"
+_ARCHIVE_TIMEOUT_SECONDS = 1800.0
 
 # System files the agent's container changed. The oracle runs its checks
 # inside a snapshot of this container, so it uses the agent's copies of
@@ -122,6 +156,7 @@ class BrokerProcess:
 		self.trace_dir.mkdir(parents=True, exist_ok=True)
 		# Save a list of tracked files before actually starting the container.
 		write_tracked_files(self.workspace_dir, self.trace_dir)
+		write_trace_meta(self.trace_dir)
 		self._socket_root.mkdir(parents=True, exist_ok=True)
 		# Traversable so the container's agent can reach the socket, but not
 		# listable, and the generated name is unguessable.
@@ -238,6 +273,28 @@ def write_tracked_files(workspace: Path, trace_dir: Path) -> Path:
 	return target
 
 
+def write_trace_meta(trace_dir: Path) -> Path:
+	"""Record which monitor wrote the trace, keyed by the run token."""
+	try:
+		version: str | None = importlib.metadata.version("aebench")
+	except importlib.metadata.PackageNotFoundError:
+		version = None
+	target = trace_dir / TRACE_META_BASENAME
+	target.write_text(
+		json.dumps(
+			{
+				"broker_version": version,
+				# The trace directory is keyed by the token, as is each record's run_id.
+				"run_token": trace_dir.name,
+				"start_events": False,
+			},
+			indent=1,
+		),
+		encoding="utf-8",
+	)
+	return target
+
+
 def check_tracked_files(workspace: Path, trace_dir: Path) -> TrackedFilesCheck | None:
 	"""Compare every tracked file against its recorded checksum and permission bits.
 
@@ -282,6 +339,257 @@ def check_tracked_files(workspace: Path, trace_dir: Path) -> TrackedFilesCheck |
 		deleted_count=len(deleted),
 		mode_changed_count=len(mode_changed),
 	)
+
+
+def capture_final_workspace(
+	workspace: Path,
+	trace_dir: Path,
+	secrets: Mapping[str, str] | None = None,
+) -> FinalContentInfo | None:
+	"""Write final.diff against the baseline commit, final_files.json and an archive.
+
+	The diff is built on a scratch repository whose objects fall back to the
+	workspace's, so the workspace's .git is only read. Values of `secrets`
+	are replaced with [REDACTED:<NAME>] in the diff.
+	"""
+	try:
+		recorded = json.loads((trace_dir / TRACKED_FILES_BASENAME).read_text(encoding="utf-8"))
+	except FileNotFoundError:
+		return None
+	commit = recorded.get("commit")
+	objects = workspace / ".git" / "objects"
+	if not commit or not objects.is_dir():
+		return None
+
+	present, omitted = _final_paths(workspace)
+	with tempfile.TemporaryDirectory(prefix="aebench-final-") as scratch:
+		git = _GitCall(Path(scratch), workspace, objects)
+		git("read-tree", commit)
+		baseline = {os.fsdecode(item) for item in git("ls-files", "-z").split(b"\0") if item}
+		# Present files are staged; baseline files gone from the workspace are removed.
+		staged = sorted(set(present) | (baseline - set(present) - set(omitted)))
+		if staged:
+			git(
+				"add",
+				"-f",
+				"-A",
+				"--pathspec-from-file=-",
+				"--pathspec-file-nul",
+				stdin=b"\0".join(os.fsencode(rel) for rel in staged),
+			)
+		diff = git("diff", "--cached", "--binary", "--full-index", *_SAFE_DIFF_OPTIONS, commit)
+		names = git("diff", "--cached", "--name-status", "-z", *_SAFE_DIFF_OPTIONS, commit)
+
+	if secrets:
+		diff = os.fsencode(redact_secrets(os.fsdecode(diff), secrets))
+	diff_path = trace_dir / FINAL_DIFF_BASENAME
+	diff_path.write_bytes(diff)
+
+	entries = _diff_entries(workspace, names)
+	before = recorded.get("files") or {}
+	for rel, reason in sorted(omitted.items()):
+		state = _file_state(workspace / rel)
+		if state is None or (rel in before and before[rel].get("sha256") == state["sha256"]):
+			continue
+		entries.append(
+			{
+				"path": rel,
+				"status": "M" if rel in baseline else "A",
+				"size": state["size"],
+				# A secret's hash could be brute-forced.
+				"sha256": None if reason == "secret_pattern" else state["sha256"],
+				"in_diff": False,
+				"reason_omitted": reason,
+			}
+		)
+	entries.sort(key=lambda entry: str(entry["path"]))
+	files_path = trace_dir / FINAL_FILES_BASENAME
+	files_path.write_text(json.dumps(entries, indent=1), encoding="utf-8")
+
+	try:
+		archive = _archive_workspace(workspace, trace_dir)
+	except (OSError, subprocess.SubprocessError, tarfile.TarError):
+		logger.warning("failed to archive the final workspace %s", workspace, exc_info=True)
+		archive = None
+
+	return FinalContentInfo(
+		diff_path=str(diff_path),
+		files_path=str(files_path),
+		workspace_path=None if archive is None else str(archive),
+		files=len(entries),
+		omitted=sum(1 for entry in entries if entry["reason_omitted"] is not None),
+		bytes=len(diff),
+	)
+
+
+class _GitCall:
+	"""Runs git on a scratch GIT_DIR over the workspace, in a clean environment."""
+
+	def __init__(self, scratch: Path, workspace: Path, objects: Path) -> None:
+		self.scratch = scratch
+		self.workspace = workspace
+		self.env = {
+			"PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+			"HOME": str(scratch),
+			"XDG_CONFIG_HOME": str(scratch),
+			"GIT_CONFIG_NOSYSTEM": "1",
+			"GIT_CONFIG_GLOBAL": os.devnull,
+			"GIT_DIR": str(scratch / "repo" / ".git"),
+			"GIT_WORK_TREE": str(workspace),
+			"GIT_INDEX_FILE": str(scratch / "index"),
+			"GIT_OBJECT_DIRECTORY": str(scratch / "objects"),
+			"GIT_ALTERNATE_OBJECT_DIRECTORIES": str(objects),
+			"GIT_LITERAL_PATHSPECS": "1",
+			"GIT_TERMINAL_PROMPT": "0",
+			"GIT_PAGER": "cat",
+			"LC_ALL": "C",
+		}
+		(scratch / "objects").mkdir()
+		self("init", "-q", "--template=", str(scratch / "repo"), init=True)
+		(scratch / "repo" / ".git" / "info").mkdir(exist_ok=True)
+		(scratch / "repo" / ".git" / "info" / "attributes").write_text(
+			_RAW_ATTRIBUTES, encoding="utf-8"
+		)
+
+	def __call__(self, *args: str, stdin: bytes | None = None, init: bool = False) -> bytes:
+		env = self.env
+		if init:
+			env = {
+				key: value
+				for key, value in env.items()
+				if not key.startswith(("GIT_DIR", "GIT_WORK", "GIT_OBJ", "GIT_ALT", "GIT_INDEX"))
+			}
+		result = subprocess.run(
+			["git", "--no-pager", *_SAFE_GIT_OPTIONS, *args],
+			input=stdin,
+			capture_output=True,
+			env=env,
+			cwd=self.scratch if init else self.workspace,
+			timeout=_GIT_TIMEOUT_SECONDS,
+			check=False,
+		)
+		if result.returncode != 0:
+			raise RuntimeError(f"git {args[0]} failed: {os.fsdecode(result.stderr).strip()}")
+		return result.stdout
+
+
+def _is_secret(rel: str) -> bool:
+	name = os.path.basename(rel)
+	return any(fnmatch.fnmatchcase(name, pattern) for pattern in SECRET_FILE_PATTERNS)
+
+
+def _walk_files(workspace: Path) -> Iterator[tuple[str, os.stat_result]]:
+	"""Yields (relative path, lstat) of every file and symlink outside any .git."""
+	for directory, subdirectories, filenames in os.walk(workspace):
+		kept = []
+		for name in subdirectories:
+			if name == ".git":
+				continue
+			if os.path.islink(os.path.join(directory, name)):
+				filenames.append(name)
+			else:
+				kept.append(name)
+		subdirectories[:] = kept
+		for name in filenames:
+			path = os.path.join(directory, name)
+			try:
+				info = os.lstat(path)
+			except OSError:
+				continue
+			if stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
+				yield os.path.relpath(path, workspace), info
+
+
+def _final_paths(workspace: Path) -> tuple[list[str], dict[str, str]]:
+	"""Returns the paths to stage and {path: reason} for those left out."""
+	present: list[str] = []
+	omitted: dict[str, str] = {}
+	for rel, info in _walk_files(workspace):
+		if _is_secret(rel):
+			omitted[rel] = "secret_pattern"
+		elif stat.S_ISREG(info.st_mode) and info.st_size > MAX_DIFF_FILE_BYTES:
+			omitted[rel] = "over_cap"
+		else:
+			present.append(rel)
+	return present, omitted
+
+
+def _diff_entries(workspace: Path, names: bytes) -> list[dict[str, object]]:
+	"""final_files.json entries from `git diff --name-status -z`."""
+	fields = [os.fsdecode(item) for item in names.split(b"\0")]
+	entries: list[dict[str, object]] = []
+	for status, rel in zip(fields[0::2], fields[1::2]):
+		if not status:
+			continue
+		# T, a type change such as file to symlink, is a modification.
+		kind = status[0] if status[0] in "AD" else "M"
+		state = None if kind == "D" else _file_state(workspace / rel)
+		entries.append(
+			{
+				"path": rel,
+				"status": kind,
+				"size": None if state is None else state["size"],
+				"sha256": None if state is None else state["sha256"],
+				"in_diff": True,
+				"reason_omitted": None,
+			}
+		)
+	return entries
+
+
+def _archive_workspace(workspace: Path, trace_dir: Path) -> Path:
+	"""Archive the workspace without .git/objects or secrets, up to the size cap."""
+	zstd = shutil.which("zstd")
+	if zstd is None:
+		target = trace_dir / FINAL_WORKSPACE_GZIP_BASENAME
+		with tarfile.open(target, "w:gz") as archive:
+			_fill_archive(archive, workspace)
+		return target
+
+	target = trace_dir / FINAL_WORKSPACE_BASENAME
+	with subprocess.Popen(
+		[zstd, "-q", "-f", "-T0", "-o", str(target)],
+		stdin=subprocess.PIPE,
+		stderr=subprocess.DEVNULL,
+	) as compressor:
+		assert compressor.stdin is not None
+		try:
+			with tarfile.open(fileobj=compressor.stdin, mode="w|") as archive:
+				_fill_archive(archive, workspace)
+		finally:
+			compressor.stdin.close()
+		if compressor.wait(timeout=_ARCHIVE_TIMEOUT_SECONDS) != 0:
+			raise subprocess.SubprocessError(f"zstd exited with {compressor.returncode}")
+	return target
+
+
+def _fill_archive(archive: tarfile.TarFile, workspace: Path) -> None:
+	total = 0
+	skipped = 0
+	for directory, subdirectories, filenames in os.walk(workspace):
+		rel_dir = os.path.relpath(directory, workspace)
+		if rel_dir == ".git":
+			subdirectories[:] = [name for name in subdirectories if name != "objects"]
+		for name in sorted(subdirectories) + sorted(filenames):
+			path = os.path.join(directory, name)
+			rel = os.path.normpath(os.path.join(rel_dir, name))
+			if _is_secret(rel):
+				continue
+			try:
+				info = os.lstat(path)
+			except OSError:
+				continue
+			if stat.S_ISREG(info.st_mode):
+				if total + info.st_size > MAX_WORKSPACE_ARCHIVE_BYTES:
+					skipped += 1
+					continue
+				total += info.st_size
+			elif not (stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode)):
+				continue
+			# Not recursive, and tarfile stores a symlink as a link.
+			archive.add(path, arcname=rel, recursive=False)
+	if skipped:
+		logger.warning("final workspace archive is capped; %d files left out", skipped)
 
 
 def check_system_files(container: str, trace_dir: Path) -> SystemFilesCheck | None:

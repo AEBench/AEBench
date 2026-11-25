@@ -1,7 +1,9 @@
 import asyncio
+import hashlib
 import json
 import os
 import socket as socketlib
+import stat as statlib
 import struct
 import sys
 import time
@@ -26,6 +28,9 @@ MAX_LISTED_PATHS = 100
 MAX_SNAPSHOT_FILES = 20000  # Limit for full-workspace snapshots only
 TRACKED_FILES_BASENAME = "tracked_files.json"  # Host-provided list of files to track
 SNAPSHOT_BUDGET_SECONDS = 2.0  # Timeout for snapshots; does not fail the command
+MAX_HASH_BYTES = 64 * 1024 * 1024  # Larger changed files get a null hash
+HASH_BUDGET_SECONDS = 2.0
+_HASH_CHUNK_BYTES = 1024 * 1024
 SUBREAPER = True  # Shims adopt and report the processes their command leaves running
 
 COMMAND_INFO = 0
@@ -249,6 +254,7 @@ class FileSnapshot(Monitor):
 		if tracked_files is not None and os.path.exists(tracked_files):
 			with open(tracked_files, encoding="utf-8") as handle:
 				self.tracked = list(json.load(handle)["files"])
+		self.tracked_set = frozenset(self.tracked or ())
 
 	def _snapshot(self) -> tuple[dict[str, FileStat] | None, str | None]:
 		if self.tracked is not None:
@@ -256,7 +262,7 @@ class FileSnapshot(Monitor):
 		return self._snapshot_walk()
 
 	def _snapshot_tracked(self) -> tuple[dict[str, FileStat] | None, str | None]:
-		"""Maps each tracked file still present to its FileStat."""
+		"""Maps each tracked file still present, then every untracked one, to its FileStat."""
 		assert self.tracked is not None
 		found: dict[str, FileStat] = {}
 		deadline = time.monotonic() + SNAPSHOT_BUDGET_SECONDS
@@ -274,7 +280,91 @@ class FileSnapshot(Monitor):
 
 			found[rel] = (stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_ino)
 
+		return self._walk_untracked(found, deadline)
+
+	def _walk_untracked(
+		self, found: dict[str, FileStat], deadline: float
+	) -> tuple[dict[str, FileStat] | None, str | None]:
+		"""Adds the files outside the tracked list to `found`, skipping .git."""
+		untracked = 0
+		for directory, subdirectories, filenames in os.walk(self.workspace):
+			kept = []
+			for name in subdirectories:
+				if name == ".git":
+					continue
+				# A symlink to a directory is an entry, not a tree to enter.
+				if os.path.islink(os.path.join(directory, name)):
+					filenames.append(name)
+				else:
+					kept.append(name)
+			subdirectories[:] = kept
+
+			for filename in filenames:
+				if time.monotonic() >= deadline:
+					return None, f"snapshot exceeded {SNAPSHOT_BUDGET_SECONDS:g}s"
+
+				path = os.path.join(directory, filename)
+				rel = os.path.relpath(path, self.workspace)
+				if rel in self.tracked_set:
+					continue
+				try:
+					stat = os.lstat(path)
+				except OSError:
+					continue
+
+				found[rel] = (stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_ino)
+				untracked += 1
+				if untracked > MAX_SNAPSHOT_FILES:
+					return None, f"workspace exceeds {MAX_SNAPSHOT_FILES} untracked files"
+
 		return found, None
+
+	def _hashes(self, names: list[str]) -> tuple[dict[str, str | None], dict[str, str]]:
+		"""SHA-256 of each path, a symlink by its target text; (hashes, skip reasons)."""
+		hashes: dict[str, str | None] = {}
+		skipped: dict[str, str] = {}
+		deadline = time.monotonic() + HASH_BUDGET_SECONDS
+
+		for rel in names:
+			hashes[rel] = None
+			if time.monotonic() >= deadline:
+				skipped[rel] = "budget"
+				continue
+			path = os.path.join(self.workspace, rel)
+			try:
+				info = os.lstat(path)
+				if statlib.S_ISLNK(info.st_mode):
+					hashes[rel] = hashlib.sha256(os.fsencode(os.readlink(path))).hexdigest()
+				elif not statlib.S_ISREG(info.st_mode):
+					skipped[rel] = "not_regular"
+				elif info.st_size > MAX_HASH_BYTES:
+					skipped[rel] = "over_cap"
+				else:
+					hashes[rel], reason = self._hash_file(path, deadline)
+					if reason is not None:
+						skipped[rel] = reason
+			except OSError:
+				# Gone, or swapped for a symlink after the lstat.
+				skipped[rel] = "unreadable"
+
+		return hashes, skipped
+
+	@staticmethod
+	def _hash_file(path: str, deadline: float) -> tuple[str | None, str | None]:
+		fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+		with os.fdopen(fd, "rb") as handle:
+			if not statlib.S_ISREG(os.fstat(handle.fileno()).st_mode):
+				return None, "not_regular"
+			digest = hashlib.sha256()
+			read = 0
+			while chunk := handle.read(_HASH_CHUNK_BYTES):
+				read += len(chunk)
+				if read > MAX_HASH_BYTES:
+					return None, "over_cap"
+				if time.monotonic() >= deadline:
+					return None, "budget"
+				digest.update(chunk)
+		return digest.hexdigest(), None
 
 	def _snapshot_walk(self) -> tuple[dict[str, FileStat] | None, str | None]:
 		"""Maps each file to its FileStat, or (None, reason) on error/exception."""
@@ -324,18 +414,35 @@ class FileSnapshot(Monitor):
 		deleted = sorted(set(before) - set(after))
 		modified = sorted(name for name in set(before) & set(after) if before[name] != after[name])
 
-		return {
-			"scope": "workspace" if self.tracked is None else "tracked",
-			"watched": len(after),
-			"total_created": len(created),
-			"total_modified": len(modified),
-			"total_deleted": len(deleted),
-			"created": created[:MAX_LISTED_PATHS],
-			"modified": modified[:MAX_LISTED_PATHS],
-			"deleted": deleted[:MAX_LISTED_PATHS],
-			"truncated": max(len(created), len(modified), len(deleted)) > MAX_LISTED_PATHS,
-			"sizes": {name: after[name][0] for name in (created + modified)[:MAX_LISTED_PATHS]},
-		}
+		if self.tracked is None:
+			result: Record = {"scope": "workspace"}
+			lists = {"created": created, "modified": modified, "deleted": deleted}
+		else:
+			# Untracked paths go only in the *_untracked lists, so created,
+			# modified and deleted keep meaning tracked files, as the checker reads them.
+			result = {"scope": "tracked+untracked"}
+			lists = {}
+			for op, names in (("created", created), ("modified", modified), ("deleted", deleted)):
+				lists[op] = [name for name in names if name in self.tracked_set]
+				lists[f"{op}_untracked"] = [name for name in names if name not in self.tracked_set]
+
+		listed = {op: names[:MAX_LISTED_PATHS] for op, names in lists.items()}
+		changed = [
+			name
+			for op in ("created", "modified", "created_untracked", "modified_untracked")
+			for name in listed.get(op, ())
+		]
+		hashes, hash_skipped = self._hashes(changed)
+
+		result["watched"] = len(after)
+		for op, names in lists.items():
+			result[f"total_{op}"] = len(names)
+		result.update(listed)
+		result["truncated"] = any(len(names) > MAX_LISTED_PATHS for names in lists.values())
+		result["sizes"] = {name: after[name][0] for name in changed}
+		result["hashes"] = hashes
+		result["hash_skipped"] = hash_skipped
+		return result
 
 
 class ProcessTree:
@@ -463,8 +570,8 @@ async def process_connection(
 			record[key] = command_info.get(key)
 		PROCESS_TREE.link(record, command_info.get("ancestry"))
 
-		# pre-command state record
-		run_before_command(context)
+		# pre-command state record; off the loop, since monitors touch no broker state
+		await asyncio.to_thread(run_before_command, context)
 
 		decision = {
 			"command_id": command_id,
@@ -559,8 +666,8 @@ async def process_connection(
 		record["stdout"] = stdout.summary(output_dir)
 		record["stderr"] = stderr.summary(output_dir)
 
-		# After commands are run
-		run_after_command(context)
+		# After commands are run; off the loop, so a slow snapshot holds no other shell
+		await asyncio.to_thread(run_after_command, context)
 
 		write_record(record, log_path)
 		writer.close()

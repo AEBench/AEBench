@@ -345,12 +345,25 @@ class SystemFilesCheck(_Model):
 	etc_count: int = 0
 
 
+class FinalContentInfo(_Model):
+	diff_path: str
+	files_path: str
+	# None when the archive could not be written.
+	workspace_path: str | None = None
+	# Entries of final_files.json, and how many of them are not in the diff.
+	files: int = 0
+	omitted: int = 0
+	# Size of final.diff.
+	bytes: int = 0
+
+
 class CommandMonitorInfo(_Model):
 	run_token: str
 	trace_path: str
 	command_count: int = 0
 	tracked_files: TrackedFilesCheck | None = None
 	system_files: SystemFilesCheck | None = None
+	final_content: FinalContentInfo | None = None
 
 
 class RunResult(_Model):

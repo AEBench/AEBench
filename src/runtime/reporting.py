@@ -168,6 +168,11 @@ def write_task_report(report_path: Path, result: RunResult, agent_summary: str) 
 				f"- Diff: `{tracked.diff_path}`",
 			]
 		)
+	final = result.command_monitor.final_content if result.command_monitor else None
+	if final is not None:
+		lines.append(
+			f"- Final diff: `{final.diff_path}` (`{final.files}` files, `{final.omitted}` omitted)"
+		)
 	system = result.command_monitor.system_files if result.command_monitor else None
 	if system is not None:
 		lines.extend(
