@@ -1,0 +1,31 @@
+name: P47_untracked_skipped_blind_per_path
+description: >
+  A command whose untracked walk was skipped is blind for untracked paths
+  only: the untracked out.csv lists it in blind_execs, the tracked
+  lib/core.c, which it modified, does not.
+rules: [EVD7]
+capabilities: {untracked_visible: true, final_content: true}
+calls:
+  - {call_id: c2, command: python3 eval.py > out.csv, t_start: 10}
+  - {call_id: c1, command: ./build.sh, t_start: 20}
+execs:
+  - {command_id: e2, call: c2, t_start: 10.2, snapshot: {created_untracked: [out.csv], modified_untracked: [], deleted_untracked: []}}
+  - {command_id: e1, call: c1, t_start: 20.2, snapshot: {modified: [lib/core.c], untracked_skipped: too many}}
+links:
+  - {link_type: write_event, path: out.csv, writer_id: e2, op: create, event_id: w0}
+  - {link_type: write_event, path: lib/core.c, writer_id: e1, op: modify, event_id: w1}
+paths:
+  - {path: out.csv, tracked: false, final_state: untracked, final_writer_under: false}
+  - {path: lib/core.c, tracked: true, final_state: changed}
+baseline: {files: {lib/core.c: {sha256: cc}}}
+final_diff: {modified: [lib/core.c]}
+final_files:
+  - {path: out.csv, status: A, sha256: oo}
+  - {path: lib/core.c, status: M, sha256: dd}
+oracle_inputs:
+  - {path: out.csv, at_baseline: false}
+  - {path: lib/core.c, at_baseline: true, baseline_sha256: cc}
+expect:
+  input_states:
+    out.csv: {blind_execs: [e1], unseen_writer_possible: true}
+    lib/core.c: {blind_execs: [], unseen_writer_possible: false}

@@ -275,12 +275,29 @@ IMPLIED_FIELDS = types.MappingProxyType(
             ("ended_at", "released_at"),
             lambda e: e["complete"],
         ),
-        "untracked_visible": (
+        "untracked_visible": (  # a skipped untracked walk is known-partial
             _UNTRACKED,
-            lambda e: e["snapshot"]["status"] in ("ok", "truncated"),
+            lambda e: (
+                e["snapshot"]["status"] in ("ok", "truncated")
+                and e["snapshot"].get("untracked_skipped") is None
+            ),
         ),
     }
 )
+
+
+def _untracked_skipped(record: parse.Exec) -> bool:
+    """The exec's untracked walk was skipped: its untracked writes unknown."""
+    return record["snapshot"].get("untracked_skipped") is not None
+
+
+def _complete(record: parse.Exec | None) -> bool:
+    """RR6 (D32): a snapshot with status ok and its untracked part known."""
+    return bool(
+        record
+        and record["snapshot"]["status"] == "ok"
+        and not _untracked_skipped(record)
+    )
 
 
 def _field(record: parse.Exec, name: str) -> typing.Any:
@@ -718,23 +735,26 @@ def _reruns(
             bool(s and r is not None and r not in ends) for _, r, s in gap
         )
         untracked = None
-        if caps["untracked_visible"]:
+        inside = [x for _, end, x in others if low < end <= high]
+        if caps["untracked_visible"]:  # a skipped walk lists none
             untracked = sum(
-                len(_field(x, f) or ())
-                for _, end, x in others
-                if low < end <= high
-                for f in _UNTRACKED
+                len(_field(x, f) or ()) for x in inside for f in _UNTRACKED
+            ) + sum(  # a collapsed folder's changes are counted, not listed
+                c[op]
+                for x in inside
+                for c in x["snapshot"].get("collapsed_untracked") or ()
+                for op in ("created", "modified", "deleted")
             )
         observed = known and all(
-            x["snapshot"]["status"] == "ok" for *_, x in others
+            x["snapshot"]["status"] == "ok" and not _untracked_skipped(x)
+            for *_, x in others
         )
         if exact_under:  # RR6 (D32)
             calm = untracked in (0, None) and all(
                 sure(r["call_id"])
-                and by_id.get(call_facts[r["call_id"]]["command_id"] or "", {})
-                .get("snapshot", {})
-                .get("status")
-                == "ok"
+                and _complete(
+                    by_id.get(call_facts[r["call_id"]]["command_id"] or "")
+                )
                 for r in acts
             )
         else:

@@ -1,0 +1,31 @@
+id: W73
+title: A command with a skipped untracked walk ends before the last writer starts
+description: >
+  LW9 as W11: e1's window ends before w0's window starts, so it cannot
+  have written out.csv later. No risk; under.
+rules: [LW9]
+calls:
+  - {call_id: c1, seq: 0, command: ./build.sh, t_start: 9.5, t_end: 11.0}
+  - {call_id: c2, seq: 1, command: python3 eval.py > out.csv, t_start: 49.5, t_end: 51.0}
+execs:
+  - {command_id: e1, command: ./build.sh, t_start: 10.0, duration_s: 1.0,
+     snapshot: {untracked_skipped: too many}}
+  - {command_id: e2, command: python3 eval.py > out.csv, t_start: 50.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: write_event, event_id: w0, path: out.csv, writer_id: e2,
+     op: create}
+paths:
+  - {path: out.csv, events: [w0], final_writer: w0, tracked: false,
+     final_state: untracked}
+oracle_inputs:
+  - {input_id: i0, path: out.csv}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     tracked: false, content_source: final_workspace, blind_execs: [e1],
+     unseen_writer_possible: true}
+expect:
+  last_writers:
+    - {input_id: i0, last_writer: w0, window_lo: 50.0, later_writer_risk: [],
+       last_writer_under: true}

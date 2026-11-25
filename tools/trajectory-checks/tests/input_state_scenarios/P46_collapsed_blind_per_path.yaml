@@ -1,0 +1,32 @@
+name: P46_collapsed_blind_per_path
+description: >
+  A command that collapsed the data folder is blind for paths under
+  data only: data/x lists it in blind_execs, evaluation/a.log does
+  not, although both windows meet it.
+rules: [EVD7]
+capabilities: {untracked_visible: true, final_content: true}
+calls:
+  - {call_id: c1, command: ./fetch.sh, t_start: 10}
+  - {call_id: c2, command: ./data.sh, t_start: 20}
+  - {call_id: c3, command: ./eval.sh, t_start: 5}
+execs:
+  - {command_id: e3, call: c3, t_start: 5.2, snapshot: {created_untracked: [evaluation/a.log], modified_untracked: [], deleted_untracked: []}}
+  - {command_id: e1, call: c1, t_start: 10.2, snapshot: {created_untracked: [data/x], modified_untracked: [], deleted_untracked: []}}
+  - {command_id: e2, call: c2, t_start: 20.2, snapshot: {created_untracked: [], modified_untracked: [], deleted_untracked: [], collapsed_untracked: [{dir: data, files: 2100, created: 0, modified: 5, deleted: 0}]}}
+links:
+  - {link_type: write_event, path: evaluation/a.log, writer_id: e3, op: create, event_id: w0}
+  - {link_type: write_event, path: data/x, writer_id: e1, op: create, event_id: w1}
+paths:
+  - {path: evaluation/a.log, tracked: false, final_state: untracked}
+  - {path: data/x, tracked: false, final_state: untracked, final_writer_under: false}
+baseline: {files: {src/main.py: {sha256: mm}}}
+final_files:
+  - {path: evaluation/a.log, status: A, sha256: aa}
+  - {path: data/x, status: A, sha256: bb}
+oracle_inputs:
+  - {path: evaluation/a.log, at_baseline: false}
+  - {path: data/x, at_baseline: false}
+expect:
+  input_states:
+    evaluation/a.log: {blind_execs: [], unseen_writer_possible: false}
+    data/x: {blind_execs: [e2], unseen_writer_possible: true}

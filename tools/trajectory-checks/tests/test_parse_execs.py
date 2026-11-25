@@ -31,6 +31,7 @@ NEW_TIMING_KEYS = (
 NEW_SNAPSHOT_KEYS = (
     *("hashes", "created_untracked", "modified_untracked"),
     *("deleted_untracked", "total_created_untracked"),
+    *("collapsed_untracked", "untracked_skipped"),
 )
 
 # Agent family of each trace fixture whose name does not start with it.
@@ -265,3 +266,121 @@ def test_timing_at_record_root_warns(
     with caplog.at_level(logging.WARNING, logger=parse.logger.name):
         parse.load_execs(NEW_FORMAT, "claude")
     assert caplog.records == []
+
+
+def _snapshot_of(tmp_path: pathlib.Path, **fields: object) -> dict:
+    """The parsed snapshot of the first new-format record with fields set."""
+    raw = json.loads(NEW_FORMAT.read_text(encoding="utf-8").splitlines()[0])
+    raw["monitors"]["file_snapshot"].update(fields)
+    trace = tmp_path / NEW_FORMAT.name
+    trace.write_text(json.dumps(raw) + "\n", encoding="utf-8")
+    (record,) = parse.load_execs(trace, "claude")
+    return record["snapshot"]
+
+
+def test_collapsed_untracked_read(tmp_path: pathlib.Path) -> None:
+    """A collapsed folder is kept with its counts; status stays ok."""
+    entry = {"dir": "data/", "files": 2100, "created": 0}
+    entry |= {"modified": 5, "deleted": 0}
+    snapshot = _snapshot_of(tmp_path, collapsed_untracked=[entry])
+    assert snapshot["status"] == "ok"
+    assert snapshot["collapsed_untracked"] == [
+        {"dir": "data", "files": 2100, "created": 0}
+        | {"modified": 5, "deleted": 0}
+    ]
+    assert snapshot["untracked_skipped"] is None
+    assert snapshot["created_untracked"] == []
+
+
+def test_collapsed_untracked_empty_list(tmp_path: pathlib.Path) -> None:
+    """[] is kept as [], distinct from a missing field."""
+    assert (
+        _snapshot_of(tmp_path, collapsed_untracked=[])["collapsed_untracked"]
+        == []
+    )
+
+
+_COUNTS = {"files": 1, "created": 1, "modified": 0, "deleted": 0}
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "data",
+        {"dir": "data"},
+        [_COUNTS],
+        [{"dir": ""} | _COUNTS],
+        [{"dir": 3} | _COUNTS],
+        [{"dir": "v", "files": "1", "created": 1, "modified": 0}],
+        [{"dir": "v"} | _COUNTS | {"created": True}],
+        [{"dir": "v"} | _COUNTS | {"created": -1}],
+        [{"dir": "/abs"} | _COUNTS],
+        [{"dir": "../up"} | _COUNTS],
+        [{"dir": "v"} | _COUNTS, "data"],
+    ],
+)
+def test_collapsed_untracked_malformed_is_none(
+    tmp_path: pathlib.Path, value: object
+) -> None:
+    """A malformed collapsed_untracked becomes None, status stays ok."""
+    snapshot = _snapshot_of(tmp_path, collapsed_untracked=value)
+    assert snapshot["status"] == "ok"
+    assert snapshot["collapsed_untracked"] is None
+
+
+def test_untracked_skipped_read(tmp_path: pathlib.Path) -> None:
+    """A skipped untracked walk keeps status ok and the tracked lists."""
+    snapshot = _snapshot_of(
+        tmp_path,
+        untracked_skipped="too many",
+        created_untracked=None,
+        modified_untracked=None,
+        deleted_untracked=None,
+        collapsed_untracked=None,
+        total_created_untracked=None,
+    )
+    assert snapshot["status"] == "ok"
+    assert snapshot["untracked_skipped"] == "too many"
+    assert snapshot["modified"] == ["src/a.c"]
+    assert snapshot["created_untracked"] is None
+    assert snapshot["collapsed_untracked"] is None
+
+
+def test_untracked_skipped_nulls_untracked_lists(
+    tmp_path: pathlib.Path,
+) -> None:
+    """With untracked_skipped set, stray untracked lists are not read."""
+    snapshot = _snapshot_of(
+        tmp_path, untracked_skipped="limit", created_untracked=["x"]
+    )
+    assert snapshot["untracked_skipped"] == "limit"
+    for key in ("created", "modified", "deleted"):
+        assert snapshot[f"{key}_untracked"] is None, key
+    assert snapshot["collapsed_untracked"] is None
+
+
+@pytest.mark.parametrize("value", [1, True, "", ["x"], {"why": "x"}])
+def test_untracked_skipped_malformed_is_none(
+    tmp_path: pathlib.Path, value: object
+) -> None:
+    """A non-string or empty untracked_skipped becomes None."""
+    snapshot = _snapshot_of(tmp_path, untracked_skipped=value)
+    assert snapshot["untracked_skipped"] is None
+    assert snapshot["created_untracked"] == []
+
+
+def test_untracked_visible_with_skipped_walks() -> None:
+    """A skipped untracked walk does not turn untracked_visible off."""
+    records = parse.load_execs(NEW_FORMAT, "claude")
+    skipped = json.loads(json.dumps(records[0]))
+    skipped["snapshot"].update(
+        untracked_skipped="too many",
+        created_untracked=None,
+        modified_untracked=None,
+        deleted_untracked=None,
+    )
+    run = {"final_diff_content": None, "oracle_reads": None}
+    caps = cli.capabilities([skipped, records[1]], run, NEW_FORMAT.parent)
+    assert caps["untracked_visible"] is True
+    caps = cli.capabilities([records[1], skipped], run, NEW_FORMAT.parent)
+    assert caps["untracked_visible"] is True

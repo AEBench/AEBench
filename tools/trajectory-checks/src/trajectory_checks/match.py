@@ -504,6 +504,52 @@ def relative_path(path: str, root: str) -> tuple[str, bool]:
     return full, False
 
 
+BLIND_STATUSES = ("truncated", "skipped", "absent")
+# Snapshots with status ok that miss part of the workspace (§6.6 rule 4).
+PARTIAL_REASONS = ("collapsed", "untracked_skipped")
+
+
+def unseen_reason(
+    snapshot: parse.Snapshot, path: str, tracked: bool | None
+) -> str | None:
+    """Why an exec's snapshot may have missed a write to path, or None.
+
+    Per-path rule 4's test, public so that layers 4 and 5 ask exactly the
+    same question. A truncated, skipped or absent snapshot may have missed
+    any path; a collapsed folder only the paths under it; a skipped
+    untracked walk only the paths not tracked at baseline (tracked None,
+    without a baseline, counts as untracked).
+
+    Args:
+        snapshot: The exec's snapshot.
+        path: A workspace-relative path (an absolute one is outside).
+        tracked: Whether the path is in the baseline's tracked files.
+
+    Returns:
+        The snapshot status, "collapsed", "untracked_skipped" or None.
+    """
+    if snapshot["status"] in BLIND_STATUSES:
+        return snapshot["status"]
+    if snapshot.get("untracked_skipped") is not None and tracked is not True:
+        return "untracked_skipped"
+    for entry in snapshot.get("collapsed_untracked") or ():
+        if _covers(entry["dir"], path):
+            return "collapsed"
+    return None
+
+
+def _covers(folder: str, path: str) -> bool:
+    """A workspace path inside folder, or a folder (listing) holding it."""
+    if path.startswith("/"):
+        return False
+    return (
+        folder == "."
+        or path == folder
+        or path.startswith(folder + "/")
+        or folder.startswith(path.rstrip("/") + "/")
+    )
+
+
 def _event(*values: typing.Any) -> dict:
     """A write event from the values of _EVENT_FIELDS, before J3 rule 5."""
     event = dict(zip(_EVENT_FIELDS, values, strict=True))
@@ -558,7 +604,8 @@ def _write_events(
         span = record["t_start"], record["t_end"]  # measured (D32)
         writer = (snap["scope"], "exec", cid, *span)
         for op, key in _OPS:
-            for raw in snap[key]:
+            # MC-05: untracked files are reported in their own lists.
+            for raw in [*snap[key], *(snap[f"{key}_untracked"] or ())]:
                 path, inside = relative_path(raw, root)
                 op_type = "mode" if op == "modify" and path in mode_only else op
                 reports.setdefault(path, []).append(
@@ -676,7 +723,8 @@ def _paths(
         diff: Workspace-relative final-diff paths per _DIFF_KEYS key.
         has_diff: Whether tracked_files_diff.json was read.
         tracked: The baseline's files, or None without a baseline.
-        execs: Non-noise, in-window execs (unattributed candidates).
+        execs: Non-noise, in-window execs (unattributed candidates, and
+            partial snapshots that void final_writer_under per path).
         root: The workspace root.
         slop: snapshot_slop_s, for the overlap clause of rule 2.
 
@@ -690,10 +738,12 @@ def _paths(
         )
     in_diff = set().union(*diff.values())
     inside = {p: relative_path(p, root)[1] for p in set(by_path) | in_diff}
-    blind = [
-        {"command_id": e["command_id"], "reason": e["snapshot"]["status"]}
+    unseen = [  # execs whose snapshot may miss some path (rule 4)
+        e
         for e in execs
-        if e["snapshot"]["status"] in ("truncated", "skipped", "absent")
+        if e["snapshot"]["status"] in BLIND_STATUSES
+        or e["snapshot"]["untracked_skipped"] is not None
+        or e["snapshot"]["collapsed_untracked"]
     ]
     rows: list[PathSummary] = []
     for path in sorted(inside, key=lambda p: (not inside[p], p)):
@@ -707,6 +757,11 @@ def _paths(
         ]
         pick = [e for e in live if e["possibly_edit_call"] is None] or live
         final = pick[-1] if pick else None
+        blind = [
+            ({"command_id": e["command_id"], "reason": reason}, e)
+            for e in unseen
+            if (reason := unseen_reason(e["snapshot"], path, is_tracked))
+        ]
         under = bool(
             final
             and final["writer_under"]
@@ -716,6 +771,12 @@ def _paths(
                 and e["t_start"] <= final["t_end"] <= _window_end(e, slop)
                 and not _explains(e, final)
                 for e in found
+            )
+            and not any(  # a partial snapshot that may have written later
+                c["reason"] in PARTIAL_REASONS
+                and e["command_id"] != final["writer_id"]
+                and e["t_end"] + slop >= final["t_start"]
+                for c, e in blind
             )
         )
         rows.append(
@@ -728,7 +789,9 @@ def _paths(
                 final_writer_under=under,
                 final_state=state,
                 unattributed_candidates=(
-                    [] if final or path not in in_diff else blind
+                    []
+                    if final or path not in in_diff
+                    else [c for c, _ in blind]
                 ),
             )
         )
@@ -822,6 +885,12 @@ def _measure(
         "snapshot_status_counts": {
             s: statuses[s] for s in ("ok", "skipped", "truncated", "absent")
         },
+        "snapshot_collapsed": sum(
+            1 for e in live if e["snapshot"]["collapsed_untracked"]
+        ),
+        "snapshot_untracked_skipped": sum(
+            1 for e in live if e["snapshot"]["untracked_skipped"] is not None
+        ),
         "paths_unlisted": max(totals - listed, 0),
         "final_diff_files": None if diff_paths is None else len(diff_paths),
         "write_events": {

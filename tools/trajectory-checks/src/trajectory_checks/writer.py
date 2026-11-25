@@ -216,7 +216,10 @@ HUNK_TYPES = tuple(
     "comparison_relaxed check_removed pure_deletion pure_addition "
     "general".split()
 )
-RISK_REASONS = ("blind_snapshot", "incomplete", "orphaned", "unrecorded")
+RISK_REASONS = (
+    *("blind_snapshot", "collapsed", "untracked_skipped"),
+    *("incomplete", "orphaned", "unrecorded"),
+)
 NOT_UNDER_REASONS = tuple(
     "no_writer invisible input_not_under several_candidates root_uncertain "
     "later_writer_risk state_conflict model_conflict read_version_differs "
@@ -547,7 +550,15 @@ def later_writer_risk(
     outlived = input_state.outlived(execs.values(), execs)
     for i in state["blind_execs"]:
         if i in late:
-            found.setdefault(i, ("exec", "blind_snapshot"))
+            # A partial snapshot keeps its own reason (match.unseen_reason).
+            snapshot = (execs.get(i) or {}).get("snapshot")
+            why = (
+                match.unseen_reason(snapshot, state["path"], state["tracked"])
+                if snapshot
+                else None
+            )
+            reason = why if why in match.PARTIAL_REASONS else "blind_snapshot"
+            found.setdefault(i, ("exec", reason))
     for i in state["detached_execs"]:
         e = execs.get(i)
         if i == writer_id or e is None:
