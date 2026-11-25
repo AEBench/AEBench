@@ -117,25 +117,47 @@ def test_a_start_that_fails_to_spawn_leaves_nothing_behind(
 		assert broker.socket_dir is None
 
 
-def test_stop_reaps_the_broker_process(tmp_path: Path) -> None:
-	class FakeProcess:
-		def __init__(self) -> None:
-			self.killed = False
-			self.waited = False
+class _FakeProcess:
+	def __init__(self, *, exits: bool) -> None:
+		self.exits = exits
+		self.terminated = False
+		self.killed = False
+		self.waited = False
 
-		def kill(self) -> None:
-			self.killed = True
+	def terminate(self) -> None:
+		self.terminated = True
 
-		def wait(self) -> int:
-			self.waited = True
-			return 0
+	def kill(self) -> None:
+		self.killed = True
 
-	process = FakeProcess()
+	def wait(self, timeout: float | None = None) -> int:
+		if timeout is not None and not self.exits:
+			raise subprocess.TimeoutExpired("monitor.py", timeout)
+		self.waited = True
+		return 0
+
+
+def test_stop_terminates_and_reaps_the_broker_process(tmp_path: Path) -> None:
+	process = _FakeProcess(exits=True)
 	broker = BrokerProcess(trace_dir=tmp_path, workspace_dir=tmp_path, socket_root=tmp_path)
 	broker._process = process  # type: ignore[assignment]
 
 	broker.stop()
 
+	# SIGTERM first, so the broker can flush the commands still running.
+	assert process.terminated is True
+	assert process.killed is False
+	assert process.waited is True
+
+
+def test_stop_kills_a_broker_that_ignores_sigterm(tmp_path: Path) -> None:
+	process = _FakeProcess(exits=False)
+	broker = BrokerProcess(trace_dir=tmp_path, workspace_dir=tmp_path, socket_root=tmp_path)
+	broker._process = process  # type: ignore[assignment]
+
+	broker.stop()
+
+	assert process.terminated is True
 	assert process.killed is True
 	assert process.waited is True
 
