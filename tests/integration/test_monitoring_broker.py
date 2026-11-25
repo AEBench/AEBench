@@ -194,7 +194,7 @@ def test_a_tty_stream_is_recorded_as_skipped(broker: BrokerProcess) -> None:
 	assert record["stderr"]["capture"] == "none"
 
 
-def test_every_record_carries_the_schema_version(broker: BrokerProcess) -> None:
+def test_records_carry_no_schema_version(broker: BrokerProcess) -> None:
 	socket_path = broker.socket_path
 	assert socket_path is not None
 
@@ -202,7 +202,7 @@ def test_every_record_carries_the_schema_version(broker: BrokerProcess) -> None:
 	_open_command(socket_path, {"argv": ["/bin/bash", "-c", "sleep"], "pid": 100}).close()
 
 	assert _wait_for(lambda: broker.command_count() == 2)
-	assert [record["schema_version"] for record in _records(broker)] == [2, 2]
+	assert all("schema_version" not in record for record in _records(broker))
 
 
 def test_the_stdio_targets_are_recorded(broker: BrokerProcess) -> None:
