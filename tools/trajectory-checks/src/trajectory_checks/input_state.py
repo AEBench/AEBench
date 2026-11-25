@@ -544,7 +544,7 @@ class _Run(typing.NamedTuple):
     scope: str | None
     detached: list[str]
     late: bool  # a process may write after the final diff (D73)
-    blind: list[tuple[str, float, float]]  # EVD7: from _intervals
+    blind: list[tuple[str, float, float, parse.Snapshot]]  # EVD7
 
 
 def _baseline(
@@ -632,29 +632,47 @@ def _content(
 
 def _intervals(
     execs: list[parse.Exec], run: match.RunInfo
-) -> list[tuple[str, float, float]]:
-    """EVD7: (command_id, start, end) of every blind exec, once per run."""
+) -> list[tuple[str, float, float, parse.Snapshot]]:
+    """EVD7: (command_id, start, end, snapshot) of possibly blind execs.
+
+    Once per run; _windows asks for which paths each one is blind.
+    """
     exact = run["capabilities"].get("exact_timing")
     stop = run["t_end"] if run["t_end"] is not None else math.inf
     out = []
     for e in execs:
-        if e["noise"] is not None or e["snapshot"]["status"] == "ok":
+        snap = e["snapshot"]
+        partial = snap.get("untracked_skipped") is not None or snap.get(
+            "collapsed_untracked"
+        )
+        if e["noise"] is not None or (snap["status"] == "ok" and not partial):
             continue
         low, high = e["t_start"], e["t_end"]
         if exact and e["ended_at"] is not None:  # D43
             low = e["released_at"] if e["released_at"] is not None else low
             high = e["ended_at"]
-        out.append(
-            (e["command_id"], low, high if e["complete"] else max(high, stop))
-        )
+        end = high if e["complete"] else max(high, stop)
+        out.append((e["command_id"], low, end, snap))
     return out
 
 
-def _windows(ctx: _Run, start: float | None) -> dict[str, list[str]]:
-    """EVD7: blind execs and unmonitored calls meeting [start, t_end]."""
+def _windows(
+    ctx: _Run, start: float | None, path: str, tracked: bool | None
+) -> dict[str, list[str]]:
+    """EVD7: execs blind for path and unmonitored calls meeting [start, t_end].
+
+    A collapsed folder or a skipped untracked walk is blind only for the
+    paths it covers (match.unseen_reason).
+    """
     begin = start if start is not None else -math.inf
     stop = ctx.run["t_end"] if ctx.run["t_end"] is not None else math.inf
-    blind = [i for i, low, high in ctx.blind if low <= stop and high >= begin]
+    blind = [
+        i
+        for i, low, high, snap in ctx.blind
+        if low <= stop
+        and high >= begin
+        and match.unseen_reason(snap, path, tracked) is not None
+    ]
     unmonitored = [
         c["call_id"]
         for c in ctx.unmatched
@@ -705,7 +723,12 @@ def _state(
     out |= _NO_CONTENT if listing else _content(ctx, out, source)  # CON14
     writer, events, last = _writer(ctx, None if listing else row["path"])
     out |= writer
-    out |= _windows(ctx, last["t_start"] if last else ctx.run["t_start"])
+    out |= _windows(
+        ctx,
+        last["t_start"] if last else ctx.run["t_start"],
+        row["path"],
+        out["tracked"],
+    )
     out["oracle_writes"] = source["oracle_writes"]
     hashes = {  # MC-07: the hash each exec event's snapshot recorded
         e["event_id"]: ctx.hashes.get(e["writer_id"], {}).get(row["path"])

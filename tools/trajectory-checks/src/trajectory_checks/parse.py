@@ -9,6 +9,7 @@ import datetime
 import json
 import logging
 import pathlib
+import posixpath
 import re
 import shlex
 import types
@@ -25,8 +26,10 @@ class UnsupportedFormatError(ValueError):
 class Snapshot(typing.TypedDict):
     """The per-command file snapshot of one trace record.
 
-    The last four fields are None when the monitor did not record them
-    (decision D26).
+    The fields from hashes on are None when the monitor did not record
+    them (decision D26). With untracked_skipped set, the *_untracked
+    lists and collapsed_untracked are None and status stays ok: the
+    tracked lists are exact, the untracked part is unknown.
     """
 
     status: str  # ok, skipped, truncated, absent
@@ -40,6 +43,11 @@ class Snapshot(typing.TypedDict):
     created_untracked: list[str] | None  # MC-05
     modified_untracked: list[str] | None
     deleted_untracked: list[str] | None
+    # Folders with no tracked file and over 2,000 untracked ones, whose
+    # changes are counted, not listed: {dir, files, created, modified,
+    # deleted}, dir workspace-relative.
+    collapsed_untracked: list[dict[str, typing.Any]] | None
+    untracked_skipped: str | None  # the untracked part is unknown
 
 
 class Call(typing.TypedDict):
@@ -722,9 +730,12 @@ def _snapshot(monitors: dict) -> Snapshot:
         op: [str(p) for p in raw.get(op) or []] if listed else []
         for op in ("created", "modified", "deleted")
     }
+    skipped = raw.get("untracked_skipped") if listed else None
+    skipped = skipped if isinstance(skipped, str) and skipped else None
+    walked = listed and skipped is None  # the *_untracked lists are known
     untracked = {
         f"{op}_untracked": _strings(raw.get(f"{op}_untracked"))
-        if listed
+        if walked
         else None
         for op in ("created", "modified", "deleted")
     }
@@ -742,7 +753,42 @@ def _snapshot(monitors: dict) -> Snapshot:
         skip_reason=str(raw["skipped"]) if status == "skipped" else None,
         hashes=dict(hashes) if isinstance(hashes, dict) else None,
         **untracked,
+        collapsed_untracked=_collapsed(raw.get("collapsed_untracked"))
+        if walked
+        else None,
+        untracked_skipped=skipped,
     )
+
+
+_COLLAPSED_COUNTS = ("files", "created", "modified", "deleted")
+
+
+def _collapsed(value: typing.Any) -> list[dict[str, typing.Any]] | None:
+    """The collapsed folders as recorded, or None when malformed.
+
+    One malformed entry makes the whole value None: a partial list would
+    hide the folders it dropped.
+    """
+    if not isinstance(value, list):
+        return None
+    out = []
+    for entry in value:
+        folder = entry.get("dir") if isinstance(entry, dict) else None
+        if not isinstance(folder, str) or not folder:
+            return None
+        folder = posixpath.normpath(folder)
+        if folder.startswith("/") or folder.split("/")[0] == "..":
+            return None
+        counts = [entry.get(k) for k in _COLLAPSED_COUNTS]
+        if not all(
+            isinstance(n, int) and not isinstance(n, bool) and n >= 0
+            for n in counts
+        ):
+            return None
+        out.append(
+            {"dir": folder, **dict(zip(_COLLAPSED_COUNTS, counts, strict=True))}
+        )
+    return out
 
 
 def _strings(value: typing.Any) -> list[str] | None:
