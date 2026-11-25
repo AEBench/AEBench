@@ -28,7 +28,6 @@ class RunInfo(typing.TypedDict):
     run_key: str | None
     family: str | None
     log_ok: bool | None
-    monitor_version: str | None  # MC-09
     trace_meta: dict | None  # MC-09
     final_diff_content: str | None  # MC-03
     final_workspace: str | None

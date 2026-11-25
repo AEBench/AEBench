@@ -309,7 +309,6 @@ def analyse(
         run_key=_run_key(run_dir),
         family=family,
         log_ok=log_ok,
-        monitor_version=(meta or {}).get("broker_version"),
         trace_meta=meta,
         final_diff_content=_file(folder / "final.diff"),
         final_workspace=_file(folder / "final_workspace.tar.zst"),

@@ -189,7 +189,6 @@ def _make_new_run(root: pathlib.Path, *, extras: bool) -> pathlib.Path:
             json.dumps(
                 {
                     "run_token": NEW_TOKEN,
-                    "broker_version": "0.2.0",
                 }
             )
         )
@@ -236,7 +235,7 @@ def test_run_info_of_an_old_run(
     run = _captured_run(_make_run(tmp_path), monkeypatch)
     assert set(run) == conftest.RUN_INFO_FIELDS
     for field in (
-        *("monitor_version", "trace_meta", "commit"),
+        *("trace_meta", "commit"),
         *("final_diff_content", "final_workspace", "oracle_reads"),
         *("case_image_digest", "shim_intact", "unattributed_reads"),
     ):
@@ -337,7 +336,6 @@ def test_new_format_run_with_every_file(
     run_dir = _make_new_run(tmp_path, extras=True)
     run = _captured_run(run_dir, monkeypatch)
     assert run["capabilities"] == dict.fromkeys(conftest.CAPABILITIES, True)
-    assert run["monitor_version"] == "0.2.0"
     assert run["trace_meta"]["run_token"] == NEW_TOKEN
     assert run["commit"] == "c0ffee"
     assert run["shim_intact"] is True
