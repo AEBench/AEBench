@@ -23,11 +23,7 @@ def _build_parser() -> argparse.ArgumentParser:
 	init_p = sub.add_parser("init", help="Initialize an AEBench workspace.")
 	init_p.add_argument("--workspace", default=None)
 
-	run_p = sub.add_parser("run", help="Run benchmark cases.")
-	_add_run_options(run_p)
-	run_p.add_argument("case_refs", nargs="*", default=[])
-	run_p.add_argument("--output-dir", default=None)
-	run_p.add_argument("--skip-incompatible", action="store_true")
+	_add_unavailable(sub, "run", "Run benchmark cases.", "benchmark runner")
 
 	case_p = sub.add_parser("case", help="Case-bundle workflows.")
 	case_sub = case_p.add_subparsers(dest="case_command")
@@ -60,17 +56,8 @@ def _build_parser() -> argparse.ArgumentParser:
 	case_validate = case_sub.add_parser("validate", help="Validate a case bundle.")
 	case_validate.add_argument("case_ref")
 
-	case_export = case_sub.add_parser("export", help="Export cases to JSONL.")
-	case_export.add_argument("case_refs", nargs="*", default=[])
-	case_export.add_argument("--output", required=True)
-
-	case_summarize = case_sub.add_parser("summarize", help="Summarize existing case outputs.")
-	case_summarize.add_argument("case_output_inputs", nargs="+")
-	case_summarize.add_argument("--output-dir", required=True)
-	case_summarize.add_argument("--run-label", default=None)
-	case_summarize.add_argument("--model-name", default=None)
-	case_summarize.add_argument("--agent-kind", default=None)
-	case_summarize.add_argument("--prompt-profile", default=None)
+	_add_unavailable(case_sub, "export", "Export cases to JSONL.", "case export")
+	_add_unavailable(case_sub, "summarize", "Summarize existing case outputs.", "case summarize")
 
 	case_oracle = case_sub.add_parser("oracle", help="Run oracle evaluation for a case.")
 	case_oracle.add_argument("case_ref")
@@ -80,10 +67,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 	runtime_p = sub.add_parser("runtime", help="Low-level runtime workflows.")
 	runtime_sub = runtime_p.add_subparsers(dest="runtime_command")
-	runtime_run = runtime_sub.add_parser("run", help="Run an explicit JSONL task file.")
-	_add_run_options(runtime_run)
-	runtime_run.add_argument("--input-file", required=True)
-	runtime_run.add_argument("--output-dir", default=None)
+	_add_unavailable(runtime_sub, "run", "Run an explicit JSONL task file.", "runtime run")
 
 	agent_p = sub.add_parser("agent", help="Agent harness workflows.")
 	agent_sub = agent_p.add_subparsers(dest="agent_command")
@@ -118,6 +102,14 @@ def _build_parser() -> argparse.ArgumentParser:
 	audit_p.add_argument("--escalation-model", default=None)
 	audit_p.add_argument("--no-escalation", action="store_true")
 	return parser
+
+
+def _add_unavailable(
+	sub: argparse._SubParsersAction[argparse.ArgumentParser], name: str, help: str, label: str
+) -> None:
+	# declares no args; cli_main lets any extras through to the message
+	parser = sub.add_parser(name, help=f"{help} (unavailable)")
+	parser.set_defaults(unavailable=f"{label} is unavailable in this checkout")
 
 
 def _add_run_options(parser: argparse.ArgumentParser) -> None:
@@ -180,14 +172,20 @@ def _add_monitor_options(parser: argparse.ArgumentParser) -> None:
 
 def cli_main(argv: list[str] | None = None) -> int:
 	parser = _build_parser()
-	args = parser.parse_args(argv)
+	# parse_known_args: unavailable commands take any args, the rest stay strict
+	args, extras = parser.parse_known_args(argv)
+	unavailable = getattr(args, "unavailable", None)
+	if unavailable is not None:
+		print(unavailable, file=sys.stderr)
+		return 1
+	if extras:
+		parser.error(f"unrecognized arguments: {' '.join(extras)}")
 	if args.command is None:
 		parser.print_help()
 		return 0
 	try:
 		return {
 			"init": _init_workspace,
-			"run": _run_benchmark,
 			"case": _handle_case,
 			"runtime": _handle_runtime,
 			"agent": _handle_agent,
@@ -214,8 +212,6 @@ def _handle_case(args: argparse.Namespace) -> int:
 			"init": _case_init,
 			"template": _case_template,
 			"validate": _case_validate,
-			"export": _case_export,
-			"summarize": _case_summarize,
 			"oracle": _case_oracle,
 		}.get(case_command)
 	if handler is None:
@@ -228,8 +224,6 @@ def _handle_case(args: argparse.Namespace) -> int:
 
 
 def _handle_runtime(args: argparse.Namespace) -> int:
-	if getattr(args, "runtime_command", None) == "run":
-		return _runtime_run(args)
 	print("usage: aebench runtime {run}", file=sys.stderr)
 	return 1
 
@@ -302,10 +296,6 @@ def _init_workspace(args: argparse.Namespace) -> int:
 	print(f"Initialized workspace: {workspace}")
 	print(f"Created: {created}")
 	return 0
-
-
-def _run_benchmark(args: argparse.Namespace) -> int:
-	raise SystemExit("benchmark runner is unavailable in this checkout")
 
 
 def _case_run(args: argparse.Namespace) -> int:
@@ -393,14 +383,6 @@ def _case_validate(args: argparse.Namespace) -> int:
 	return 1
 
 
-def _case_export(args: argparse.Namespace) -> int:
-	raise SystemExit("case export is unavailable in this checkout")
-
-
-def _case_summarize(args: argparse.Namespace) -> int:
-	raise SystemExit("case summarize is unavailable in this checkout")
-
-
 def _case_oracle(args: argparse.Namespace) -> int:
 	from models import RunResult
 
@@ -434,10 +416,6 @@ def _case_oracle(args: argparse.Namespace) -> int:
 	if result.error:
 		print(f"Error: {result.error}", file=sys.stderr)
 	return 0 if result.status.value != "error" else 1
-
-
-def _runtime_run(args: argparse.Namespace) -> int:
-	raise SystemExit("runtime run is unavailable in this checkout")
 
 
 def _audit_trace(args: argparse.Namespace) -> int:
@@ -538,7 +516,6 @@ def _run_options(args: argparse.Namespace) -> RunOptions:
 		prompt_append=getattr(args, "prompt_append", None),
 		cleanup_workspace=bool(getattr(args, "cleanup_workspace", False)),
 		delete_image=bool(getattr(args, "delete_image", False)),
-		skip_incompatible=bool(getattr(args, "skip_incompatible", False)),
 		monitor_commands=bool(getattr(args, "monitor_commands", False)) or trajectory_audit,
 		monitor_socket_root=getattr(args, "socket_dir", None),
 		trajectory_audit=trajectory_audit,
