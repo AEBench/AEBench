@@ -108,7 +108,15 @@ def install_workdir_snapshot_hook(
 				{
 					"matcher": "*",
 					"hooks": [
-						{"type": "command", "command": hook, "timeout": _HOOK_TIMEOUT_SECONDS}
+						{
+							"type": "command",
+							"command": hook,
+							"timeout": _HOOK_TIMEOUT_SECONDS,
+							# Block the tool call if the hook cannot start, crashes or times
+							# out (by default Claude Code lets it run). Claude Code >= 2.1.295;
+							# older versions ignore the key.
+							"onFailure": "block",
+						}
 					],
 				}
 			]
