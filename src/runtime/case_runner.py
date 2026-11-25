@@ -598,6 +598,7 @@ class _CaseRunner:
 				trace_path=str(monitor.trace_path),
 				command_count=monitor.command_count(),
 				workdir_snapshots=snapshots,
+				in_flight_at_stop=monitor.in_flight_count(),
 			)
 			if snapshots is not None:
 				# Snapshots fail closed: the hook stops the agent rather than let a

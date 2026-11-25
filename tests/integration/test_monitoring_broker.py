@@ -85,10 +85,17 @@ def _run_one_command(
 	return decision
 
 
-def _records(broker: BrokerProcess) -> list[dict[str, object]]:
-	"""Returns every record in the trace, in the order written."""
+def _lines(broker: BrokerProcess) -> list[dict[str, object]]:
+	"""Returns every line of the trace, start records included, in the order written."""
+	if not broker.trace_path.exists():
+		return []
 	lines = broker.trace_path.read_text(encoding="utf-8").splitlines()
 	return [json.loads(line) for line in lines]
+
+
+def _records(broker: BrokerProcess) -> list[dict[str, object]]:
+	"""Returns the end record of each command, in the order written."""
+	return [record for record in _lines(broker) if record.get("event") != "start"]
 
 
 @pytest.fixture(name="broker")
@@ -171,7 +178,7 @@ def test_a_command_is_recorded_with_its_output(broker: BrokerProcess) -> None:
 	_run_one_command(socket_path, argv)
 
 	assert _wait_for(lambda: broker.command_count() == 1)
-	record = json.loads(broker.trace_path.read_text(encoding="utf-8").splitlines()[0])
+	(record,) = _records(broker)
 	assert record["argv"] == argv
 	assert record["exit_code"] == 0
 	assert record["complete"] is True
@@ -626,7 +633,7 @@ def test_an_interrupted_shell_still_leaves_a_record(broker: BrokerProcess) -> No
 	client.close()
 
 	assert _wait_for(lambda: broker.command_count() == 1)
-	record = json.loads(broker.trace_path.read_text(encoding="utf-8").splitlines()[0])
+	(record,) = _records(broker)
 	assert record["complete"] is False
 	assert record["exit_code"] is None
 
@@ -685,7 +692,7 @@ def test_a_command_that_edits_a_tracked_file_is_attributed_the_change(tmp_path: 
 			client.close()
 
 		assert _wait_for(lambda: broker.command_count() == 1)
-		record = json.loads(broker.trace_path.read_text(encoding="utf-8").splitlines()[0])
+		(record,) = _records(broker)
 		snapshot = record["monitors"]["file_snapshot"]
 		assert snapshot["scope"] == "tracked+untracked"
 		assert snapshot["modified"] == ["run.sh"]
@@ -731,7 +738,7 @@ def test_a_same_size_rewrite_with_a_restored_mtime_is_still_attributed(tmp_path:
 			client.close()
 
 		assert _wait_for(lambda: broker.command_count() == 1)
-		record = json.loads(broker.trace_path.read_text(encoding="utf-8").splitlines()[0])
+		(record,) = _records(broker)
 		assert record["monitors"]["file_snapshot"]["modified"] == ["aggregate.py"]
 	finally:
 		broker.stop()
@@ -807,7 +814,124 @@ def _snapshot_around(tmp_path: Path, files: dict[str, bytes], command: object) -
 
 def test_trace_meta_is_written_at_start(broker: BrokerProcess) -> None:
 	meta = json.loads((broker.trace_dir / "trace_meta.json").read_text(encoding="utf-8"))
-	assert meta == {"run_token": broker.trace_dir.name, "start_events": False}
+	assert meta == {"run_token": broker.trace_dir.name, "start_events": True}
+
+
+def _start_command(socket_path: Path, argv: list[str]) -> socket.socket:
+	"""Opens a command and sends its `started` frame, as the shim does after the spawn."""
+	client = _open_command(
+		socket_path,
+		{
+			"argv": argv,
+			"pid": 100,
+			"ppid": 90,
+			"pgid": 100,
+			"sid": 90,
+			"start_ticks": 5,
+			"ancestry": [],
+		},
+	)
+	started = {"child_pid": 101, "child_start_ticks": 6, "t_spawn": 1700000000.0}
+	client.sendall(_frame(_STARTED, json.dumps(started).encode("utf-8")))
+	return client
+
+
+def test_a_command_writes_a_start_record_then_an_end_record(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	argv = ["/bin/bash", "-c", "make"]
+
+	client = _start_command(socket_path, argv)
+	try:
+		assert _wait_for(lambda: len(_lines(broker)) == 1)
+		(start,) = _lines(broker)
+		client.sendall(_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8")))
+	finally:
+		client.close()
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	first, end = _lines(broker)
+	assert first == start
+	assert start["event"] == "start"
+	assert start["command_id"] == end["command_id"]
+	assert start["run_id"] == end["run_id"]
+	assert start["argv"] == argv
+	assert start["cwd"] == "/repo"
+	assert (start["pid"], start["ppid"], start["pgid"], start["sid"]) == (100, 90, 100, 90)
+	assert start["start_ticks"] == 5
+	assert (start["child_pid"], start["child_start_ticks"]) == (101, 6)
+	assert start["parent_command_id"] is None
+	assert start["root_command_id"] == start["command_id"]
+	assert start["depth"] == 0
+	assert start["parent_link"] == "none"
+	assert start["ancestry"] == []
+	timing = end["monitors"]["timing"]
+	assert start["monitors"] == {
+		"timing": {"started_at": timing["started_at"], "released_at": timing["released_at"]}
+	}
+	assert end["event"] == "end"
+	assert end["complete"] is True
+	assert end["end_reason"] == "end_frame"
+
+
+def test_a_running_command_is_flushed_when_the_broker_stops(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	process = broker._process
+	assert process is not None
+
+	client = _start_command(socket_path, ["/bin/bash", "-c", "./experiment.sh"])
+	try:
+		client.sendall(_frame(_STDOUT, b"epoch 1\n"))
+		assert _wait_for(lambda: len(_lines(broker)) == 1)
+		time.sleep(0.1)
+
+		began = time.monotonic()
+		broker.stop()
+		elapsed = time.monotonic() - began
+	finally:
+		client.close()
+
+	assert elapsed < 5.0
+	# SIGTERM, handled, not SIGKILL.
+	assert process.returncode == 0
+	start, end = _lines(broker)
+	assert start["event"] == "start"
+	assert end["event"] == "end"
+	assert end["command_id"] == start["command_id"]
+	assert end["complete"] is False
+	assert end["end_reason"] == "broker_shutdown"
+	assert end["exit_code"] is None
+	assert end["stdout"]["bytes_received"] == len(b"epoch 1\n")
+	monitors = end["monitors"]
+	assert monitors["file_snapshot"] == {"skipped": "broker_shutdown"}
+	timing = monitors["timing"]
+	released = datetime.fromisoformat(timing["released_at"])
+	ended = datetime.fromisoformat(timing["ended_at"])
+	assert released <= ended
+	assert timing["duration_ms"] >= 100
+	assert broker.command_count() == 1
+	assert broker.in_flight_count() == 1
+
+
+def test_a_command_that_ends_just_before_the_stop_is_written_once(
+	broker: BrokerProcess,
+) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+
+	client = _start_command(socket_path, ["/bin/bash", "-c", "ls"])
+	try:
+		client.sendall(_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8")))
+		time.sleep(0.05)
+		broker.stop()
+	finally:
+		client.close()
+
+	(record,) = _records(broker)
+	assert record["end_reason"] == "end_frame"
+	assert record["complete"] is True
+	assert broker.in_flight_count() == 0
 
 
 def test_a_new_untracked_file_is_listed_as_created_untracked(tmp_path: Path) -> None:

@@ -364,6 +364,8 @@ class CommandMonitorInfo(_Model):
 	run_token: str
 	trace_path: str
 	command_count: int = 0
+	# Commands the broker flushed at stop, still running (end_reason "broker_shutdown").
+	in_flight_at_stop: int = 0
 	tracked_files: TrackedFilesCheck | None = None
 	system_files: SystemFilesCheck | None = None
 	workdir_snapshots: WorkdirSnapshotsInfo | None = None

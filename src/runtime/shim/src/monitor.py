@@ -38,6 +38,7 @@ MAX_HASH_BYTES = 64 * 1024 * 1024  # Larger changed files get a null hash
 HASH_BUDGET_SECONDS = 2.0
 _HASH_CHUNK_BYTES = 1024 * 1024
 SUBREAPER = True  # Shims adopt and report the processes their command leaves running
+SHUTDOWN_GRACE_SECONDS = 5.0  # On SIGTERM, how long an ended command may finish its snapshot
 
 COMMAND_INFO = 0
 STDOUT = 1
@@ -711,6 +712,7 @@ async def process_snapshot_request(
 
 
 def write_record(record: Record, log_path: str) -> None:
+	# One write per line from the loop thread, so lines never interleave.
 	with open(log_path, "a", encoding="utf-8") as file:
 		file.write(json.dumps(record) + "\n")
 
@@ -738,6 +740,96 @@ async def handle_client(
 	)
 
 
+# Fields of the start record, copied from the record as it is when the child starts.
+START_FIELDS = (
+	*("run_id", "command_id", "argv", "cwd", "stdio", "pid", "ppid", "pgid", "sid"),
+	*("start_ticks", "child_pid", "child_start_ticks", "ancestry"),
+	*("parent_command_id", "root_command_id", "depth", "parent_link"),
+)
+
+
+def start_record(record: Record, ctx: CommandContext) -> Record:
+	"""The short line written when the command's child starts."""
+	start: Record = {"event": "start", **{key: record.get(key) for key in START_FIELDS}}
+	released = ctx.state.get("released")
+	if released is not None:
+		released_at = released[1].isoformat()
+		start["monitors"] = {"timing": {"started_at": released_at, "released_at": released_at}}
+	return start
+
+
+class OpenCommand:
+	"""A connection whose end record is not written yet."""
+
+	def __init__(
+		self, ctx: CommandContext, stdout: StreamSink, stderr: StreamSink, log_path: str
+	) -> None:
+		self.ctx = ctx
+		self.stdout = stdout
+		self.stderr = stderr
+		self.log_path = log_path
+		self.task = asyncio.current_task()
+		# Set once the connection is over and only its after-command phase is left.
+		self.ending = False
+		self.written = False
+
+	def write(self, record: Record) -> None:
+		"""Writes the end record, once."""
+		if self.written:
+			return
+		self.written = True
+		OPEN_COMMANDS.pop(str(self.ctx.record["command_id"]), None)
+		write_record(record, self.log_path)
+
+	def flush(self) -> None:
+		"""Writes what is known so far, at broker shutdown, without the after snapshot."""
+		if self.written:
+			return
+		record = dict(self.ctx.record)
+		if not self.ending:
+			self.ctx.state["ended"] = (time.monotonic(), datetime.now(timezone.utc))
+			record.update(complete=False, end_reason="broker_shutdown")
+			self.stdout.close()
+			self.stderr.close()
+			record["stdout"] = self.stdout.summary(self.ctx.output_dir)
+			record["stderr"] = self.stderr.summary(self.ctx.output_dir)
+
+		# A thread may still be filling the original's monitors.
+		monitors: Record = {}
+		for monitor in MONITORS:
+			if monitor.name != "timing":
+				monitors[monitor.name] = {"skipped": "broker_shutdown"}
+				continue
+			try:
+				timing = monitor.after_command(self.ctx)
+			except Exception as exc:
+				note_monitor_error(record, monitor.name, "after_command", exc)
+				continue
+			if timing is not None:
+				monitors[monitor.name] = timing
+		record["monitors"] = monitors
+		self.write(record)
+
+
+OPEN_COMMANDS: dict[str, OpenCommand] = {}
+
+
+async def shutdown(server: asyncio.Server) -> None:
+	"""Closes the socket and writes an end record for every open connection."""
+	server.close()
+	# Still running: written now, as the broker was stopped under them.
+	for entry in list(OPEN_COMMANDS.values()):
+		if not entry.ending:
+			entry.flush()
+
+	# Already ended: given a moment to finish their after snapshot.
+	ending = [entry.task for entry in OPEN_COMMANDS.values() if entry.task is not None]
+	if ending:
+		await asyncio.wait(ending, timeout=SHUTDOWN_GRACE_SECONDS)
+	for entry in list(OPEN_COMMANDS.values()):
+		entry.flush()
+
+
 async def process_connection(
 	reader: asyncio.StreamReader,
 	writer: asyncio.StreamWriter,
@@ -760,6 +852,7 @@ async def process_connection(
 
 	shim_clock: dict[str, object] = {"info": None, "spawn": None, "exit": None}
 	record: Record = {
+		"event": "end",
 		"run_id": run_id,
 		"command_id": command_id,
 		"complete": False,
@@ -774,6 +867,8 @@ async def process_connection(
 	}
 
 	context = CommandContext(record, output_dir, run_id)
+	entry = OpenCommand(context, stdout, stderr, log_path)
+	OPEN_COMMANDS[command_id] = entry
 
 	try:
 		if first_error is not None:
@@ -839,6 +934,7 @@ async def process_connection(
 				PROCESS_TREE.add(
 					started.get("child_pid"), started.get("child_start_ticks"), command_id, "child"
 				)
+				write_record(start_record(record, context), log_path)
 				continue
 
 			if message_type == STDOUT:
@@ -888,21 +984,24 @@ async def process_connection(
 		record["monitor_error"] = str(exc)
 
 	finally:
-		if "ended" not in context.state:
-			# Timed to the disconnect, so a killed shim still has a duration.
-			context.state["ended"] = (time.monotonic(), datetime.now(timezone.utc))
-			record["end_reason"] = "disconnect"
 		PROCESS_TREE.close(command_id)
-		stdout.close()
-		stderr.close()
+		# Flushed at shutdown already, so nothing is left to record.
+		if not entry.written:
+			entry.ending = True
+			if "ended" not in context.state:
+				# Timed to the disconnect, so a killed shim still has a duration.
+				context.state["ended"] = (time.monotonic(), datetime.now(timezone.utc))
+				record["end_reason"] = "disconnect"
+			stdout.close()
+			stderr.close()
 
-		record["stdout"] = stdout.summary(output_dir)
-		record["stderr"] = stderr.summary(output_dir)
+			record["stdout"] = stdout.summary(output_dir)
+			record["stderr"] = stderr.summary(output_dir)
 
-		# After commands are run; off the loop, so a slow snapshot holds no other shell
-		await asyncio.to_thread(run_after_command, context)
+			# After commands are run; off the loop, so a slow snapshot holds no other shell
+			await asyncio.to_thread(run_after_command, context)
 
-		write_record(record, log_path)
+			entry.write(record)
 		writer.close()
 		try:
 			await writer.wait_closed()
@@ -963,8 +1062,9 @@ async def serve(
 	try:
 		await terminate.wait()
 	finally:
-		# Not wait_closed(): it would wait on shells the agent left running.
-		server.close()
+		# Closes the socket and writes an end record for every open command.
+		await shutdown(server)
+	print("stopped; open commands flushed", flush=True)
 
 	if snapshotter is None:
 		return 0

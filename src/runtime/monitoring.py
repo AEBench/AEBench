@@ -249,12 +249,28 @@ class BrokerProcess:
 
 		logger.info("command broker listening on %s", socket_path)
 
-	def command_count(self) -> int:
+	def _end_records(self) -> Iterator[dict[str, object]]:
+		"""Each command's end record; start records and unreadable lines are skipped."""
 		try:
 			with self.trace_path.open("r", encoding="utf-8") as handle:
-				return sum(1 for line in handle if line.strip())
+				for line in handle:
+					try:
+						record = json.loads(line)
+					except json.JSONDecodeError:
+						continue
+					if isinstance(record, dict) and record.get("event") != "start":
+						yield record
 		except FileNotFoundError:
-			return 0
+			return
+
+	def command_count(self) -> int:
+		return sum(1 for _record in self._end_records())
+
+	def in_flight_count(self) -> int:
+		"""Commands still running when the broker stopped."""
+		return sum(
+			1 for record in self._end_records() if record.get("end_reason") == "broker_shutdown"
+		)
 
 	def request_workdir_snapshot(self, kind: str) -> dict[str, object]:
 		"""Asks the broker for a workdir snapshot, as the agent's hook does, and waits for it."""
@@ -388,14 +404,14 @@ def write_tracked_files(workspace: Path, trace_dir: Path) -> Path:
 
 
 def write_trace_meta(trace_dir: Path) -> Path:
-	"""Record the run token the trace is keyed by."""
+	"""Record the run token the trace is keyed by, and that it holds start records."""
 	target = trace_dir / TRACE_META_BASENAME
 	target.write_text(
 		json.dumps(
 			{
 				# The trace directory is keyed by the token, as is each record's run_id.
 				"run_token": trace_dir.name,
-				"start_events": False,
+				"start_events": True,
 			},
 			indent=1,
 		),
