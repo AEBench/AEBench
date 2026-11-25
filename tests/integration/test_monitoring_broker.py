@@ -10,6 +10,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import socket
 import struct
 import time
@@ -904,6 +905,26 @@ def test_a_big_new_untracked_folder_is_summarised(tmp_path: Path) -> None:
 
 	assert later["created_untracked"] == ["b.txt"]
 	assert later["collapsed_untracked"] == []
+
+
+def test_deleting_a_big_untracked_folder_is_summarised(tmp_path: Path) -> None:
+	def unpack(workspace: Path) -> None:
+		_unpack(workspace / "vendor" / "pkg", 2100)
+
+	def remove(workspace: Path) -> None:
+		shutil.rmtree(workspace / "vendor")
+		(workspace / "gone.txt").write_bytes(b"x\n")
+
+	_, removed = _snapshots_around(tmp_path, {"run.sh": b"echo\n"}, [unpack, remove])
+
+	# The folder is gone from the after picture, so the before count decides.
+	assert removed["collapsed_untracked"] == [
+		{"dir": "vendor", "files": 0, "created": 0, "modified": 0, "deleted": 2100}
+	]
+	assert removed["deleted_untracked"] == []
+	assert removed["created_untracked"] == ["gone.txt"]
+	assert removed["truncated"] is False
+	assert removed["untracked_skipped"] is None
 
 
 def test_a_folder_holding_a_tracked_file_is_never_summarised(tmp_path: Path) -> None:
