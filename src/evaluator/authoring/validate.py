@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from constants import ARTIFACT_DIRNAME, CASE_MANIFEST_FILENAME, ORACLE_DIRNAME, REFS_DIRNAME
+from constants import CASE_MANIFEST_FILENAME, ORACLE_DIRNAME, REFS_DIRNAME
+from evaluator import artifact_dir_for, local_artifact_error
 from evaluator.loader import CaseBundleError, load_case_spec
 from evaluator.oracles.discovery import OracleLoadError, discover_oracle_classes
-from project_config import ArtifactMode
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,7 +31,6 @@ class ValidationResult:
 def validate_case_bundle(case_dir: Path) -> ValidationResult:
 	root = case_dir.resolve()
 	manifest_path = root / CASE_MANIFEST_FILENAME
-	artifact_dir = root / ARTIFACT_DIRNAME
 	refs_dir = root / REFS_DIRNAME
 	oracle_dir = root / ORACLE_DIRNAME
 	issues: list[ValidationIssue] = []
@@ -52,11 +51,15 @@ def validate_case_bundle(case_dir: Path) -> ValidationResult:
 				)
 			)
 		else:
-			if case.upstream.artifact_mode not in (ArtifactMode.UPSTREAM, ArtifactMode.OVERLAY) or (
-				case.upstream.artifact_mode == ArtifactMode.OVERLAY
-				and case.upstream.overlay_artifact
-			):
-				_require_dir(artifact_dir, "missing_artifact_dir", issues)
+			error = local_artifact_error(root, case.upstream)
+			if error is not None:
+				issues.append(
+					ValidationIssue(
+						code="missing_artifact_dir",
+						path=str(artifact_dir_for(root)),
+						message=error,
+					)
+				)
 
 	if oracle_dir.is_dir():
 		try:

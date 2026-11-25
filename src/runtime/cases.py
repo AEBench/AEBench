@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evaluator import artifact_dir_for, has_local_artifact
+from evaluator import artifact_dir_for, local_artifact_error
 from models import (
 	ArchiveSource,
+	ArtifactMode,
 	BenchSource,
 	CaseConfig,
 	GitSource,
@@ -16,7 +17,6 @@ from models import (
 	UpstreamConfig,
 	UpstreamSourceType,
 )
-from project_config import ArtifactMode
 
 
 def task_from_case(case_dir: Path, case: CaseConfig) -> TaskConfig:
@@ -30,24 +30,16 @@ def task_from_case(case_dir: Path, case: CaseConfig) -> TaskConfig:
 
 def _source_from_case(case_dir: Path, case: CaseConfig) -> BenchSource:
 	upstream = case.upstream
-	artifact_dir = artifact_dir_for(case_dir)
+	error = local_artifact_error(case_dir, upstream)
+	if error is not None:
+		raise RuntimeError(f"case {case.id}: {error}")
+	if not upstream.uses_local_artifact:
+		return _source_from_upstream(case_dir, upstream)
 
+	local = LocalSource(path=str(artifact_dir_for(case_dir)))
 	if upstream.artifact_mode == ArtifactMode.LOCAL:
-		if not has_local_artifact(case_dir):
-			raise RuntimeError(f"case {case.id} has no local artifact")
-		return LocalSource(path=str(artifact_dir))
-
-	base = _source_from_upstream(case_dir, upstream)
-
-	if upstream.artifact_mode == ArtifactMode.OVERLAY and upstream.overlay_artifact:
-		if not has_local_artifact(case_dir):
-			raise RuntimeError(f"case {case.id} has no artifact overlay")
-		return OverlaySource(
-			base=base,
-			overlay=LocalSource(path=str(artifact_dir)),
-		)
-
-	return base
+		return local
+	return OverlaySource(base=_source_from_upstream(case_dir, upstream), overlay=local)
 
 
 def _source_from_upstream(case_dir: Path, upstream: UpstreamConfig) -> BenchSource:

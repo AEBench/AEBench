@@ -7,7 +7,7 @@ from pathlib import Path
 
 from config import AppState, resolve_settings
 from evaluator.loader import load_case_spec
-from evaluator.registry import resolve_case_dir
+from evaluator.registry import CaseResolutionError, new_case_dir, resolve_case_ref
 from log import configure_logging
 from models import OracleFailureMode, RunOptions
 from project_config import load_project_config
@@ -198,6 +198,9 @@ def cli_main(argv: list[str] | None = None) -> int:
 	except KeyboardInterrupt:
 		print("Interrupted", file=sys.stderr)
 		return 130
+	except CaseResolutionError as exc:
+		print(f"error: {exc}", file=sys.stderr)
+		return 2
 
 
 def _handle_case(args: argparse.Namespace) -> int:
@@ -309,7 +312,7 @@ def _case_run(args: argparse.Namespace) -> int:
 	from runtime.case_runner import run_case
 
 	context = _build_context()
-	case_dir = resolve_case_dir(args.case_ref, project_state=context.project_state)
+	case_dir = resolve_case_ref(args.case_ref, project_state=context.project_state)
 	result = run_case(
 		context,
 		case_dir,
@@ -355,18 +358,12 @@ def _case_init(args: argparse.Namespace) -> int:
 	case_id = args.case_id or (infer_case_id(args.source) if args.source else None)
 	if not case_id:
 		raise SystemExit("case init requires --id when no source is provided")
-	target_root = _optional_path(args.target_dir)
 	if not args.blank and not args.source:
 		raise SystemExit("case init requires a source unless --blank is used")
-	bundle_root = (
-		target_root
-		or context.project_state.config.resolve_bundles_dir(context.project_state.root) / case_id
+	bundle_dir = new_case_dir(
+		case_id, project_state=context.project_state, target_dir=_optional_path(args.target_dir)
 	)
-	bundle_dir = create_case_bundle(
-		bundle_root,
-		CaseInitOptions(case_id=case_id),
-		overwrite=False,
-	)
+	create_case_bundle(bundle_dir, CaseInitOptions(case_id=case_id), overwrite=False)
 	print(f"Initialized case bundle: {bundle_dir}")
 	return 0
 
@@ -375,7 +372,7 @@ def _case_template(args: argparse.Namespace) -> int:
 	from evaluator.authoring import write_oracle_templates
 
 	context = _build_context()
-	case_dir = resolve_case_dir(args.case_ref, project_state=context.project_state)
+	case_dir = resolve_case_ref(args.case_ref, project_state=context.project_state)
 	write_oracle_templates(case_dir, expected_output_path=args.expected_output)
 	print(f"Wrote oracle templates: {case_dir / 'oracles'}")
 	return 0
@@ -385,7 +382,7 @@ def _case_validate(args: argparse.Namespace) -> int:
 	from evaluator.authoring.validate import validate_case_bundle
 
 	context = _build_context()
-	case_dir = resolve_case_dir(args.case_ref, project_state=context.project_state)
+	case_dir = resolve_case_ref(args.case_ref, project_state=context.project_state)
 	result = validate_case_bundle(case_dir)
 	if result.ok:
 		print(f"Case bundle is valid: {case_dir}")
@@ -408,7 +405,7 @@ def _case_oracle(args: argparse.Namespace) -> int:
 	from models import RunResult
 
 	context = _build_context()
-	case_dir = resolve_case_dir(args.case_ref, project_state=context.project_state)
+	case_dir = resolve_case_ref(args.case_ref, project_state=context.project_state)
 	case = load_case_spec(case_dir)
 	output_dir = _optional_path(args.output_dir) or (case_dir / "output")
 	output_dir.mkdir(parents=True, exist_ok=True)

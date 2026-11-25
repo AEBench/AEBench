@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 from types import SimpleNamespace
@@ -42,20 +43,37 @@ def test_wasabi_oracle_phases_construct_current_checks(tmp_path: Path) -> None:
 			assert "ground_truth_coverage" in {check.name for check in checks}
 
 
-@pytest.mark.parametrize(
-	("mode", "overlay_artifact", "required"),
-	[("local", False, True), ("overlay", True, True), ("overlay", False, False)],
-)
-def test_artifact_directory_required_only_when_used(
-	tmp_path: Path, mode: str, overlay_artifact: bool, required: bool
-) -> None:
+def _case_with_upstream(tmp_path: Path, **upstream: str | bool) -> Path:
+	"""Copy wasabi without artifact/ and set the given upstream keys."""
 	case_dir = tmp_path / "case"
 	shutil.copytree(WASABI_CASE, case_dir, ignore=shutil.ignore_patterns("artifact", "__pycache__"))
 	manifest = case_dir / "case.toml"
-	content = manifest.read_text(encoding="utf-8")
-	content = content.replace('artifact_mode = "upstream"', f'artifact_mode = "{mode}"')
-	content += f"\noverlay_artifact = {str(overlay_artifact).lower()}\n"
-	manifest.write_text(content, encoding="utf-8")
+	lines = [
+		line
+		for line in manifest.read_text(encoding="utf-8").splitlines()
+		if not line.startswith("artifact_mode")
+	]
+	extra = [f"{key} = {json.dumps(value)}" for key, value in upstream.items()]
+	index = lines.index("[upstream]") + 1
+	manifest.write_text("\n".join(lines[:index] + extra + lines[index:]) + "\n", encoding="utf-8")
+	return case_dir
 
-	result = validate_case_bundle(case_dir)
-	assert ("missing_artifact_dir" in {issue.code for issue in result.issues}) == required
+
+@pytest.mark.parametrize(
+	("upstream", "required"),
+	[
+		({}, False),
+		({"artifact_mode": "upstream"}, False),
+		({"artifact_mode": "local"}, True),
+		({"artifact_mode": "overlay", "overlay_artifact": True}, True),
+		({"artifact_mode": "overlay", "overlay_artifact": False}, False),
+	],
+)
+def test_artifact_directory_required_only_when_used(
+	tmp_path: Path, upstream: dict[str, str | bool], required: bool
+) -> None:
+	result = validate_case_bundle(_case_with_upstream(tmp_path, **upstream))
+	codes = {issue.code for issue in result.issues}
+	assert "invalid_case_spec" not in codes
+	assert ("missing_artifact_dir" in codes) == required
+	assert result.ok != required
