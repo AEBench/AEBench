@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import sys
-from enum import Enum
 from importlib import resources
 from pathlib import Path
 from typing import Any, Mapping, TypeVar
@@ -33,15 +32,6 @@ def _require_relative(path_text: str, field_name: str) -> None:
 	path = Path(path_text)
 	if path.is_absolute() or ".." in path.parts:
 		raise ValueError(f"{field_name} must be a relative path")
-
-
-class ArtifactMode(str, Enum):
-	"""Select local artifacts, an upstream checkout, or an upstream overlay."""
-
-	LOCAL = "local"
-	UPSTREAM = "upstream"
-	# Case bundles may include local artifacts in an overlay when enabled.
-	OVERLAY = "overlay"
 
 
 class LoggingConfig(_Model):
@@ -149,7 +139,6 @@ class UserConfig(_Model):
 
 
 class WorkspaceConfig(_Model):
-	artifact_mode: ArtifactMode | None = None
 	bundle_source: BundleSourceOverrideConfig = Field(default_factory=BundleSourceOverrideConfig)
 	bundles_dir: str | None = None
 	case_runs_dir: str | None = None
@@ -158,11 +147,18 @@ class WorkspaceConfig(_Model):
 	cache: CacheOverrideConfig = Field(default_factory=CacheOverrideConfig)
 	repo_launch: RepoLaunchOverrideConfig = Field(default_factory=RepoLaunchOverrideConfig)
 
+	@model_validator(mode="before")
+	@classmethod
+	def _drop_artifact_mode(cls, values: object) -> object:
+		# Older `aebench init` wrote artifact_mode; each case.toml now owns it.
+		if isinstance(values, dict) and "artifact_mode" in values:
+			values = {key: value for key, value in values.items() if key != "artifact_mode"}
+		return values
+
 
 class ProjectConfig(_Model):
 	bundles_dir: str = "cases"
 	case_runs_dir: str = _DEFAULT_CASE_RUNS_DIR
-	artifact_mode: ArtifactMode = ArtifactMode.UPSTREAM
 	default_bundle_layout: str = "structured"
 	logging: LoggingConfig = Field(default_factory=LoggingConfig)
 	cache: CacheConfig = Field(default_factory=CacheConfig)
@@ -296,7 +292,7 @@ def _merge_project_config(
 		"bundle_source": _apply_overrides(config.bundle_source, workspace.bundle_source),
 		"repo_launch": _apply_overrides(config.repo_launch, workspace.repo_launch),
 	}
-	for name in ("bundles_dir", "case_runs_dir", "artifact_mode", "default_bundle_layout"):
+	for name in ("bundles_dir", "case_runs_dir", "default_bundle_layout"):
 		value = getattr(workspace, name)
 		if value is not None:
 			updates[name] = value

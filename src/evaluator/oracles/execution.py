@@ -8,7 +8,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Sequence
 
-from constants import ARTIFACT_DIRNAME, ORACLE_RESULT_FILENAME
+from constants import ORACLE_RESULT_FILENAME
 from models import (
 	OracleFailureMode,
 	OracleInput,
@@ -17,6 +17,7 @@ from models import (
 	OracleStatus,
 )
 
+from .. import artifact_dir_for
 from ..loader import load_case_spec
 from .discovery import (
 	DiscoveredOracleClass,
@@ -213,7 +214,7 @@ def run_oracle(
 		if spec.oracle is None:
 			raise RuntimeError(f"case {spec.id!r} does not define an oracle configuration")
 
-		artifact_dir = (case_root / ARTIFACT_DIRNAME).resolve(strict=False)
+		artifact_dir = artifact_dir_for(case_root)
 		resolved_workspace_dir = _resolve_workspace_dir(
 			case_root=case_root,
 			artifact_dir=artifact_dir,
