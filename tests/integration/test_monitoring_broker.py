@@ -6,6 +6,7 @@ so this exercises the supervisor and the broker exactly as a run would.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import socket
@@ -683,9 +684,11 @@ def test_a_command_that_edits_a_tracked_file_is_attributed_the_change(tmp_path: 
 		assert _wait_for(lambda: broker.command_count() == 1)
 		record = json.loads(broker.trace_path.read_text(encoding="utf-8").splitlines()[0])
 		snapshot = record["monitors"]["file_snapshot"]
-		assert snapshot["scope"] == "tracked"
+		assert snapshot["scope"] == "tracked+untracked"
 		assert snapshot["modified"] == ["run.sh"]
 		assert snapshot["deleted"] == ["plot.py"]
+		assert snapshot["created"] == []
+		assert snapshot["created_untracked"] == ["build.log"]
 	finally:
 		broker.stop()
 
@@ -753,3 +756,104 @@ def test_stopping_releases_the_socket_and_keeps_the_trace(tmp_path: Path) -> Non
 	assert not socket_dir.exists()
 	assert broker.trace_path.is_file()
 	assert broker.command_count() == 1
+
+
+def _snapshot_around(tmp_path: Path, files: dict[str, bytes], command: object) -> dict[str, object]:
+	"""Runs `command` as one shell's command over a workspace holding `files`."""
+	workspace = tmp_path / "workspace"
+	workspace.mkdir()
+	for rel, data in files.items():
+		(workspace / rel).write_bytes(data)
+	broker = BrokerProcess(
+		trace_dir=tmp_path / "trace",
+		workspace_dir=workspace,
+		socket_root=tmp_path / "sockets",
+	)
+	broker.start()
+	try:
+		assert broker.socket_path is not None
+		client = _open_command(broker.socket_path, {"argv": ["/bin/bash", "-c", "x"], "pid": 1})
+		try:
+			assert callable(command)
+			command(workspace)
+			client.sendall(
+				_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8"))
+			)
+		finally:
+			client.close()
+		assert _wait_for(lambda: broker.command_count() == 1)
+		(record,) = _records(broker)
+		monitors = record["monitors"]
+		assert isinstance(monitors, dict)
+		return monitors["file_snapshot"]
+	finally:
+		broker.stop()
+
+
+def test_trace_meta_is_written_at_start(broker: BrokerProcess) -> None:
+	meta = json.loads((broker.trace_dir / "trace_meta.json").read_text(encoding="utf-8"))
+	assert meta["broker_version"]
+	assert meta["run_token"] == broker.trace_dir.name
+	assert meta["start_events"] is False
+
+
+def test_a_new_untracked_file_is_listed_as_created_untracked(tmp_path: Path) -> None:
+	def command(workspace: Path) -> None:
+		(workspace / "out").mkdir()
+		(workspace / "out" / "new.csv").write_text("a,b\n", encoding="utf-8")
+
+	snapshot = _snapshot_around(tmp_path, {"run.sh": b"echo\n"}, command)
+
+	assert snapshot["created_untracked"] == ["out/new.csv"]
+	assert snapshot["modified_untracked"] == []
+	assert snapshot["deleted_untracked"] == []
+	assert snapshot["created"] == []
+
+
+def test_a_copy_is_hashed_with_its_source_content(tmp_path: Path) -> None:
+	def command(workspace: Path) -> None:
+		(workspace / "b").write_bytes((workspace / "a").read_bytes())
+
+	snapshot = _snapshot_around(tmp_path, {"a": b"measured\n"}, command)
+
+	assert snapshot["created_untracked"] == ["b"]
+	assert snapshot["hashes"] == {"b": hashlib.sha256(b"measured\n").hexdigest()}
+	assert snapshot["hash_skipped"] == {}
+
+
+def test_a_modified_tracked_file_is_hashed(tmp_path: Path) -> None:
+	def command(workspace: Path) -> None:
+		(workspace / "a").write_bytes(b"faked\n")
+
+	snapshot = _snapshot_around(tmp_path, {"a": b"measured\n"}, command)
+
+	assert snapshot["modified"] == ["a"]
+	assert snapshot["hashes"] == {"a": hashlib.sha256(b"faked\n").hexdigest()}
+
+
+def test_an_over_cap_file_gets_no_hash(tmp_path: Path) -> None:
+	def command(workspace: Path) -> None:
+		# Sparse, so the test writes no 64 MB.
+		with (workspace / "big.bin").open("wb") as handle:
+			handle.truncate(64 * 1024 * 1024 + 1)
+
+	snapshot = _snapshot_around(tmp_path, {"a": b"a\n"}, command)
+
+	assert snapshot["hashes"] == {"big.bin": None}
+	assert snapshot["hash_skipped"] == {"big.bin": "over_cap"}
+
+
+def test_a_symlink_is_hashed_by_its_target_text_and_not_followed(tmp_path: Path) -> None:
+	outside = tmp_path / "secret.txt"
+	outside.write_text("outside the workspace\n", encoding="utf-8")
+
+	def command(workspace: Path) -> None:
+		os.symlink(str(outside), workspace / "link")
+
+	snapshot = _snapshot_around(tmp_path, {"a": b"a\n"}, command)
+
+	assert snapshot["created_untracked"] == ["link"]
+	hashes = snapshot["hashes"]
+	assert isinstance(hashes, dict)
+	assert hashes["link"] == hashlib.sha256(os.fsencode(str(outside))).hexdigest()
+	assert hashes["link"] != hashlib.sha256(outside.read_bytes()).hexdigest()
