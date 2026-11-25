@@ -54,7 +54,7 @@ def export_trace_site(run_dir: Path, output_dir: Path) -> Path:
 
 	run_result = _read_last_jsonl(run_dir / RUN_RESULT)
 	case_result = _read_json(run_dir / CASE_RESULT)
-	secrets = _environment_secrets()
+	secrets = environment_secrets()
 	trace_format = _trace_format(run_result)
 	reader = trace_reader(trace_format)
 	log_path = run_dir / RUNNER_LOG
@@ -226,7 +226,7 @@ def _claude_event(
 			total_cost_usd=payload.get("total_cost_usd"),
 			stop_reason=payload.get("stop_reason"),
 			usage=_redact_value(payload.get("usage", {}), secrets),
-			result_text=_redact(str(payload.get("result") or ""), secrets),
+			result_text=redact_secrets(str(payload.get("result") or ""), secrets),
 		)
 	return event
 
@@ -250,7 +250,7 @@ def _codex_event(
 	if not isinstance(item, dict):
 		if event_type == "thread.started":
 			event["subtype"] = "init"
-			event["raw"] = {"thread_id": _redact(session_id, secrets)}
+			event["raw"] = {"thread_id": redact_secrets(session_id, secrets)}
 		return event
 
 	item_type = str(item.get("type", "item"))
@@ -322,7 +322,7 @@ def _dsh_event(
 		"parent_tool_use_id": None,
 	}
 	event_type = str(payload.get("type") or "unknown")
-	text = _redact(str(payload.get("text") or ""), secrets)
+	text = redact_secrets(str(payload.get("text") or ""), secrets)
 	if event_type == "session":
 		raw = {"session_id": session_id, "cwd": payload.get("cwd")}
 		event.update(type="system", subtype="init", raw=_redact_value(raw, secrets))
@@ -355,7 +355,7 @@ def _dsh_event(
 		block = {
 			"type": "tool_result",
 			"tool_use_id": payload.get("callId"),
-			"content": _redact(content, secrets),
+			"content": redact_secrets(content, secrets),
 			"is_error": payload.get("status") != "completed" or isinstance(error, dict),
 		}
 		event.update(type="user", blocks=[block])
@@ -363,7 +363,7 @@ def _dsh_event(
 		event.update(type="result", result_text=text)
 	elif event_type == "error":
 		# A run that fails outside a turn ends on an error event instead of final.
-		message = _redact(str(payload.get("message") or ""), secrets)
+		message = redact_secrets(str(payload.get("message") or ""), secrets)
 		event.update(
 			type="result", result_text=message, stop_reason=str(payload.get("code") or "error")
 		)
@@ -414,7 +414,7 @@ def read_zcode_events(
 		if reply not in pending:
 			return
 		kind, parts, timestamp = pending.pop(reply)
-		text = _redact("".join(parts), secrets)
+		text = redact_secrets("".join(parts), secrets)
 		if not text.strip():
 			return
 		block = (
@@ -477,7 +477,7 @@ def read_zcode_events(
 			block = {
 				"type": "tool_result",
 				"tool_use_id": body.get("toolCallId"),
-				"content": _redact(content, secrets),
+				"content": redact_secrets(content, secrets),
 				"is_error": kind == "error" or result.get("success") is False,
 			}
 			emit("user", timestamp, blocks=[block])
@@ -493,12 +493,12 @@ def read_zcode_events(
 			emit(
 				"result",
 				timestamp,
-				result_text=_redact(str(error.get("message") or ""), secrets),
+				result_text=redact_secrets(str(error.get("message") or ""), secrets),
 				stop_reason=str(error.get("code") or "error"),
 			)
 		elif event_type == "result":
 			# The closing summary line; its usage repeats what the turns reported.
-			text = _redact(str(payload.get("response") or ""), secrets)
+			text = redact_secrets(str(payload.get("response") or ""), secrets)
 			emit("result", timestamp, result_text=text, stop_reason=stop_reason)
 		elif event_type not in _ZCODE_PROGRESS_EVENTS:
 			emit("system", timestamp, subtype=event_type, raw=_redact_value(payload, secrets))
@@ -670,7 +670,7 @@ def _build_record(
 		"system_monitor": [],
 		"case_brief": _redact_value(case_result.get("case_brief", {}), secrets),
 		"oracle": _redact_value(oracle, secrets),
-		"prompt": _redact(prompt, secrets),
+		"prompt": redact_secrets(prompt, secrets),
 		"events": events,
 	}
 
@@ -715,7 +715,9 @@ def parse_raw_trace(
 					"session_id": "default",
 					"session_idx": 0,
 					"parent_tool_use_id": None,
-					"blocks": [{"type": "text", "text": _redact("\n".join(lines), secret_values)}],
+					"blocks": [
+						{"type": "text", "text": redact_secrets("\n".join(lines), secret_values)}
+					],
 				}
 			)
 		lines.clear()
@@ -879,7 +881,8 @@ def _safe_run_id(value: str) -> str:
 	return re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip("-")
 
 
-def _environment_secrets() -> dict[str, str]:
+def environment_secrets() -> dict[str, str]:
+	"""Host variables that look like API keys or tokens, by name."""
 	return {
 		name: value
 		for name, value in os.environ.items()
@@ -887,7 +890,8 @@ def _environment_secrets() -> dict[str, str]:
 	}
 
 
-def _redact(text: str, secrets: Mapping[str, str]) -> str:
+def redact_secrets(text: str, secrets: Mapping[str, str]) -> str:
+	"""Replaces each secret value with [REDACTED:<NAME>], longest first."""
 	for name, value in sorted(secrets.items(), key=lambda pair: len(pair[1]), reverse=True):
 		text = text.replace(value, f"[REDACTED:{name}]")
 	return text
@@ -895,7 +899,7 @@ def _redact(text: str, secrets: Mapping[str, str]) -> str:
 
 def _redact_value(value: Any, secrets: Mapping[str, str]) -> Any:
 	if isinstance(value, str):
-		return _redact(value, secrets)
+		return redact_secrets(value, secrets)
 	if isinstance(value, list):
 		return [_redact_value(item, secrets) for item in value]
 	if isinstance(value, dict):

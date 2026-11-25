@@ -470,6 +470,10 @@ def test_monitored_case_orders_the_broker_and_shim(
 		"runtime.case_runner.verify_monitoring",
 		lambda _runtime, _broker: events.append("shim-probe"),
 	)
+	monkeypatch.setattr(
+		"runtime.case_runner.capture_final_workspace",
+		lambda *_a: events.append("final-workspace"),
+	)
 
 	captured: dict[str, Any] = {}
 
@@ -524,6 +528,8 @@ def test_monitored_case_orders_the_broker_and_shim(
 		"agent",
 		"broker-stop",
 		"container-stop",
+		# After the agent's container stops, before the oracle can write.
+		"final-workspace",
 		"snapshot",
 		"oracle",
 		"audit",

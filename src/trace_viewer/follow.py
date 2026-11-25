@@ -17,11 +17,11 @@ from .exporter import (
 	CASE_RESULT,
 	RUN_RESULT,
 	RUNNER_LOG,
-	_environment_secrets,
 	_read_last_jsonl,
-	_redact,
 	_trace_format,
+	environment_secrets,
 	read_codex_events,
+	redact_secrets,
 	split_trace_line,
 	trace_reader,
 )
@@ -79,7 +79,7 @@ def follow_trace(
 		print(f"Waiting for {log_path}", file=sys.stderr, flush=True)
 	while not log_path.is_file():
 		time.sleep(poll_seconds)
-	secrets = _environment_secrets()
+	secrets = environment_secrets()
 	width = shutil.get_terminal_size((120, 24)).columns
 
 	def show(timestamp: str | None, label: str, summary: Any) -> None:
@@ -135,7 +135,7 @@ def _trace_format_of(
 		timestamp, text, payload = split_trace_line(line)
 		if payload is None:
 			if text:
-				show(timestamp, "out", _redact(text, secrets))
+				show(timestamp, "out", redact_secrets(text, secrets))
 			continue
 		read.append(line)
 		if trace_format := _detect_trace_format(payload):
@@ -166,7 +166,7 @@ def _echo_plain_lines(
 	for line in lines:
 		timestamp, text, payload = split_trace_line(line)
 		if text and (every or payload is None):
-			show(timestamp, "out", _redact(text, secrets))
+			show(timestamp, "out", redact_secrets(text, secrets))
 		yield line
 
 
