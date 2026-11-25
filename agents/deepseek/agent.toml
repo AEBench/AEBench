@@ -1,6 +1,7 @@
 description = "DeepSeek Flash with the official DSH CLI"
 requires = ["dsh"]
 reasoning_effort = "high"
+trace_format = "dsh"
 
 [[secrets]]
 name = "DEEPSEEK_API_KEY"

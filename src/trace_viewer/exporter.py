@@ -23,8 +23,18 @@ _LEGACY_TRACE_FORMATS = {
 	"claude_non_api": "claude_code",
 	"codex": "codex",
 	"codex_non_api": "codex",
+	"deepseek": "dsh",
 }
 _RAW_CHUNK_LINES = 200
+# Formats parsed into the viewer's message blocks, so the summary reads them the same way.
+_MESSAGE_BLOCK_FORMATS = {"claude_code", "dsh"}
+# DSH tools the viewer has a special display for, under the names it knows.
+_DSH_TOOL_NAMES = {"bash": "Bash"}
+# DSH cache counters, under the names the summary reads.
+_DSH_USAGE_ALIASES = {
+	"cacheReadTokens": "cache_read_input_tokens",
+	"cacheWriteTokens": "cache_write_input_tokens",
+}
 
 
 def export_trace_site(run_dir: Path, output_dir: Path) -> Path:
@@ -40,6 +50,7 @@ def export_trace_site(run_dir: Path, output_dir: Path) -> Path:
 	parser = {
 		"claude_code": parse_claude_trace,
 		"codex": parse_codex_trace,
+		"dsh": parse_dsh_trace,
 	}.get(trace_format, parse_raw_trace)
 	events, usage = parser(run_dir / RUNNER_LOG, secrets=secrets)
 	record = _build_record(
@@ -64,6 +75,21 @@ def export_trace_site(run_dir: Path, output_dir: Path) -> Path:
 	return output_dir / "index.html"
 
 
+def split_trace_line(raw_line: str) -> tuple[str | None, str, dict[str, Any] | None]:
+	"""Splits a runner log line into its timestamp, text, and JSON object (None if not one)."""
+	line = raw_line.strip()
+	timestamp: str | None = None
+	match = _TIMESTAMP_PREFIX.match(line)
+	if match:
+		timestamp = match.group(1)
+		line = line[match.end() :]
+	try:
+		payload = json.loads(line)
+	except json.JSONDecodeError:
+		payload = None
+	return timestamp, line, payload if isinstance(payload, dict) else None
+
+
 def parse_codex_trace(
 	path: Path, *, secrets: Mapping[str, str] | None = None
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
@@ -76,19 +102,10 @@ def parse_codex_trace(
 	session_id: str | None = None
 
 	for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-		line = raw_line.strip()
-		if not line:
+		if not raw_line.strip():
 			continue
-		timestamp: str | None = None
-		match = _TIMESTAMP_PREFIX.match(line)
-		if match:
-			timestamp = match.group(1)
-			line = line[match.end() :]
-		try:
-			payload = json.loads(line)
-		except json.JSONDecodeError:
-			continue
-		if not isinstance(payload, dict):
+		timestamp, _, payload = split_trace_line(raw_line)
+		if payload is None:
 			continue
 
 		event_type = str(payload.get("type", "unknown"))
@@ -123,19 +140,10 @@ def parse_claude_trace(
 	task_types: dict[tuple[str, str], str] = {}
 
 	for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-		line = raw_line.strip()
-		if not line:
+		if not raw_line.strip():
 			continue
-		timestamp: str | None = None
-		match = _TIMESTAMP_PREFIX.match(line)
-		if match:
-			timestamp = match.group(1)
-			line = line[match.end() :]
-		try:
-			payload = json.loads(line)
-		except json.JSONDecodeError:
-			continue
-		if not isinstance(payload, dict):
+		timestamp, _, payload = split_trace_line(raw_line)
+		if payload is None:
 			continue
 
 		event_type = payload.get("type")
@@ -249,6 +257,118 @@ def _codex_event(
 	return event
 
 
+def parse_dsh_trace(
+	path: Path, *, secrets: Mapping[str, str] | None = None
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+	"""Reads DSH's --json events into the message blocks the viewer renders."""
+	if not path.is_file():
+		raise ValueError(f"runner log does not exist: {path}")
+
+	secret_values = secrets or {}
+	events: list[dict[str, Any]] = []
+	usage: dict[str, int] = {}
+	session_id = "default"
+	turns = 0
+	stop_reason: str | None = None
+	for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+		timestamp, _, payload = split_trace_line(raw_line)
+		if payload is None:
+			continue
+		# Read run-wide fields from any event, so they survive DSH moving them.
+		session_id = str(payload.get("sessionId") or session_id)
+		if isinstance(turn := payload.get("turn"), int):
+			turns = max(turns, turn)
+		if isinstance(raw_usage := payload.get("usage"), dict):
+			for key, value in raw_usage.items():
+				if isinstance(value, int):
+					name = _dsh_usage_key(str(key))
+					usage[name] = usage.get(name, 0) + value
+		if isinstance(reason := payload.get("reason"), dict) and reason.get("kind"):
+			stop_reason = str(reason["kind"])
+		event = _dsh_event(payload, timestamp, session_id, secret_values)
+		if event is None:
+			continue
+		if event["type"] == "result":
+			event["num_turns"] = turns
+			event["stop_reason"] = event.get("stop_reason") or stop_reason
+		events.append(event)
+	return events, usage
+
+
+def _dsh_usage_key(key: str) -> str:
+	"""Names a DSH usage counter the way the summary reads it (inputTokens -> input_tokens)."""
+	return _DSH_USAGE_ALIASES.get(key) or re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower()
+
+
+def _dsh_event(
+	payload: dict[str, Any],
+	timestamp: str | None,
+	session_id: str,
+	secrets: Mapping[str, str],
+) -> dict[str, Any] | None:
+	"""Maps one DSH event onto a viewer event, or None for progress events.
+
+	Events this version does not know are kept as system events rather than dropped.
+	"""
+	event: dict[str, Any] = {
+		"ts": timestamp,
+		"session_id": session_id,
+		"session_idx": 0,
+		"parent_tool_use_id": None,
+	}
+	event_type = str(payload.get("type") or "unknown")
+	text = _redact(str(payload.get("text") or ""), secrets)
+	if event_type == "session":
+		raw = {"session_id": session_id, "cwd": payload.get("cwd")}
+		event.update(type="system", subtype="init", raw=_redact_value(raw, secrets))
+	elif event_type in {"thinking", "text"} and not text.strip():
+		return None
+	elif event_type == "thinking":
+		event.update(type="assistant", blocks=[{"type": "thinking", "thinking": text}])
+	elif event_type == "text":
+		event.update(type="assistant", blocks=[{"type": "text", "text": text}])
+	elif event_type == "tool_call":
+		arguments = payload.get("input")
+		# DSH keeps arguments that JSON cannot round-trip as their raw text.
+		if not isinstance(arguments, dict):
+			arguments = {"arguments": arguments} if arguments not in (None, "") else {}
+		block = {
+			"type": "tool_use",
+			"id": payload.get("callId"),
+			"name": _DSH_TOOL_NAMES.get(str(payload.get("tool")), payload.get("tool")),
+			"input": _redact_value(arguments, secrets),
+		}
+		event.update(type="assistant", blocks=[block])
+	elif event_type == "tool_result":
+		content = str(payload.get("result") or "")
+		error = payload.get("error")
+		if isinstance(error, dict):
+			detail = " ".join(str(error[key]) for key in ("name", "code") if error.get(key))
+			detail += f": {error['reason']}" if error.get("reason") else ""
+			content = f"{content}\n{detail}" if content else detail
+		# "completed" only means the tool returned; a shell command in it may still have failed.
+		block = {
+			"type": "tool_result",
+			"tool_use_id": payload.get("callId"),
+			"content": _redact(content, secrets),
+			"is_error": payload.get("status") != "completed" or isinstance(error, dict),
+		}
+		event.update(type="user", blocks=[block])
+	elif event_type == "final":
+		event.update(type="result", result_text=text)
+	elif event_type == "error":
+		# A run that fails outside a turn ends on an error event instead of final.
+		message = _redact(str(payload.get("message") or ""), secrets)
+		event.update(
+			type="result", result_text=message, stop_reason=str(payload.get("code") or "error")
+		)
+	elif event_type == "status":
+		return None
+	else:
+		event.update(type="system", subtype=event_type, raw=_redact_value(payload, secrets))
+	return event
+
+
 def _build_record(
 	run_dir: Path,
 	run_result: dict[str, Any],
@@ -282,7 +402,7 @@ def _build_record(
 	)
 	result_events = [event for event in events if event.get("type") == "result"]
 	result_event = result_events[-1] if result_events else {}
-	if trace_format == "claude_code":
+	if trace_format in _MESSAGE_BLOCK_FORMATS:
 		reported_turns = [event.get("num_turns") for event in result_events]
 		turn_count = sum(turns for turns in reported_turns if isinstance(turns, int))
 	else:
@@ -351,7 +471,7 @@ def _build_record(
 		"session_ids": [session["session_id"] for session in sessions],
 		"num_turns": turn_count,
 	}
-	if trace_format == "claude_code":
+	if trace_format in _MESSAGE_BLOCK_FORMATS:
 		init_raw = _claude_init(events)
 		summary.update(
 			tools_offered=sessions[0]["tools"],

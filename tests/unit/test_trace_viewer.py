@@ -4,7 +4,70 @@ import json
 from pathlib import Path
 
 from trace_viewer import export_trace_site
-from trace_viewer.exporter import parse_claude_trace, parse_codex_trace
+from trace_viewer.exporter import parse_claude_trace, parse_codex_trace, parse_dsh_trace
+
+_DSH_LOG = (
+	"[llm-deepseek-api-key] model listing loaded 2 model(s)\n"
+	'[2026-11-20T01:00:00Z] {"type":"session","sessionId":"dsh-1","cwd":"/repo"}\n'
+	'[2026-11-20T01:00:01Z] {"type":"status","phase":"turn_start","turn":1}\n'
+	'[2026-11-20T01:00:02Z] {"type":"thinking","text":"Read the README first."}\n'
+	'[2026-11-20T01:00:02Z] {"type":"thinking","text":""}\n'
+	'[2026-11-20T01:00:03Z] {"type":"text","text":"Inspecting the artifact."}\n'
+	'[2026-11-20T01:00:04Z] {"type":"tool_call","callId":"call-1","tool":"bash",'
+	'"input":{"command":"echo secret-value","description":"Print"}}\n'
+	'[2026-11-20T01:00:05Z] {"type":"tool_result","callId":"call-1","status":"completed",'
+	'"result":"secret-value\\n"}\n'
+	'[2026-11-20T01:00:06Z] {"type":"tool_call","callId":"call-2","tool":"read",'
+	'"input":{"path":"missing.txt"}}\n'
+	'[2026-11-20T01:00:07Z] {"type":"tool_result","callId":"call-2","status":"error",'
+	'"result":"no such file"}\n'
+	'[2026-11-20T01:00:08Z] {"type":"status","phase":"turn_end","turn":1}\n'
+	'[2026-11-20T01:00:09Z] {"type":"final","text":"All done."}\n'
+)
+
+
+def test_parse_dsh_trace_maps_events_onto_message_blocks(tmp_path: Path) -> None:
+	trace = tmp_path / "runner_output.log"
+	trace.write_text(_DSH_LOG, encoding="utf-8")
+
+	events, usage = parse_dsh_trace(trace, secrets={"TEST_TOKEN": "secret-value"})
+
+	assert [event["type"] for event in events] == [
+		"system",
+		"assistant",
+		"assistant",
+		"assistant",
+		"user",
+		"assistant",
+		"user",
+		"result",
+	]
+	assert {event["session_id"] for event in events} == {"dsh-1"}
+	assert events[0]["subtype"] == "init"
+	assert events[0]["raw"] == {"session_id": "dsh-1", "cwd": "/repo"}
+	assert events[1]["ts"] == "2026-11-20T01:00:02Z"
+	assert events[1]["blocks"] == [{"type": "thinking", "thinking": "Read the README first."}]
+	assert events[2]["blocks"] == [{"type": "text", "text": "Inspecting the artifact."}]
+	assert events[3]["blocks"] == [
+		{
+			"type": "tool_use",
+			"id": "call-1",
+			"name": "Bash",
+			"input": {"command": "echo [REDACTED:TEST_TOKEN]", "description": "Print"},
+		}
+	]
+	assert events[4]["blocks"] == [
+		{
+			"type": "tool_result",
+			"tool_use_id": "call-1",
+			"content": "[REDACTED:TEST_TOKEN]\n",
+			"is_error": False,
+		}
+	]
+	assert events[6]["blocks"][0]["is_error"] is True
+	assert events[7]["result_text"] == "All done."
+	assert events[7]["num_turns"] == 1
+	assert usage == {}
 
 
 def test_parse_codex_trace_reads_completed_items_and_usage(tmp_path: Path) -> None:
@@ -351,6 +414,73 @@ def test_recorded_trace_format_wins_over_the_agent_name(tmp_path: Path) -> None:
 	record = _exported_record(tmp_path / "site")
 	assert record["meta"]["trace_format"] == "claude_code"
 	assert record["summary"]["final_result_text"] == "done"
+
+
+def test_export_trace_site_reads_dsh_runs(tmp_path: Path) -> None:
+	run_dir = tmp_path / "run"
+	_write_run(run_dir, _DSH_LOG, agent_kind="deepseek", trace_format="dsh")
+	export_trace_site(run_dir, tmp_path / "site")
+	record = _exported_record(tmp_path / "site")
+	assert record["meta"]["trace_format"] == "dsh"
+	assert record["summary"]["final_result_text"] == "All done."
+	assert record["sessions"][0]["cwd"] == "/repo"
+	assert record["summary"]["num_turns"] == 1
+
+
+def test_parse_dsh_trace_reads_fields_newer_dsh_versions_add(tmp_path: Path) -> None:
+	trace = tmp_path / "runner_output.log"
+	trace.write_text(
+		'{"type":"session","sessionId":"dsh-2","cwd":"/repo"}\n'
+		'{"type":"status","phase":"turn_start","turn":1}\n'
+		'{"type":"tool_call","callId":"c1","tool":"bash","input":"1e400"}\n'
+		'{"type":"tool_result","callId":"c1","status":"error","result":"",'
+		'"error":{"name":"ToolError","code":"AUTO_REVIEW_DENIED","reason":"not allowed"}}\n'
+		'{"type":"status","phase":"step_end","turn":1,"step":1,'
+		'"usage":{"inputTokens":10,"outputTokens":4,"cacheReadTokens":6}}\n'
+		'{"type":"status","phase":"step_end","turn":2,"step":1,'
+		'"usage":{"inputTokens":5,"outputTokens":1}}\n'
+		'{"type":"plan_update","steps":["a","b"]}\n'
+		'{"type":"final","sessionId":"dsh-2","reason":{"kind":"completed"},"text":"Done."}\n',
+		encoding="utf-8",
+	)
+
+	events, usage = parse_dsh_trace(trace)
+
+	assert events[1]["blocks"][0]["input"] == {"arguments": "1e400"}
+	result = events[2]["blocks"][0]
+	assert result["is_error"] is True
+	assert result["content"] == "ToolError AUTO_REVIEW_DENIED: not allowed"
+	assert events[3]["type"] == "system"
+	assert events[3]["subtype"] == "plan_update"
+	assert events[3]["raw"] == {"type": "plan_update", "steps": ["a", "b"]}
+	assert events[4]["type"] == "result"
+	assert events[4]["stop_reason"] == "completed"
+	assert events[4]["num_turns"] == 2
+	assert usage == {"input_tokens": 15, "output_tokens": 5, "cache_read_input_tokens": 6}
+
+
+def test_parse_dsh_trace_ends_a_failed_run_on_its_error_event(tmp_path: Path) -> None:
+	trace = tmp_path / "runner_output.log"
+	trace.write_text(
+		'{"type":"session","sessionId":"dsh-3","cwd":"/repo"}\n'
+		'{"type":"error","code":"SESSION_NOT_FOUND","message":"no stored session"}\n',
+		encoding="utf-8",
+	)
+
+	events, _ = parse_dsh_trace(trace)
+
+	assert events[-1]["type"] == "result"
+	assert events[-1]["stop_reason"] == "SESSION_NOT_FOUND"
+	assert events[-1]["result_text"] == "no stored session"
+
+
+def test_dsh_runs_without_a_recorded_trace_format_are_read_as_dsh(tmp_path: Path) -> None:
+	run_dir = tmp_path / "run"
+	_write_run(run_dir, _DSH_LOG, agent_kind="deepseek")
+	export_trace_site(run_dir, tmp_path / "site")
+	record = _exported_record(tmp_path / "site")
+	assert record["meta"]["trace_format"] == "dsh"
+	assert record["summary"]["final_result_text"] == "All done."
 
 
 def test_unknown_agents_get_a_raw_log_view(tmp_path: Path) -> None:

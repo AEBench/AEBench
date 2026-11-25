@@ -12,20 +12,22 @@ from runtime.agents import load_agent, resolve_secrets
 
 
 @pytest.mark.parametrize(
-	("name", "key", "file_env"),
+	("name", "key", "file_env", "trace_format"),
 	[
-		("deepseek", "DEEPSEEK_API_KEY", "AEBENCH_DEEPSEEK_API_KEY_FILE"),
-		("zcode", "ZAI_CODING_PLAN_KEY", "AEBENCH_ZAI_CODING_PLAN_KEY_FILE"),
+		("deepseek", "DEEPSEEK_API_KEY", "AEBENCH_DEEPSEEK_API_KEY_FILE", "dsh"),
+		("zcode", "ZAI_CODING_PLAN_KEY", "AEBENCH_ZAI_CODING_PLAN_KEY_FILE", "raw"),
 	],
 )
-def test_open_model_credentials(tmp_path: Path, name: str, key: str, file_env: str) -> None:
+def test_open_model_credentials(
+	tmp_path: Path, name: str, key: str, file_env: str, trace_format: str
+) -> None:
 	agent = load_agent(name)
 	token = tmp_path / "key"
 	token.write_text("test-value\n")
 	assert resolve_secrets(agent, environ={key: "test-value"}) == {key: "test-value"}
 	assert resolve_secrets(agent, environ={file_env: str(token)}) == {key: "test-value"}
 	assert agent.config.reasoning_effort == "high"
-	assert agent.config.trace_format.value == "raw"
+	assert agent.config.trace_format.value == trace_format
 
 
 @pytest.mark.parametrize(
