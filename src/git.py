@@ -357,11 +357,9 @@ def _remove_entry(entry: GitCacheEntryStatus) -> None:
 def _known_case_dirs(state: ProjectState) -> set[Path]:
 	out: set[Path] = set()
 	for entry in state.registry.cases.values():
-		path = Path(entry.path)
-		if not path.is_absolute():
-			path = state.root / path
+		path = entry.resolve(state.root)
 		if path.is_dir():
-			out.add(path.resolve())
+			out.add(path)
 	bundles_dir = state.config.resolve_bundles_dir(state.root)
 	if bundles_dir.exists():
 		out.update(
