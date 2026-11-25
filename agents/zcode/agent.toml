@@ -1,6 +1,7 @@
 description = "GLM-5.3-Flash with ZCode and a Z.AI Coding Plan"
 requires = ["zcode", "node"]
 reasoning_effort = "high"
+trace_format = "zcode"
 
 [[secrets]]
 name = "ZAI_CODING_PLAN_KEY"

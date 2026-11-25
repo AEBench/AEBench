@@ -4,7 +4,12 @@ import json
 from pathlib import Path
 
 from trace_viewer import export_trace_site
-from trace_viewer.exporter import parse_claude_trace, parse_codex_trace, parse_dsh_trace
+from trace_viewer.exporter import (
+	parse_claude_trace,
+	parse_codex_trace,
+	parse_dsh_trace,
+	parse_zcode_trace,
+)
 
 _DSH_LOG = (
 	"[llm-deepseek-api-key] model listing loaded 2 model(s)\n"
@@ -68,6 +73,124 @@ def test_parse_dsh_trace_maps_events_onto_message_blocks(tmp_path: Path) -> None
 	assert events[7]["result_text"] == "All done."
 	assert events[7]["num_turns"] == 1
 	assert usage == {}
+
+
+def _zcode_line(event_type: str, ts: str = "", **payload: object) -> str:
+	"""Writes one ZCode stream-json event the way the runner logs it."""
+	event = {"type": event_type, "sessionId": "sess-1", "seq": 1, "payload": payload}
+	prefix = f"[2026-11-20T02:00:{ts}Z] " if ts else ""
+	return prefix + json.dumps(event) + "\n"
+
+
+def _zcode_stream(message: str, kind: str, **fields: object) -> str:
+	return _zcode_line("model.streaming", assistantMessageId=message, kind=kind, **fields)
+
+
+_ZCODE_LOG = (
+	"[2026-11-20T02:00:00Z] ZCode Built-in skipped (not-due)\n"
+	+ _zcode_line("turn.started", "01", turnNumber=0, input="the prompt")
+	+ _zcode_line("session.updated", modelId="glm-5.3-flash")
+	+ _zcode_stream("m1", "start", delta="")
+	+ _zcode_stream("m1", "reasoning_start", delta="")
+	+ _zcode_line(
+		"model.streaming", "02", assistantMessageId="m1", kind="reasoning_delta", delta="Read "
+	)
+	+ _zcode_stream("m1", "reasoning_delta", delta="the README.")
+	+ _zcode_stream("m1", "reasoning_end", delta="")
+	+ _zcode_stream("m1", "text_delta", delta="Inspecting.")
+	+ _zcode_stream("m1", "text_end", delta="")
+	+ _zcode_stream("m1", "tool_input_start", toolCallId="c1", toolName="Bash", delta="")
+	+ _zcode_stream("m1", "tool_input_delta", toolCallId="c1", delta='{"command":')
+	+ _zcode_stream(
+		"m1",
+		"tool_call",
+		toolCallId="c1",
+		toolName="Bash",
+		input={"command": "echo secret-value", "description": "Print"},
+	)
+	+ _zcode_stream("m1", "tool_call", toolCallId="c2", toolName="WebFetch", input={"url": "u"})
+	+ _zcode_stream("m1", "finish", delta="", done=True)
+	+ _zcode_line("tool.updated", toolCallId="c1", toolName="Bash", kind="started")
+	+ _zcode_line("tool.updated", toolCallId="c1", toolName="Bash", kind="progress")
+	+ _zcode_line(
+		"tool.updated",
+		toolCallId="c1",
+		kind="result",
+		result={"success": True, "content": "secret-value\n"},
+	)
+	+ _zcode_line(
+		"tool.updated",
+		toolCallId="c2",
+		kind="error",
+		error={"code": "TOOL_EXECUTION_FAILED", "message": "Unsupported content type"},
+	)
+	+ _zcode_line("tool.updated", toolCallIds=["c1", "c2"], kind="batch")
+	+ _zcode_line("streamRecovery.updated", kind="tool_result", toolCallId="c1")
+	+ _zcode_stream("m2", "text_delta", delta="All done.")
+	+ _zcode_stream("m2", "finish", delta="", done=True)
+	+ _zcode_line(
+		"turn.completed",
+		response="All done.",
+		resultType="success",
+		usage={"source": "provider", "inputTokens": 10, "outputTokens": 4, "cacheReadTokens": 6},
+	)
+	+ '{"type":"result","sessionId":"sess-1","response":"All done.",'
+	'"usage":{"inputTokens":10,"outputTokens":4,"cacheReadTokens":6}}\n'
+)
+
+
+def test_parse_zcode_trace_maps_events_onto_message_blocks(tmp_path: Path) -> None:
+	trace = tmp_path / "runner_output.log"
+	trace.write_text(_ZCODE_LOG, encoding="utf-8")
+
+	events, usage = parse_zcode_trace(trace, secrets={"TEST_TOKEN": "secret-value"})
+
+	assert [event["type"] for event in events] == [
+		"system",
+		"assistant",
+		"assistant",
+		"assistant",
+		"assistant",
+		"user",
+		"user",
+		"assistant",
+		"result",
+	]
+	assert {event["session_id"] for event in events} == {"sess-1"}
+	assert events[0]["subtype"] == "init"
+	assert events[0]["raw"] == {"session_id": "sess-1"}
+	assert events[1]["ts"] == "2026-11-20T02:00:02Z"
+	assert events[1]["blocks"] == [{"type": "thinking", "thinking": "Read the README."}]
+	assert events[2]["blocks"] == [{"type": "text", "text": "Inspecting."}]
+	assert events[3]["blocks"] == [
+		{
+			"type": "tool_use",
+			"id": "c1",
+			"name": "Bash",
+			"input": {"command": "echo [REDACTED:TEST_TOKEN]", "description": "Print"},
+		}
+	]
+	assert events[5]["blocks"] == [
+		{
+			"type": "tool_result",
+			"tool_use_id": "c1",
+			"content": "[REDACTED:TEST_TOKEN]\n",
+			"is_error": False,
+		}
+	]
+	assert events[6]["blocks"] == [
+		{
+			"type": "tool_result",
+			"tool_use_id": "c2",
+			"content": "TOOL_EXECUTION_FAILED: Unsupported content type",
+			"is_error": True,
+		}
+	]
+	assert events[7]["blocks"] == [{"type": "text", "text": "All done."}]
+	assert events[8]["result_text"] == "All done."
+	assert events[8]["stop_reason"] == "success"
+	assert events[8]["num_turns"] == 2
+	assert usage == {"input_tokens": 10, "output_tokens": 4, "cache_read_input_tokens": 6}
 
 
 def test_parse_codex_trace_reads_completed_items_and_usage(tmp_path: Path) -> None:
@@ -521,3 +644,73 @@ def test_export_never_runs_a_converter_named_in_the_run_record(tmp_path: Path) -
 	assert not ran.exists()
 	assert record["meta"]["trace_format"] == "raw"
 	assert record["events"][0]["blocks"] == [{"type": "text", "text": "custom output"}]
+
+
+def test_parse_zcode_trace_keeps_unknown_events_and_reads_new_fields(tmp_path: Path) -> None:
+	trace = tmp_path / "runner_output.log"
+	trace.write_text(
+		_zcode_stream("m1", "tool_call", toolCallId="c1", toolName="Bash", input="1e400")
+		+ _zcode_line(
+			"tool.updated",
+			toolCallId="c1",
+			kind="result",
+			result={"success": False, "content": ["a"]},
+		)
+		+ _zcode_stream("m1", "summary_delta", delta="Short summary.")
+		+ _zcode_line("plan.updated", steps=["a", "b"])
+		+ _zcode_line("turn.completed", usage={"inputTokens": 3})
+		+ _zcode_line("turn.completed", usage={"inputTokens": 2, "outputTokens": 1}),
+		encoding="utf-8",
+	)
+
+	events, usage = parse_zcode_trace(trace)
+
+	assert events[1]["blocks"][0]["input"] == {"arguments": "1e400"}
+	assert events[2]["blocks"][0]["is_error"] is True
+	assert events[2]["blocks"][0]["content"] == '["a"]'
+	assert events[3]["blocks"] == [{"type": "text", "text": "Short summary."}]
+	assert events[4]["type"] == "system"
+	assert events[4]["subtype"] == "plan.updated"
+	assert events[4]["raw"]["payload"] == {"steps": ["a", "b"]}
+	assert usage == {"input_tokens": 5, "output_tokens": 1}
+
+
+def test_parse_zcode_trace_ends_a_failed_turn_on_its_error(tmp_path: Path) -> None:
+	trace = tmp_path / "runner_output.log"
+	trace.write_text(
+		_zcode_stream("m1", "text_delta", delta="Starting.")
+		+ _zcode_line(
+			"turn.failed",
+			turnPhase="model",
+			error={"code": "PROVIDER_RATE_LIMITED", "message": "too many requests"},
+		),
+		encoding="utf-8",
+	)
+
+	events, _ = parse_zcode_trace(trace)
+
+	assert events[1]["blocks"] == [{"type": "text", "text": "Starting."}]
+	assert events[-1]["type"] == "result"
+	assert events[-1]["stop_reason"] == "PROVIDER_RATE_LIMITED"
+	assert events[-1]["result_text"] == "too many requests"
+	assert events[-1]["num_turns"] == 1
+
+
+def test_export_trace_site_reads_zcode_runs(tmp_path: Path) -> None:
+	run_dir = tmp_path / "run"
+	_write_run(run_dir, _ZCODE_LOG, agent_kind="zcode", trace_format="zcode")
+	export_trace_site(run_dir, tmp_path / "site")
+	record = _exported_record(tmp_path / "site")
+	assert record["meta"]["trace_format"] == "zcode"
+	assert record["summary"]["final_result_text"] == "All done."
+	assert record["summary"]["num_turns"] == 2
+	assert record["summary"]["usage_total"]["cache_read_input_tokens"] == 6
+
+
+def test_zcode_runs_without_a_recorded_trace_format_are_read_as_zcode(tmp_path: Path) -> None:
+	run_dir = tmp_path / "run"
+	_write_run(run_dir, _ZCODE_LOG, agent_kind="zcode")
+	export_trace_site(run_dir, tmp_path / "site")
+	record = _exported_record(tmp_path / "site")
+	assert record["meta"]["trace_format"] == "zcode"
+	assert record["summary"]["final_result_text"] == "All done."
