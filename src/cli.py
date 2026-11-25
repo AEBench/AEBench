@@ -168,6 +168,16 @@ def _add_monitor_options(parser: argparse.ArgumentParser) -> None:
 			"socket path cannot exceed 107 bytes."
 		),
 	)
+	parser.add_argument(
+		"--workdir-snapshots",
+		action="store_true",
+		help=(
+			"Take a btrfs snapshot of the workspace before every tool call the agent "
+			"makes (agents with tool hooks only). The workspace is created under "
+			"$AEBENCH_BTRFS_WORKSPACE_ROOT (see scripts/setup_btrfs_workspace_root.sh), "
+			"and the snapshots are kept there after the run."
+		),
+	)
 
 
 def cli_main(argv: list[str] | None = None) -> int:
@@ -310,6 +320,14 @@ def _case_run(args: argparse.Namespace) -> int:
 				f"Container system files changed: {system.executables_count} executables, "
 				f"{system.python_startup_count} Python startup hooks, {system.etc_count} in /etc "
 				f"({system.diff_path})"
+			)
+		if monitor.workdir_snapshots is not None:
+			snapshots = monitor.workdir_snapshots
+			print(
+				f"Workdir snapshots: {snapshots.count} taken ({snapshots.tool_count} before "
+				f"tool calls, {snapshots.failed_count} failed, final "
+				f"{'ok' if snapshots.final_ok else 'missing'}) in {snapshots.snapshot_dir} "
+				f"({snapshots.index_path})"
 			)
 	if result.runtime_result.runtime.snapshot_failed:
 		from runtime.reporting import snapshot_status
@@ -520,6 +538,7 @@ def _run_options(args: argparse.Namespace) -> RunOptions:
 		skip_incompatible=bool(getattr(args, "skip_incompatible", False)),
 		monitor_commands=bool(getattr(args, "monitor_commands", False)) or trajectory_audit,
 		monitor_socket_root=getattr(args, "socket_dir", None),
+		workdir_snapshots=bool(getattr(args, "workdir_snapshots", False)),
 		trajectory_audit=trajectory_audit,
 		oracle_fail_fast=bool(getattr(args, "oracle_fail_fast", False)),
 	)

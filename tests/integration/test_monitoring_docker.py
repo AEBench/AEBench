@@ -88,6 +88,8 @@ def test_a_monitored_container_records_the_agent_user_shells(tmp_path: Path) -> 
 		runtime_agent_home="/home/agent",
 		host_command_socket_dir=broker.socket_dir,
 		runtime_command_socket_dir="/run/aebench",
+		host_tool_hooks_dir=None,
+		runtime_tool_hooks_dir=None,
 	)
 	runtime = DockerRuntime(image=_IMAGE)
 
@@ -178,6 +180,8 @@ def test_the_shim_runs_unmonitored_with_no_socket_at_all(tmp_path: Path) -> None
 		runtime_agent_home="/home/agent",
 		host_command_socket_dir=None,
 		runtime_command_socket_dir=None,
+		host_tool_hooks_dir=None,
+		runtime_tool_hooks_dir=None,
 	)
 	runtime = DockerRuntime(image=_IMAGE)
 

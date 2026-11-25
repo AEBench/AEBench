@@ -14,6 +14,7 @@ It is deleted after the run.
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import shutil
@@ -23,7 +24,7 @@ from pathlib import Path
 
 from models import AgentResult
 
-from .agents import AgentDefinition, resolve_files, resolve_secrets
+from .agents import AgentDefinition, ToolHookFormat, resolve_files, resolve_secrets
 from .backend import BenchRuntime, DockerRuntime, LocalRuntime
 
 _RUNTIME_ENV_KEYS = ("PATH", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TERM")
@@ -53,6 +54,76 @@ TIMESTAMP_SCRIPT = "timestamp_lines.py"
 PROMPT_FILE = "prompt.txt"
 SECRETS_FILE = "secrets.sh"
 _COPY_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", ".git")
+
+# Workdir snapshots: a hook the harness runs before every tool call, and the
+# harness settings that install it. They live in their own directory, mounted
+# read-only into the container (not in the writable support directory), so the
+# agent cannot edit or disable them. agent.sh reads the settings path from
+# $AEBENCH_TOOL_HOOK_SETTINGS, which is set only when the hook is installed.
+WORKDIR_SNAPSHOT_HOOK = "workdir_snapshot_hook.py"
+TOOL_HOOK_SETTINGS = "tool_hooks.json"
+TOOL_HOOK_SETTINGS_ENV = "AEBENCH_TOOL_HOOK_SETTINGS"
+RUNTIME_TOOL_HOOKS_DIR = "/run/aebench-hooks"
+# The hook gives up (and stops the agent) before the harness would kill it,
+# which for Claude Code would let the tool run unsnapshotted.
+_HOOK_CLIENT_TIMEOUT_SECONDS = 300
+_HOOK_TIMEOUT_SECONDS = 330
+
+
+def install_workdir_snapshot_hook(
+	agent: AgentDefinition,
+	host_hooks_dir: Path,
+	runtime_hooks_dir: str,
+	*,
+	runtime_socket_path: str,
+) -> str:
+	"""Writes the pre-tool-call snapshot hook and its settings into a new `host_hooks_dir`.
+
+	The caller mounts that directory read-only at `runtime_hooks_dir`. Returns the
+	settings file's runtime path, for run_agent(tool_hook_settings=...).
+	"""
+	if agent.config.tool_hooks != ToolHookFormat.CLAUDE_CODE:
+		raise ValueError(
+			f"agent {agent.name!r} declares no supported tool_hooks in agent.toml, so it "
+			"cannot take workdir snapshots (supported: claude_code)"
+		)
+	host_hooks_dir.mkdir(mode=_PRIVATE_DIRECTORY_MODE)
+	_write_private(
+		host_hooks_dir / WORKDIR_SNAPSHOT_HOOK,
+		(_SUPPORT_FILES_DIR / WORKDIR_SNAPSHOT_HOOK).read_text(encoding="utf-8"),
+	)
+	hook = shlex.join(
+		[
+			"python3",
+			f"{runtime_hooks_dir}/{WORKDIR_SNAPSHOT_HOOK}",
+			runtime_socket_path,
+			str(_HOOK_CLIENT_TIMEOUT_SECONDS),
+		]
+	)
+	settings = {
+		# --settings outranks the user settings the agent can write in $CLAUDE_CONFIG_DIR.
+		"disableAllHooks": False,
+		"hooks": {
+			"PreToolUse": [
+				{
+					"matcher": "*",
+					"hooks": [
+						{
+							"type": "command",
+							"command": hook,
+							"timeout": _HOOK_TIMEOUT_SECONDS,
+							# Block the tool call if the hook cannot start, crashes or times
+							# out (by default Claude Code lets it run). Claude Code >= 2.1.295;
+							# older versions ignore the key.
+							"onFailure": "block",
+						}
+					],
+				}
+			]
+		},
+	}
+	_write_private(host_hooks_dir / TOOL_HOOK_SETTINGS, json.dumps(settings, indent=1))
+	return f"{runtime_hooks_dir}/{TOOL_HOOK_SETTINGS}"
 
 
 def prepare_agent_support_dir(
@@ -106,6 +177,7 @@ def run_agent(
 	timeout_seconds: float,
 	output_path: Path,
 	shell_path: str = "bash",
+	tool_hook_settings: str | None = None,
 ) -> AgentResult:
 	reasoning_effort = agent.config.reasoning_effort
 	_write_private(
@@ -118,6 +190,9 @@ def run_agent(
 		runtime_support_dir=runtime_support_dir,
 		include_host_runtime=isinstance(runtime, LocalRuntime),
 	)
+	if tool_hook_settings is not None:
+		# From install_workdir_snapshot_hook(); agent.sh passes it to the harness.
+		env[TOOL_HOOK_SETTINGS_ENV] = tool_hook_settings
 	command = _timeout_command(runtime, timeout_seconds) + _agent_shell_command(
 		runtime, shell_path=shell_path
 	)
@@ -296,6 +371,7 @@ def _agent_shell_command(runtime: BenchRuntime, *, shell_path: str = "bash") -> 
 __all__ = [
 	"check_agent_requirements",
 	"clear_agent_support_dir",
+	"install_workdir_snapshot_hook",
 	"prepare_agent_runtime",
 	"prepare_agent_support_dir",
 	"run_agent",
