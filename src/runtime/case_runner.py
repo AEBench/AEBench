@@ -255,7 +255,6 @@ class _CaseRunner:
 				run_spec=self.task,
 				prompt=prompt,
 				settings=self.context.settings,
-				run_control=None,
 				host_workspace=self.workspace,
 				runtime_workspace=runtime_workspace,
 				# The case's refs hold the expected results; only the oracle reads them.

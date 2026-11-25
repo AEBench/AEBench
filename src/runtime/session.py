@@ -5,7 +5,6 @@ from pathlib import Path
 
 from config import Config
 from models import PromptBundle, TaskConfig
-from run_control import RunControl
 
 from .backend import BenchRuntime
 from .reporting import TaskPaths
@@ -16,7 +15,6 @@ class RunSession:
 	run_spec: TaskConfig
 	prompt: PromptBundle
 	settings: Config
-	run_control: RunControl | None
 
 	host_workspace: Path
 	runtime_workspace: str

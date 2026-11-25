@@ -13,7 +13,6 @@ dependencies = [
   "pydantic>=2.10.6",
   "rich>=14.0.0",
   "structlog>=25.4.0",
-  "textual>=1.0.0",
   "tiktoken>=0.11.0",
   "tomli>=2.2.1; python_version < '3.11'",
 ]
@@ -44,7 +43,6 @@ py-modules = [
   "models",
   "project_config",
   "prompting",
-  "run_control",
   "shell",
   "settings",
   "sources",
