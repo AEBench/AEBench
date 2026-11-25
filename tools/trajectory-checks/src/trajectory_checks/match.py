@@ -558,7 +558,8 @@ def _write_events(
         span = record["t_start"], record["t_end"]  # measured (D32)
         writer = (snap["scope"], "exec", cid, *span)
         for op, key in _OPS:
-            for raw in snap[key]:
+            # MC-05: untracked files are reported in their own lists.
+            for raw in [*snap[key], *(snap[f"{key}_untracked"] or ())]:
                 path, inside = relative_path(raw, root)
                 op_type = "mode" if op == "modify" and path in mode_only else op
                 reports.setdefault(path, []).append(
