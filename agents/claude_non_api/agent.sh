@@ -23,7 +23,13 @@ export BASH_MAX_TIMEOUT_MS=36000000
 # Limit Bash output returned to Claude (characters)
 export BASH_MAX_OUTPUT_LENGTH=16000
 
+# Hooks AEBench installs (workdir snapshots before every tool call), if any.
+hook_settings=()
+if [ -n "${AEBENCH_TOOL_HOOK_SETTINGS:-}" ]; then
+    hook_settings=(--settings "$AEBENCH_TOOL_HOOK_SETTINGS")
+fi
+
 # Use the effort level selected by AEBench
 printf '%s' "$PROMPT" | claude --print --verbose --model "$AEBENCH_MODEL" \
     --output-format stream-json --effort "$AEBENCH_REASONING_EFFORT" --thinking-display summarized \
-    --dangerously-skip-permissions
+    "${hook_settings[@]}" --dangerously-skip-permissions

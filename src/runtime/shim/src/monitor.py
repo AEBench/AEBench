@@ -1,11 +1,14 @@
+import argparse
 import asyncio
 import json
 import os
+import signal as signallib
 import socket as socketlib
 import struct
 import sys
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, BinaryIO, TypeAlias
@@ -32,6 +35,13 @@ STDOUT = 1
 STDERR = 2
 END = 3
 DECISION = 4
+# A client asks for a snapshot of the workspace subvolume and waits until it is taken.
+WORKDIR_SNAPSHOT = 5
+WORKDIR_SNAPSHOT_DONE = 6
+
+WORKDIR_SNAPSHOTS_BASENAME = "workdir_snapshots.jsonl"
+# Exit status when the final snapshot, taken on SIGTERM, failed.
+EXIT_FINAL_SNAPSHOT_FAILED = 3
 
 
 async def read_buffer(reader: asyncio.StreamReader, size: int) -> bytes | None:
@@ -322,9 +332,127 @@ class FileSnapshot(Monitor):
 		}
 
 
+class WorkdirSnapshotter:
+	"""Takes btrfs snapshots of the workspace subvolume, one at a time, in request order.
+
+	A single-worker executor runs the requests in submission order, so snapshots
+	are serialized and numbered in the order they are taken, while the event loop
+	keeps serving the shim's connections. Each snapshot is appended to the index
+	before its requester is answered.
+	"""
+
+	def __init__(self, subvolume: str, snapshot_dir: str, index_path: str) -> None:
+		# Imported here: only a snapshotting broker needs it, and it lives outside
+		# this script's directory (src/runtime/btrfs.py, stdlib only).
+		sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+		from runtime import btrfs
+
+		self._btrfs = btrfs
+		self.subvolume = subvolume
+		self.snapshot_dir = snapshot_dir
+		self.index_path = index_path
+		self._next_seq = 0
+		self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="workdir-snapshots")
+
+	def start(self) -> None:
+		os.makedirs(self.snapshot_dir, exist_ok=True)
+
+	def stop(self) -> None:
+		"""Finishes the requests already submitted, then ends the worker."""
+		self._executor.shutdown(wait=True)
+
+	async def request(self, fields: Record) -> Record:
+		"""Submits one snapshot and waits until it is taken, or has failed."""
+		requested = dict(fields)
+		requested["requested_at"] = datetime.now(timezone.utc).isoformat()
+		return await asyncio.wrap_future(self._executor.submit(self._take_and_index, requested))
+
+	def _take_and_index(self, fields: Record) -> Record:
+		entry = self._take(fields)
+		try:
+			write_record(entry, self.index_path)
+		except OSError as exc:
+			entry["ok"] = False
+			entry["error"] = f"could not write the snapshot index: {exc}"
+		return entry
+
+	def _take(self, fields: Record) -> Record:
+		seq = self._next_seq
+		self._next_seq += 1
+		name = f"{seq:06d}"
+		started = time.monotonic()
+		entry: Record = {"seq": seq, **fields, "snapshot": name}
+		try:
+			self._btrfs.snapshot(self.subvolume, os.path.join(self.snapshot_dir, name))
+			entry["ok"] = True
+			entry["error"] = None
+		except Exception as exc:
+			entry["ok"] = False
+			entry["error"] = f"{type(exc).__name__}: {exc}"
+		entry["taken_at"] = datetime.now(timezone.utc).isoformat()
+		entry["duration_ms"] = round((time.monotonic() - started) * 1000, 3)
+		return entry
+
+
+async def process_snapshot_request(
+	payload: bytes,
+	writer: asyncio.StreamWriter,
+	snapshotter: WorkdirSnapshotter | None,
+) -> None:
+	"""Takes the snapshot a client asked for, then answers with its outcome."""
+	try:
+		if snapshotter is None:
+			reply: Record = {"ok": False, "error": "workdir snapshots are not enabled"}
+		else:
+			# The client decides what metadata to send (the hook sends no tool input);
+			# it is recorded as sent.
+			fields = json.loads(payload)
+			if not isinstance(fields, dict):
+				raise ValueError("snapshot request must be a JSON object")
+			entry = await snapshotter.request(fields)
+			reply = {key: entry.get(key) for key in ("ok", "seq", "snapshot", "error")}
+	except Exception as exc:
+		reply = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+	try:
+		await send_frame(writer, WORKDIR_SNAPSHOT_DONE, json.dumps(reply).encode("utf-8"))
+	except (ConnectionError, OSError) as exc:
+		# The requester gave up (its hook timed out); the snapshot is still in the index.
+		print(f"could not answer snapshot {reply.get('seq')}: {exc}", flush=True)
+	finally:
+		writer.close()
+		try:
+			await writer.wait_closed()
+		except OSError:
+			pass
+
+
 def write_record(record: Record, log_path: str) -> None:
 	with open(log_path, "a", encoding="utf-8") as file:
 		file.write(json.dumps(record) + "\n")
+
+
+async def handle_client(
+	reader: asyncio.StreamReader,
+	writer: asyncio.StreamWriter,
+	output_dir: str,
+	run_id: str,
+	snapshotter: WorkdirSnapshotter | None = None,
+) -> None:
+	"""Dispatches one connection on its first frame: a snapshot request, or a shell."""
+	first: Frame | None = None
+	first_error: Exception | None = None
+	try:
+		first = await read_frame(reader)
+	except Exception as exc:
+		# Recorded by process_connection, like any other broken shell session.
+		first_error = exc
+	if first is not None and first[0] == WORKDIR_SNAPSHOT:
+		await process_snapshot_request(first[1], writer, snapshotter)
+		return
+	await process_connection(
+		reader, writer, output_dir, run_id, first=first, first_error=first_error, first_read=True
+	)
 
 
 async def process_connection(
@@ -332,6 +460,10 @@ async def process_connection(
 	writer: asyncio.StreamWriter,
 	output_dir: str,
 	run_id: str,
+	*,
+	first: Frame | None = None,
+	first_error: Exception | None = None,
+	first_read: bool = False,
 ) -> None:
 	"""Process and monitor the session for one shell invocation."""
 	command_id = uuid.uuid4().hex
@@ -355,7 +487,10 @@ async def process_connection(
 	context = CommandContext(record, output_dir, run_id)
 
 	try:
-		first = await read_frame(reader)
+		if first_error is not None:
+			raise first_error
+		if not first_read:
+			first = await read_frame(reader)
 
 		if first is None:
 			return
@@ -452,8 +587,13 @@ async def serve(
 	workspace_dir: str,
 	socket_path: str = SOCKET_PATH,
 	sock: socketlib.socket | None = None,
-) -> None:
-	"""Serves the broker, on <sock> when an embedder already bound one."""
+	snapshotter: WorkdirSnapshotter | None = None,
+) -> int:
+	"""Serves the broker, on <sock> when an embedder already bound one.
+
+	Runs until SIGTERM. A snapshotting broker then takes the final workspace
+	snapshot, and the exit status says whether it succeeded.
+	"""
 	os.makedirs(output_dir, exist_ok=True)
 	log_path = os.path.join(output_dir, LOG_BASENAME)
 	run_id = os.path.basename(os.path.normpath(output_dir))
@@ -473,7 +613,12 @@ async def serve(
 		reader: asyncio.StreamReader,
 		writer: asyncio.StreamWriter,
 	) -> None:
-		await process_connection(reader, writer, output_dir, run_id)
+		await handle_client(reader, writer, output_dir, run_id, snapshotter)
+
+	terminate = asyncio.Event()
+	asyncio.get_running_loop().add_signal_handler(signallib.SIGTERM, terminate.set)
+	if snapshotter is not None:
+		snapshotter.start()
 
 	if sock is None:
 		server = await asyncio.start_unix_server(handle_connection, path=socket_path)
@@ -482,28 +627,63 @@ async def serve(
 
 	print(f"listening on {socket_path}")
 	print(f"journal at {log_path}")
+	if snapshotter is not None:
+		print(f"workdir snapshots of {snapshotter.subvolume} in {snapshotter.snapshot_dir}")
+	sys.stdout.flush()
 
 	# One broker remains available for the duration of the agent invocation.
-	async with server:
-		await server.serve_forever()
+	try:
+		await terminate.wait()
+	finally:
+		# Not wait_closed(): it would wait on shells the agent left running.
+		server.close()
+
+	if snapshotter is None:
+		return 0
+	# The agent has exited, so this snapshot holds what its last tool call did.
+	final = await snapshotter.request({"kind": "final"})
+	snapshotter.stop()
+	outcome = "ok" if final["ok"] else final["error"]
+	print(f"final snapshot {final['seq']}: {outcome}", flush=True)
+	return 0 if final["ok"] else EXIT_FINAL_SNAPSHOT_FAILED
 
 
-def main(
-	output_dir: str,
-	workspace_dir: str,
-	socket_path: str = SOCKET_PATH,
-	socket_fd: str | None = None,
-) -> None:
+def main(argv: list[str] | None = None) -> int:
+	parser = argparse.ArgumentParser(prog="monitor.py")
+	parser.add_argument("output_dir")
+	parser.add_argument("workspace_dir")
+	parser.add_argument("socket_path", nargs="?", default=SOCKET_PATH)
 	# An embedder passes an already-listening descriptor, so the socket is
 	# accepting before this process starts.
-	sock = None if socket_fd is None else socketlib.socket(fileno=int(socket_fd))
-	asyncio.run(serve(output_dir, workspace_dir, socket_path, sock))
+	parser.add_argument("socket_fd", nargs="?", type=int, default=None)
+	parser.add_argument(
+		"--snapshot-subvolume",
+		default=None,
+		help="Btrfs subvolume holding the workspace; enables workdir snapshot requests.",
+	)
+	parser.add_argument(
+		"--snapshot-dir",
+		default=None,
+		help="Where snapshots go; on the same btrfs filesystem as the subvolume.",
+	)
+	args = parser.parse_args(argv)
+	if (args.snapshot_subvolume is None) != (args.snapshot_dir is None):
+		parser.error("--snapshot-subvolume and --snapshot-dir go together")
+
+	sock = None if args.socket_fd is None else socketlib.socket(fileno=args.socket_fd)
+	snapshotter = (
+		None
+		if args.snapshot_subvolume is None
+		else WorkdirSnapshotter(
+			args.snapshot_subvolume,
+			args.snapshot_dir,
+			os.path.join(args.output_dir, WORKDIR_SNAPSHOTS_BASENAME),
+		)
+	)
+	return asyncio.run(
+		serve(args.output_dir, args.workspace_dir, args.socket_path, sock, snapshotter)
+	)
 
 
 if __name__ == "__main__":
-	if not 3 <= len(sys.argv) <= 5:
-		raise SystemExit(
-			"usage: monitor.py <run-output-dir> <workspace-dir> [socket-path] [socket-fd]"
-		)
-
-	main(*sys.argv[1:])
+	sys.exit(main())

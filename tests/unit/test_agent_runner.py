@@ -413,6 +413,8 @@ def test_docker_artifact_workspace_mount_preserves_host_path(tmp_path: Path) -> 
 		runtime_agent_home="/home/agent",
 		host_command_socket_dir=None,
 		runtime_command_socket_dir=None,
+		host_tool_hooks_dir=None,
+		runtime_tool_hooks_dir=None,
 	)
 
 	command = runtime._docker_run_command(session)  # type: ignore[arg-type]
@@ -444,6 +446,8 @@ def test_docker_run_mounts_the_command_socket_read_only(tmp_path: Path) -> None:
 		runtime_agent_home="/home/agent",
 		host_command_socket_dir=socket_dir,
 		runtime_command_socket_dir="/run/aebench",
+		host_tool_hooks_dir=None,
+		runtime_tool_hooks_dir=None,
 	)
 
 	command = runtime._docker_run_command(session)  # type: ignore[arg-type]
@@ -475,9 +479,42 @@ def test_docker_run_has_no_socket_mount_without_monitoring(tmp_path: Path) -> No
 		runtime_agent_home="/home/agent",
 		host_command_socket_dir=None,
 		runtime_command_socket_dir=None,
+		host_tool_hooks_dir=None,
+		runtime_tool_hooks_dir=None,
 	)
 
 	assert not any("/run/aebench:" in argument for argument in runtime._docker_run_command(session))  # type: ignore[arg-type]
+
+
+def test_docker_run_mounts_the_tool_hooks_read_only(tmp_path: Path) -> None:
+	task = TaskConfig(
+		id="snapshotted",
+		runtime=RuntimeConfig(mode=RuntimeMode.DOCKER, image="aebench-agent:latest"),
+	)
+	support_dir = tmp_path / "agent-support"
+	hooks_dir = tmp_path / "tool-hooks"
+	runtime = DockerRuntime(container_name="test-container", resolved_image="aebench-agent:latest")
+	session = SimpleNamespace(
+		run_spec=task,
+		host_workspace=tmp_path,
+		runtime_workspace="/repo",
+		host_refs=None,
+		host_agent_support_dir=support_dir,
+		runtime_agent_support_dir="/run/aebench-agent",
+		runtime_agent_user="agent",
+		runtime_agent_home="/home/agent",
+		host_command_socket_dir=None,
+		runtime_command_socket_dir=None,
+		host_tool_hooks_dir=hooks_dir,
+		runtime_tool_hooks_dir="/run/aebench-hooks",
+	)
+
+	command = runtime._docker_run_command(session)  # type: ignore[arg-type]
+
+	# Read-only, and outside the writable support directory: the agent, which has
+	# sudo, cannot edit or remove the hook that snapshots its workspace.
+	assert f"{hooks_dir}:/run/aebench-hooks:ro" in command
+	assert f"{support_dir}:/run/aebench-agent" in command
 
 
 def test_agent_shell_command_can_bypass_the_shim() -> None:

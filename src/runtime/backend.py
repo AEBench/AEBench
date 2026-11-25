@@ -152,6 +152,10 @@ class DockerRuntime:
 					f"{session.host_command_socket_dir}:{session.runtime_command_socket_dir}:ro",
 				]
 			)
+		if session.host_tool_hooks_dir is not None and session.runtime_tool_hooks_dir is not None:
+			# Read-only, so the agent cannot edit or remove its own tool hook, even with
+			# sudo: the container lacks CAP_SYS_ADMIN, so it cannot remount it.
+			cmd.extend(["-v", f"{session.host_tool_hooks_dir}:{session.runtime_tool_hooks_dir}:ro"])
 		if session.run_spec.artifact_requirements.docker:
 			cmd.extend(["-v", "/var/run/docker.sock:/var/run/docker.sock"])
 		if self.gpu or bool(getattr(session.run_spec.runtime, "gpu", False)):

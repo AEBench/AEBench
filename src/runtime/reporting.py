@@ -182,6 +182,21 @@ def write_task_report(report_path: Path, result: RunResult, agent_summary: str) 
 				f"- Diff: `{system.diff_path}`",
 			]
 		)
+	snapshots = result.command_monitor.workdir_snapshots if result.command_monitor else None
+	if snapshots is not None:
+		lines.extend(
+			[
+				"",
+				"## Workdir Snapshots",
+				"",
+				f"- Taken: `{snapshots.count}`",
+				f"- Before tool calls: `{snapshots.tool_count}`",
+				f"- Failed: `{snapshots.failed_count}`",
+				f"- Final snapshot: `{'ok' if snapshots.final_ok else 'missing'}`",
+				f"- Snapshots: `{snapshots.snapshot_dir}`",
+				f"- Index: `{snapshots.index_path}`",
+			]
+		)
 	if result.error:
 		lines.extend(["", "## Error", "", result.error])
 	lines.extend(["", "## Agent Summary", "", agent_summary])
