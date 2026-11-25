@@ -328,7 +328,6 @@ def _coverage(
             name = row["disposition"]
             by_disposition[name] = by_disposition.get(name, 0) + 1
     coverage = {
-        "schema_version": "1",
         "run_key": run.get("run_key"),
         "family": run.get("family"),
         "inputs": {

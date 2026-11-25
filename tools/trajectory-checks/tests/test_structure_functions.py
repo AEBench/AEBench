@@ -812,7 +812,6 @@ def _structure(voided: bool) -> dict[str, Any]:
         },
     }
     return {
-        "schema_version": "1",
         "run_key": "art__agent__1",
         "family": "claude",
         "preconditions": {

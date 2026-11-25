@@ -61,11 +61,10 @@ MC-04 (`event` = `start` | `end`, `end_reason`), MC-05
 `tracked+untracked`), MC-07 (`hashes`), MC-10 (`ended_at`,
 `snapshot_before_ms`, `snapshot_after_ms`; `released_at` on one record only),
 `stdio` (the targets of fds 0, 1 and 2; the nested `cc` inherits its
-parent's `pipe:[N]` ends), MC-14 (`file_events.jsonl`, with layer 6 §4.3's
-`event_type` and one event using MC-14's `kind`) and MC-21
-(`schema_version` 2). The record shape otherwise copies
-`claude_eval_skipped.jsonl` (the `claude_eval` wrapper, the `stdout` and
-`stderr` blocks), with neutral commands and paths.
+parent's `pipe:[N]` ends) and MC-14 (`file_events.jsonl`, with layer 6
+§4.3's `event_type` and one event using MC-14's `kind`). The record shape
+otherwise copies `claude_eval_skipped.jsonl` (the `claude_eval` wrapper, the
+`stdout` and `stderr` blocks), with neutral commands and paths.
 
 | Record | Covers |
 |---|---|

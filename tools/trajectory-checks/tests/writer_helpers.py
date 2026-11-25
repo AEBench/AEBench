@@ -265,7 +265,7 @@ HUNK_FIELDS = frozenset(
 )
 WRITER_FIELDS = frozenset(
     {
-        *("schema_version", "run_key", "family", "capabilities", "bases"),
+        *("run_key", "family", "capabilities", "bases"),
         *("preconditions", "metrics", "diff_files_unclassified", "warnings"),
     }
 )
@@ -655,7 +655,6 @@ def _layer2(
     call_rows = _merged(call_rows, raw.get("call_facts") or [], "call_id")
     exec_rows = _merged(exec_rows, raw.get("exec_facts") or [], "command_id")
     run_facts = {
-        "schema_version": "1",
         "run_key": run["run_key"],
         "family": run["family"],
         "capabilities": dict(run["capabilities"]),
@@ -735,7 +734,6 @@ def _layer3(
         "reruns": [],
         "file_classes": classes,
         "structure": {
-            "schema_version": "1",
             "run_key": run["run_key"],
             "family": run["family"],
             "preconditions": {},
@@ -804,7 +802,6 @@ def _oracle_block(
 ) -> dict[str, Any]:
     caps = run["capabilities"]
     block = {
-        "schema_version": "1",
         "run_key": run["run_key"],
         "family": run["family"],
         "capabilities": dict(caps),
@@ -928,7 +925,6 @@ def _layer4(
         else "fails"
     )
     counts = {
-        "schema_version": "1",
         "run_key": run["run_key"],
         "family": run["family"],
         "capabilities": dict(caps),

@@ -38,8 +38,8 @@ Exec defaults (``DEFAULT_EXEC``): ``duration_s`` 1.0 when neither it nor
 ``complete`` True, ``cwd`` the run's workspace root, ``pid`` 1000 + list
 index, ``argv0`` "/bin/bash", ``command_norm`` = ``command``, ``wrapper``
 None, ``noise`` None, ``stdout_bytes`` and ``stderr_bytes`` 0, and every
-field decision D26 adds (``env_keys``, ``schema_version``,
-``parent_command_id`` and the others of ``NEW_EXEC_FIELDS``) None.
+field decision D26 adds (``env_keys``, ``parent_command_id`` and the
+others of ``NEW_EXEC_FIELDS``) None.
 ``snapshot`` defaults to status "ok", scope "tracked", empty lists,
 ``skip_reason`` None, the D26 fields (``hashes`` and the three
 ``*_untracked`` lists) None, and ``totals`` equal to the list lengths; a
@@ -132,8 +132,8 @@ EXEC_FIELDS = frozenset(
 # Decision D26: present in every Exec, None when the monitor did not record
 # them (``env_keys`` is in every existing trace).
 NEW_EXEC_FIELDS = (
-    *("env_keys", "schema_version", "parent_command_id", "root_command_id"),
-    *("depth", "ppid", "pgid", "sid", "parent_link", "record_type"),
+    *("env_keys", "parent_command_id", "root_command_id", "depth"),
+    *("ppid", "pgid", "sid", "parent_link", "record_type"),
     *("released_at", "ended_at", "snapshot_before_s", "snapshot_after_s"),
     *("reads", "orphans", "stdio"),
 )
@@ -165,7 +165,7 @@ CAPABILITIES = (
 RUN_INFO_FIELDS = frozenset(
     {
         *("t_start", "t_end", "workspace_root", "trace_ok", "run_key"),
-        *("family", "log_ok", "monitor_version", "schema_version"),
+        *("family", "log_ok", "monitor_version"),
         *("trace_meta", "final_diff_content", "final_workspace"),
         *("oracle_reads", "case_image_digest", "commit", "shim_intact"),
         *("unattributed_reads", "capabilities"),

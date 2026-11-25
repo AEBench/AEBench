@@ -172,7 +172,6 @@ class Hunk(typing.TypedDict):
 class WriterRun(typing.TypedDict):
     """writer.json (spec §5.4)."""
 
-    schema_version: str
     run_key: str | None
     family: str | None
     capabilities: dict[str, bool]
@@ -1811,7 +1810,6 @@ def derive(
     }
     warnings = _void(metrics, labels)
     writer_run = WriterRun(
-        schema_version="1",
         run_key=run.get("run_key"),
         family=run.get("family"),
         capabilities=dict(sorted(coverage["capabilities"].items())),

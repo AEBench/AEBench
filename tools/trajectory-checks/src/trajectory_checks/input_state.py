@@ -100,7 +100,6 @@ class Evidence(typing.TypedDict):
 class StateCounts(typing.TypedDict):
     """state_counts.json (spec §5.2)."""
 
-    schema_version: str
     run_key: str | None
     family: str | None
     capabilities: dict[str, bool]
@@ -1042,7 +1041,6 @@ def classify(
     if any(labels[k] == "fails" for k, voids in PRECONDITIONS if voids):
         m32 = dict.fromkeys(m32)
     counts = {
-        "schema_version": "1",
         "run_key": run.get("run_key"),
         "family": run.get("family"),
         "capabilities": dict(sorted(coverage["capabilities"].items())),

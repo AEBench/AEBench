@@ -190,7 +190,7 @@ M32_KEYS = frozenset(
 )
 COUNTS_FIELDS = frozenset(
     {
-        *("schema_version", "run_key", "family", "capabilities", "bases"),
+        *("run_key", "family", "capabilities", "bases"),
         *("preconditions", "metrics", "warnings"),
     }
 )
@@ -369,7 +369,6 @@ def default_block(
         phases_complete=dict.fromkeys(phases, True),
     )
     block = {
-        "schema_version": "1",
         "run_key": run["run_key"],
         "family": run["family"],
         "capabilities": dict(run["capabilities"]),

@@ -135,7 +135,7 @@ FILE_CLASS_FIELDS = frozenset(
 )
 STRUCTURE_FIELDS = frozenset(
     {
-        *("schema_version", "run_key", "family", "preconditions"),
+        *("run_key", "family", "preconditions"),
         *("capabilities", "bases", "metrics", "warnings"),
     }
 )

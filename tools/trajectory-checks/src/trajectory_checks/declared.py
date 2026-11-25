@@ -81,7 +81,6 @@ class CaseSpec(typing.TypedDict):
 class DeclaredMeta(typing.TypedDict):
     """declared.json (spec §5.3)."""
 
-    schema_version: str
     artifact: str
     commit: str | None
     commit_source: str | None  # checkout, case_ref
@@ -788,7 +787,6 @@ def declare(
                 f"declared {key} {o}: no declared invocation" for o in table
             ]
     meta = DeclaredMeta(
-        schema_version="1",
         artifact=artifact,
         commit=commit,
         commit_source=source,

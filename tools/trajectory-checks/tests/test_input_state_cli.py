@@ -258,7 +258,7 @@ def test_write_outputs_writes_layer4_files(tmp_path: pathlib.Path) -> None:
             record = json.loads(line)
             assert list(record) == sorted(record)
     block = json.loads((folders[0] / "oracle_inputs.json").read_text())
-    assert block["schema_version"] == "1"
+    assert "run_key" in block
     counts = json.loads((folders[0] / "state_counts.json").read_text())
     assert set(counts["metrics"]) == {"M3.2"}
 

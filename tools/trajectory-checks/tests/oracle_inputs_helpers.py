@@ -127,7 +127,7 @@ ROW_FIELDS = frozenset(
 )
 BLOCK_FIELDS = frozenset(
     {
-        *("schema_version", "run_key", "family", "capabilities", "bases"),
+        *("run_key", "family", "capabilities", "bases"),
         *("preconditions", "metrics", "warnings"),
     }
 )

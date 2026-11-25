@@ -192,7 +192,6 @@ def test_record_fields(path: pathlib.Path) -> None:
             assert set(hunk) == helpers.HUNK_FIELDS
         run = result["writer"]
         assert set(run) == helpers.WRITER_FIELDS
-        assert run["schema_version"] == "1"
         assert run["run_key"] == scenario["run"]["run_key"]
         assert run["family"] == scenario["run"]["family"]
         assert (

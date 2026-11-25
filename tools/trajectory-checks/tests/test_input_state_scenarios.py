@@ -96,7 +96,6 @@ def test_record_fields(path: pathlib.Path) -> None:
         assert row["under_reason"] in (None, *helpers.UNDER_REASONS)
     counts = result["state_counts"]
     assert set(counts) == helpers.COUNTS_FIELDS
-    assert counts["schema_version"] == "1"
     assert counts["run_key"] == scenario["run"]["run_key"]
     assert (
         counts["capabilities"] == scenario["linked"]["coverage"]["capabilities"]

@@ -89,7 +89,6 @@ class Exec(typing.TypedDict):
     stdout_bytes: int | None
     stderr_bytes: int | None
     env_keys: list[str] | None
-    schema_version: int | None  # MC-21
     parent_command_id: str | None  # MC-01
     root_command_id: str | None
     depth: int | None
@@ -834,7 +833,6 @@ def _exec(record: dict, family: str) -> Exec | None:
         stdout_bytes=_obj(record.get("stdout")).get("bytes_received"),
         stderr_bytes=_obj(record.get("stderr")).get("bytes_received"),
         env_keys=_strings(record.get("env_keys")),
-        schema_version=record.get("schema_version"),
         **{key: record.get(key) for key in _LINK_KEYS},
         record_type=_record_type(record),
         released_at=released_at,

@@ -189,7 +189,6 @@ def _make_new_run(root: pathlib.Path, *, extras: bool) -> pathlib.Path:
             json.dumps(
                 {
                     "run_token": NEW_TOKEN,
-                    "schema_version": 2,
                     "broker_version": "0.2.0",
                 }
             )
@@ -237,7 +236,7 @@ def test_run_info_of_an_old_run(
     run = _captured_run(_make_run(tmp_path), monkeypatch)
     assert set(run) == conftest.RUN_INFO_FIELDS
     for field in (
-        *("monitor_version", "schema_version", "trace_meta", "commit"),
+        *("monitor_version", "trace_meta", "commit"),
         *("final_diff_content", "final_workspace", "oracle_reads"),
         *("case_image_digest", "shim_intact", "unattributed_reads"),
     ):
@@ -338,7 +337,6 @@ def test_new_format_run_with_every_file(
     run_dir = _make_new_run(tmp_path, extras=True)
     run = _captured_run(run_dir, monkeypatch)
     assert run["capabilities"] == dict.fromkeys(conftest.CAPABILITIES, True)
-    assert run["schema_version"] == 2
     assert run["monitor_version"] == "0.2.0"
     assert run["trace_meta"]["run_token"] == NEW_TOKEN
     assert run["commit"] == "c0ffee"
@@ -356,20 +354,37 @@ def test_new_format_run_with_every_file(
     assert not [w for w in result["coverage"]["warnings"] if "schema" in w]
 
 
-def test_unknown_schema_version_warns(tmp_path: pathlib.Path) -> None:
-    """An unknown schema_version is a warning, never an error (D26)."""
-    run_dir = _make_new_run(tmp_path, extras=False)
+def test_trace_record_version_keys_are_ignored(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A version key in the trace records or trace_meta changes nothing."""
+    plain = cli.analyse(_make_new_run(tmp_path / "plain", extras=True))
+    run_dir = _make_new_run(tmp_path / "keyed", extras=True)
     trace = run_dir / "monitor" / "commands.jsonl"
     lines = [
-        json.dumps({**json.loads(line), "schema_version": 9})
+        json.dumps({**json.loads(line), "format_version": 9})
         for line in trace.read_text().splitlines()
     ]
     trace.write_text("\n".join(lines) + "\n")
+    meta = run_dir / "monitor" / "trace_meta.json"
+    meta.write_text(json.dumps({**json.loads(meta.read_text()), "v": 9}))
+    keyed = cli.analyse(run_dir)
+    assert keyed["coverage"] == plain["coverage"]
+    assert keyed["execs"] == plain["execs"]
+
+
+def test_outputs_name_no_schema(tmp_path: pathlib.Path) -> None:
+    """No RunInfo field, output key or warning names a schema version."""
+    run_dir = _make_new_run(tmp_path, extras=True)
+    out = tmp_path / "out"
+    assert cli.main([str(run_dir), "--out", str(out)]) == 0
+    written = [p for p in sorted(out.rglob("*")) if p.is_file()]
+    assert written
+    for path in written:
+        assert "schema" not in path.read_text(), path.name
     result = cli.analyse(run_dir)
-    assert [w for w in result["coverage"]["warnings"] if "schema" in w] == [
-        "schema_version 9 unknown: known fields read, others ignored"
-    ]
-    assert result["coverage"]["capabilities"]["parent_links"] is True
+    assert "schema" not in json.dumps(result, default=str)
+    assert not [k for k in conftest.RUN_INFO_FIELDS if "schema" in k]
 
 
 def test_csv_row_has_capabilities_and_preconditions(

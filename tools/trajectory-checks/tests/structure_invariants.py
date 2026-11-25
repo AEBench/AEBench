@@ -450,8 +450,6 @@ def _structure_problems(
     problems = []
     structure = result["structure"]
     metrics = structure["metrics"]
-    if structure["schema_version"] != "1":
-        problems.append("schema_version != '1'")
     for block, keys in METRIC_KEYS.items():
         if set(metrics.get(block) or {}) != set(keys):
             problems.append(f"{block}: keys differ from §5.4")
