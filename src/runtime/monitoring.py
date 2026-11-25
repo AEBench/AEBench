@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
-import importlib.metadata
 import json
 import logging
 import os
@@ -274,16 +273,11 @@ def write_tracked_files(workspace: Path, trace_dir: Path) -> Path:
 
 
 def write_trace_meta(trace_dir: Path) -> Path:
-	"""Record which monitor wrote the trace, keyed by the run token."""
-	try:
-		version: str | None = importlib.metadata.version("aebench")
-	except importlib.metadata.PackageNotFoundError:
-		version = None
+	"""Record the run token the trace is keyed by."""
 	target = trace_dir / TRACE_META_BASENAME
 	target.write_text(
 		json.dumps(
 			{
-				"broker_version": version,
 				# The trace directory is keyed by the token, as is each record's run_id.
 				"run_token": trace_dir.name,
 				"start_events": False,
