@@ -1,0 +1,25 @@
+name: F03_kills
+description: A kill reported by the monitor's signal, an exit 137 and a signal with an exit code.
+rules: [OUT1, OUT2, EXT1, EXT2]
+calls:
+  - {call_id: c1, command: ./a, t_start: 10}
+  - {call_id: c2, command: ./b, t_start: 20}
+  - {call_id: c3, command: ./c, t_start: 30}
+execs:
+  - {command_id: e1, command: ./a, t_start: 10.1, exit_code: null, signal: 15}
+  - {command_id: e2, command: ./b, t_start: 20.1, exit_code: 137}
+  - {command_id: e3, command: ./c, t_start: 30.1, exit_code: 143, signal: 15}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: call_exec, call_id: c3, command_id: e3}
+expect:
+  call_facts:
+    c1: {outcome: killed, exit_signal: null}
+    c2: {outcome: failed, exit_signal: 9}
+    c3: {outcome: killed, exit_signal: null}
+  facts:
+    M1.3.kills_under: 2
+    M1.3.kills_over: 3
+    M1.3.nonzero_exits_under: 3
+    M1.3.failure_streak_under: 3

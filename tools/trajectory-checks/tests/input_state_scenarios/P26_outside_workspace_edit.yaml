@@ -1,0 +1,24 @@
+name: P26_outside_workspace_edit
+description: >
+  An input outside the workspace, edited with an absolute path, with no
+  grading read: never observable; the edit is known from the log. A
+  second input, tracked per §0 with no baseline file, has an unknown
+  baseline existence: its strict origin is narrowed by its labels.
+rules: [INP1, EVD6, CON6, CON11]
+calls:
+  - {call_id: c1, tool_type: edit, paths: [/home/agent/notes.txt], t_start: 10}
+links:
+  - {link_type: write_event, path: /home/agent/notes.txt, writer_id: c1, in_workspace: false}
+paths:
+  - {path: /home/agent/notes.txt, in_workspace: false, tracked: null, final_state: null}
+final_diff: {}
+oracle_inputs:
+  - {path: /home/agent/notes.txt}
+  - {path: data/old.csv, tracked_at_baseline: true, oracle_writes: false, oracle_writes_basis: fallback}
+expect:
+  input_states:
+    /home/agent/notes.txt: {input_scope: outside_workspace, observable: false, tracked: null, baseline_exists: null, events: [w0], edit_events: [w0], states_under: [rewritten_identical, edit_written, command_written, deleted, missing], states_over: [rewritten_identical, edit_written, command_written, deleted, missing], under_reason: no_content_evidence, origin_under: null, origins_over: [baseline_file, new_file]}
+    data/old.csv: {tracked: true, baseline_exists: null, baseline_source: null, content_cmp: equal, content_source: final_diff, states_under: [pristine], states_over: [pristine, rewritten_identical, oracle_written], origin_under: baseline_file, origins_over: [baseline_file, new_file]}
+  counts:
+    M3.2.ever_edit_written: 1
+    preconditions.content: holds

@@ -1,0 +1,22 @@
+name: P38_final_files_unlisted
+description: >
+  final_content without a grading read: a tracked input D not in
+  final_files is unchanged since the baseline (D36), an untracked input E
+  not in final_files has no content source at all.
+rules: [EVD2, EVD3]
+capabilities: {final_content: true}
+calls:
+  - {call_id: c1, command: make, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2}
+baseline: {files: {data/d.csv: {sha256: dd}}}
+final_diff: {}
+final_files:
+  - {path: notes/other.txt, status: A, sha256: oo}
+oracle_inputs:
+  - {path: data/d.csv, at_baseline: true, baseline_sha256: dd}
+  - {path: out/e.csv, at_baseline: false}
+expect:
+  input_states:
+    data/d.csv: {content_source: final_workspace, content_cmp: equal, grading_exists: true, grading_sha256: dd, content_sources_disagree: false, state_under: pristine}
+    out/e.csv: {content_source: null, grading_exists: null, content_cmp: null, states_under: [command_written, missing]}

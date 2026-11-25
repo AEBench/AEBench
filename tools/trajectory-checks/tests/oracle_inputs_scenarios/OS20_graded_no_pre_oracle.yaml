@@ -1,0 +1,20 @@
+name: OS20_graded_no_pre_oracle
+description: >
+  OS19 without the null-agent manifest: the untracked input's baseline
+  existence and hash are unknown, tracked_at_baseline false (a baseline
+  was given), and no fallback gives oracle_writes.
+rules: [OI3, OI10]
+run: {capabilities: {oracle_reads: true}}
+baseline: {files: {data/a.csv: {sha256: aa}}}
+graded_manifest:
+  - {check_id: summary, path: /repo/out/new.csv, exists: true, sha256: nn, mtime_ns: 9}
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {input_id: i0, path: out/new.csv, source_type: graded, at_baseline: null, baseline_sha256: null, tracked_at_baseline: false, grading_exists: true, oracle_writes: null, oracle_writes_basis: null}
+  oracle_inputs_exact: true
+  block:
+    bases.oracle_writes: fallback
+    M3.1.inputs_present_at_baseline: 0
+    M3.1.inputs_absent_at_baseline: 0

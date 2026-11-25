@@ -1,0 +1,5 @@
+[
+  {"decl_id": "d0", "invocation_key": "top.sh", "options": {}, "source_type": "readme", "source_path": "README.md", "line": 9, "block_id": "README.md:8", "position": 0, "cwd": ".", "text": "./top.sh"},
+  {"decl_id": "d1", "invocation_key": "docs/run.sh", "options": {"--n": {"value": "2", "value_type": "int"}}, "source_type": "readme", "source_path": "docs/run.md", "line": 6, "block_id": "docs/run.md:5", "position": 0, "cwd": "docs", "text": "./run.sh --n 2"},
+  {"decl_id": "d2", "invocation_key": "sub/sub.sh", "options": {}, "source_type": "readme", "source_path": "sub/README.md", "line": 2, "block_id": "sub/README.md:1", "position": 0, "cwd": "sub", "text": "./sub.sh"}
+]

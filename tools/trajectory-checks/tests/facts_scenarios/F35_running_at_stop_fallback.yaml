@@ -1,0 +1,21 @@
+name: F35_running_at_stop_fallback
+description: Without start_events, a call still running at the stop is one layer 1 left unmatched with reason running_at_stop; it has no interval.
+rules: [EXT6, TIM1, CAP1]
+run: {t_start: 0, t_end: 1000}
+calls:
+  - {call_id: c1, command: ls, t_start: 10}
+  - {call_id: c2, command: ./serve, t_start: 900, t_end: null}
+execs:
+  - {command_id: e1, command: ls, t_start: 10.1, duration_s: 1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+dispositions:
+  c2: {reason: running_at_stop}
+expect:
+  call_facts:
+    c2: {command_id: null, outcome: unknown, span_under_s: null, t_start: null}
+  facts:
+    bases.running_at_stop: fallback
+    M1.3.running_at_stop: 1
+    M1.1.command_time_under_s: 1.0
+    M1.1.command_time_over_s: 1.0

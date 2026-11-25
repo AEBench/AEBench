@@ -1,0 +1,9 @@
+{"record_type": "header", "schema_version": "1", "scope": ["/tmp/ws/project"], "t_start": 1795168790.0, "t_end": 1795168930.0}
+{"t": 1795168800.2, "command_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1", "host_pid": 5001, "path": "/tmp/ws/project/src/a.c", "event_type": "access", "cookie": null, "dropped_before": 0}
+{"t": 1795168800.3, "command_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1", "host_pid": 5001, "path": "/tmp/ws/project/Makefile", "event_type": "close_nowrite", "cookie": null, "dropped_before": 0}
+{"t": 1795168800.4, "command_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1", "host_pid": 5001, "path": "/tmp/ws/project/Makefile", "event_type": "close_nowrite", "cookie": null, "dropped_before": 0}
+{"t": 1795168801.5, "command_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2", "host_pid": 5002, "path": "/tmp/ws/project/src/a.c", "event_type": "close_nowrite", "cookie": null, "dropped_before": 0}
+{"t": 1795168801.6, "command_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2", "host_pid": 5002, "path": "/tmp/ws/project/include/a.h", "kind": "open", "cookie": null, "dropped_before": 0}
+{"t": 1795168802.0, "command_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2", "host_pid": 5002, "path": "/tmp/ws/project/src/a.o", "event_type": "close_write", "cookie": null, "dropped_before": 0}
+{"t": 1795168804.0, "command_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1", "host_pid": 5001, "path": "/tmp/ws/project/out/new.csv", "event_type": "moved_to", "cookie": 7, "dropped_before": 0}
+{"t": 1795168804.5, "command_id": null, "host_pid": 5009, "path": "/etc/passwd", "event_type": "close_nowrite", "cookie": null, "dropped_before": 0}

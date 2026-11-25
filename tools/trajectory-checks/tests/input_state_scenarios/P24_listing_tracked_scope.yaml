@@ -1,0 +1,19 @@
+name: P24_listing_tracked_scope
+description: >
+  A graded listing in tracked scope whose recorded matches were all there
+  at the baseline: the untracked folder is not observable, so whether its
+  set of files changed is unknown under and possible over.
+rules: [INP4, CON14]
+capabilities: {oracle_reads: true}
+baseline: {files: {out/a.csv: {sha256: aa}}}
+final_diff: {}
+oracle_inputs:
+  - {path: out, pattern: "*.csv", source_type: graded, at_baseline: true, grading_exists: true}
+  - {path: out/a.csv, listed_by: [i0], access_types: [list, read], source_type: graded, at_baseline: true, baseline_sha256: aa, grading_exists: true, grading_sha256: aa}
+expect:
+  input_states:
+    out|listing: {members: [out/a.csv], observable: false, tracked: false, listing_changed_under: null, listing_changed_over: true, unseen_writer_possible: true}
+    out/a.csv: {member_of: [out], state_under: pristine, content_source: grading_read}
+  counts:
+    M3.2.listing_changed_under: 0
+    M3.2.listing_changed_over: 1

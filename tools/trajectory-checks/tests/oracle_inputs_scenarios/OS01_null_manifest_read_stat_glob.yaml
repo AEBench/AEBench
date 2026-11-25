@@ -1,0 +1,36 @@
+name: OS01_null_manifest_read_stat_glob
+description: >
+  A null-agent manifest with one read, one stat and one glob with one
+  match gives four rows: a literal read, a literal stat, the pattern row
+  and a literal row for the match, listed by the pattern.
+rules: [OI1, OI2, OI3, OI4, OI7, OI8]
+null_manifest:
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: aa, exists_before: true, sha256_before: aa, tracked_before: true}
+  - {check_id: stat_b, method: path_exists, path: /repo/build/b.bin, exists: false, exists_before: false, tracked_before: false}
+  - {check_id: list_out, method: glob, path: /repo/out, glob_pattern: "*.csv", glob_matches: [out/m.csv], exists: true, exists_before: true}
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {input_id: i0, path: build/b.bin, in_workspace: true, input_scope: workspace, pattern: null, match_type: literal, listed_by: [], in_under: true, access_types: [stat], checks: [stat_b], phases: [experiment_runs], source_type: null_agent, at_baseline: false, baseline_sha256: null, tracked_at_baseline: false, null_sha256: null, oracle_writes: false, oracle_writes_basis: fallback, grading_exists: null, grading_sha256: null, grading_mtime_ns: null}
+    - {input_id: i1, path: data/a.csv, match_type: literal, access_types: [read], checks: [read_a], at_baseline: true, baseline_sha256: aa, tracked_at_baseline: true, null_sha256: aa, oracle_writes: false, oracle_writes_basis: fallback}
+    - {input_id: i2, path: out, pattern: "*.csv", match_type: pattern, in_under: false, listed_by: [], access_types: [list], checks: [list_out], at_baseline: true, baseline_sha256: null, tracked_at_baseline: null, oracle_writes: null, oracle_writes_basis: null}
+    - {input_id: i3, path: out/m.csv, pattern: null, match_type: literal, in_under: true, listed_by: [i2], access_types: [list], checks: [list_out], at_baseline: null, null_sha256: null, oracle_writes: null, oracle_writes_basis: null}
+  oracle_inputs_exact: true
+  block:
+    bases.source: fallback
+    preconditions.oracle_inputs: holds
+    M3.1.source_type: null_agent
+    M3.1.inputs_under: 3
+    M3.1.inputs_over: 3
+    M3.1.inputs_read_under: 1
+    M3.1.inputs_stat_only_under: 1
+    M3.1.inputs_outside_workspace: 0
+    M3.1.inputs_reference: 0
+    M3.1.inputs_present_at_baseline: 1
+    M3.1.inputs_absent_at_baseline: 1
+    M3.1.inputs_oracle_written: 0
+    M3.1.patterns: 1
+    M3.1.command_checks: 0
+    M3.1.command_reads_recorded: null
+    M3.1.phases_complete: {experiment_runs: true}

@@ -1,0 +1,26 @@
+id: H09
+title: The last writer is an edit call
+rules: [ARG4, FA6]
+calls:
+  - {call_id: c1, tool_type: edit, t_start: 20.0}
+execs:
+  - {command_id: e1, command: "./tool.sh --k 3", t_start: 10.0, duration_s: 5.0}
+dispositions: {e1: {disposition: matched_root, root_under: true}}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: c1}
+oracle_inputs:
+  - {path: out/r.json}
+state: edit_written
+declared:
+  invocations:
+    - {invocation_key: tool.sh, text: "./tool.sh --k 3",
+       options: {--k: {value: "3", value_type: int}}}
+expect:
+  arg_checks:
+    - {command_id: e1, invocation: 0, option: --k,
+       in_scope: {writer: [], before_writer: [i0], run: true}}
+  faithfulness:
+    - {input_id: i0, writer_event: w0,
+       clauses: {fresh: holds, untampered: violated}, faithful: violated}
+  metrics:
+    M5.1: {options_compared_under: 0, options_compared_over: 1}

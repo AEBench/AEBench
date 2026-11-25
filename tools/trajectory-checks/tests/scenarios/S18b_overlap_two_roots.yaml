@@ -1,0 +1,20 @@
+name: S18b_overlap_two_roots
+description: Two overlapping execs of different roots both report a file -> both events root_ambiguous with both roots as candidates, writer_under false (§6.6 rule 6).
+calls:
+  - {call_id: cb, t_start: 100, t_end: 100.5, command: "./watch.sh", background: true}
+  - {call_id: cf, t_start: 150, t_end: 152, command: "./update.sh"}
+execs:
+  - {command_id: eb, t_start: 100.2, t_end: 200, command: "./watch.sh", snapshot: {modified: [state.db]}}
+  - {command_id: ef, t_start: 150.2, t_end: 151.8, command: "./update.sh", snapshot: {modified: [state.db]}}
+baseline: {files: {state.db: {}}}
+final_diff: {modified: [state.db], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: write_event, event_id: w0, path: state.db, writer_id: ef, root_call_id: cf, root_ambiguous: true, root_candidates: [cb, cf], writer_under: false}
+    - {link_type: write_event, event_id: w1, path: state.db, writer_id: eb, root_call_id: cb, root_ambiguous: true, root_candidates: [cb, cf], writer_under: false}
+  links_exact: true
+  paths:
+    - {path: state.db, events: [w0, w1], final_writer: w1, final_writer_under: false, final_state: changed}
+  coverage:
+    rates.final_diff_attributed_rate_under: 0.0
+    rates.final_diff_attributed_rate_over: 1.0

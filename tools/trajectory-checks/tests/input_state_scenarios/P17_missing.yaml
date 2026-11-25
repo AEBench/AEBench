@@ -1,0 +1,15 @@
+name: P17_missing
+description: >
+  An input absent at the baseline and at grading (a graded read found
+  nothing), never written: missing in both models.
+rules: [CON2, CON3, EVD3]
+capabilities: {oracle_reads: true}
+baseline: {files: {src/main.py: {sha256: mm}}}
+oracle_inputs:
+  - {path: out/none.csv, at_baseline: false, source_type: graded, grading_exists: false}
+expect:
+  input_states:
+    out/none.csv: {grading_exists: false, content_cmp: null, content_source: grading_read, states_under: [missing], states_over: [missing], origin_under: new_file}
+  counts:
+    M3.2.absent_under: 1
+    M3.2.by_state_under.missing: 1

@@ -1,0 +1,65 @@
+id: W69
+title: A file read only by a candidate writer that was not chosen has in_read null
+description: >
+  FLT3 (D53 (3)): two overlapping writes give two candidate writers;
+  in_read is true for a file the chosen writer read, null for one only
+  the other candidate read, and false only for one no candidate read.
+rules: [FLT3, LW6]
+run:
+  capabilities: {final_content: true, read_tracing: true}
+  final_diff_content: monitor/final.diff
+calls:
+  - {call_id: c1, seq: 0, command: ./a.sh, t_start: 9.5, t_end: 11.0}
+  - {call_id: c2, seq: 1, command: ./b.sh, t_start: 11.0, t_end: 12.0}
+execs:
+  - {command_id: e1, command: ./a.sh, t_start: 10.0, duration_s: 0.5, reads: [src/a.py]}
+  - {command_id: e2, command: ./b.sh, t_start: 11.5, duration_s: 0.3, reads: [src/c.py]}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: write_event, event_id: w0, path: out/r.json, writer_id: e1}
+  - {link_type: write_event, event_id: w1, path: out/r.json, writer_id: e2}
+paths:
+  - {path: out/r.json, events: [w0, w1], final_writer: w1}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+final_diff: |
+  diff --git a/src/a.py b/src/a.py
+  index 1111111..2222222 100644
+  --- a/src/a.py
+  +++ b/src/a.py
+  @@ -1,2 +1,2 @@
+   import os
+  -x = 1
+  +x = 2
+  diff --git a/src/b.py b/src/b.py
+  index 3333333..4444444 100644
+  --- a/src/b.py
+  +++ b/src/b.py
+  @@ -1,2 +1,2 @@
+   import os
+  -y = 1
+  +y = 2
+  diff --git a/src/c.py b/src/c.py
+  index 5555555..6666666 100644
+  --- a/src/c.py
+  +++ b/src/c.py
+  @@ -1,2 +1,2 @@
+   import os
+  -z = 1
+  +z = 2
+expect:
+  bases: {in_read: exact}
+  last_writers:
+    - {input_id: i0, last_writer: w1, last_writer_candidates: [w0, w1],
+       last_writer_under: false, not_under: [several_candidates]}
+  hunks:
+    - {path: src/a.py, hunk_index: 0, in_read: null}
+    - {path: src/b.py, hunk_index: 0, in_read: false}
+    - {path: src/c.py, hunk_index: 0, in_read: true}
+  metrics:
+    M4.3:
+      hunks_by_type_read: {numeric_only: 1, general: 0}

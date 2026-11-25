@@ -1,0 +1,16 @@
+name: P18_oracle_writes_exact
+description: >
+  oracle_writes true with basis exact: oracle_written in both models and
+  no further rule applies; the input is not agent-written.
+rules: [CON1]
+baseline: {files: {out/r.json: {sha256: aa}}}
+final_diff: {modified: [out/r.json]}
+oracle_inputs:
+  - {path: out/r.json, at_baseline: true, baseline_sha256: aa, oracle_writes: true, oracle_writes_basis: exact}
+expect:
+  input_states:
+    out/r.json: {oracle_writes: true, states_under: [oracle_written], states_over: [oracle_written], state_under: oracle_written}
+  counts:
+    M3.2.agent_written_over: 0
+    M3.2.by_state_over.oracle_written: 1
+    M3.2.fresh_under: 1

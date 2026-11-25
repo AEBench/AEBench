@@ -1,0 +1,22 @@
+name: OS10_command_checks_unrecorded
+description: >
+  A run_process record in env_setup and no command record (MC-16): no
+  row for it, command_reads_recorded false, env_setup incomplete, the
+  other phase complete, counts still computed.
+rules: [OI2, OI6]
+null_manifest:
+  - {check_id: env.tool, phase: env_setup, method: run_process, path: null, argv: [tool, --version]}
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: aa, exists_before: true, sha256_before: aa, tracked_before: true}
+null_score: {phases: {env_setup: success, experiment_runs: success}}
+run_score: {phases: {env_setup: success, experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {input_id: i0, path: data/a.csv}
+  oracle_inputs_exact: true
+  block:
+    M3.1.command_checks: 1
+    M3.1.command_reads_recorded: false
+    M3.1.phases_complete: {env_setup: false, experiment_runs: true}
+    M3.1.inputs_under: 1
+  warnings: ["oracle command checks ran without read recording (MC-16): M3.1 inputs may be missing files"]
+  warnings_exact: true

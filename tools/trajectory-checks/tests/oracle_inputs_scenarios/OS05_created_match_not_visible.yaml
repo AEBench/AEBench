@@ -1,0 +1,26 @@
+name: OS05_created_match_not_visible
+description: >
+  OS04 with untracked_visible false: the created file has no paths.jsonl
+  row, so no pattern_match row; matches are incomplete (basis fallback)
+  with a warning.
+rules: [OI5]
+baseline: {files: {results/a.csv: {sha256: aa}, results/old.csv: {sha256: oo}}}
+paths:
+  - {path: results/old.csv, final_state: deleted}
+null_manifest:
+  - {check_id: per_run, method: glob, path: /repo/results, glob_pattern: "*.csv", glob_matches: [results/a.csv], exists: true, exists_before: true}
+  - {check_id: per_run, path: /repo/results/a.csv, exists: true, sha256: aa, exists_before: true, sha256_before: aa, tracked_before: true}
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {input_id: i0, path: results, match_type: pattern}
+    - {input_id: i1, path: results/a.csv, match_type: literal}
+  oracle_inputs_exact: true
+  absent: [results/b.csv, results/old.csv]
+  block:
+    bases.pattern_matches: fallback
+    M3.1.pattern_matches_complete: false
+    M3.1.inputs_over: 1
+  warnings: [pattern inputs instantiated without created files]
+  warnings_exact: true

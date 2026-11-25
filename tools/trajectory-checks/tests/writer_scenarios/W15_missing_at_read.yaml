@@ -1,0 +1,24 @@
+id: W15
+title: The input is missing at read and its last event is a delete
+rules: [EX1, LW3, LW10]
+calls:
+  - {call_id: c1, seq: 0, command: rm -f out/r.json, t_start: 9.5, t_end: 11.0}
+execs:
+  - {command_id: e1, command: rm -f out/r.json, t_start: 10.0, duration_s: 0.1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, event_id: w0, path: out/r.json, op: delete,
+     writer_id: e1}
+paths:
+  - {path: out/r.json, events: [w0], final_writer: w0, final_state: deleted}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+input_states:
+  - {input_id: i0, states_over: [deleted], grading_exists: false,
+     content_source: final_diff}
+expect:
+  last_writers:
+    - {input_id: i0, last_writer: w0, last_writer_op: delete,
+       last_writer_candidates: [w0], exists_at_read: false,
+       exists_source: final_diff, state_conflict: false,
+       last_writer_under: true}

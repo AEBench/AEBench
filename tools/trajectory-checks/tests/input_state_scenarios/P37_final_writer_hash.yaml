@@ -1,0 +1,26 @@
+name: P37_final_writer_hash
+description: >
+  An untracked input in workspace scope, absent at the baseline, created
+  by one exec, with no grading read, no final content and no final diff;
+  content_hashes gives the final writer's hash, which fixes existence and
+  content in the strict model.
+rules: [CON7, PRE4]
+capabilities: {content_hashes: true}
+coverage: {rates.snapshot_scope: workspace, rates.untracked_visible: true}
+calls:
+  - {call_id: c1, command: ./gen.sh, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2, snapshot: {scope: workspace, created: [out/x.bin], hashes: {out/x.bin: ff}}}
+links:
+  - {link_type: write_event, path: out/x.bin, writer_id: e1, op: create, scope: workspace}
+paths:
+  - {path: out/x.bin, tracked: false, final_state: untracked}
+oracle_inputs:
+  - {path: out/x.bin, at_baseline: false}
+expect:
+  input_states:
+    out/x.bin: {content_cmp: null, grading_exists: null, states_under: [command_written], states_over: [command_written, missing], state_under: command_written, rewrite_type: null}
+  counts:
+    preconditions.content: fails
+    bases.content_hash: exact
+    M3.2.rewritten_same_content: 0

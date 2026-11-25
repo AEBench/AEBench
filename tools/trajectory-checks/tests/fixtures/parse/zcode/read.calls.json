@@ -1,0 +1,22 @@
+[
+  {
+    "actor": "main",
+    "background": null,
+    "call_id": "call_5d0654de6ff140a299472678",
+    "command": null,
+    "command_norm": null,
+    "edit_content": false,
+    "family": "zcode",
+    "log_exit_code": null,
+    "log_ok": true,
+    "paths": [
+      "/tmp/ws/project/requirements.txt"
+    ],
+    "raw_name": "Read",
+    "seq": 0,
+    "t_end": 1793722433.628,
+    "t_precision_s": 0.001,
+    "t_start": 1793722433.617,
+    "tool_type": "read"
+  }
+]

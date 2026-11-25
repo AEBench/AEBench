@@ -1,0 +1,107 @@
+[
+  {
+    "command": "echo AEBENCH_SHIM_PROBE_OK",
+    "command_id": "03c531ded3e143d8bede0b151bf931e3",
+    "command_norm": "echo AEBENCH_SHIM_PROBE_OK",
+    "complete": true,
+    "duration_s": 0.009,
+    "exit_code": 0,
+    "noise": "shim_probe",
+    "seq": 0,
+    "signal": null,
+    "stderr_bytes": 0,
+    "stdout_bytes": 22,
+    "t_end": 1791938561.761981,
+    "t_start": 1791938561.752981
+  },
+  {
+    "command_id": "313293753b964d1aa76bbcb76055c6f3",
+    "complete": true,
+    "duration_s": 0.034,
+    "exit_code": 0,
+    "noise": "<any non-null>",
+    "seq": 1,
+    "signal": null,
+    "stderr_bytes": 0,
+    "stdout_bytes": 14172,
+    "t_end": 1791938562.970051,
+    "t_start": 1791938562.936051
+  },
+  {
+    "command_id": "b6fa09bb2d6c4720b70638793bc259ef",
+    "complete": true,
+    "duration_s": 0.01,
+    "exit_code": 0,
+    "noise": "<any non-null>",
+    "seq": 2,
+    "signal": null,
+    "stderr_bytes": 0,
+    "stdout_bytes": 0,
+    "t_end": 1791938563.000334,
+    "t_start": 1791938562.990334
+  },
+  {
+    "argv0": "/bin/bash",
+    "command": "pwd && rg --files -g 'README.md' -g 'AGENTS.md' -g 'Dockerfile' -g 'run_test.sh' -g 'test_setup.sh' -g 'cat_docker.sh' | sort && ls -la",
+    "command_id": "4220ebc614f04d1088ecda747b106758",
+    "command_norm": "pwd && rg --files -g 'README.md' -g 'AGENTS.md' -g 'Dockerfile' -g 'run_test.sh' -g 'test_setup.sh' -g 'cat_docker.sh' | sort && ls -la",
+    "complete": true,
+    "cwd": "/repo",
+    "duration_s": 0.045,
+    "exit_code": 0,
+    "noise": null,
+    "pid": 237,
+    "seq": 3,
+    "signal": null,
+    "snapshot": {
+      "created": [],
+      "deleted": [],
+      "modified": [],
+      "scope": "tracked",
+      "skip_reason": null,
+      "status": "ok",
+      "totals": {
+        "created": 0,
+        "deleted": 0,
+        "modified": 0
+      }
+    },
+    "stderr_bytes": 0,
+    "stdout_bytes": 3904,
+    "t_end": 1791938568.828434,
+    "t_start": 1791938568.783434,
+    "wrapper": "codex_snapshot_exec"
+  },
+  {
+    "argv0": "/bin/bash",
+    "command": "pwd && rg --files -g 'README.md' -g 'AGENTS.md' -g 'Dockerfile' -g 'run_test.sh' -g 'test_setup.sh' -g 'cat_docker.sh' | sort && ls -la",
+    "command_id": "b18c5ccb403b4f34a00d17aeee91e83d",
+    "command_norm": "pwd && rg --files -g 'README.md' -g 'AGENTS.md' -g 'Dockerfile' -g 'run_test.sh' -g 'test_setup.sh' -g 'cat_docker.sh' | sort && ls -la",
+    "complete": true,
+    "cwd": "/repo",
+    "duration_s": 0.021,
+    "exit_code": 0,
+    "noise": null,
+    "pid": 238,
+    "seq": 4,
+    "signal": null,
+    "snapshot": {
+      "created": [],
+      "deleted": [],
+      "modified": [],
+      "scope": "tracked",
+      "skip_reason": null,
+      "status": "ok",
+      "totals": {
+        "created": 0,
+        "deleted": 0,
+        "modified": 0
+      }
+    },
+    "stderr_bytes": 0,
+    "stdout_bytes": 3904,
+    "t_end": 1791938568.822647,
+    "t_start": 1791938568.801647,
+    "wrapper": "codex_direct"
+  }
+]

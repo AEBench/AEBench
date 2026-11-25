@@ -1,0 +1,21 @@
+name: G07_gap_unobserved_start_only
+description: >
+  Spec RS06, second variant. The exec overlapping the gap is a start_only
+  record (MC-04): incomplete, so it lasts to the run's end, and its
+  snapshot is absent, which is never ok.
+rules: [RR5, RR6]
+run: {capabilities: {start_events: true}}
+calls:
+  - {call_id: c0, command: ./train.sh &, t_start: 1, t_end: 2}
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e0, call: c0, t_start: 1.1, t_end: 1.5, record_type: closed}
+  - {command_id: e0b, command: train, t_start: 5.0, duration_s: 0, complete: false, exit_code: null, record_type: start_only, snapshot: {status: absent, scope: null}}
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9, record_type: closed}
+  - {command_id: e2, call: c2, t_start: 30.1, t_end: 31.9, record_type: closed}
+links:
+  - {link_type: exec_parent, command_id: e0b, parent: e0, root_call_id: c0}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, gap_observed: false, unchanged_under: false, unchanged_over: true}

@@ -1,0 +1,23 @@
+name: G69_heredoc_background_text
+description: >
+  Corpus pattern (critic cycle 1, A3): an & inside a heredoc body is text,
+  not a control operator (OBS1 removes bodies before OBS4). A heredoc that
+  writes a script with a background line is act by its redirect; a cat of
+  a heredoc whose body ends in & is observe.
+rules: [OBS1, OBS4, OBS6]
+calls:
+  - {call_id: c1, command: "cat <<EOF > start.sh\n./server --port 8080 &\nEOF", t_start: 10, t_end: 11}
+  - {call_id: c2, command: "cat <<EOF\nnote &\nEOF", t_start: 20, t_end: 21}
+  - {call_id: c3, command: "./start.sh > server.log 2>&1 &", t_start: 30, t_end: 31}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 10.9}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 20.9}
+  - {command_id: e3, call: c3, t_start: 30.1, t_end: 30.9}
+expect:
+  call_structure:
+    c1: {call_class: act, class_reason: redirect}
+    c2: {call_class: observe, class_reason: observe}
+    c3: {call_class: act, class_reason: background}
+  structure:
+    M2.1.act_calls: 2
+    M2.1.observe_calls: 1

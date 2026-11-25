@@ -1,0 +1,27 @@
+name: G28_mode_only
+description: >
+  Spec FS04. Three mode-only files and one content change: they are
+  counted apart, and classes with 0 are omitted from the sparse dicts.
+rules: [CLS1, OUTF1]
+calls:
+  - {call_id: c1, command: chmod -R +x data, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./fix.sh, t_start: 20, t_end: 22}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 21.9}
+links:
+  - {link_type: write_event, path: data/a.csv, writer_id: e1, op: mode}
+  - {link_type: write_event, path: data/b.csv, writer_id: e1, op: mode}
+  - {link_type: write_event, path: data/c.csv, writer_id: e1, op: mode}
+  - {link_type: write_event, path: src/x.py, writer_id: e2}
+paths:
+  - {path: data/a.csv, final_state: mode_only}
+  - {path: data/b.csv, final_state: mode_only}
+  - {path: data/c.csv, final_state: mode_only}
+expect:
+  structure:
+    M4.2.mode_only_by_class: {data: 3}
+    M4.2.changed_by_class: {code: 1}
+    M4.2.reverted_by_class: {}
+    M4.2.shell_written_by_class_over: {code: 1}
+    M4.2.changed_by_class_and_role_over: {code: {root_exec: 1}}

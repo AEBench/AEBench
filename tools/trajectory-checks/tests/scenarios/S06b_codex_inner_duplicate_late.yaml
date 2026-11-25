@@ -1,0 +1,20 @@
+name: S06b_codex_inner_duplicate_late
+description: The inner record starts 8 s after its outer but inside the outer's interval -> still wrapper_duplicate, not nested (§6.4; decision D25).
+calls:
+  - {call_id: c1, family: codex, raw_name: command_execution, t_start: 100, t_end: 131, command: "make test", background: null}
+execs:
+  - {command_id: outer, t_start: 100.2, t_end: 130, command: "make test", wrapper: codex_snapshot_exec}
+  - {command_id: inner, t_start: 108.2, t_end: 129.9, command: "make test", wrapper: codex_direct}
+  - {command_id: kid, t_start: 110, t_end: 111, command: "cc -c a.c"}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c1, command_id: outer, rule: exact}
+    - {link_type: wrapper_duplicate, command_id: inner, of: outer}
+    - {link_type: exec_parent, command_id: kid, parent: outer, root_call_id: c1, rule: time_containment}
+  links_exact: true
+  links_absent:
+    - {link_type: exec_parent, command_id: inner}
+  dispositions:
+    outer: matched_root
+    inner: wrapper_duplicate
+    kid: {disposition: nested, root_under: true}

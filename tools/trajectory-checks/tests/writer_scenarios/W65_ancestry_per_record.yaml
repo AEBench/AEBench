@@ -1,0 +1,64 @@
+id: W65
+title: Under parent links, an exec without MC-01's fields keeps J2's parent
+description: >
+  PRE6 and D43: a record that lacks the field its exact form reads takes
+  the fallback for itself only. e3 and e4 carry no root_command_id (nor
+  parent_command_id), so LW14's ancestry takes J2's parent e1 for them,
+  as LW8 takes J2's disposition; e1's recorded fields stay exact. So
+  e3, the writer of i0, names the changed script its parent ran (LW14),
+  and e4, a child of e1 (the writer of i1), read that script, so its
+  hunk is inside FLT3's filter. Before the fix the recorded chain alone
+  cut e3 and e4 off from e1 (D47).
+rules: [LW14, FLT3, PRE6]
+run:
+  capabilities: {parent_links: true, final_content: true, read_tracing: true}
+  final_diff_content: monitor/final.diff
+calls:
+  - {call_id: c0, seq: 0, tool_type: edit, paths: [scripts/build.sh], t_start: 2.0}
+  - {call_id: c1, seq: 1, command: bash scripts/build.sh, t_start: 9.5, t_end: 31.0}
+execs:
+  - {command_id: e1, command: bash scripts/build.sh, t_start: 10.0,
+     duration_s: 20.0, parent_command_id: null, root_command_id: e1,
+     depth: 0, orphans: [], reads: []}
+  - {command_id: e3, command: python3 gen.py, t_start: 20.0, duration_s: 1.0,
+     reads: []}
+  - {command_id: e4, command: cat scripts/build.sh, t_start: 22.0,
+     duration_s: 1.0, reads: [scripts/build.sh]}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: exec_parent, command_id: e3, parent: e1, root_call_id: c1}
+  - {link_type: exec_parent, command_id: e4, parent: e1, root_call_id: c1}
+  - {link_type: write_event, event_id: w0, path: scripts/build.sh, writer_id: c0}
+  - {link_type: write_event, event_id: w1, path: out/r.json, writer_id: e3}
+  - {link_type: write_event, event_id: w2, path: out/s.json, writer_id: e1}
+paths:
+  - {path: scripts/build.sh, events: [w0], final_writer: w0}
+  - {path: out/r.json, events: [w1], final_writer: w1}
+  - {path: out/s.json, events: [w2], final_writer: w2}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+  - {input_id: i1, path: out/s.json}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+  - {input_id: i1, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+final_diff: |
+  diff --git a/scripts/build.sh b/scripts/build.sh
+  index 1111111..2222222 100644
+  --- a/scripts/build.sh
+  +++ b/scripts/build.sh
+  @@ -1 +1 @@
+  -echo 1
+  +echo 2
+expect:
+  bases: {ancestry: exact, in_read: exact}
+  last_writers:
+    - {input_id: i0, writer_command_id: e3, writer_root_certain: true,
+       writer_named_written: [scripts/build.sh],
+       writer_named_changed: [scripts/build.sh]}
+    - {input_id: i1, writer_command_id: e1, writer_root_certain: true,
+       writer_named_written: [scripts/build.sh]}
+  hunks:
+    - {path: scripts/build.sh, hunk_index: 0, in_named_over: true,
+       in_read: true}

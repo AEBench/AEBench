@@ -1,0 +1,33 @@
+[
+  {
+    "argv0": "/bin/bash",
+    "command": "./run-verify-all.sh",
+    "command_id": "7c62533b3e4f4e7db277f5967ebef8ca",
+    "command_norm": "./run-verify-all.sh",
+    "complete": false,
+    "cwd": "/repo/project",
+    "duration_s": 122.194,
+    "exit_code": null,
+    "noise": null,
+    "pid": 11044,
+    "seq": 0,
+    "signal": null,
+    "snapshot": {
+      "created": [],
+      "deleted": [],
+      "modified": [],
+      "scope": "tracked",
+      "skip_reason": null,
+      "status": "ok",
+      "totals": {
+        "created": 0,
+        "deleted": 0,
+        "modified": 0
+      }
+    },
+    "stderr_bytes": 0,
+    "stdout_bytes": 0,
+    "t_start": 1792621496.140778,
+    "wrapper": null
+  }
+]

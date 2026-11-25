@@ -1,0 +1,20 @@
+name: P32b_sources_differ_oracle_wrote
+description: >
+  P32 with final_content and final_files listing the path M with a hash
+  different from the grading hash, so §0 gave an exact oracle_writes
+  true: the difference is the oracle's own write, not a disagreement.
+rules: [EVD2, EVD4, CON1]
+capabilities: {oracle_reads: true, final_content: true}
+calls:
+  - {call_id: c1, command: make, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2}
+baseline: {files: {out/r.json: {sha256: aa}}}
+final_diff: {modified: [out/r.json]}
+final_files:
+  - {path: out/r.json, status: M, sha256: ee}
+oracle_inputs:
+  - {path: out/r.json, at_baseline: true, baseline_sha256: aa, source_type: graded, grading_exists: true, grading_sha256: aa, oracle_writes: true, oracle_writes_basis: exact}
+expect:
+  input_states:
+    out/r.json: {content_source: grading_read, content_sources_disagree: false, states_under: [oracle_written], states_over: [oracle_written], model_conflict: false}

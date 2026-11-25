@@ -1,0 +1,44 @@
+name: F01_nested_write
+description: One matched call with one nested shell and one write by the root shell.
+rules: [OUT1, TIM1, TIM2, TIM3, TIM4, NST1, NST2, WRT2, SHP9]
+calls:
+  - {call_id: c1, command: "cd /repo && bash -n x.sh > y.sh", t_start: 10}
+execs:
+  - {command_id: e1, command: "cd /repo && bash -n x.sh > y.sh", t_start: 10.1, duration_s: 2.0, snapshot: {modified: [y.sh]}}
+  - {command_id: e2, command: "-n x.sh", t_start: 10.5, duration_s: 0.5}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: exec_parent, command_id: e2, parent: e1, root_call_id: c1}
+  - {link_type: write_event, path: y.sh, writer_id: e1}
+expect:
+  call_facts:
+    c1:
+      command_id: e1
+      outcome: ok
+      duration_s: 2.0
+      span_under_s: 2.0
+      span_over_s: 2.0
+      descendants_under: 1
+      descendants_over: 1
+      depth_max_over: 1
+      writes_under: {create: 0, delete: 0, mode: 0, modify: 1}
+      writes_over: {create: 0, delete: 0, mode: 0, modify: 1}
+      command_shape: "cd repo && bash -n x.sh > y.sh"
+      numeric_args: []
+      arg_count: 6
+      programs: [cd, bash]
+  exec_facts:
+    e1: {depth: 0, root_call_id: c1, outcome: ok}
+    e2: {depth: 1, root_call_id: c1, root_under: true, outcome: ok}
+  path_facts:
+    y.sh: {final_writer_role: root_exec, final_writer_root: c1}
+  facts:
+    M1.1.command_time_under_s: 2.0
+    M1.1.command_time_over_s: 2.0
+    M1.1.wall_time_s: 10000.0
+    M1.1.duration_p50_under_s: 2.0
+    M1.1.duration_p90_over_s: 2.0
+    M1.1.longest_span_under_s: 2.0
+    M1.2.root_shapes: 1
+    M1.4.depth_max_over: 1
+    M1.4.descendants_total_under: 1

@@ -1,0 +1,29 @@
+id: H04
+title: Writer omits an option the README sets; the default equals it
+rules: [ARG3, ARG7]
+execs:
+  - {command_id: e1, command: "python3 tools/run.py", t_start: 10.0,
+     duration_s: 5.0}
+dispositions: {e1: {disposition: matched_root, root_under: true}}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+oracle_inputs:
+  - {path: out/r.json}
+declared:
+  invocations:
+    - {invocation_key: tools/run.py, text: "python3 tools/run.py --iters 10",
+       options: {--iters: {value: "10", value_type: int}}}
+  options:
+    - {invocation_key: tools/run.py, option: --iters, aliases: [--iters],
+       default: {value: "10", value_type: int}}
+expect:
+  arg_checks:
+    - {command_id: e1, invocation: 0, option: --iters, comparison: omitted,
+       effective: equal, conforms: null, scale_reduced: false,
+       executed: {origin: omitted, value: "10", value_type: int},
+       declared_values: [{value: "10", value_type: int}],
+       declared_origin: [readme]}
+  row_counts: {arg_checks: 1}
+  metrics:
+    M5.1: {args_omitted_under: 1, args_omitted_over: 1, args_omitted_run: 1,
+           options_compared_under: 1, args_unmarked_deviations_under: 1}

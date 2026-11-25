@@ -1,0 +1,20 @@
+[
+  {
+    "actor": "main",
+    "background": false,
+    "call_id": "toolu_01R9PYXQybXPAeoHLa1nGnFG",
+    "command": "sleep 200; tail -4 /tmp/build.log",
+    "command_norm": "sleep 200; tail -4 /tmp/build.log",
+    "edit_content": false,
+    "family": "claude",
+    "log_exit_code": null,
+    "log_ok": false,
+    "paths": [],
+    "raw_name": "Bash",
+    "seq": 0,
+    "t_end": 1791330182.0,
+    "t_precision_s": 1.0,
+    "t_start": 1791330062.0,
+    "tool_type": "shell"
+  }
+]

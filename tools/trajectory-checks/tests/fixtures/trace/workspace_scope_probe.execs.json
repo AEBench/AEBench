@@ -1,0 +1,30 @@
+[
+  {
+    "command": "echo AEBENCH_SHIM_PROBE_OK",
+    "command_id": "8888f1431a134eac906eb2285dab4f75",
+    "command_norm": "echo AEBENCH_SHIM_PROBE_OK",
+    "complete": true,
+    "duration_s": 0.003,
+    "exit_code": 0,
+    "noise": "shim_probe",
+    "seq": 0,
+    "signal": null,
+    "snapshot": {
+      "created": [],
+      "deleted": [],
+      "modified": [],
+      "scope": "workspace",
+      "skip_reason": null,
+      "status": "ok",
+      "totals": {
+        "created": 0,
+        "deleted": 0,
+        "modified": 0
+      }
+    },
+    "stderr_bytes": 0,
+    "stdout_bytes": 22,
+    "t_end": 1791065859.173914,
+    "t_start": 1791065859.170914
+  }
+]

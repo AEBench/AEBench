@@ -1,0 +1,26 @@
+name: P36_unmatched_call_fallback
+description: >
+  A shell call with no trace record (running_at_stop) after the final
+  writer's start, start_events false: it is an unmonitored call (basis
+  fallback); under M_s (S3) the content still fixes the label. The call
+  was still running at the broker's stop and may write after the final
+  diff, so M_r does not read the final diff (D73).
+rules: [EVD7, S3]
+calls:
+  - {call_id: c1, command: ./gen.sh, t_start: 10}
+  - {call_id: c2, command: ./long.sh, t_start: 9990, t_end: null}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2, snapshot: {modified: [out/r.json]}}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+dispositions:
+  c2: {reason: running_at_stop}
+baseline: {files: {out/r.json: {sha256: aa}}}
+final_diff: {modified: [out/r.json]}
+oracle_inputs:
+  - {path: out/r.json, at_baseline: true, baseline_sha256: aa}
+expect:
+  input_states:
+    out/r.json: {unmonitored_calls: [c2], blind_execs: [], state_under: command_written, states_over: [rewritten_identical, command_written, deleted], unseen_writer_possible: true}
+  counts:
+    bases.unmonitored: fallback

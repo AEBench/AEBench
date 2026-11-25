@@ -1,0 +1,36 @@
+name: G30_created_workspace_scope
+description: >
+  Spec FS06, first half. A workspace-scope run (rates.untracked_visible
+  true, every capability false) sees created files: two created untracked
+  files are counted by class, one written by a shell and one by the write
+  tool.
+rules: [CLS3, PRE5, FC6, FC8]
+coverage:
+  rates.untracked_visible: true
+  rates.snapshot_scope: workspace
+calls:
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 12}
+  - {call_id: c2, tool_type: write, paths: [/repo/report.md], t_start: 20}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9, snapshot: {scope: workspace, created: [outputs/run.log]}}
+links:
+  - {link_type: write_event, path: outputs/run.log, writer_id: e1, op: create, scope: workspace}
+  - {link_type: write_event, path: report.md, writer_id: c2, op: create}
+paths:
+  - {path: outputs/run.log, tracked: false, final_state: untracked}
+  - {path: report.md, tracked: false, final_state: untracked}
+path_facts:
+  outputs/run.log: {created: true}
+  report.md: {created: true}
+expect:
+  file_classes:
+    outputs/run.log: {file_class: data, class_rule: FC8}
+    report.md: {file_class: docs, class_rule: FC6}
+  structure:
+    preconditions.untracked_visible: holds
+    M4.2.created_by_class_under: {data: 1, docs: 1}
+    M4.2.created_by_class_over: {data: 1, docs: 1}
+    M4.2.changed_by_class: {}
+    bases.unchanged_under: exact
+  warnings: [baseline_by_class, precondition final_content]
+  warnings_exact: true

@@ -1,0 +1,25 @@
+[
+  {
+    "argv0": "/bin/bash",
+    "command": "sleep 1; echo waiting",
+    "command_id": "8bec62e8b8a949acbe8f00dc7cc98903",
+    "command_norm": "sleep 1; echo waiting",
+    "complete": true,
+    "cwd": "/repo/tester",
+    "duration_s": 1.284,
+    "exit_code": 0,
+    "noise": null,
+    "pid": 242121,
+    "seq": 0,
+    "signal": null,
+    "snapshot": {
+      "skip_reason": "workspace exceeds 20000 files",
+      "status": "skipped"
+    },
+    "stderr_bytes": 0,
+    "stdout_bytes": 8,
+    "t_end": 1791823407.462064,
+    "t_start": 1791823406.178064,
+    "wrapper": "claude_eval"
+  }
+]

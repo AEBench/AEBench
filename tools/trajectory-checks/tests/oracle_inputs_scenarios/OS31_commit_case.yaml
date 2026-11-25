@@ -1,0 +1,20 @@
+name: OS31_commit_case
+description: >
+  The null run's commit is the run's commit written in upper case.
+  Commits are hex and compared lowercase, as hashes are (§6.8):
+  null_commit holds and M3.1 and M3.5 are computed (A9). A shortened
+  commit is not a match: OI9 compares equal commits only.
+rules: [OI9]
+run: {commit: 0a1b2c3d4e5f60718293a4b5c6d7e8f901234567}
+null_manifest:
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: aa, exists_before: true, sha256_before: aa, tracked_before: true}
+null_score: {phases: {experiment_runs: success}, commit: 0A1B2C3D4E5F60718293A4B5C6D7E8F901234567}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {path: data/a.csv, source_type: null_agent, oracle_writes: false, oracle_writes_basis: fallback}
+  oracle_inputs_exact: true
+  block:
+    preconditions.null_commit: holds
+    M3.1.inputs_under: 1
+    M3.5.null_score: 1

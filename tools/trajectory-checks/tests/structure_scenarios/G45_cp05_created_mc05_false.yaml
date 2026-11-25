@@ -1,0 +1,23 @@
+name: G45_cp05_created_mc05_false
+description: >
+  Spec CP05, false half. Without MC-05 the tracked-scope run is not
+  untracked-visible: created_by_class_* is null with a warning.
+rules: [CLS3, PRE5]
+calls:
+  - {call_id: c1, tool_type: write, paths: [/repo/report.md], t_start: 10}
+  - {call_id: c2, command: ls, t_start: 20}
+execs:
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 20.2}
+links:
+  - {link_type: write_event, path: report.md, writer_id: c1, op: create}
+paths:
+  - {path: report.md, tracked: false, final_state: untracked}
+path_facts:
+  report.md: {created: true}
+expect:
+  structure:
+    preconditions.untracked_visible: fails
+    M4.2.created_by_class_under: null
+    M4.2.created_by_class_over: null
+  warnings: [precondition untracked_visible, baseline_by_class, precondition final_content]
+  warnings_exact: true

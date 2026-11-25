@@ -1,0 +1,39 @@
+id: W66
+title: An exec with no owning call wrote the input after a rooted call
+description: >
+  RW2 and RW6 (D48): e1 has no call_exec or exec_parent link, so its
+  content event has no root_call_id and cannot be grouped into a member.
+  Its owning call, if any, may be a call other than c0, so the
+  over-approximation counts it as one more possible member: e1 is listed
+  in unowned_execs and rewrites_over is 1, not 0. The under-
+  approximation counts certain pairs only and stays 0. The rewrite
+  whose previous outcome is unknown is counted in
+  rewrites_after_other_over.
+rules: [RW2, RW6]
+calls:
+  - {call_id: c0, seq: 0, command: ./gen.sh, t_start: 4.5, t_end: 6.0}
+execs:
+  - {command_id: e0, command: ./gen.sh, t_start: 5.0, duration_s: 1.0}
+  - {command_id: e1, command: python3 out.py, t_start: 20.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c0, command_id: e0}
+  - {link_type: write_event, event_id: w0, path: out/r.csv, writer_id: e0}
+  - {link_type: write_event, event_id: w1, path: out/r.csv, writer_id: e1,
+     writer_under: false}
+oracle_inputs:
+  - {input_id: i0, path: out/r.csv}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+expect:
+  input_rewrites:
+    - input_id: i0
+      unowned_execs: [e1]
+      pairs: []
+      rewrites_over: 1
+      rewrites_under: 0
+  metrics:
+    M2.4: {rewrites_total_over: 1, rewrites_total_under: 0,
+           inputs_rewritten_over: 1, inputs_rewritten_under: 0,
+           rewrites_max_over: 1, rewrites_after_other_over: 1,
+           rewrites_after_other_under: 0}

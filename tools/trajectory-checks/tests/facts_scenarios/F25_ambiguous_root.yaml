@@ -1,0 +1,24 @@
+name: F25_ambiguous_root
+description: A nested shell whose owning call is ambiguous counts only in the over versions.
+rules: [NST1, NET2, EXT5]
+calls:
+  - {call_id: c1, command: make, t_start: 0}
+  - {call_id: c2, command: ls, t_start: 10}
+execs:
+  - {command_id: e1, command: make, t_start: 0.1, duration_s: 100}
+  - {command_id: e2, command: ls, t_start: 10.1, duration_s: 1}
+  - {command_id: e3, command: "curl u", t_start: 10.5, duration_s: 1, exit_code: 6}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: exec_parent, command_id: e3, parent: e1, root_call_id: c1, root_ambiguous: true, root_candidates: [c1, c2]}
+expect:
+  call_facts:
+    c1: {descendants_under: 0, descendants_over: 1, network_types_under: [], network_types_over: [download]}
+  exec_facts:
+    e3: {root_under: false, root_call_id: c1, outcome: failed}
+  facts:
+    M6.1.network_execs_under: 0
+    M6.1.network_execs_over: 1
+    M1.3.nested_nonzero_exits_under: 0
+    M1.3.nested_nonzero_exits_over: 1

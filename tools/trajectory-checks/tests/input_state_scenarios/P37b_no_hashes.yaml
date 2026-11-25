@@ -1,0 +1,23 @@
+name: P37b_no_hashes
+description: >
+  P37 with content_hashes false: CON7 is not applied, so the strict model
+  keeps missing and the reason is the missing content evidence.
+rules: [CON7, PRE4]
+coverage: {rates.snapshot_scope: workspace, rates.untracked_visible: true}
+calls:
+  - {call_id: c1, command: ./gen.sh, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2, snapshot: {scope: workspace, created: [out/x.bin]}}
+links:
+  - {link_type: write_event, path: out/x.bin, writer_id: e1, op: create, scope: workspace}
+paths:
+  - {path: out/x.bin, tracked: false, final_state: untracked}
+oracle_inputs:
+  - {path: out/x.bin, at_baseline: false}
+expect:
+  input_states:
+    out/x.bin: {states_under: [command_written, missing], states_over: [command_written, missing], state_under: null, under_reason: no_content_evidence}
+  counts:
+    preconditions.content: fails
+    bases.content_hash: fallback
+    M3.2.rewritten_same_content: null

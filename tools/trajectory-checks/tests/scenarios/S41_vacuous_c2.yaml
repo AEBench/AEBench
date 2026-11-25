@@ -1,0 +1,19 @@
+name: S41_vacuous_c2
+description: Every exec is harness noise; C2_under and C6 hold vacuously, while C7_under fails because the final diff is missing (§7.2; decisions D30, R9).
+calls: []
+execs:
+  - {command_id: p1, t_start: 1, command: "echo AEBENCH_SHIM_PROBE_OK", noise: shim_probe}
+  - {command_id: p2, t_start: 2, command: env, noise: claude_env_probe}
+baseline: {files: {}}
+expect:
+  dispositions:
+    p1: noise
+    p2: noise
+  coverage:
+    rates.exec_explained_rate_under: null
+    rates.listed_path_rate: null
+    preconditions.C1_under: vacuous
+    preconditions.C2_under: vacuous
+    preconditions.C6: vacuous
+    preconditions.C7_under: fails
+    warnings: ["precondition C7_under >= 0.9 failed (null): M4.1, M4.2 null"]

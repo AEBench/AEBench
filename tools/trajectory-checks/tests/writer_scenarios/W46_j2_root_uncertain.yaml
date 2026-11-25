@@ -1,0 +1,31 @@
+id: W46
+title: Without parent links, J2's uncertain root stays uncertain
+rules: [LW8]
+calls:
+  - {call_id: c1, seq: 0, command: bash run.sh, t_start: 9.5, t_end: 31.0}
+  - {call_id: c2, seq: 1, command: ./other.sh, t_start: 14.5, t_end: 26.0}
+execs:
+  - {command_id: e1, command: bash run.sh, t_start: 10.0, duration_s: 20.0}
+  - {command_id: e2, command: ./other.sh, t_start: 15.0, duration_s: 10.0}
+  - {command_id: e3, command: python3 out.py, t_start: 20.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: exec_parent, command_id: e3, parent: e1, root_call_id: c1,
+     root_ambiguous: true, root_candidates: [c1, c2]}
+  - {link_type: write_event, event_id: w0, path: out/r.json, writer_id: e3,
+     writer_under: false}
+dispositions:
+  e3: {root_under: false}
+paths:
+  - {path: out/r.json, events: [w0], final_writer: w0, final_writer_under: false}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+expect:
+  bases: {root_certainty: fallback}
+  last_writers:
+    - {input_id: i0, writer_root_certain: false, last_writer_under: false,
+       not_under: [root_uncertain]}

@@ -1,0 +1,23 @@
+name: G66_c6_and_c7_fail
+description: >
+  C6 and C7_under both fail: C6 voids reverted_by_class, the role splits
+  and shell_written_by_class_* with one warning; C7_under's keys are then
+  all void, so it adds no warning. The class counts are computed.
+rules: [PRE4, PRE5]
+calls:
+  - {call_id: c1, command: ./fix.sh 3, t_start: 10, t_end: 12}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+links:
+  - {link_type: write_event, path: src/a.py, writer_id: e1}
+facts:
+  preconditions.C6: fails
+  preconditions.C7_under: fails
+expect:
+  structure:
+    M4.2.changed_by_class: {code: 1}
+    M4.2.reverted_by_class: null
+    M4.2.changed_by_class_and_role_over: null
+    M4.2.shell_written_by_class_under: null
+  warnings: [precondition C6, precondition untracked_visible, baseline_by_class, precondition final_content]
+  warnings_exact: true

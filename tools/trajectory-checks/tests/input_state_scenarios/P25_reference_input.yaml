@@ -1,0 +1,16 @@
+name: P25_reference_input
+description: A reference input is dropped and counted; the other input is classified.
+rules: [INP2, CNT2]
+baseline: {files: {out/r.json: {sha256: aa}}}
+final_diff: {}
+oracle_inputs:
+  - {path: /refs/expected.json, input_scope: reference, oracle_writes: null, oracle_writes_basis: null}
+  - {path: out/r.json, at_baseline: true, baseline_sha256: aa}
+expect:
+  input_states:
+    out/r.json: {input_id: i1, state_under: pristine}
+  absent: [/refs/expected.json]
+  counts:
+    preconditions.oracle_inputs: holds
+    M3.2.reference_inputs_excluded: 1
+    M3.2.oracle_inputs: 1

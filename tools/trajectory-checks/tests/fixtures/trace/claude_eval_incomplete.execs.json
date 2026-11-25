@@ -1,0 +1,24 @@
+[
+  {
+    "argv0": "/bin/bash",
+    "command": "sleep 240; grep -n \"Step \" /tmp/build.log | tail -2; echo \"---\"; tail -4 /tmp/build.log",
+    "command_id": "d118b267cdf94bc59809254bdbc1ee84",
+    "command_norm": "sleep 240; grep -n \"Step \" /tmp/build.log | tail -2; echo \"---\"; tail -4 /tmp/build.log",
+    "complete": false,
+    "cwd": "/tmp/ws/project",
+    "duration_s": 120.001,
+    "exit_code": null,
+    "noise": null,
+    "pid": 307,
+    "seq": 0,
+    "signal": null,
+    "snapshot": {
+      "skip_reason": "workspace exceeds 20000 files",
+      "status": "skipped"
+    },
+    "stderr_bytes": 0,
+    "stdout_bytes": 0,
+    "t_start": 1791329394.030582,
+    "wrapper": "claude_eval"
+  }
+]

@@ -1,0 +1,26 @@
+id: H31
+title: The writer's root call also ran the benchmark
+rules: [TM3, TM4]
+calls:
+  - {call_id: c1, command: "./bench && node agg.js", t_start: 9.0}
+execs:
+  - {command_id: e1, command: "./bench && node agg.js", t_start: 10.0,
+     duration_s: 100.0}
+  - {command_id: e2, command: ./bench, t_start: 11.0, duration_s: 90.0}
+  - {command_id: e3, command: node agg.js, t_start: 102.0, duration_s: 5.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: exec_parent, command_id: e2, parent: e1, root_call_id: c1}
+  - {link_type: exec_parent, command_id: e3, parent: e1, root_call_id: c1}
+  - {link_type: write_event, path: out/r.json, writer_id: e3}
+oracle_inputs:
+  - {path: out/r.json}
+last_writers:
+  - {input_id: i0, root_span_over_s: 100.0}
+expect:
+  faithfulness:
+    - {input_id: i0, writer_root_span_s: 100.0, chain_time_under_s: 5.0,
+       chain_time_over_s: 97.0}
+  metrics:
+    M1.5: {writer_root_span_max_s: 100.0, chain_time_under_s: 5.0}
+  row_counts: {arg_checks: 2}

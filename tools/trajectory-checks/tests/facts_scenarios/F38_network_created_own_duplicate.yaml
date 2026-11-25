@@ -1,0 +1,32 @@
+name: F38_network_created_own_duplicate
+description: A download overlapped only by its own wrapper duplicate is created under; one overlapped by an unrooted exec is not (NET4 as written, S4).
+rules: [NET4]
+calls:
+  - {call_id: c1, command: "curl -o a.bin u", t_start: 10}
+  - {call_id: c2, command: "wget u -O b.bin", t_start: 30}
+execs:
+  - {command_id: e1, command: "curl -o a.bin u", t_start: 10.1, duration_s: 2, wrapper: codex_snapshot_exec, snapshot: {scope: workspace, created: [a.bin]}}
+  - {command_id: e2, command: "curl -o a.bin u", t_start: 10.2, duration_s: 1.5, snapshot: {scope: workspace}}
+  - {command_id: e3, command: "wget u -O b.bin", t_start: 30.1, duration_s: 2, snapshot: {scope: workspace, created: [b.bin]}}
+  - {command_id: e4, command: ./bg, t_start: 31, duration_s: 5, snapshot: {scope: workspace}}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: wrapper_duplicate, command_id: e2, of: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e3}
+  - {link_type: write_event, path: a.bin, writer_id: e1, op: create, scope: workspace}
+  - {link_type: write_event, path: b.bin, writer_id: e3, op: create, scope: workspace}
+paths:
+  - {path: a.bin, tracked: false, final_state: untracked}
+  - {path: b.bin, tracked: false, final_state: untracked}
+coverage:
+  rates.untracked_visible: true
+  rates.snapshot_scope: workspace
+expect:
+  path_facts:
+    a.bin: {network_created_under: true, network_created_over: true}
+    b.bin: {network_created_under: false, network_created_over: true}
+  exec_facts:
+    e4: {disposition: unrooted}
+  facts:
+    M6.1.network_files_created_under: 1
+    M6.1.network_files_created_over: 2

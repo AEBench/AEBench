@@ -1,0 +1,59 @@
+[
+  {
+    "command": "echo AEBENCH_SHIM_PROBE_OK",
+    "command_id": "a946eeecb92e4ef4894706a90c6b3f1d",
+    "command_norm": "echo AEBENCH_SHIM_PROBE_OK",
+    "complete": true,
+    "duration_s": 0.124,
+    "exit_code": 0,
+    "noise": "shim_probe",
+    "seq": 0,
+    "signal": null,
+    "snapshot": {
+      "created": [],
+      "deleted": [],
+      "modified": [],
+      "scope": "tracked",
+      "skip_reason": null,
+      "status": "ok",
+      "totals": {
+        "created": 0,
+        "deleted": 0,
+        "modified": 0
+      }
+    },
+    "stderr_bytes": 0,
+    "stdout_bytes": 22,
+    "t_end": 1793295156.032606,
+    "t_start": 1793295155.908606
+  },
+  {
+    "command": "env",
+    "command_id": "0460e4fc1bf3402da24ab7d1decb7995",
+    "command_norm": "env",
+    "complete": true,
+    "duration_s": 0.239,
+    "exit_code": 0,
+    "noise": "claude_env_probe",
+    "seq": 1,
+    "signal": null,
+    "stderr_bytes": 0,
+    "stdout_bytes": 10953,
+    "t_end": 1793295160.316245,
+    "t_start": 1793295160.077245,
+    "wrapper": null
+  },
+  {
+    "command_id": "d369741ee01440a6ac93db1a98fdfcba",
+    "complete": true,
+    "duration_s": 0.246,
+    "exit_code": 0,
+    "noise": "<any non-null>",
+    "seq": 2,
+    "signal": null,
+    "stderr_bytes": 0,
+    "stdout_bytes": 0,
+    "t_end": 1793295160.443243,
+    "t_start": 1793295160.197243
+  }
+]

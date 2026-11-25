@@ -1,0 +1,23 @@
+name: F41_depth_wrapper_duplicate_exact
+description: With parent_links, a wrapper duplicate one broker level below its outer exec has the outer's depth, not its own (S7).
+rules: [NST2, CAP1]
+run: {capabilities: {parent_links: true}}
+calls:
+  - {call_id: c1, command: make, t_start: 0}
+execs:
+  - {command_id: e1, command: make, t_start: 0.1, duration_s: 10, depth: 2, wrapper: codex_snapshot_exec}
+  - {command_id: e2, command: make, t_start: 0.2, duration_s: 9, depth: 3}
+  - {command_id: e3, command: "sh -c a", t_start: 1, duration_s: 2, depth: 4}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: wrapper_duplicate, command_id: e2, of: e1}
+  - {link_type: exec_parent, command_id: e3, parent: e2, root_call_id: c1}
+expect:
+  call_facts:
+    c1: {depth_max_over: 2, depth_max_under: 2}
+  exec_facts:
+    e1: {depth: 0}
+    e2: {depth: 0, disposition: wrapper_duplicate}
+    e3: {depth: 2}
+  facts:
+    bases.depth: exact

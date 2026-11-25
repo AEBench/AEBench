@@ -1,0 +1,25 @@
+name: G38_cp02_exact_timing_true
+description: >
+  Spec CP02, true half. An exec of another call starts (t_start) inside
+  the gap but is released after the next call's start; with exact timing
+  it does not overlap the gap, so its skipped snapshot leaves the gap
+  observed.
+rules: [RR5, RR6]
+run: {capabilities: {exact_timing: true}}
+calls:
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 12}
+  - {call_id: c2, command: tail -3 log, t_start: 29, t_end: 33}
+  - {call_id: c3, command: ./run.sh 3, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9, released_at: 10.2, ended_at: 11.8}
+  - {command_id: e2, call: c2, t_start: 29.5, t_end: 32.5, released_at: 31.0, ended_at: 32.0, snapshot: {status: skipped, scope: null, skip_reason: too many files}}
+  - {command_id: e3, call: c3, t_start: 30.1, t_end: 31.9, released_at: 30.3, ended_at: 31.7}
+expect:
+  call_structure:
+    c2: {call_class: observe}
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c3, calls_between: 1, act_calls_between: 0, gap_observed: true, unchanged_under: true, unchanged_over: true}
+  structure:
+    bases.gap: exact
+    bases.writes_between: fallback
+    M2.2.reruns_after_success_unchanged_under: 1

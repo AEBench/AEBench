@@ -1,0 +1,23 @@
+name: G06_gap_unobserved_skipped
+description: >
+  Spec RS06. A background exec of another root runs through the gap with a
+  skipped snapshot, so the gap is not observed: unchanged_under is false,
+  unchanged_over stays true (no write is known).
+rules: [RR6, REP2]
+calls:
+  - {call_id: c0, command: ./train.sh &, t_start: 1, t_end: 2}
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e0, call: c0, t_start: 1.1, t_end: 1.5}
+  - {command_id: e0b, command: train, t_start: 5.0, t_end: 50.0, snapshot: {status: skipped, scope: null, skip_reason: too many files}}
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e2, call: c2, t_start: 30.1, t_end: 31.9}
+links:
+  - {link_type: exec_parent, command_id: e0b, parent: e0, root_call_id: c0}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, gap_observed: false, writes_between_over: 0, unchanged_under: false, unchanged_over: true}
+  structure:
+    M2.2.reruns_after_success_unchanged_under: 0
+    M2.2.reruns_after_success_unchanged_over: 1

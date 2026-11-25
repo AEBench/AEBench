@@ -1,0 +1,16 @@
+name: S03_file_order_irrelevant
+description: As S02, but the records are listed out of start order and their ids sort against start order -> same matches (§5.2 seq).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "make test"}
+  - {call_id: c2, t_start: 101, t_end: 102, command: "make test"}
+  - {call_id: c3, t_start: 102, t_end: 103, command: "make test"}
+execs:
+  - {command_id: a3, t_start: 102.1, t_end: 102.6, command: "make test"}
+  - {command_id: z1, t_start: 100.1, t_end: 100.6, command: "make test"}
+  - {command_id: m2, t_start: 101.1, t_end: 101.6, command: "make test"}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c1, command_id: z1, rule: exact}
+    - {link_type: call_exec, call_id: c2, command_id: m2, rule: exact}
+    - {link_type: call_exec, call_id: c3, command_id: a3, rule: exact}
+  links_exact: true

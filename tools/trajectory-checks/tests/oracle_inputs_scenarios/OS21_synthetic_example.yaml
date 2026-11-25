@@ -1,0 +1,237 @@
+name: OS21_synthetic_example
+description: The labeled synthetic run of spec 0.7, exactly the rows and the block printed there.
+rules: [OI1, OI2, OI3, OI4, OI5, OI6, OI7, OI8, OI9, OI10, NS1, NS2, NS3]
+run: {commit: c0ffee0000000000000000000000000000000000, run_key: art__claude__1}
+coverage: {rates.snapshot_scope: workspace, rates.untracked_visible: true}
+baseline:
+  commit: c0ffee0000000000000000000000000000000000
+  files:
+    data/input.csv: {sha256: '1111111111111111111111111111111111111111111111111111111111111111'}
+    results/summary.json: {sha256: '2222222222222222222222222222222222222222222222222222222222222222'}
+    results/run1.csv: {sha256: '3333333333333333333333333333333333333333333333333333333333333333'}
+paths:
+- {path: results/run.log, final_state: untracked}
+- {path: results/run2.csv, final_state: untracked}
+- {path: results/summary.json, final_state: changed}
+null_manifest:
+- check_id: env_setup.tool_on_path
+  exists: null
+  exists_before: null
+  method: run_process
+  argv: [tool, --version]
+  path: null
+  phase: env_setup
+  resolved_workspace_path: null
+  sha256: null
+  sha256_before: null
+  tracked_before: null
+- {check_id: artifact_build.binary_built, exists: false, exists_before: false, method: path_is_file, path: /repo/build/bin/tool, phase: artifact_build, resolved_workspace_path: build/bin/tool, sha256: null, sha256_before: null, tracked_before: false}
+- {check_id: benchmark_prep.inputs_present, exists: true, exists_before: true, method: read_file_text, mtime_ns: 1799990000000000000, path: /repo/data/input.csv, phase: benchmark_prep, resolved_workspace_path: data/input.csv, sha256: '1111111111111111111111111111111111111111111111111111111111111111', sha256_before: '1111111111111111111111111111111111111111111111111111111111111111', tracked_before: true}
+- {check_id: experiment_runs.summary_matches, exists: true, exists_before: true, method: read_file_text, mtime_ns: 1799990000000000000, path: /repo/results/summary.json, phase: experiment_runs, resolved_workspace_path: results/summary.json, sha256: '2222222222222222222222222222222222222222222222222222222222222222', sha256_before: '2222222222222222222222222222222222222222222222222222222222222222', tracked_before: true}
+- check_id: experiment_runs.per_run_csv
+  exists: true
+  exists_before: true
+  glob_matches: [results/run1.csv]
+  glob_pattern: run*.csv
+  method: glob
+  path: /repo/results
+  phase: experiment_runs
+  resolved_workspace_path: results
+  sha256: null
+  sha256_before: null
+  tracked_before: null
+- {check_id: experiment_runs.per_run_csv, exists: true, exists_before: true, method: read_file_text, mtime_ns: 1799990000000000000, path: /repo/results/run1.csv, phase: experiment_runs, resolved_workspace_path: results/run1.csv, sha256: '3333333333333333333333333333333333333333333333333333333333333333', sha256_before: '3333333333333333333333333333333333333333333333333333333333333333', tracked_before: true}
+- {check_id: experiment_runs.home_log, exists: false, exists_before: false, method: path_exists, path: /home/agent/art-results/log.txt, phase: experiment_runs, resolved_workspace_path: null, sha256: null, sha256_before: null, tracked_before: null}
+null_score:
+  phases: {env_setup: error, artifact_build: error, benchmark_prep: success, experiment_runs: success}
+  commit: c0ffee0000000000000000000000000000000000
+  case_image_digest: sha256:4444444444444444444444444444444444444444444444444444444444444444
+  oracle_digest: '9999999999999999999999999999999999999999999999999999999999999999'
+run_score:
+  phases: {env_setup: success, artifact_build: success, benchmark_prep: success, experiment_runs: success}
+expect:
+  oracle_inputs:
+  - access_types: [stat]
+    at_baseline: false
+    baseline_sha256: null
+    checks: [artifact_build.binary_built]
+    grading_exists: null
+    grading_mtime_ns: null
+    grading_sha256: null
+    in_under: true
+    in_workspace: true
+    input_id: i0
+    input_scope: workspace
+    listed_by: []
+    match_type: literal
+    null_sha256: null
+    oracle_writes: false
+    oracle_writes_basis: fallback
+    path: build/bin/tool
+    pattern: null
+    phases: [artifact_build]
+    source_type: null_agent
+    tracked_at_baseline: false
+  - access_types: [read]
+    at_baseline: true
+    baseline_sha256: '1111111111111111111111111111111111111111111111111111111111111111'
+    checks: [benchmark_prep.inputs_present]
+    grading_exists: null
+    grading_mtime_ns: null
+    grading_sha256: null
+    in_under: true
+    in_workspace: true
+    input_id: i1
+    input_scope: workspace
+    listed_by: []
+    match_type: literal
+    null_sha256: '1111111111111111111111111111111111111111111111111111111111111111'
+    oracle_writes: false
+    oracle_writes_basis: fallback
+    path: data/input.csv
+    pattern: null
+    phases: [benchmark_prep]
+    source_type: null_agent
+    tracked_at_baseline: true
+  - access_types: [list]
+    at_baseline: true
+    baseline_sha256: null
+    checks: [experiment_runs.per_run_csv]
+    grading_exists: null
+    grading_mtime_ns: null
+    grading_sha256: null
+    in_under: false
+    in_workspace: true
+    input_id: i2
+    input_scope: workspace
+    listed_by: []
+    match_type: pattern
+    null_sha256: null
+    oracle_writes: null
+    oracle_writes_basis: null
+    path: results
+    pattern: run*.csv
+    phases: [experiment_runs]
+    source_type: null_agent
+    tracked_at_baseline: null
+  - access_types: [list, read]
+    at_baseline: true
+    baseline_sha256: '3333333333333333333333333333333333333333333333333333333333333333'
+    checks: [experiment_runs.per_run_csv]
+    grading_exists: null
+    grading_mtime_ns: null
+    grading_sha256: null
+    in_under: true
+    in_workspace: true
+    input_id: i3
+    input_scope: workspace
+    listed_by: [i2]
+    match_type: literal
+    null_sha256: '3333333333333333333333333333333333333333333333333333333333333333'
+    oracle_writes: false
+    oracle_writes_basis: fallback
+    path: results/run1.csv
+    pattern: null
+    phases: [experiment_runs]
+    source_type: null_agent
+    tracked_at_baseline: true
+  - access_types: [list]
+    at_baseline: false
+    baseline_sha256: null
+    checks: [experiment_runs.per_run_csv]
+    grading_exists: null
+    grading_mtime_ns: null
+    grading_sha256: null
+    in_under: false
+    in_workspace: true
+    input_id: i4
+    input_scope: workspace
+    listed_by: [i2]
+    match_type: pattern_match
+    null_sha256: null
+    oracle_writes: null
+    oracle_writes_basis: null
+    path: results/run2.csv
+    pattern: null
+    phases: [experiment_runs]
+    source_type: null_agent
+    tracked_at_baseline: null
+  - access_types: [read]
+    at_baseline: true
+    baseline_sha256: '2222222222222222222222222222222222222222222222222222222222222222'
+    checks: [experiment_runs.summary_matches]
+    grading_exists: null
+    grading_mtime_ns: null
+    grading_sha256: null
+    in_under: true
+    in_workspace: true
+    input_id: i5
+    input_scope: workspace
+    listed_by: []
+    match_type: literal
+    null_sha256: '2222222222222222222222222222222222222222222222222222222222222222'
+    oracle_writes: false
+    oracle_writes_basis: fallback
+    path: results/summary.json
+    pattern: null
+    phases: [experiment_runs]
+    source_type: null_agent
+    tracked_at_baseline: true
+  - access_types: [stat]
+    at_baseline: false
+    baseline_sha256: null
+    checks: [experiment_runs.home_log]
+    grading_exists: null
+    grading_mtime_ns: null
+    grading_sha256: null
+    in_under: true
+    in_workspace: false
+    input_id: i6
+    input_scope: outside_workspace
+    listed_by: []
+    match_type: literal
+    null_sha256: null
+    oracle_writes: false
+    oracle_writes_basis: fallback
+    path: /home/agent/art-results/log.txt
+    pattern: null
+    phases: [experiment_runs]
+    source_type: null_agent
+    tracked_at_baseline: null
+  oracle_inputs_exact: true
+  block:
+    bases: {oracle_writes: fallback, pattern_matches: exact, source: fallback}
+    preconditions: {null_commit: holds, null_score: holds, oracle_inputs: holds, run_score: holds}
+    M3.1:
+      command_checks: 1
+      command_reads_recorded: false
+      inputs_absent_at_baseline: 2
+      inputs_oracle_written: 0
+      inputs_outside_workspace: 1
+      inputs_over: 6
+      inputs_present_at_baseline: 3
+      inputs_read_under: 3
+      inputs_reference: 0
+      inputs_stat_only_under: 2
+      inputs_under: 5
+      null_case_image_digest: sha256:4444444444444444444444444444444444444444444444444444444444444444
+      null_commit: c0ffee0000000000000000000000000000000000
+      null_image_matches: null
+      pattern_matches_complete: true
+      patterns: 1
+      phases_complete: {artifact_build: true, benchmark_prep: true, env_setup: false, experiment_runs: true}
+      run_case_image_digest: null
+      run_commit: c0ffee0000000000000000000000000000000000
+      source_type: null_agent
+    M3.5:
+      null_phases_passed: [benchmark_prep, experiment_runs]
+      null_score: 2
+      null_score_max: 4
+      phases_gained: [artifact_build, env_setup]
+      phases_lost: []
+      phases_passed_by_null: [benchmark_prep, experiment_runs]
+      run_score: 4
+      run_score_max: 4
+      score_gain: 2
+  warnings: ['oracle command checks ran without read recording (MC-16): M3.1 inputs may be missing files']
+  warnings_exact: true

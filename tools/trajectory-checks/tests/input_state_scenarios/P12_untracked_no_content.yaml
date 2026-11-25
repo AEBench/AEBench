@@ -1,0 +1,22 @@
+name: P12_untracked_no_content
+description: >
+  An untracked input in tracked scope, absent at the baseline per the
+  pre-oracle pass, with untracked_visible and final_content false and no
+  grading read: not observable, no content evidence.
+rules: [EVD1, EVD2, EVD6, CON2, CON11, CON13]
+calls:
+  - {call_id: c1, command: ./gen.sh, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2}
+baseline: {files: {src/main.py: {sha256: mm}}}
+final_diff: {}
+oracle_inputs:
+  - {path: out/new.csv, at_baseline: false}
+expect:
+  input_states:
+    out/new.csv: {tracked: false, baseline_exists: false, baseline_sha256: null, baseline_source: pre_oracle_pass, grading_exists: null, content_cmp: null, content_source: null, observable: false, states_under: [command_written, missing], states_over: [command_written, missing], under_reason: no_content_evidence, origin_under: new_file, origins_over: [new_file], unseen_writer_possible: true}
+  counts:
+    bases.observable: fallback
+    M3.2.created_by_agent_under: 0
+    M3.2.created_by_agent_over: 1
+    M3.2.absent_over: 1

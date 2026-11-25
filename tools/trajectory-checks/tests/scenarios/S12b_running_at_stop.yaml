@@ -1,0 +1,17 @@
+name: S12b_running_at_stop
+description: A call still running when the broker stopped has no record -> unmatched, reason running_at_stop, excluded from C1 and counted apart (§5.4, §7.1).
+run: {t_end: 1000}
+calls:
+  - {call_id: c0, t_start: 100, t_end: 101, command: "ls"}
+  - {call_id: c1, t_start: 900, t_end: null, command: "./train.sh"}
+execs:
+  - {command_id: e0, t_start: 100.2, t_end: 100.3, command: "ls"}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c0, command_id: e0, rule: exact}
+  links_exact: true
+  dispositions:
+    c1: {disposition: unmatched, reason: running_at_stop, matched: false}
+  coverage:
+    rates.call_match_rate_under: 1.0
+    counts.calls_running_at_stop: 1

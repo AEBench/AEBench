@@ -1,0 +1,22 @@
+name: G63_running_at_stop_between
+description: >
+  A background call still running when the run stopped lies between two
+  reruns: its incomplete exec lasts to the run's end, so it overlaps the
+  gap, and its absent snapshot leaves the gap unobserved.
+rules: [OBS4, RR5, RR6, REP2]
+calls:
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./serve.sh &, t_start: 15, t_end: 16}
+  - {call_id: c3, command: ./run.sh, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e2, call: c2, t_start: 15.1, duration_s: 0.2, complete: false, exit_code: null, snapshot: {status: absent, scope: null}}
+  - {command_id: e3, call: c3, t_start: 30.1, t_end: 31.9}
+expect:
+  call_structure:
+    c2: {call_class: act, class_reason: background}
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c3, act_calls_between: 1, gap_observed: false, unchanged_under: false, unchanged_over: true}
+  structure:
+    M2.2.reruns_after_success_unchanged_under: 0
+    M2.2.reruns_after_success_unchanged_over: 1

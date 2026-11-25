@@ -1,0 +1,21 @@
+name: G55_cp10_untracked_listed_true
+description: >
+  Spec CP10, true half. The act call in between has a complete snapshot
+  that lists a created untracked file: one untracked write in the gap, so
+  unchanged_under is false; no certain write, so unchanged_over is true.
+rules: [RR5, RR6]
+run: {capabilities: {untracked_visible: true}}
+calls:
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: cp -r in out, t_start: 20, t_end: 21}
+  - {call_id: c3, command: ./run.sh, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9, snapshot: {created_untracked: [], modified_untracked: [], deleted_untracked: []}}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 20.2, snapshot: {created_untracked: [out/new.csv], modified_untracked: [], deleted_untracked: []}}
+  - {command_id: e3, call: c3, t_start: 30.1, t_end: 31.9, snapshot: {created_untracked: [], modified_untracked: [], deleted_untracked: []}}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c3, untracked_writes_between: 1, writes_between_over: 0, unchanged_under: false, unchanged_over: true}
+  structure:
+    M2.2.reruns_after_success_unchanged_under: 0
+    M2.2.reruns_after_success_unchanged_over: 1

@@ -1,0 +1,22 @@
+name: F34_running_at_stop_exact
+description: With start_events, a call whose root exec has only a start record ran until the stop; its interval to the run's end is measured.
+rules: [EXT6, TIM1, CAP1]
+run: {t_start: 0, t_end: 1000, capabilities: {start_events: true}}
+calls:
+  - {call_id: c1, command: ls, t_start: 10}
+  - {call_id: c2, command: ./serve, t_start: 900, t_end: null}
+execs:
+  - {command_id: e1, command: ls, t_start: 10.1, duration_s: 1, record_type: closed}
+  - {command_id: e2, command: ./serve, t_start: 900.1, duration_s: 0, complete: false, exit_code: null, record_type: start_only, snapshot: {status: absent}}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+expect:
+  call_facts:
+    c2: {command_id: e2, outcome: unknown, complete: false, span_under_s: 99.9, span_over_s: 99.9}
+  facts:
+    bases.running_at_stop: exact
+    M1.3.running_at_stop: 1
+    M1.3.exits_unknown: 1
+    M1.1.command_time_under_s: 100.9
+    M1.1.command_time_over_s: 100.9

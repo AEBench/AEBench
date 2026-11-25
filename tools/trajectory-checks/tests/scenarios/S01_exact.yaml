@@ -1,0 +1,21 @@
+name: S01_exact
+description: One shell call, one record with the same text -> J1 rule exact; coverage 1.0.
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "ls -la"}
+execs:
+  - {command_id: e1, t_start: 100.3, t_end: 100.4, command: "ls -la"}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c1, command_id: e1, rule: exact, dt_s: 0.3}
+  links_exact: true
+  dispositions:
+    c1: {item_type: call, disposition: matched, reason: null, matched: true, match_under: true}
+    e1: {item_type: exec, disposition: matched_root, reason: null, snapshot_ok: true, root_under: true}
+  coverage:
+    rates.call_match_rate_under: 1.0
+    rates.call_match_rate_over: 1.0
+    rates.exec_explained_rate_under: 1.0
+    rates.exec_explained_rate_over: 1.0
+    counts.shell_calls: 1
+    counts.shell_calls_matched.exact: 1
+    counts.shell_calls_matched.prefix: 0

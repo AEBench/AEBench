@@ -1,0 +1,14 @@
+name: S26_non_shell_only
+description: Only non-shell tools (read, web, meta) -> no J1 candidates, not counted as unmatched, C1 null (§7.1 C1).
+# Whether non-shell calls get a dispositions row is not settled (open point 12); not asserted.
+calls:
+  - {call_id: r1, tool_type: read, raw_name: Read, t_start: 100, paths: ["/repo/README.md"]}
+  - {call_id: w1, tool_type: web, raw_name: WebFetch, t_start: 110}
+  - {call_id: m1, tool_type: meta, raw_name: TodoWrite, t_start: 120}
+execs: []
+expect:
+  links: []
+  coverage:
+    counts.shell_calls: 0
+    rates.call_match_rate_under: null
+    rates.call_match_rate_over: null

@@ -1,0 +1,29 @@
+id: W60
+title: A mode change is the only change, and layer 1 names a mode event
+rules: [LW3, LW5, RW2]
+calls:
+  - {call_id: c1, seq: 0, command: chmod -x run.sh, t_start: 9.5, t_end: 11.0}
+  - {call_id: c2, seq: 1, command: chmod +x run.sh, t_start: 10.5, t_end: 12.0}
+execs:
+  - {command_id: e1, command: chmod -x run.sh, t_start: 10.0, duration_s: 0.2}
+  - {command_id: e2, command: chmod +x run.sh, t_start: 11.0, duration_s: 0.2}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: write_event, event_id: w0, path: run.sh, op: mode, writer_id: e1}
+  - {link_type: write_event, event_id: w1, path: run.sh, op: mode, writer_id: e2}
+paths:
+  - {path: run.sh, events: [w0, w1], final_writer: w1, final_state: mode_only}
+oracle_inputs:
+  - {input_id: i0, path: run.sh}
+input_states:
+  - {input_id: i0, tracked: true, baseline_sha256: aa, grading_exists: true,
+     content_source: final_diff, states_over: [pristine]}
+expect:
+  last_writers:
+    - {input_id: i0, last_writer: w1, last_writer_op: mode,
+       last_writer_candidates: [w1], window_lo: 11.0, window_hi: 13.2,
+       state_conflict: false, last_writer_under: true}
+  input_rewrites:
+    - {input_id: i0, members: [], pairs: [], delete_roots: [],
+       rewrites_over: 0, rewrites_under: 0}

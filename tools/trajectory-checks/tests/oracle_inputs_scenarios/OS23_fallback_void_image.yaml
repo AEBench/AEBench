@@ -1,0 +1,36 @@
+name: OS23_fallback_void_image
+description: >
+  OS22 with the run's image digest known and different from the null
+  run's: the fallback is void, so every oracle_writes and its basis are
+  null; M3.1 is still computed (graded source).
+rules: [OI9, OI10]
+run: {capabilities: {oracle_reads: true}, case_image_digest: "sha256:77"}
+baseline: {files: {data/a.csv: {sha256: aa}, data/b.csv: {sha256: bb}}}
+graded_manifest:
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: a2, mtime_ns: 7}
+  - {check_id: read_b, path: /repo/data/b.csv, exists: true, sha256: b1}
+  - {check_id: stat_c, method: path_exists, path: /tmp/c.log, exists: true}
+null_manifest:
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: a9, exists_before: true, sha256_before: aa, tracked_before: true}
+  - {check_id: read_b, path: /repo/data/b.csv, exists: true, sha256: bb, exists_before: true, sha256_before: bb, tracked_before: true}
+  - {check_id: stat_c, method: path_exists, path: /tmp/c.log, exists: true, exists_before: false}
+final_files:
+  - {path: data/a.csv, status: M, sha256: a1}
+  - {path: data/b.csv, status: M, sha256: b1}
+null_score: {phases: {experiment_runs: success}, case_image_digest: "sha256:44"}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {path: data/a.csv, oracle_writes: null, oracle_writes_basis: null}
+    - {path: data/b.csv, oracle_writes: null, oracle_writes_basis: null}
+    - {path: /tmp/c.log, oracle_writes: null, oracle_writes_basis: null}
+  oracle_inputs_exact: true
+  block:
+    bases.oracle_writes: fallback
+    M3.1.source_type: graded
+    M3.1.inputs_under: 3
+    M3.1.inputs_oracle_written: 0
+    M3.1.null_image_matches: false
+    M3.5.null_score: 1
+  warnings: ["null run image differs: art"]
+  warnings_exact: true

@@ -1,0 +1,26 @@
+name: S27_reparenting
+description: A nohup call returns at once; its script then spawns shells for an hour while no agent command runs -> the script's shell is reparented to the nohup call, its children nest under it (§6.5 reparenting; decision R3).
+calls:
+  - {call_id: cn, t_start: 100, t_end: 100.5, command: "nohup ./run_all.sh > log 2>&1 &"}
+execs:
+  - {command_id: en, t_start: 100.2, t_end: 100.3, command: "nohup ./run_all.sh > log 2>&1 &"}
+  - {command_id: n1, t_start: 100.35, t_end: 3700, command: "./run_all.sh"}
+  - {command_id: n2, t_start: 200, t_end: 300, command: "make bench"}
+  - {command_id: n3, t_start: 400, t_end: 500, command: "make plot"}
+expect:
+  links:
+    - {link_type: call_exec, call_id: cn, command_id: en, rule: exact}
+    - {link_type: exec_parent, command_id: n1, parent: null, root_call_id: cn, rule: reparenting, root_ambiguous: false, root_candidates: []}
+    - {link_type: exec_parent, command_id: n2, parent: n1, root_call_id: cn, rule: time_containment, root_ambiguous: false}
+    - {link_type: exec_parent, command_id: n3, parent: n1, root_call_id: cn, rule: time_containment, root_ambiguous: false}
+  links_exact: true
+  dispositions:
+    en: {disposition: matched_root, root_under: true}
+    n1: {disposition: nested, root_under: false}
+    # R3: root_under is false when the root came through reparenting, also for n2 and n3 (their chain passes through n1).
+    n2: {disposition: nested, root_under: false}
+    n3: {disposition: nested, root_under: false}
+  coverage:
+    counts.execs_reparented: 1
+    rates.exec_explained_rate_under: 0.25
+    rates.exec_explained_rate_over: 1.0

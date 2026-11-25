@@ -1,0 +1,42 @@
+name: G24_one_file_per_class
+description: >
+  Spec FS01. One changed file for each rule FC1 to FC11 (FC7 retired), all
+  last written by a root shell with certain attribution: every class is
+  counted, data twice (a data folder and a data extension), and the role
+  split is root_exec.
+rules: [FC1, FC2, FC3, FC4, FC5, FC6, FC8, FC9, FC10, FC11, CLS1]
+calls:
+  - {call_id: c1, command: ./update.sh 3, t_start: 10, t_end: 20}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 19.9}
+links:
+  - {link_type: write_event, path: .github/workflows/ci.yml, writer_id: e1}
+  - {link_type: write_event, path: Makefile, writer_id: e1}
+  - {link_type: write_event, path: analysis.ipynb, writer_id: e1}
+  - {link_type: write_event, path: tests/test_core.py, writer_id: e1}
+  - {link_type: write_event, path: src/core.py, writer_id: e1}
+  - {link_type: write_event, path: README.md, writer_id: e1}
+  - {link_type: write_event, path: results/summary.csv, writer_id: e1}
+  - {link_type: write_event, path: config/settings.yaml, writer_id: e1}
+  - {link_type: write_event, path: notes/table.tsv, writer_id: e1}
+  - {link_type: write_event, path: src/model.xyz, writer_id: e1}
+expect:
+  file_classes:
+    .github/workflows/ci.yml: {file_class: ci, class_rule: FC1, extension: .yml, in_workspace: true, binary_content: null}
+    Makefile: {file_class: build, class_rule: FC2, extension: ""}
+    analysis.ipynb: {file_class: notebook, class_rule: FC3, extension: .ipynb}
+    tests/test_core.py: {file_class: test, class_rule: FC4, extension: .py}
+    src/core.py: {file_class: code, class_rule: FC5, extension: .py, mode_source: null}
+    README.md: {file_class: docs, class_rule: FC6, extension: .md}
+    results/summary.csv: {file_class: data, class_rule: FC8, extension: .csv}
+    config/settings.yaml: {file_class: config, class_rule: FC9, extension: .yaml}
+    notes/table.tsv: {file_class: data, class_rule: FC10, extension: .tsv}
+    src/model.xyz: {file_class: other, class_rule: FC11, extension: .xyz}
+  structure:
+    M4.2.changed_by_class: {ci: 1, build: 1, notebook: 1, test: 1, code: 1, docs: 1, data: 2, config: 1, other: 1}
+    M4.2.changed_by_class_and_role_under: {ci: {root_exec: 1}, build: {root_exec: 1}, notebook: {root_exec: 1}, test: {root_exec: 1}, code: {root_exec: 1}, docs: {root_exec: 1}, data: {root_exec: 2}, config: {root_exec: 1}, other: {root_exec: 1}}
+    M4.2.changed_by_class_and_role_over: {ci: {root_exec: 1}, build: {root_exec: 1}, notebook: {root_exec: 1}, test: {root_exec: 1}, code: {root_exec: 1}, docs: {root_exec: 1}, data: {root_exec: 2}, config: {root_exec: 1}, other: {root_exec: 1}}
+    M4.2.shell_written_by_class_under: {ci: 1, build: 1, notebook: 1, test: 1, code: 1, docs: 1, data: 2, config: 1, other: 1}
+    M4.2.shell_written_by_class_over: {ci: 1, build: 1, notebook: 1, test: 1, code: 1, docs: 1, data: 2, config: 1, other: 1}
+    M4.2.mode_only_by_class: {}
+    M4.2.reverted_by_class: {}

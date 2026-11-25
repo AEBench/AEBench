@@ -1,0 +1,16 @@
+name: F26_unrooted
+description: An unrooted shell has no owner and no depth, but its time counts in the command time.
+rules: [NST2, TIM1]
+calls:
+  - {call_id: c1, command: ls, t_start: 0}
+execs:
+  - {command_id: e1, command: ls, t_start: 0.1, duration_s: 1}
+  - {command_id: e2, command: ./orphan, t_start: 50, duration_s: 10}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+expect:
+  exec_facts:
+    e2: {disposition: unrooted, depth: null, root_call_id: null, root_under: false}
+  facts:
+    M1.1.command_time_under_s: 11.0
+    M1.4.descendants_total_over: 0

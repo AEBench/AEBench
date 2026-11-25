@@ -1,0 +1,16 @@
+name: S49_two_roots_window
+description: Two execs of different roots report one path, the second starting 1 s after the first ended; their observation windows overlap, so both are root-ambiguous (§6.6 rule 6; decision D33).
+calls:
+  - {call_id: c1, t_start: 10, t_end: 11, command: "./gen.sh"}
+  - {call_id: c2, t_start: 11.5, t_end: 12, command: "./gen2.sh"}
+execs:
+  - {command_id: e1, t_start: 10.2, t_end: 10.6, command: "./gen.sh", snapshot: {modified: [out.csv]}}
+  - {command_id: e2, t_start: 11.6, t_end: 11.9, command: "./gen2.sh", snapshot: {modified: [out.csv]}}
+baseline: {files: {out.csv: {}}}
+final_diff: {modified: [out.csv], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: write_event, writer_id: e1, root_ambiguous: true, root_candidates: [c1, c2], writer_under: false}
+    - {link_type: write_event, writer_id: e2, root_ambiguous: true, root_candidates: [c1, c2], writer_under: false}
+  paths:
+    - {path: out.csv, final_writer: w1, final_writer_under: false}

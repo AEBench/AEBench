@@ -1,0 +1,27 @@
+name: P09_edit_close_to_exec
+description: >
+  An edit 0.5 s before an exec that reports the path (t_precision_s 1.0);
+  layer 1's final writer is the exec, not certain: both written labels
+  stay, and the reason is final_writer_uncertain.
+rules: [CON6, CON9, CON13]
+calls:
+  - {call_id: c1, tool_type: edit, paths: [/repo/cfg/p.yaml], t_start: 20, t_precision_s: 1.0}
+  - {call_id: c2, command: ./gen.sh, t_start: 20.4}
+execs:
+  - {command_id: e2, call: c2, t_start: 20.5, snapshot: {modified: [cfg/p.yaml]}}
+links:
+  - {link_type: write_event, path: cfg/p.yaml, writer_id: c1}
+  - {link_type: write_event, path: cfg/p.yaml, writer_id: e2}
+paths:
+  - {path: cfg/p.yaml, final_writer_under: false}
+baseline: {files: {cfg/p.yaml: {sha256: aa}}}
+final_diff: {modified: [cfg/p.yaml]}
+oracle_inputs:
+  - {path: cfg/p.yaml, at_baseline: true, baseline_sha256: aa}
+expect:
+  input_states:
+    cfg/p.yaml: {states_under: [edit_written, command_written], states_over: [edit_written, command_written], state_under: null, under_reason: final_writer_uncertain, final_writer: w1, final_writer_under: false, model_conflict: false}
+  counts:
+    M3.2.state_unknown_under: 1
+    M3.2.agent_written_under: 1
+    M3.2.final_writer_roots_under: []

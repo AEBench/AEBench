@@ -1,0 +1,20 @@
+[
+  {
+    "actor": "subagent",
+    "background": false,
+    "call_id": "toolu_01R38ma8PSmiMshCwE8EDb4Q",
+    "command": "sleep 1; echo waiting",
+    "command_norm": "sleep 1; echo waiting",
+    "edit_content": false,
+    "family": "claude",
+    "log_exit_code": null,
+    "log_ok": true,
+    "paths": [],
+    "raw_name": "Bash",
+    "seq": 0,
+    "t_end": 1791823407.0,
+    "t_precision_s": 1.0,
+    "t_start": 1791823406.0,
+    "tool_type": "shell"
+  }
+]

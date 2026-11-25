@@ -1,0 +1,24 @@
+name: OS18_only_command_records
+description: >
+  A manifest with only run_process records: no row, the oracle_inputs
+  precondition holds vacuously, and the counts are 0, not null.
+rules: [OI2, OI6, OI8]
+null_manifest:
+  - {check_id: env.a, phase: env_setup, method: run_process, path: null, argv: [a]}
+  - {check_id: env.b, phase: env_setup, method: run_process, path: null, argv: [b]}
+null_score: {phases: {env_setup: success}}
+run_score: {phases: {env_setup: success}}
+expect:
+  oracle_inputs: []
+  oracle_inputs_exact: true
+  block:
+    preconditions.oracle_inputs: vacuous
+    M3.1.source_type: null_agent
+    M3.1.inputs_under: 0
+    M3.1.inputs_over: 0
+    M3.1.inputs_read_under: 0
+    M3.1.inputs_oracle_written: 0
+    M3.1.patterns: 0
+    M3.1.command_checks: 2
+    M3.1.command_reads_recorded: false
+    M3.1.phases_complete: {env_setup: false}

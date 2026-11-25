@@ -1,0 +1,28 @@
+id: W43
+title: With exact timing, two writes 1 s apart are ordered
+rules: [LW4]
+run:
+  capabilities: {exact_timing: true}
+calls:
+  - {call_id: c1, seq: 0, command: ./a.sh, t_start: 9.5, t_end: 11.0}
+  - {call_id: c2, seq: 1, command: ./b.sh, t_start: 11.0, t_end: 12.0}
+execs:
+  - {command_id: e1, command: ./a.sh, t_start: 10.0, duration_s: 0.5, released_at: 10.1, ended_at: 10.5, snapshot_after_s: 0.2}
+  - {command_id: e2, command: ./b.sh, t_start: 11.5, duration_s: 0.3, released_at: 11.55, ended_at: 11.8, snapshot_after_s: 0.1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: write_event, event_id: w0, path: out/r.json, writer_id: e1}
+  - {link_type: write_event, event_id: w1, path: out/r.json, writer_id: e2}
+paths:
+  - {path: out/r.json, events: [w0, w1], final_writer: w1}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+expect:
+  bases: {window: exact}
+  last_writers:
+    - {input_id: i0, last_writer: w1, window_lo: 11.55, window_hi: 11.9,
+       last_writer_candidates: [w1], last_writer_under: true}

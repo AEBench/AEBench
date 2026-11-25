@@ -1,0 +1,28 @@
+name: P01_pristine_tracked
+description: >
+  A tracked input not in the final diff, with no write event, every
+  snapshot ok and nothing detached: pristine in the strict model; the
+  relaxed model cannot exclude an unseen identical rewrite.
+rules: [EVD1, EVD3, CON2, CON4, CON8, CON11]
+calls:
+  - {call_id: c1, command: make, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2}
+baseline: {files: {out/r.json: {sha256: aa}}}
+final_diff: {}
+oracle_inputs:
+  - {path: out/r.json, at_baseline: true, baseline_sha256: aa}
+expect:
+  input_states:
+    out/r.json: {input_type: file, tracked: true, baseline_exists: true, baseline_sha256: aa, baseline_source: tracked_files, grading_exists: true, grading_sha256: null, content_cmp: equal, content_source: final_diff, content_sources_disagree: false, events: [], observable: true, blind_execs: [], unmonitored_calls: [], detached_execs: [], unseen_writer_possible: false, states_under: [pristine], states_over: [pristine, rewritten_identical], state_under: pristine, under_reason: null, model_conflict: false, origin_under: baseline_file, origins_over: [baseline_file], final_writer: null, final_writer_type: null, final_writer_under: false, writer_roots: [], rewrite_type: null}
+  counts:
+    M3.2.oracle_inputs: 1
+    M3.2.by_state_under.pristine: 1
+    M3.2.baseline_content_under: 1
+    M3.2.baseline_content_over: 1
+    M3.2.fresh_under: 0
+    M3.2.fresh_over: 1
+    M3.2.detached_possible: false
+    preconditions.content: holds
+    preconditions.trace: holds
+  warnings_exact: true

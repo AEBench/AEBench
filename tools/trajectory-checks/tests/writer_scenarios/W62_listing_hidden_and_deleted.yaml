@@ -1,0 +1,36 @@
+id: W62
+title: A listing's members follow the glob, deleted ones in, hidden ones out
+rules: [LW15]
+calls:
+  - {call_id: c1, seq: 0, command: ./mk.sh, t_start: 9.5, t_end: 11.0}
+  - {call_id: c2, seq: 1, command: rm out/b.csv, t_start: 49.5, t_end: 51.0}
+  - {call_id: c3, seq: 2, command: ./cache.sh, t_start: 79.5, t_end: 81.0}
+execs:
+  - {command_id: e1, command: ./mk.sh, t_start: 10.0, duration_s: 1.0}
+  - {command_id: e2, command: rm out/b.csv, t_start: 50.0, duration_s: 1.0}
+  - {command_id: e3, command: ./cache.sh, t_start: 80.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: call_exec, call_id: c3, command_id: e3}
+  - {link_type: write_event, event_id: w0, path: out/a.csv, op: create,
+     writer_id: e1}
+  - {link_type: write_event, event_id: w1, path: out/b.csv, op: delete,
+     writer_id: e2}
+  - {link_type: write_event, event_id: w2, path: out/.cache.csv, op: create,
+     writer_id: e3}
+paths:
+  - {path: out/a.csv, tracked: false, events: [w0], final_writer: w0,
+     final_state: untracked}
+  - {path: out/b.csv, events: [w1], final_writer: w1, final_state: deleted}
+  - {path: out/.cache.csv, tracked: false, events: [w2], final_writer: w2,
+     final_state: untracked}
+oracle_inputs:
+  - {input_id: i0, path: out, pattern: "*.csv"}
+expect:
+  last_writers:
+    - {input_id: i0, input_type: listing, last_writer: w1,
+       last_writer_op: delete, last_writer_candidates: [w1],
+       writer_call_id: c2}
+  input_rewrites:
+    - {input_id: i0, delete_roots: [c2], rewrites_over: 0}

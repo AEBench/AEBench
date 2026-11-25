@@ -1,0 +1,36 @@
+id: H02
+title: Writer runs its script with a scale option below the program's default
+rules: [KEY1, KEY7, ARG1, ARG2, ARG4, SC1, SC2]
+execs:
+  - {command_id: e1, command: "python3 tools/run.py --iters 3", t_start: 10.0,
+     duration_s: 400.0}
+dispositions: {e1: {disposition: matched_root, root_under: true}}
+links:
+  - {link_type: write_event, event_id: w0, path: out/result.json, op: create,
+     writer_type: exec, writer_id: e1, t_start: 10.0, t_end: 410.0}
+paths:
+  - {path: out/result.json, tracked: false, events: [w0], final_writer: w0,
+     final_writer_under: true, final_state: changed}
+oracle_inputs:
+  - {input_id: i0, path: out/result.json}
+input_states:
+  - {input_id: i0, final_writer: w0, final_writer_under: true}
+declared:
+  options:
+    - {invocation_key: tools/run.py, option: --iters, aliases: [--iters, -n],
+       default: {value: "10", value_type: int}, takes_value: true,
+       source_path: tools/run.py, line: 12}
+expect:
+  arg_checks:
+    - {command_id: e1, invocation: 0, option: --iters, comparison: below,
+       effective: below, declared_origin: [argparse], marker: null,
+       contract: null, conforms: null, scale_option: true, scale_reduced: true,
+       declared_values: [{value: "10", value_type: int}],
+       in_scope: {writer: [i0], chain_under: null, chain_over: null,
+                  before_writer: [i0], run: true}}
+  metrics:
+    M5.1: {args_below_under: 1, args_below_over: 1, scale_reduced_under: 1,
+           scale_reduced_over: 1, scale_reduced_run: 1, args_below_run: 1}
+  faithfulness:
+    - {input_id: i0, scale_reduced_under: true, scale_reduced_over: true}
+  bases: {chain: fallback}

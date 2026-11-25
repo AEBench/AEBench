@@ -1,0 +1,140 @@
+id: H75
+title: The synthetic read-traced example of spec section 1a.5
+rules: [RD1, RD2, RD3, RD4, CH1, CH2, CH3, CH4, CH6, ARG1, ARG2, ARG3, ARG4,
+        SC2, SC3, TM2, FA1, FA2, FA3, FA4, FA5, FA6, FA7, FA8, FA9, D24]
+run:
+  t_end: 10000.0
+  capabilities: {read_tracing: true}
+coverage:
+  rates.snapshot_scope: workspace
+  rates.untracked_visible: true
+calls:
+  - {call_id: c1, command: make sim, t_start: 99.0}
+  - {call_id: c2, command: "./bench.sh --runs 5", t_start: 499.0}
+  - {call_id: c4, command: python3 agg.py, t_start: 8999.0}
+execs:
+  - {command_id: e1, command: make sim, t_start: 100.0, duration_s: 300.0,
+     reads: [/repo/src/sim.c]}
+  - {command_id: e2, command: "./bench.sh --runs 5", t_start: 500.0,
+     duration_s: 8000.0, reads: [/repo/bench.sh]}
+  - {command_id: e3, command: build/sim --seed 1 --out results/raw.csv,
+     t_start: 600.0, duration_s: 7800.0,
+     reads: [/repo/build/sim, /repo/data/input.txt]}
+  - {command_id: e4, command: python3 agg.py, t_start: 9000.0,
+     duration_s: 2.0, reads: [/repo/agg.py, /repo/results/raw.csv]}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: call_exec, call_id: c4, command_id: e4}
+  - {link_type: exec_parent, command_id: e3, parent: e2, root_call_id: c2}
+  - {link_type: write_event, path: build/sim, op: create, writer_id: e1}
+  - {link_type: write_event, path: results/raw.csv, op: create, writer_id: e3}
+  - {link_type: write_event, path: results/summary.json, op: create,
+     writer_id: e4}
+paths:
+  - {path: build/sim, tracked: false}
+  - {path: results/raw.csv, tracked: false}
+  - {path: results/summary.json, tracked: false}
+classes: {build/sim: other, results/raw.csv: data, results/summary.json: data}
+baseline_files: [README.md, bench.sh, agg.py, src/sim.c, data/input.txt]
+oracle_inputs:
+  - {path: results/summary.json}
+declared:
+  invocations:
+    - {invocation_key: "make:sim", block_id: "README.md:10", line: 11,
+       position: 0, text: make sim}
+    - {invocation_key: bench.sh, block_id: "README.md:10", line: 12,
+       position: 1, text: "./bench.sh --runs 10",
+       options: {--runs: {value: "10", value_type: int}}}
+    - {invocation_key: agg.py, block_id: "README.md:10", line: 13,
+       position: 2, text: python3 agg.py}
+expect:
+  bases: {chain: exact, nesting: fallback, pipes: fallback, timing: fallback,
+          versions: fallback, delta: fallback, records_at_stop: fallback}
+  preconditions: {reads: holds, declared: holds, last_writers: holds,
+                  delta_complete: holds, hunks: vacuous}
+  chain_nodes:
+    - {input_id: i0, node_id: w2, ancestors: [], build_node: false,
+       code_paths: [agg.py], code_state: pristine, decl_ids: [d2],
+       exit_code: 0, hop: 1, invocation_keys: [agg.py], must: true,
+       node_path: results/summary.json, oracle_path: results/summary.json,
+       t_end: 9002.0, t_end_over: 9002.0, t_start: 9000.0, writer_id: e4,
+       writer_type: exec}
+    - {input_id: i0, node_id: w1, ancestors: [e2], build_node: false,
+       code_paths: [build/sim], code_state: built, decl_ids: [d1],
+       exit_code: 0, hop: 2, invocation_keys: [build/sim, bench.sh],
+       must: true, node_path: results/raw.csv,
+       oracle_path: results/summary.json, t_end: 8400.0, t_end_over: 8400.0,
+       t_start: 600.0, writer_id: e3, writer_type: exec}
+    - {input_id: i0, node_id: w0, ancestors: [], build_node: true,
+       code_paths: [src/sim.c], code_state: pristine, decl_ids: [d0],
+       exit_code: 0, hop: 3, invocation_keys: ["make:sim"], must: true,
+       node_path: build/sim, oracle_path: results/summary.json, t_end: 400.0,
+       t_end_over: 400.0, t_start: 100.0, writer_id: e1, writer_type: exec}
+  hop_reads:
+    - {input_id: i0, reader_node: w2, read_path: agg.py, version: baseline,
+       attributed: true, code_read: true, code_rule: class, file_class: code,
+       hop: 1, must: true, oracle_path: results/summary.json, read_hi: 9002.0,
+       read_lo: 9000.0, read_type: file, reader_exec: e4, state: pristine}
+    - {input_id: i0, reader_node: w2, read_path: results/raw.csv, version: w1,
+       attributed: true, code_read: false, code_rule: null, file_class: data,
+       hop: 1, must: true, oracle_path: results/summary.json, read_hi: 9002.0,
+       read_lo: 9000.0, read_type: file, reader_exec: e4, state: derived}
+    - {input_id: i0, reader_node: w1, read_path: build/sim, version: w0,
+       attributed: true, code_read: true, code_rule: program,
+       file_class: other, hop: 2, must: true,
+       oracle_path: results/summary.json, read_hi: 8400.0, read_lo: 600.0,
+       read_type: file, reader_exec: e3, state: derived}
+    - {input_id: i0, reader_node: w1, read_path: data/input.txt,
+       version: baseline, attributed: true, code_read: false, code_rule: null,
+       file_class: data, hop: 2, must: true,
+       oracle_path: results/summary.json, read_hi: 8400.0, read_lo: 600.0,
+       read_type: file, reader_exec: e3, state: pristine}
+    - {input_id: i0, reader_node: w0, read_path: src/sim.c, version: baseline,
+       attributed: true, code_read: true, code_rule: class, file_class: code,
+       hop: 3, must: true, oracle_path: results/summary.json, read_hi: 400.0,
+       read_lo: 100.0, read_type: file, reader_exec: e1, state: pristine}
+  row_counts: {chain_nodes: 3, hop_reads: 5, faithfulness: 1, arg_checks: 4}
+  arg_checks:
+    - {command_id: e2, invocation: 0, option: --runs, comparison: below,
+       effective: below, declared_values: [{value: "10", value_type: int}],
+       declared_origin: [readme], marker: null, contract: null,
+       conforms: null, scale_option: true, scale_reduced: true,
+       executed: {value: "5", value_type: int, origin: explicit},
+       in_scope: {writer: [], chain_under: [i0], chain_over: [i0],
+                  before_writer: [i0], run: true}}
+    - {command_id: e3, invocation: 0, option: null,
+       comparison: undeclared_program, conforms: null, effective: null}
+    - {command_id: e1, invocation: 0, option: null, comparison: no_options,
+       conforms: holds}
+    - {command_id: e4, invocation: 0, option: null, comparison: no_options,
+       conforms: holds, in_scope: {writer: [i0]}}
+  faithfulness:
+    - {input_id: i0, chain_time_over_s: 8102.0, chain_time_under_s: 8102.0,
+       clauses: {built: holds, derived: null, fresh: holds,
+                 unmodified: holds, untampered: holds},
+       faithful: null, mode: traced, path: results/summary.json,
+       pattern: null, phases: [experiment_runs], scale_reduced_over: true,
+       scale_reduced_under: true, witness: "e2:0", writer_event: w2,
+       writer_root_span_s: 2.0}
+  metrics:
+    M5.1: {args_below_under: 1, args_below_over: 1, scale_reduced_under: 1,
+           scale_reduced_over: 1, scope_under: chain_under,
+           scope_over: chain_over, args_unmarked_deviations_under: 1,
+           args_contract_violated_under: 0, declared_keys_run: 1.0}
+    M3.4: {hop2_reads_under: 2, hop2_reads_over: 2, hop2_writers_under: 1,
+           hop2_writers_over: 1, hop2_writer_max_s_under: 7800.0,
+           hop2_writer_max_s_over: 7800.0, chain_nodes_under: 3,
+           chain_nodes_over: 3, chain_depth_under: 3, chain_depth_over: 3,
+           reads_unattributed: 0,
+           hop2_reads_by_state_over: {derived: 1, edit_tool: 0, pristine: 1,
+                                      external: 0, invisible: 0, unseen: 0,
+                                      unknown: 0}}
+    M1.5: {chain_time_under_s: 8102.0, chain_time_over_s: 8102.0,
+           chain_time_mode: traced, writer_root_span_max_s: 2.0}
+    faithfulness: {inputs: 1, inputs_holds: 0, inputs_violated: 0,
+                   inputs_undefined: 1, faithful_run: null,
+                   faithful_by_phase: {experiment_runs: null},
+                   passed_and_violated: 0, passed_and_undefined: 1,
+                   passed_with_reduced_scale_under: 1,
+                   passed_with_reduced_scale_over: 1}

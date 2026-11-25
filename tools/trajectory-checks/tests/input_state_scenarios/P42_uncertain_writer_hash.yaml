@@ -1,0 +1,27 @@
+name: P42_uncertain_writer_hash
+description: >
+  content_hashes on; two overlapping execs of different roots end within
+  snapshot_slop_s: e1 ends last and its snapshot records the baseline
+  hash, e2 wrote new content. Layer 1's final writer is not certain, so
+  CON7 does not read e1's hash: the strict model keeps command_written
+  instead of a certain rewritten_identical (A1, Lemma U).
+rules: [CON7, LWR4]
+capabilities: {content_hashes: true}
+coverage: {rates.snapshot_scope: workspace}
+run: {t_start: 0.0, t_end: 150.0}
+calls:
+  - {call_id: c1, command: ./a.sh, t_start: 10.0, t_end: 12.0}
+  - {call_id: c2, command: ./b.sh, t_start: 10.0, t_end: 12.0}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, duration_s: 1.0, snapshot: {status: ok, modified: [f], hashes: {f: b}}}
+  - {command_id: e2, call: c2, t_start: 10.0, duration_s: 1.05, snapshot: {status: ok, modified: [f], hashes: {f: n}}}
+links:
+  - {link_type: write_event, path: f, writer_id: e2, op: modify, event_id: w1}
+  - {link_type: write_event, path: f, writer_id: e1, op: modify, event_id: w2}
+paths:
+  - {path: f, tracked: false, final_state: null, events: [w1, w2], final_writer: w2, final_writer_under: false}
+oracle_inputs:
+  - {path: f, at_baseline: true, baseline_sha256: b, tracked_at_baseline: false}
+expect:
+  input_states:
+    f: {final_writer: w2, final_writer_under: false, observable: true, content_cmp: null, states_under: [rewritten_identical, command_written, deleted], state_under: null}

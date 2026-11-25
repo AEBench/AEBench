@@ -1,0 +1,25 @@
+name: F46_arith_substitution
+description: The deadline idiom end=$(( $(date +%s) + 60 )) and other substitutions inside $((…)) are classified as substitution commands (B4, T5).
+rules: [SHP8, NET1, NET3]
+calls:
+  - {call_id: c1, command: "end=$(( $(date +%s) + 60 ))\nwhile [ $(date +%s) -lt $end ]; do sleep 5; done", t_start: 10}
+  - {call_id: c2, command: "x=$(( $(./run.sh) + 1 ))", t_start: 100}
+  - {call_id: c3, command: "n=$(( $(curl -s u | wc -l) + 1 ))", t_start: 200}
+execs:
+  - {command_id: e1, command: "end=$(( $(date +%s) + 60 ))\nwhile [ $(date +%s) -lt $end ]; do sleep 5; done", t_start: 10.1, duration_s: 60}
+  - {command_id: e2, command: "x=$(( $(./run.sh) + 1 ))", t_start: 100.1}
+  - {command_id: e3, command: "n=$(( $(curl -s u | wc -l) + 1 ))", t_start: 200.1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: call_exec, call_id: c3, command_id: e3}
+expect:
+  call_facts:
+    c1: {programs: [date, "[", date, sleep]}
+    c2: {programs: [run.sh]}
+    c3: {programs: [curl, wc], network_types_under: [download]}
+  exec_facts:
+    e3: {network_types: [download]}
+  facts:
+    M6.1.network_execs_under: 1
+    M6.1.network_calls_under: 1

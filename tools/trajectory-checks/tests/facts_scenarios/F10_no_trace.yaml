@@ -1,0 +1,35 @@
+name: F10_no_trace
+description: No trace; every trace-derived precondition fails, while shapes still come from the calls.
+rules: [PRE3, SHP9, OUT3]
+run: {trace_ok: false}
+calls:
+  - {call_id: c1, command: "ls -la /tmp", t_start: 10}
+  - {call_id: c2, command: "ls -la /tmp/", t_start: 20}
+dispositions:
+  c1: {reason: trace_missing}
+  c2: {reason: trace_missing}
+coverage:
+  inputs.trace: false
+  integrity.C0.1: false
+  rates.call_match_rate_under: null
+  rates.call_match_rate_over: null
+  rates.exec_explained_rate_under: null
+  rates.exec_explained_rate_over: null
+  rates.listed_path_rate: null
+  rates.final_diff_attributed_rate_under: null
+  rates.final_diff_attributed_rate_over: null
+env_keys: {}
+expect:
+  call_facts:
+    c1: {outcome: unknown, command_id: null, command_shape: "ls -la tmp", programs: [ls], env_confirmed: null}
+    c2: {outcome: unknown, command_shape: "ls -la tmp"}
+  facts:
+    preconditions.C1_under: fails
+    preconditions.C2_under: fails
+    preconditions.C6: fails
+    preconditions.C7_under: fails
+    M1.1.command_time_under_s: null
+    M1.3.exits_unknown: null
+    M4.1.files_changed: null
+    M1.2.shell_calls: 2
+    M1.2.root_shapes: 1

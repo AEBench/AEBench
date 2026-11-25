@@ -1,0 +1,21 @@
+name: S22_trace_mismatched
+description: The trace belongs to another run (C0.1 fails, trace_ok false) -> no trace-derived link, calls unmatched with reason trace_mismatched, trace rates null (§5.4; decisions F1, R9).
+run: {trace_ok: false}
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "ls"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 100.3, command: "ls"}
+expect:
+  links_absent:
+    - {link_type: call_exec}
+    - {link_type: exec_parent}
+    - {link_type: wrapper_duplicate}
+  dispositions:
+    # AMBIGUOUS: link() sees only trace_ok = false; it tells trace_mismatched from trace_missing by whether any exec was passed (S23 passes none). If the spec intends another signal (e.g. a run field), this expectation changes.
+    c1: {disposition: unmatched, reason: trace_mismatched, matched: false}
+  coverage:
+    integrity.C0.1: false
+    rates.call_match_rate_under: null
+    rates.call_match_rate_over: null
+    rates.exec_explained_rate_under: null
+    rates.snapshot_time_coverage: null

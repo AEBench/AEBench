@@ -1,0 +1,51 @@
+id: W20
+title: A listing input's last writer is the last change of its membership
+rules: [LW15]
+calls:
+  - {call_id: c1, seq: 0, command: ./mk_a.sh, t_start: 9.5, t_end: 11.0}
+  - {call_id: c2, seq: 1, command: ./mk_b.sh, t_start: 29.5, t_end: 31.0}
+  - {call_id: c3, seq: 2, command: rm out/a.json, t_start: 59.5, t_end: 61.0}
+  - {call_id: c4, seq: 3, command: ./upd_b.sh, t_start: 79.5, t_end: 81.0}
+execs:
+  - {command_id: e1, command: ./mk_a.sh, t_start: 10.0, duration_s: 1.0}
+  - {command_id: e2, command: ./mk_b.sh, t_start: 30.0, duration_s: 1.0}
+  - {command_id: e3, command: rm out/a.json, t_start: 60.0, duration_s: 1.0}
+  - {command_id: e4, command: ./upd_b.sh, t_start: 80.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: call_exec, call_id: c3, command_id: e3}
+  - {link_type: call_exec, call_id: c4, command_id: e4}
+  - {link_type: write_event, event_id: w0, path: out/a.json, op: create,
+     writer_id: e1}
+  - {link_type: write_event, event_id: w1, path: out/b.json, op: create,
+     writer_id: e2}
+  - {link_type: write_event, event_id: w2, path: out/a.json, op: delete,
+     writer_id: e3}
+  - {link_type: write_event, event_id: w3, path: out/b.json, op: modify,
+     writer_id: e4}
+paths:
+  - {path: out/a.json, events: [w0, w2], final_writer: w2,
+     final_state: deleted}
+  - {path: out/b.json, events: [w1, w3], final_writer: w3}
+oracle_inputs:
+  - {input_id: i0, path: out, pattern: "*.json"}
+  - {input_id: i1, path: out/b.json, match_type: pattern_match,
+     listed_by: [i0]}
+input_states:
+  - {input_id: i1, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+expect:
+  last_writers:
+    - {input_id: i0, input_type: listing, pattern: "*.json", last_writer: w2,
+       last_writer_op: delete, last_writer_candidates: [w2],
+       writer_call_id: c3, writer_command_id: e3, window_lo: 60.0,
+       window_hi: 63.0, state_conflict: null, exists_at_read: null,
+       exists_source: null, read_version: unverified, differs_causes: null,
+       hash_confirms_writer: null, member_input_ids: [i1], in_under: false,
+       last_writer_under: false, not_under: [input_not_under]}
+    - {input_id: i1, input_type: file, last_writer: w3, in_under: false,
+       member_input_ids: [], last_writer_under: false,
+       not_under: [input_not_under]}
+  input_rewrites:
+    - {input_id: i0, delete_roots: [c3], rewrites_over: 2}

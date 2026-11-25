@@ -1,0 +1,23 @@
+name: P02_detached_fallback
+description: >
+  P01 plus a root exec whose command ends in &, parent_links false: the
+  fallback form of EVD8 lists it; states_under is unchanged, but an unseen
+  writer is possible. The server may write after the final diff, so M_r
+  does not read the final diff (D73): command_written and deleted stay in
+  states_over.
+rules: [EVD8]
+calls:
+  - {call_id: c1, command: ./serve.sh &, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2}
+baseline: {files: {out/r.json: {sha256: aa}}}
+final_diff: {}
+oracle_inputs:
+  - {path: out/r.json, at_baseline: true, baseline_sha256: aa}
+expect:
+  input_states:
+    out/r.json: {states_under: [pristine], states_over: [pristine, rewritten_identical, command_written, deleted], detached_execs: [e1], unseen_writer_possible: true, late_write: true}
+  counts:
+    bases.detached: fallback
+    M3.2.detached_possible: true
+    M3.2.unseen_writer_possible: 1

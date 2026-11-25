@@ -1,0 +1,38 @@
+[
+  {
+    "actor": "main",
+    "background": false,
+    "call_id": "call_005e30a49b9d44dbab31202a",
+    "command": "find /tmp/ws/project -type f | head -100",
+    "command_norm": "find /tmp/ws/project -type f | head -100",
+    "edit_content": false,
+    "family": "zcode",
+    "log_exit_code": 0,
+    "log_ok": true,
+    "paths": [],
+    "raw_name": "Bash",
+    "seq": 0,
+    "t_end": 1793722423.227,
+    "t_precision_s": 0.001,
+    "t_start": 1793722423.142,
+    "tool_type": "shell"
+  },
+  {
+    "actor": "main",
+    "background": false,
+    "call_id": "call_b9d6bc3bcee7487b9908eefd",
+    "command": "ls -la /tmp/ws/project",
+    "command_norm": "ls -la /tmp/ws/project",
+    "edit_content": false,
+    "family": "zcode",
+    "log_exit_code": 0,
+    "log_ok": true,
+    "paths": [],
+    "raw_name": "Bash",
+    "seq": 1,
+    "t_end": 1793722423.254,
+    "t_precision_s": 0.001,
+    "t_start": 1793722423.232,
+    "tool_type": "shell"
+  }
+]

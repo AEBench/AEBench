@@ -1,0 +1,23 @@
+name: OS11_null_two_of_four
+description: >
+  The null run passes two of four phases, the run all four: score gain 2,
+  the two phases passed with no agent, the two gained.
+rules: [NS1, NS2, NS3]
+null_manifest:
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: aa, exists_before: true, sha256_before: aa, tracked_before: true}
+null_score: {phases: {env_setup: error, artifact_build: error, benchmark_prep: success, experiment_runs: success}}
+run_score: {phases: {env_setup: success, artifact_build: success, benchmark_prep: success, experiment_runs: success}}
+expect:
+  block:
+    preconditions.null_score: holds
+    preconditions.run_score: holds
+    M3.5.null_score: 2
+    M3.5.null_score_max: 4
+    M3.5.null_phases_passed: [benchmark_prep, experiment_runs]
+    M3.5.run_score: 4
+    M3.5.run_score_max: 4
+    M3.5.score_gain: 2
+    M3.5.phases_passed_by_null: [benchmark_prep, experiment_runs]
+    M3.5.phases_gained: [artifact_build, env_setup]
+    M3.5.phases_lost: []
+  warnings_exact: true

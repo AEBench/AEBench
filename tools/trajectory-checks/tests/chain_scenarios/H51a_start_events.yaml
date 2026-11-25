@@ -1,0 +1,27 @@
+id: H51a
+title: A declared command still running at stop has a start-only record
+rules: [CH8]
+run:
+  capabilities: {start_events: true}
+execs:
+  - {command_id: e1, command: ./bench.sh, t_start: 10.0, duration_s: 1.0,
+     complete: false, exit_code: null, record_type: start_only}
+  - {command_id: e2, command: python3 agg.py, t_start: 20.0, duration_s: 2.0,
+     record_type: closed}
+dispositions:
+  e1: {disposition: matched_root, root_under: true}
+  e2: {disposition: matched_root, root_under: true}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e2}
+oracle_inputs:
+  - {path: out/r.json}
+declared:
+  invocations:
+    - {invocation_key: bench.sh, text: ./bench.sh}
+expect:
+  bases: {records_at_stop: exact}
+  arg_checks:
+    - {command_id: e1, invocation: 0, option: null, exit_code: null,
+       in_scope: {writer: [], before_writer: [i0]}}
+  faithfulness:
+    - {input_id: i0, witness: null, clauses: {derived: null}}

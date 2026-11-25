@@ -1,0 +1,18 @@
+name: G34_outside_workspace
+description: >
+  Spec FS09. An edit outside the workspace gets a row and a class from its
+  basename and folders, but is never counted in M4.2.
+rules: [FC0, CLS1]
+calls:
+  - {call_id: c1, tool_type: edit, paths: [/tmp/x.py], t_start: 10}
+  - {call_id: c2, tool_type: edit, paths: [/repo/src/b.py], t_start: 20}
+links:
+  - {link_type: write_event, path: /tmp/x.py, writer_id: c1, in_workspace: false}
+  - {link_type: write_event, path: src/b.py, writer_id: c2}
+expect:
+  file_classes:
+    /tmp/x.py: {in_workspace: false, file_class: code, class_rule: FC5, extension: .py}
+    src/b.py: {in_workspace: true, file_class: code}
+  structure:
+    M4.2.changed_by_class: {code: 1}
+    M4.2.changed_by_class_and_role_over: {code: {edit_call: 1}}

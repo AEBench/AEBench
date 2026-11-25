@@ -1,0 +1,19 @@
+name: G51_cp08_workspace_scope_false
+description: >
+  Spec CP08, false half. The same run in tracked scope: the fallback form
+  applies and the act call in between breaks unchanged_under.
+rules: [RR6, REP2]
+calls:
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: cp -r in out, t_start: 20, t_end: 21}
+  - {call_id: c3, command: ./run.sh, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 20.2}
+  - {command_id: e3, call: c3, t_start: 30.1, t_end: 31.9}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c3, act_calls_between: 1, untracked_writes_between: null, unchanged_under: false, unchanged_over: true}
+  structure:
+    bases: {writes_between: fallback, gap: fallback, unchanged_under: fallback}
+    M2.2.reruns_after_success_unchanged_under: 0

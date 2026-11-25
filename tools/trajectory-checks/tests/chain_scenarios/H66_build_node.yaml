@@ -1,0 +1,42 @@
+id: H66
+title: A tool the chain built is a build node, and the witness skips it
+rules: [FA7]
+run:
+  capabilities: {read_tracing: true}
+execs:
+  - {command_id: e1, command: make tool, t_start: 10.0, duration_s: 5.0,
+     reads: []}
+  - {command_id: e2, command: tools/x --in a, t_start: 20.0, duration_s: 5.0,
+     reads: [/repo/tools/x]}
+  - {command_id: e3, command: python3 agg.py, t_start: 40.0, duration_s: 2.0,
+     reads: [/repo/out/raw.csv]}
+dispositions:
+  e1: {disposition: matched_root, root_under: true}
+  e2: {disposition: matched_root, root_under: true}
+  e3: {disposition: matched_root, root_under: true}
+links:
+  - {link_type: write_event, path: tools/x, op: create, writer_id: e1}
+  - {link_type: write_event, path: out/raw.csv, op: create, writer_id: e2}
+  - {link_type: write_event, path: out/r.json, op: create, writer_id: e3}
+paths:
+  - {path: tools/x, tracked: false}
+  - {path: out/raw.csv, tracked: false}
+  - {path: out/r.json, tracked: false}
+classes: {tools/x: other}
+oracle_inputs:
+  - {path: out/r.json}
+declared:
+  invocations:
+    - {invocation_key: "make:tool", text: make tool, position: 0}
+    - {invocation_key: tools/x, text: tools/x --in a, position: 1}
+    - {invocation_key: agg.py, text: python3 agg.py, position: 2}
+expect:
+  chain_nodes:
+    - {input_id: i0, node_id: w0, hop: 3, build_node: true}
+    - {input_id: i0, node_id: w1, hop: 2, build_node: false,
+       code_state: built}
+  hop_reads:
+    - {input_id: i0, reader_node: w1, read_path: tools/x, version: w0,
+       code_read: true, code_rule: program}
+  faithfulness:
+    - {input_id: i0, witness: "e2:0"}

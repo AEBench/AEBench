@@ -1,0 +1,29 @@
+id: H37
+title: An unattributed read falls inside the writer exec's interval
+rules: [RD1, RD2]
+run:
+  capabilities: {read_tracing: true}
+  unattributed_reads:
+    - {path: /repo/data/in.csv, t: 105.0, event_type: open, host_pid: 77}
+execs:
+  - {command_id: e0, command: ./prep.sh, t_start: 10.0, duration_s: 5.0,
+     reads: []}
+  - {command_id: e1, command: python3 agg.py, t_start: 100.0,
+     duration_s: 10.0, reads: []}
+dispositions:
+  e0: {disposition: matched_root, root_under: true}
+  e1: {disposition: matched_root, root_under: true}
+links:
+  - {link_type: write_event, path: data/in.csv, writer_id: e0}
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+oracle_inputs:
+  - {path: out/r.json}
+expect:
+  hop_reads:
+    - {input_id: i0, reader_node: w1, read_path: data/in.csv, version: w0,
+       attributed: false, must: false, reader_exec: null, read_lo: 105.0,
+       read_hi: 105.0}
+  chain_nodes:
+    - {input_id: i0, node_id: w0, hop: 2, must: false}
+  metrics:
+    M3.4: {reads_unattributed: 1, chain_nodes_under: 1, chain_nodes_over: 2}

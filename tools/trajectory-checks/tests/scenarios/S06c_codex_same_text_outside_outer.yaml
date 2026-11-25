@@ -1,0 +1,18 @@
+name: S06c_codex_same_text_outside_outer
+description: A same-text record that starts after the outer ended, and a snapshot-wrapped same-text record inside it, are not wrapper duplicates (§6.4; decision D25).
+calls:
+  - {call_id: c1, family: codex, raw_name: command_execution, t_start: 100, t_end: 103, command: "pytest -q", background: null}
+execs:
+  - {command_id: outer, t_start: 100.2, t_end: 102.8, command: "pytest -q", wrapper: codex_snapshot_exec}
+  - {command_id: wrapped, t_start: 100.4, t_end: 102.6, command: "pytest -q", wrapper: codex_snapshot_exec}
+  - {command_id: later, t_start: 104, t_end: 105, command: "pytest -q", wrapper: codex_direct}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c1, command_id: outer, rule: exact}
+    - {link_type: exec_parent, command_id: wrapped, parent: outer, root_call_id: c1}
+  links_absent:
+    - {link_type: wrapper_duplicate}
+  dispositions:
+    outer: matched_root
+    wrapped: nested
+    later: unrooted

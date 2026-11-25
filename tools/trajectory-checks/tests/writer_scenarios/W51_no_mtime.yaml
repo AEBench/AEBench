@@ -1,0 +1,29 @@
+id: W51
+title: The same input from the null-agent source has no modification time
+rules: [EX1, LW17]
+calls:
+  - {call_id: c1, seq: 0, command: ./gen.sh, t_start: 99.5, t_end: 101.0}
+  - {call_id: c2, seq: 1, tool_type: edit, paths: [notes.txt], t_start: 300.0}
+  - {call_id: c3, seq: 2, command: ./other.sh, t_start: 499.5, t_end: 501.0}
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 100.0, duration_s: 1.0}
+  - {command_id: e3, command: ./other.sh, t_start: 500.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c3, command_id: e3}
+  - {link_type: write_event, event_id: w0, path: out/r.json, writer_id: e1}
+  - {link_type: write_event, event_id: w1, path: notes.txt, writer_id: c2}
+paths:
+  - {path: out/r.json, events: [w0], final_writer: w0}
+  - {path: notes.txt, events: [w1], final_writer: w1}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+expect:
+  bases: {mtime: fallback}
+  last_writers:
+    - {input_id: i0, exists_at_read: true, exists_source: final_diff,
+       mtime_candidates: null, read_version: unverified,
+       root_candidates: [c1]}

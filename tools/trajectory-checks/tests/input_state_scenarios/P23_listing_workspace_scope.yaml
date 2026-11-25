@@ -1,0 +1,34 @@
+name: P23_listing_workspace_scope
+description: >
+  A listing in workspace scope: recorded match a.csv and a created b.csv
+  (a pattern_match row). Both are file rows and members; the listing
+  changed.
+rules: [INP4, CON14, PHS1, CNT2]
+coverage: {rates.snapshot_scope: workspace, rates.untracked_visible: true}
+calls:
+  - {call_id: c1, command: ./gen.sh, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2, snapshot: {scope: workspace, created: [out/b.csv]}}
+links:
+  - {link_type: write_event, path: out/b.csv, writer_id: e1, op: create, scope: workspace}
+paths:
+  - {path: out/b.csv, tracked: false, final_state: untracked}
+baseline: {files: {out/a.csv: {sha256: aa}}}
+final_diff: {}
+oracle_inputs:
+  - {path: out, pattern: "*.csv", checks: [outs], at_baseline: true}
+  - {path: out/a.csv, listed_by: [i0], access_types: [list], checks: [outs], at_baseline: true, baseline_sha256: aa}
+  - {path: out/b.csv, match_type: pattern_match, listed_by: [i0], checks: [outs]}
+expect:
+  input_states:
+    out|listing: {input_type: listing, pattern: "*.csv", members: [out/a.csv, out/b.csv], member_of: [], observable: true, listing_changed_under: true, listing_changed_over: true, states_under: [], states_over: [], state_under: null, under_reason: null, model_conflict: false, origin_under: null, origins_over: [], events: [], final_writer: null, grading_exists: null, content_cmp: null}
+    out/a.csv: {input_type: file, member_of: [out], states_under: [pristine], listing_changed_under: null, listing_changed_over: null}
+    out/b.csv: {input_type: file, member_of: [out], in_under: false, states_under: [command_written, missing], states_over: [command_written, oracle_written, missing], final_writer: w0}
+  counts:
+    M3.2.oracle_inputs: 2
+    M3.2.oracle_inputs_under: 1
+    M3.2.listing_inputs: 1
+    M3.2.listing_changed_under: 1
+    M3.2.listing_changed_over: 1
+    M3.2.phases.experiment_runs.inputs: 2
+    M3.2.phases.experiment_runs.inputs_complete: true

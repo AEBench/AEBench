@@ -1,0 +1,10 @@
+[
+  {"decl_id": "d0", "invocation_key": "tools/a.sh", "options": {}, "source_type": "readme", "source_path": "README.md", "line": 5, "block_id": "README.md:3", "position": 1, "cwd": "tools", "text": "./a.sh"},
+  {"decl_id": "d1", "invocation_key": "b.sh", "options": {}, "source_type": "readme", "source_path": "README.md", "line": 6, "block_id": "README.md:3", "position": 3, "cwd": ".", "text": "./b.sh"},
+  {"decl_id": "d2", "invocation_key": "sub/c.sh", "options": {}, "source_type": "readme", "source_path": "README.md", "line": 7, "block_id": "README.md:3", "position": 5, "cwd": "sub", "text": "./c.sh"},
+  {"decl_id": "d3", "invocation_key": "d.sh", "options": {}, "source_type": "readme", "source_path": "README.md", "line": 8, "block_id": "README.md:3", "position": 6, "cwd": ".", "text": "./d.sh"},
+  {"decl_id": "d4", "invocation_key": "lib/e.sh", "options": {}, "source_type": "readme", "source_path": "README.md", "line": 10, "block_id": "README.md:3", "position": 8, "cwd": "lib", "text": "./e.sh"},
+  {"decl_id": "d5", "invocation_key": "f.sh", "options": {}, "source_type": "readme", "source_path": "README.md", "line": 12, "block_id": "README.md:3", "position": 10, "cwd": ".", "text": "./f.sh"},
+  {"decl_id": "d6", "invocation_key": "tools/g.sh", "options": {}, "source_type": "readme", "source_path": "README.md", "line": 13, "block_id": "README.md:3", "position": 12, "cwd": "tools", "text": "./g.sh"},
+  {"decl_id": "d7", "invocation_key": "tools/h.sh", "options": {}, "source_type": "readme", "source_path": "README.md", "line": 14, "block_id": "README.md:3", "position": 13, "cwd": "tools", "text": "./h.sh"}
+]

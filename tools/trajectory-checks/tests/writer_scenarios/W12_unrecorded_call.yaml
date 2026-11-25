@@ -1,0 +1,31 @@
+id: W12
+title: Without start events, a call running at stop is an unrecorded risk
+rules: [LW9]
+description: >
+  The unmonitored call starts before the last writer and never finished:
+  its window runs to the run's end (LW4), so it reaches the writer.
+calls:
+  - {call_id: c2, seq: 0, command: ./serve.sh, t_start: 5.0, t_end: null}
+  - {call_id: c1, seq: 1, command: ./gen.sh, t_start: 9.5, t_end: 11.0}
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 10.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, event_id: w0, path: out/r.json, writer_id: e1}
+dispositions:
+  c2: {reason: running_at_stop}
+paths:
+  - {path: out/r.json, events: [w0], final_writer: w0}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff, unmonitored_calls: [c2],
+     unseen_writer_possible: true}
+expect:
+  last_writers:
+    - {input_id: i0, last_writer: w0,
+       later_writer_risk: [{id: c2, item_type: call, reason: unrecorded}],
+       root_candidates: [c2, c1], root_candidates_complete: false,
+       last_writer_under: false, not_under: [later_writer_risk]}
+  bases: {unrecorded_risk: fallback}

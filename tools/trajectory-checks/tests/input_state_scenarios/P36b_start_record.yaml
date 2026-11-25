@@ -1,0 +1,25 @@
+name: P36b_start_record
+description: >
+  P36 with start_events: the same command left a start record (an
+  incomplete exec), so no call is unmonitored (basis exact); the exec is
+  a blind window and may have left processes running.
+rules: [EVD7, EVD8]
+capabilities: {start_events: true}
+calls:
+  - {call_id: c1, command: ./gen.sh, t_start: 10}
+  - {call_id: c2, command: ./long.sh, t_start: 9990, t_end: null}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2, record_type: closed, snapshot: {modified: [out/r.json]}}
+  - {command_id: e2, call: c2, t_start: 9990.1, duration_s: 0.0, complete: false, exit_code: null, record_type: start_only, snapshot: {status: absent}}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+baseline: {files: {out/r.json: {sha256: aa}}}
+final_diff: {modified: [out/r.json]}
+oracle_inputs:
+  - {path: out/r.json, at_baseline: true, baseline_sha256: aa}
+expect:
+  input_states:
+    out/r.json: {unmonitored_calls: [], blind_execs: [e2], detached_execs: [e2], state_under: command_written, unseen_writer_possible: true}
+  counts:
+    bases.unmonitored: exact
+    bases.detached: fallback

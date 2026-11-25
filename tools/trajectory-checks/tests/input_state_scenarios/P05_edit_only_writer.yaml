@@ -1,0 +1,21 @@
+name: P05_edit_only_writer
+description: >
+  An edit-tool call is the only writer of a tracked input: edit_written in
+  the strict model; the relaxed one keeps an unseen command after it.
+rules: [CON6, CON9, LWR4]
+calls:
+  - {call_id: c1, tool_type: edit, paths: [/repo/src/cfg.py], t_start: 10}
+links:
+  - {link_type: write_event, path: src/cfg.py, writer_id: c1}
+baseline: {files: {src/cfg.py: {sha256: aa}}}
+final_diff: {modified: [src/cfg.py]}
+oracle_inputs:
+  - {path: src/cfg.py, at_baseline: true, baseline_sha256: aa}
+expect:
+  input_states:
+    src/cfg.py: {state_under: edit_written, states_under: [edit_written], states_over: [edit_written, command_written], final_writer: w0, final_writer_type: edit_call, final_writer_id: c1, final_writer_root: c1, edit_events: [w0], writer_roots: [{event_id: w0, writer_type: edit_call, root_call_id: c1, root_under: true}]}
+  counts:
+    M3.2.edit_written_under: 1
+    M3.2.edit_written_over: 1
+    M3.2.ever_edit_written: 1
+    M3.2.final_writer_roots_under: [c1]

@@ -1,0 +1,17 @@
+name: S12_incomplete_record
+description: A record with complete = false is matched normally, and it extends to the run's end for nesting (§5.2, §6.5; decision R8).
+run: {t_end: 1000}
+calls:
+  - {call_id: c1, t_start: 100, t_end: 200, command: "./long_job.sh"}
+execs:
+  - {command_id: e1, t_start: 100.3, t_end: 150.3, command: "./long_job.sh", complete: false, exit_code: null}
+  - {command_id: n1, t_start: 400, t_end: 401, command: "sleep 1"}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c1, command_id: e1, rule: exact}
+    - {link_type: exec_parent, command_id: n1, parent: e1, root_call_id: c1, rule: time_containment, root_ambiguous: false}
+  links_exact: true
+  dispositions:
+    c1: matched
+    e1: matched_root
+    n1: {disposition: nested, root_under: true}

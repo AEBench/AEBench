@@ -1,0 +1,26 @@
+name: F45_array_assignment
+description: Array assignments of a benchmark driver; an array element is neither a program nor a network program (B2).
+rules: [SHP1, SHP8, NET1, NET3]
+calls:
+  - {call_id: c1, command: "counts=(4 11 2 7 3)\nbenches=(analytics ml web)\nfor i in \"${!benches[@]}\"; do ./run.sh \"${benches[$i]}\" \"${counts[$i]}\"; done", t_start: 10}
+  - {call_id: c2, command: "tools=(curl wget)\necho \"${tools[@]}\"", t_start: 100}
+  - {call_id: c3, command: "files=($(ls *.csv)); declare -a sizes=(1 2)", t_start: 200}
+execs:
+  - {command_id: e1, command: "counts=(4 11 2 7 3)\nbenches=(analytics ml web)\nfor i in \"${!benches[@]}\"; do ./run.sh \"${benches[$i]}\" \"${counts[$i]}\"; done", t_start: 10.1, duration_s: 30}
+  - {command_id: e2, command: "tools=(curl wget)\necho \"${tools[@]}\"", t_start: 100.1}
+  - {command_id: e3, command: "files=($(ls *.csv)); declare -a sizes=(1 2)", t_start: 200.1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: call_exec, call_id: c3, command_id: e3}
+expect:
+  call_facts:
+    c1: {programs: [run.sh]}
+    c2: {programs: [echo], network_types_under: []}
+    c3: {programs: [ls, declare]}
+  exec_facts:
+    e2: {network_types: []}
+  facts:
+    M6.1.network_execs_under: 0
+    M6.1.network_execs_over: 0
+    M6.1.network_calls_under: 0

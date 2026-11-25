@@ -1,0 +1,17 @@
+name: S09_unrooted_no_call
+description: A trace record outside every call's interval, with no agent call at all -> unrooted (§6.5).
+calls: []
+execs:
+  - {command_id: u1, t_start: 500, t_end: 501, command: "run-parts /etc/cron.hourly"}
+expect:
+  links: []
+  links_absent:
+    - {link_type: exec_parent}
+    - {link_type: call_exec}
+  dispositions:
+    u1: {item_type: exec, disposition: unrooted, root_under: false}
+  coverage:
+    counts.unrooted_execs: 1
+    rates.exec_explained_rate_under: 0.0
+    rates.exec_explained_rate_over: 0.0
+    rates.call_match_rate_under: null

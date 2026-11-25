@@ -1,0 +1,24 @@
+name: G08_own_descendant_write
+description: >
+  Spec RS07. The previous call's own detached descendants run into the
+  gap: one writes a file there, one has a skipped snapshot. Both belong to
+  an endpoint, so the write is not counted and the skipped snapshot does
+  not make the gap unobserved.
+rules: [RR5, RR6]
+calls:
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e1b, command: worker, t_start: 11.0, t_end: 20.0}
+  - {command_id: e1c, command: indexer, t_start: 11.2, t_end: 25.0, snapshot: {status: skipped, scope: null, skip_reason: too many files}}
+  - {command_id: e2, call: c2, t_start: 30.1, t_end: 31.9}
+links:
+  - {link_type: exec_parent, command_id: e1b, parent: e1, root_call_id: c1}
+  - {link_type: exec_parent, command_id: e1c, parent: e1, root_call_id: c1}
+  - {link_type: write_event, path: out/a.csv, writer_id: e1b}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, writes_between_under: 0, writes_between_over: 0, gap_observed: true, unchanged_under: true, unchanged_over: true}
+  structure:
+    M2.2.reruns_after_success_unchanged_under: 1

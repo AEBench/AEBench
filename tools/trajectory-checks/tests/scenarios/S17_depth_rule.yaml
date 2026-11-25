@@ -1,0 +1,19 @@
+name: S17_depth_rule
+description: Parent and child both report the same modified file -> one event, writer = the child, depth_rule parent_may_also_write, still writer_under true (§6.6 rules 3 and 8).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 110, command: "./run.sh"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 109, command: "./run.sh", snapshot: {modified: [results/out.csv]}}
+  - {command_id: n1, t_start: 101, t_end: 105, command: "python3 gen.py", snapshot: {modified: [results/out.csv]}}
+baseline: {files: {results/out.csv: {}}}
+final_diff: {modified: [results/out.csv], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: exec_parent, command_id: n1, parent: e1, root_call_id: c1, rule: time_containment}
+    - {link_type: write_event, event_id: w0, path: results/out.csv, writer_type: exec, writer_id: n1, t_start: 101.0, t_end: 105.0, depth_rule: parent_may_also_write, root_call_id: c1, root_ambiguous: false, writer_under: true}
+  links_exact: true
+  paths:
+    - {path: results/out.csv, events: [w0], final_writer: w0, final_writer_under: true, final_state: changed}
+  coverage:
+    counts.events_parent_may_also_write: 1
+    rates.final_diff_attributed_rate_under: 1.0

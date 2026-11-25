@@ -1,0 +1,20 @@
+name: S45_incomplete_delete_recreate
+description: An incomplete exec deletes a file (measured end 40, run end 100) and a short command recreates it at 90; J3 uses the measured end, so the recreate is the final writer, while J2 still extends the incomplete exec (§6.5, §6.6; decision D32).
+run: {t_end: 100}
+calls:
+  - {call_id: c1, t_start: 10, t_end: 41, command: "rm -f results/* && setsid nohup ./bench.sh > /tmp/b.log 2>&1 & sleep 30"}
+  - {call_id: c2, t_start: 90, t_end: 91, command: "node collect.js"}
+execs:
+  - {command_id: e1, t_start: 10.2, t_end: 40, command: "rm -f results/* && setsid nohup ./bench.sh > /tmp/b.log 2>&1 & sleep 30", complete: false, exit_code: null, snapshot: {deleted: [results/t.json]}}
+  - {command_id: n1, t_start: 60, t_end: 61, command: "./bench.sh step"}
+  - {command_id: e2, t_start: 90.1, t_end: 90.2, command: "node collect.js", snapshot: {created: [results/t.json]}}
+baseline: {files: {results/t.json: {}}}
+final_diff: {modified: [results/t.json], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: exec_parent, command_id: n1, parent: e1, root_call_id: c1, rule: time_containment}
+    - {link_type: write_event, event_id: w0, writer_id: e1, op: delete, t_start: 10.2, t_end: 40.0, order_t: 40.0, root_ambiguous: false, writer_under: true}
+    - {link_type: write_event, event_id: w1, writer_id: e2, op: create, t_end: 90.2, root_ambiguous: false, writer_under: true}
+  links_exact: true
+  paths:
+    - {path: results/t.json, events: [w0, w1], final_writer: w1, final_writer_under: true, final_state: changed}

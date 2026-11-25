@@ -1,0 +1,19 @@
+name: OS30_reference_prefix_pattern_match
+description: >
+  A relative reference prefix covers a listed folder of the workspace:
+  the pattern row under it is a reference, and so is the pattern_match
+  row OI5 adds for a run path under it, by the same scope rule (OI2,
+  D50; A8).
+rules: [OI2, OI5]
+config: {reference_prefixes: [refs]}
+paths:
+  - {path: refs/a.txt}
+null_manifest:
+  - {check_id: list_refs, method: glob, path: /repo/refs, glob_pattern: "*.txt", glob_matches: [], exists: true, exists_before: true}
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {path: refs, pattern: "*.txt", match_type: pattern, input_scope: reference}
+    - {path: refs/a.txt, match_type: pattern_match, input_scope: reference}
+  oracle_inputs_exact: true

@@ -1,0 +1,24 @@
+name: OS26_workspace_scope_visible
+description: >
+  OS05 in snapshot scope workspace (rates.untracked_visible true, the
+  capability still false) with the created file in paths.jsonl: it is a
+  pattern_match row and matches are complete, with no warning (D37).
+rules: [OI5]
+coverage: {rates.snapshot_scope: workspace, rates.untracked_visible: true}
+baseline: {files: {results/a.csv: {sha256: aa}, results/old.csv: {sha256: oo}}}
+paths:
+  - {path: results/b.csv}
+  - {path: results/old.csv, final_state: deleted}
+null_manifest:
+  - {check_id: per_run, method: glob, path: /repo/results, glob_pattern: "*.csv", glob_matches: [results/a.csv], exists: true, exists_before: true}
+  - {check_id: per_run, path: /repo/results/a.csv, exists: true, sha256: aa, exists_before: true, sha256_before: aa, tracked_before: true}
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {input_id: i2, path: results/b.csv, match_type: pattern_match, listed_by: [i0], at_baseline: false}
+  absent: [results/old.csv]
+  block:
+    bases.pattern_matches: exact
+    M3.1.pattern_matches_complete: true
+  warnings_exact: true

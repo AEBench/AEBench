@@ -1,0 +1,15 @@
+name: S35_edit_outside_workspace
+description: An edit to /tmp/rerun_subset.py -> an event with the absolute path and in_workspace false (§6.6 rule 1).
+calls:
+  - {call_id: c1, tool_type: write, raw_name: Write, t_start: 100, t_end: 101, paths: ["/tmp/rerun_subset.py"]}
+execs: []
+baseline: {files: {}}
+final_diff: {modified: [], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: write_event, event_id: w0, path: /tmp/rerun_subset.py, in_workspace: false, writer_type: edit_call, writer_id: c1, source: edit_call}
+  links_exact: true
+  paths:
+    - {path: /tmp/rerun_subset.py, in_workspace: false, events: [w0], final_writer: w0}
+  coverage:
+    counts.write_events_outside_workspace: 1

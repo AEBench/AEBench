@@ -1,0 +1,638 @@
+name: P30_synthetic_mini_example
+description: 'The synthetic run of the human-readable version, Part 2.3: exactly the rows and counts printed there.'
+rules: [EVD1, EVD2, EVD4, CON12, INP2, INP4, CON14, CNT1, CNT2, CNT3, CNT4, CNT5, CNT6, PHS1, PHS2, PHS3]
+capabilities: {oracle_reads: true}
+run: {t_start: 1793900000.0, t_end: 1793900080.0, case_image_digest: 'sha256:7777777777777777777777777777777777777777777777777777777777777777'}
+calls:
+- actor: main
+  background: false
+  call_id: c1
+  command: python3 gen.py --n 5 > out/summary.csv
+  command_norm: python3 gen.py --n 5 > out/summary.csv
+  edit_content: false
+  family: claude
+  log_exit_code: null
+  log_ok: true
+  paths: []
+  raw_name: Bash
+  seq: 0
+  t_end: 1793900041.0
+  t_precision_s: 1.0
+  t_start: 1793900010.0
+  timeout_s: 3600.0
+  tool_type: shell
+- actor: main
+  background: null
+  call_id: c2
+  command: null
+  command_norm: null
+  edit_content: true
+  family: claude
+  log_exit_code: null
+  log_ok: true
+  paths: [/repo/config/params.yaml]
+  raw_name: Edit
+  seq: 1
+  t_end: 1793900051.0
+  t_precision_s: 1.0
+  t_start: 1793900050.0
+  timeout_s: null
+  tool_type: edit
+- actor: main
+  background: false
+  call_id: c3
+  command: 'sed -i ''s/n: 5/n: 50/'' config/params.yaml'
+  command_norm: 'sed -i ''s/n: 5/n: 50/'' config/params.yaml'
+  edit_content: false
+  family: claude
+  log_exit_code: null
+  log_ok: true
+  paths: []
+  raw_name: Bash
+  seq: 2
+  t_end: 1793900061.0
+  t_precision_s: 1.0
+  t_start: 1793900060.0
+  timeout_s: 3600.0
+  tool_type: shell
+- actor: main
+  background: null
+  call_id: c4
+  command: null
+  command_norm: null
+  edit_content: true
+  family: claude
+  log_exit_code: null
+  log_ok: true
+  paths: [/repo/out/notes.md]
+  raw_name: Write
+  seq: 3
+  t_end: 1793900071.0
+  t_precision_s: 1.0
+  t_start: 1793900070.0
+  timeout_s: null
+  tool_type: write
+execs:
+- argv0: /bin/bash
+  command: python3 gen.py --n 5 > out/summary.csv
+  command_id: e1
+  command_norm: python3 gen.py --n 5 > out/summary.csv
+  complete: true
+  cwd: /repo
+  duration_s: 30.0
+  exit_code: 0
+  noise: null
+  pid: 101
+  seq: 0
+  signal: null
+  snapshot:
+    created: []
+    deleted: []
+    modified: []
+    scope: tracked
+    skip_reason: null
+    status: ok
+    totals: {created: 0, deleted: 0, modified: 0}
+  stderr_bytes: 0
+  stdout_bytes: 0
+  t_end: 1793900040.2
+  t_start: 1793900010.2
+  wrapper: claude_eval
+- argv0: /bin/bash
+  command: 'sed -i ''s/n: 5/n: 50/'' config/params.yaml'
+  command_id: e2
+  command_norm: 'sed -i ''s/n: 5/n: 50/'' config/params.yaml'
+  complete: true
+  cwd: /repo
+  duration_s: 0.1
+  exit_code: 0
+  noise: null
+  pid: 140
+  seq: 1
+  signal: null
+  snapshot:
+    created: []
+    deleted: []
+    modified: [config/params.yaml]
+    scope: tracked
+    skip_reason: null
+    status: ok
+    totals: {created: 0, deleted: 0, modified: 1}
+  stderr_bytes: 0
+  stdout_bytes: 0
+  t_end: 1793900060.2
+  t_start: 1793900060.1
+  wrapper: claude_eval
+links:
+- {call_id: c1, command_id: e1, dt_s: 0.2, link_type: call_exec, rule: exact}
+- {call_id: c3, command_id: e2, dt_s: 0.1, link_type: call_exec, rule: exact}
+- depth_rule: none
+  event_id: w0
+  in_workspace: true
+  link_type: write_event
+  op: modify
+  overlaps_sibling: false
+  path: config/params.yaml
+  possibly_edit_call: null
+  root_ambiguous: false
+  root_call_id: c2
+  root_candidates: []
+  scope: null
+  source: edit_call
+  t_end: 1793900050.0
+  t_start: 1793900050.0
+  writer_id: c2
+  writer_type: edit_call
+  writer_under: true
+- depth_rule: none
+  event_id: w1
+  in_workspace: true
+  link_type: write_event
+  op: modify
+  overlaps_sibling: false
+  path: config/params.yaml
+  possibly_edit_call: null
+  root_ambiguous: false
+  root_call_id: c3
+  root_candidates: []
+  scope: tracked
+  source: snapshot
+  t_end: 1793900060.2
+  t_start: 1793900060.1
+  writer_id: e2
+  writer_type: exec
+  writer_under: true
+- depth_rule: none
+  event_id: w2
+  in_workspace: true
+  link_type: write_event
+  op: create
+  overlaps_sibling: false
+  path: out/notes.md
+  possibly_edit_call: null
+  root_ambiguous: false
+  root_call_id: c4
+  root_candidates: []
+  scope: null
+  source: edit_call
+  t_end: 1793900070.0
+  t_start: 1793900070.0
+  writer_id: c4
+  writer_type: edit_call
+  writer_under: true
+paths:
+- events: [w0, w1]
+  final_state: changed
+  final_writer: w1
+  final_writer_under: true
+  in_workspace: true
+  path: config/params.yaml
+  tracked: true
+  unattributed_candidates: []
+- events: []
+  final_state: changed
+  final_writer: null
+  final_writer_under: false
+  in_workspace: true
+  path: data/input.bin
+  tracked: true
+  unattributed_candidates: []
+- events: [w2]
+  final_state: untracked
+  final_writer: w2
+  final_writer_under: true
+  in_workspace: true
+  path: out/notes.md
+  tracked: false
+  unattributed_candidates: []
+baseline:
+  commit: '0000000000000000000000000000000000000000'
+  files:
+    build/report.txt: {sha256: b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0}
+    config/params.yaml: {sha256: a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1}
+    data/input.bin: {sha256: d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0}
+final_diff:
+  modified: [config/params.yaml, data/input.bin]
+  deleted: []
+  mode_changed: []
+oracle_inputs:
+- access_types: [read]
+  at_baseline: true
+  baseline_sha256: b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0
+  checks: [report]
+  grading_exists: true
+  grading_mtime_ns: 1793900090000000000
+  grading_sha256: b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9
+  in_under: true
+  in_workspace: true
+  input_id: i0
+  input_scope: workspace
+  listed_by: []
+  match_type: literal
+  null_sha256: null
+  oracle_writes: null
+  oracle_writes_basis: null
+  path: build/report.txt
+  pattern: null
+  phases: [artifact_build]
+  source_type: graded
+  tracked_at_baseline: true
+- access_types: [read]
+  at_baseline: true
+  baseline_sha256: a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1
+  checks: [params]
+  grading_exists: true
+  grading_mtime_ns: 1793900060150000000
+  grading_sha256: c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3
+  in_under: true
+  in_workspace: true
+  input_id: i1
+  input_scope: workspace
+  listed_by: []
+  match_type: literal
+  null_sha256: null
+  oracle_writes: null
+  oracle_writes_basis: null
+  path: config/params.yaml
+  pattern: null
+  phases: [experiment_runs]
+  source_type: graded
+  tracked_at_baseline: true
+- access_types: [stat]
+  at_baseline: true
+  baseline_sha256: d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0
+  checks: [input]
+  grading_exists: true
+  grading_mtime_ns: 1793900075000000000
+  grading_sha256: d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1
+  in_under: true
+  in_workspace: true
+  input_id: i2
+  input_scope: workspace
+  listed_by: []
+  match_type: literal
+  null_sha256: null
+  oracle_writes: null
+  oracle_writes_basis: null
+  path: data/input.bin
+  pattern: null
+  phases: [experiment_runs]
+  source_type: graded
+  tracked_at_baseline: true
+- access_types: [list]
+  at_baseline: false
+  baseline_sha256: null
+  checks: [outputs]
+  grading_exists: true
+  grading_mtime_ns: null
+  grading_sha256: null
+  in_under: false
+  in_workspace: true
+  input_id: i3
+  input_scope: workspace
+  listed_by: []
+  match_type: pattern
+  null_sha256: null
+  oracle_writes: null
+  oracle_writes_basis: null
+  path: out
+  pattern: '*.csv'
+  phases: [experiment_runs]
+  source_type: graded
+  tracked_at_baseline: null
+- access_types: [list, read]
+  at_baseline: false
+  baseline_sha256: null
+  checks: [outputs, summary]
+  grading_exists: true
+  grading_mtime_ns: 1793900040000000000
+  grading_sha256: 5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c
+  in_under: true
+  in_workspace: true
+  input_id: i4
+  input_scope: workspace
+  listed_by: [i3]
+  match_type: literal
+  null_sha256: null
+  oracle_writes: null
+  oracle_writes_basis: null
+  path: out/summary.csv
+  pattern: null
+  phases: [experiment_runs]
+  source_type: graded
+  tracked_at_baseline: false
+- access_types: [read]
+  at_baseline: null
+  baseline_sha256: null
+  checks: [expected]
+  grading_exists: true
+  grading_mtime_ns: 1793800000000000000
+  grading_sha256: e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0
+  in_under: true
+  in_workspace: false
+  input_id: i5
+  input_scope: reference
+  listed_by: []
+  match_type: literal
+  null_sha256: null
+  oracle_writes: null
+  oracle_writes_basis: null
+  path: /refs/expected.json
+  pattern: null
+  phases: [experiment_runs]
+  source_type: graded
+  tracked_at_baseline: false
+oracle_inputs_block:
+  M3.1.phases_complete: {artifact_build: true, experiment_runs: true}
+phase_status: {artifact_build: success, experiment_runs: success}
+expect:
+  input_states:
+    build/report.txt|file:
+      access_types: [read]
+      baseline_exists: true
+      baseline_sha256: b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0
+      baseline_source: tracked_files
+      blind_execs: []
+      check_ids: [report]
+      content_cmp: differs
+      content_source: grading_read
+      content_sources_disagree: true
+      detached_execs: []
+      edit_events: []
+      events: []
+      final_writer: null
+      final_writer_id: null
+      final_writer_root: null
+      final_writer_type: null
+      final_writer_under: false
+      grading_exists: true
+      grading_sha256: b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9
+      in_under: true
+      input_id: i0
+      input_scope: workspace
+      input_type: file
+      listing_changed_over: null
+      listing_changed_under: null
+      member_of: []
+      members: []
+      model_conflict: true
+      observable: true
+      oracle_writes: null
+      origin_under: baseline_file
+      origins_over: [baseline_file]
+      path: build/report.txt
+      pattern: null
+      phases: [artifact_build]
+      predicates_over: {absent: false, agent_written: true, baseline_content: false, command_written: true, edit_written: false, fresh: true}
+      predicates_under: {absent: false, agent_written: false, baseline_content: false, command_written: false, edit_written: false, fresh: false}
+      rewrite_type: null
+      source_type: graded
+      state_under: null
+      states_over: [command_written, oracle_written]
+      states_under: []
+      tracked: true
+      under_reason: model_conflict
+      unmonitored_calls: []
+      unseen_writer_possible: true
+      writer_roots: []
+    config/params.yaml|file:
+      access_types: [read]
+      baseline_exists: true
+      baseline_sha256: a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1
+      baseline_source: tracked_files
+      blind_execs: []
+      check_ids: [params]
+      content_cmp: differs
+      content_source: grading_read
+      content_sources_disagree: false
+      detached_execs: []
+      edit_events: [w0]
+      events: [w0, w1]
+      final_writer: w1
+      final_writer_id: e2
+      final_writer_root: c3
+      final_writer_type: exec
+      final_writer_under: true
+      grading_exists: true
+      grading_sha256: c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3
+      in_under: true
+      input_id: i1
+      input_scope: workspace
+      input_type: file
+      listing_changed_over: null
+      listing_changed_under: null
+      member_of: []
+      members: []
+      model_conflict: false
+      observable: true
+      oracle_writes: null
+      origin_under: baseline_file
+      origins_over: [baseline_file]
+      path: config/params.yaml
+      pattern: null
+      phases: [experiment_runs]
+      predicates_over: {absent: false, agent_written: true, baseline_content: false, command_written: true, edit_written: false, fresh: true}
+      predicates_under: {absent: false, agent_written: true, baseline_content: false, command_written: true, edit_written: false, fresh: true}
+      rewrite_type: null
+      source_type: graded
+      state_under: command_written
+      states_over: [command_written, oracle_written]
+      states_under: [command_written]
+      tracked: true
+      under_reason: null
+      unmonitored_calls: []
+      unseen_writer_possible: false
+      writer_roots:
+      - {event_id: w0, root_call_id: c2, root_under: true, writer_type: edit_call}
+      - {event_id: w1, root_call_id: c3, root_under: true, writer_type: exec}
+    data/input.bin|file:
+      access_types: [stat]
+      baseline_exists: true
+      baseline_sha256: d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0
+      baseline_source: tracked_files
+      blind_execs: []
+      check_ids: [input]
+      content_cmp: differs
+      content_source: grading_read
+      content_sources_disagree: false
+      detached_execs: []
+      edit_events: []
+      events: []
+      final_writer: null
+      final_writer_id: null
+      final_writer_root: null
+      final_writer_type: null
+      final_writer_under: false
+      grading_exists: true
+      grading_sha256: d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1
+      in_under: true
+      input_id: i2
+      input_scope: workspace
+      input_type: file
+      listing_changed_over: null
+      listing_changed_under: null
+      member_of: []
+      members: []
+      model_conflict: true
+      observable: true
+      oracle_writes: null
+      origin_under: baseline_file
+      origins_over: [baseline_file]
+      path: data/input.bin
+      pattern: null
+      phases: [experiment_runs]
+      predicates_over: {absent: false, agent_written: true, baseline_content: false, command_written: true, edit_written: false, fresh: true}
+      predicates_under: {absent: false, agent_written: false, baseline_content: false, command_written: false, edit_written: false, fresh: false}
+      rewrite_type: null
+      source_type: graded
+      state_under: null
+      states_over: [command_written, oracle_written]
+      states_under: []
+      tracked: true
+      under_reason: model_conflict
+      unmonitored_calls: []
+      unseen_writer_possible: true
+      writer_roots: []
+    out/summary.csv|file:
+      access_types: [list, read]
+      baseline_exists: false
+      baseline_sha256: null
+      baseline_source: pre_oracle_pass
+      blind_execs: []
+      check_ids: [outputs, summary]
+      content_cmp: differs
+      content_source: grading_read
+      content_sources_disagree: false
+      detached_execs: []
+      edit_events: []
+      events: []
+      final_writer: null
+      final_writer_id: null
+      final_writer_root: null
+      final_writer_type: null
+      final_writer_under: false
+      grading_exists: true
+      grading_sha256: 5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c
+      in_under: true
+      input_id: i4
+      input_scope: workspace
+      input_type: file
+      listing_changed_over: null
+      listing_changed_under: null
+      member_of: [out]
+      members: []
+      model_conflict: false
+      observable: false
+      oracle_writes: null
+      origin_under: new_file
+      origins_over: [new_file]
+      path: out/summary.csv
+      pattern: null
+      phases: [experiment_runs]
+      predicates_over: {absent: false, agent_written: true, baseline_content: false, command_written: true, edit_written: false, fresh: true}
+      predicates_under: {absent: false, agent_written: true, baseline_content: false, command_written: true, edit_written: false, fresh: true}
+      rewrite_type: null
+      source_type: graded
+      state_under: command_written
+      states_over: [command_written, oracle_written]
+      states_under: [command_written]
+      tracked: false
+      under_reason: null
+      unmonitored_calls: []
+      unseen_writer_possible: true
+      writer_roots: []
+    out|listing:
+      access_types: [list]
+      baseline_exists: false
+      baseline_sha256: null
+      baseline_source: pre_oracle_pass
+      blind_execs: []
+      check_ids: [outputs]
+      content_cmp: null
+      content_source: null
+      content_sources_disagree: false
+      detached_execs: []
+      edit_events: []
+      events: []
+      final_writer: null
+      final_writer_id: null
+      final_writer_root: null
+      final_writer_type: null
+      final_writer_under: false
+      grading_exists: null
+      grading_sha256: null
+      in_under: false
+      input_id: i3
+      input_scope: workspace
+      input_type: listing
+      listing_changed_over: true
+      listing_changed_under: true
+      member_of: []
+      members: [out/summary.csv]
+      model_conflict: false
+      observable: false
+      oracle_writes: null
+      origin_under: null
+      origins_over: []
+      path: out
+      pattern: '*.csv'
+      phases: [experiment_runs]
+      predicates_over: {absent: false, agent_written: false, baseline_content: false, command_written: false, edit_written: false, fresh: false}
+      predicates_under: {absent: false, agent_written: false, baseline_content: false, command_written: false, edit_written: false, fresh: false}
+      rewrite_type: null
+      source_type: graded
+      state_under: null
+      states_over: []
+      states_under: []
+      tracked: false
+      under_reason: null
+      unmonitored_calls: []
+      unseen_writer_possible: true
+      writer_roots: []
+  counts:
+    bases: {content_hash: fallback, detached: fallback, observable: fallback, shim: fallback, timing: fallback, unmonitored: fallback}
+    capabilities: {content_hashes: false, egress_log: false, exact_timing: false, final_content: false, oracle_reads: true, parent_links: false, read_tracing: false, start_events: false, stdio: false, untracked_visible: false}
+    preconditions: {content: holds, log: holds, oracle_inputs: holds, trace: holds}
+    run_key: art__agent__1
+    family: claude
+    schema_version: '1'
+    M3.2:
+      absent_over: 0
+      absent_under: 0
+      agent_written_over: 4
+      agent_written_under: 2
+      baseline_content_over: 0
+      baseline_content_under: 0
+      by_state_over: {command_written: 4, deleted: 0, edit_written: 0, missing: 0, oracle_written: 4, pristine: 0, rewritten_identical: 0}
+      by_state_under: {command_written: 2, deleted: 0, edit_written: 0, missing: 0, oracle_written: 0, pristine: 0, rewritten_identical: 0}
+      command_written_over: 4
+      command_written_under: 2
+      created_by_agent_over: 1
+      created_by_agent_under: 1
+      detached_possible: false
+      edit_written_over: 0
+      edit_written_under: 0
+      ever_edit_written: 1
+      final_writer_roots_under: [c3]
+      fresh_over: 4
+      fresh_under: 2
+      listing_changed_over: 1
+      listing_changed_under: 1
+      listing_inputs: 1
+      model_conflicts: 2
+      oracle_inputs: 4
+      oracle_inputs_under: 4
+      passing_phases: 2
+      passing_phases_baseline_content_over: 0
+      passing_phases_baseline_content_under: 0
+      phases:
+        artifact_build: {agent_written_any_over: true, agent_written_any_under: false, baseline_content_all_over: false, baseline_content_all_under: false, inputs: 1, inputs_complete: true, status: success}
+        experiment_runs: {agent_written_any_over: true, agent_written_any_under: true, baseline_content_all_over: false, baseline_content_all_under: false, inputs: 3, inputs_complete: true, status: success}
+      reference_inputs_excluded: 1
+      rewritten_restored: null
+      rewritten_same_content: null
+      state_unknown_under: 2
+      unseen_writer_possible: 3
+      written_unseen_over: 3
+      written_unseen_under: 1
+  warnings_exact: true

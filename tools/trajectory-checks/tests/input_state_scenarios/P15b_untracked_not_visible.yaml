@@ -1,0 +1,22 @@
+name: P15b_untracked_not_visible
+description: >
+  P15 with untracked_visible false: no snapshot lists the file, so there
+  is no event and it is not observable (basis fallback).
+rules: [EVD6]
+capabilities: {final_content: true}
+calls:
+  - {call_id: c1, command: ./gen.sh, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2}
+baseline: {files: {src/main.py: {sha256: mm}}}
+final_diff: {}
+final_files:
+  - {path: out/new.csv, status: A, sha256: bb}
+oracle_inputs:
+  - {path: out/new.csv, at_baseline: false}
+expect:
+  input_states:
+    out/new.csv: {observable: false, states_under: [command_written], states_over: [command_written], final_writer: null, unseen_writer_possible: true}
+  counts:
+    bases.observable: fallback
+    M3.2.written_unseen_under: 1

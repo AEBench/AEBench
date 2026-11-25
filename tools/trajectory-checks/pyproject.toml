@@ -1,0 +1,27 @@
+[project]
+name = "trajectory-checks"
+version = "0.1.0"
+description = "Matching layer of the AEBench trajectory analysis tool"
+requires-python = ">=3.10"
+dependencies = [
+    "tree-sitter==0.25.2",
+    "tree-sitter-bash==0.25.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 80
+# Fixture repositories are data (one has a syntax error on purpose, DEC6).
+extend-exclude = ["tests/fixtures/declared"]
+
+[tool.ruff.format]
+indent-style = "space"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "D", "UP", "B"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

@@ -1,0 +1,26 @@
+id: H35
+title: An incomplete exec on the chain, without exact timing
+rules: [TM1]
+run:
+  capabilities: {read_tracing: true}
+execs:
+  - {command_id: e1, command: ./sim, t_start: 10.0, duration_s: 100.0,
+     complete: false, reads: []}
+  - {command_id: e2, command: python3 agg.py, t_start: 500.0,
+     duration_s: 10.0, reads: [/repo/data/raw.csv]}
+dispositions:
+  e1: {disposition: matched_root, root_under: true}
+  e2: {disposition: matched_root, root_under: true}
+links:
+  - {link_type: write_event, path: data/raw.csv, writer_id: e1}
+  - {link_type: write_event, path: out/r.json, writer_id: e2}
+oracle_inputs:
+  - {path: out/r.json}
+expect:
+  chain_nodes:
+    - {input_id: i0, node_id: w0, t_start: 10.0, t_end: 110.0,
+       t_end_over: 1000.0, must: true}
+  faithfulness:
+    - {input_id: i0, chain_time_under_s: 110.0, chain_time_over_s: 990.0}
+  metrics:
+    M3.4: {hop2_writer_max_s_under: 100.0, hop2_writer_max_s_over: 990.0}

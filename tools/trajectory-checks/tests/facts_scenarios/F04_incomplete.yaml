@@ -1,0 +1,28 @@
+name: F04_incomplete
+description: A root shell that never reported its end; over-approximations extend it to the run's end.
+rules: [OUT1, TIM1, TIM2, TIM3, EXT3]
+run: {t_start: 0, t_end: 1000}
+calls:
+  - {call_id: c1, command: ./serve, t_start: 10}
+  - {call_id: c2, command: ls, t_start: 20}
+execs:
+  - {command_id: e1, command: ./serve, t_start: 10.2, duration_s: 5.0, complete: false, exit_code: null}
+  - {command_id: e2, command: ls, t_start: 20.1, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+expect:
+  call_facts:
+    c1: {outcome: unknown, complete: false, span_under_s: 5.0, span_over_s: 989.8}
+    c2: {outcome: ok, span_under_s: 1.0, span_over_s: 1.0}
+  facts:
+    M1.1.command_time_under_s: 6.0
+    M1.1.command_time_over_s: 989.8
+    M1.1.duration_p50_under_s: 1.0
+    M1.1.duration_p90_under_s: 1.0
+    M1.1.duration_p50_over_s: 1.0
+    M1.1.duration_p90_over_s: 989.8
+    M1.1.longest_span_under_s: 5.0
+    M1.1.longest_span_over_s: 989.8
+    M1.1.wall_time_s: 1000.0
+    M1.3.exits_unknown: 1

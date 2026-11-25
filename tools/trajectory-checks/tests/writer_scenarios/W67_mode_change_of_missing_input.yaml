@@ -1,0 +1,27 @@
+id: W67
+title: The input is missing at read and its last event is a mode change
+description: >
+  LW10 (D50): a mode change needs the file to exist, so a mode event as
+  the last writer of a file that is missing when the oracle reads it
+  implies an unseen delete after it, as a content write does.
+rules: [LW10, LW12]
+calls:
+  - {call_id: c1, seq: 0, command: chmod +x run.sh, t_start: 9.5, t_end: 11.0}
+execs:
+  - {command_id: e1, command: chmod +x run.sh, t_start: 10.0, duration_s: 0.2}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, event_id: w0, path: run.sh, op: mode, writer_id: e1}
+paths:
+  - {path: run.sh, events: [w0], final_writer: w0, final_state: mode_only}
+oracle_inputs:
+  - {input_id: i0, path: run.sh}
+input_states:
+  - {input_id: i0, tracked: true, baseline_sha256: aa, grading_exists: false,
+     content_source: grading_read, states_over: [deleted]}
+expect:
+  last_writers:
+    - {input_id: i0, last_writer: w0, last_writer_op: mode,
+       exists_at_read: false, exists_source: grading_read,
+       state_conflict: true, last_writer_under: false,
+       not_under: [state_conflict]}

@@ -1,0 +1,14 @@
+name: S39_cp_preserve
+description: cp -p over a tracked file keeping size and mtime -> the snapshot still reports it (ctime changed) and it gives one event (§6.6 sources table).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "cp -p backup/a.txt a.txt"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 100.3, command: "cp -p backup/a.txt a.txt", snapshot: {modified: [a.txt]}}
+baseline: {files: {a.txt: {}}}
+final_diff: {modified: [a.txt], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: write_event, event_id: w0, path: a.txt, op: modify, writer_type: exec, writer_id: e1, root_call_id: c1, writer_under: true}
+  links_exact: true
+  paths:
+    - {path: a.txt, events: [w0], final_writer: w0, final_writer_under: true, final_state: changed}

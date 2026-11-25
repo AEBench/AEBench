@@ -1,0 +1,13 @@
+name: OS13_phase_lost
+description: A phase passes in the null run and fails in the run, so it is lost.
+rules: [NS3]
+null_manifest:
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: aa, exists_before: true, sha256_before: aa, tracked_before: true}
+null_score: {phases: {artifact_build: success, experiment_runs: success}}
+run_score: {phases: {artifact_build: success, experiment_runs: failure}}
+expect:
+  block:
+    M3.5.score_gain: -1
+    M3.5.phases_passed_by_null: [artifact_build]
+    M3.5.phases_gained: []
+    M3.5.phases_lost: [experiment_runs]

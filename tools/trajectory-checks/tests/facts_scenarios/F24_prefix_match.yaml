@@ -1,0 +1,26 @@
+name: F24_prefix_match
+description: A prefix-matched call counts only in the over-approximations of exits, streaks and durations; root_under is J2's and unaffected.
+rules: [EXT1, EXT4, TIM3, NST1]
+calls:
+  - {call_id: c1, command: "make all", t_start: 10}
+  - {call_id: c2, command: ls, t_start: 20}
+execs:
+  - {command_id: e1, command: "make all", t_start: 10.1, duration_s: 3, exit_code: 2}
+  - {command_id: e3, command: "cc a.c", t_start: 11, duration_s: 1}
+  - {command_id: e2, command: ls, t_start: 20.1, duration_s: 1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1, rule: prefix}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: exec_parent, command_id: e3, parent: e1, root_call_id: c1}
+expect:
+  call_facts:
+    c1: {match_rule: prefix, match_under: false, outcome: failed, descendants_under: 1, descendants_over: 1}
+  facts:
+    M1.3.nonzero_exits_under: 0
+    M1.3.nonzero_exits_over: 1
+    M1.3.failure_streak_under: 0
+    M1.3.failure_streak_over: 1
+    M1.1.duration_p50_under_s: 1.0
+    M1.1.duration_p90_under_s: 1.0
+    M1.1.duration_p50_over_s: 1.0
+    M1.1.duration_p90_over_s: 3.0

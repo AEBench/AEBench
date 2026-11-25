@@ -1,0 +1,38 @@
+name: G05_background_write_fallback
+description: >
+  Spec RS05 and the false half of CP01. A background exec writes a file in
+  the gap; layer 1's J2 gives it another root with writer_under false, so
+  the write counts in writes_between_over only (fallback roots).
+rules: [RR5, RR6, REP2, CLS1]
+calls:
+  - {call_id: c0, command: ./serve.sh &, t_start: 1, t_end: 2}
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e0, call: c0, t_start: 1.1, t_end: 1.5}
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e1b, command: sync_worker, t_start: 11.0, t_end: 20.0}
+  - {command_id: e2, call: c2, t_start: 30.1, t_end: 31.9}
+links:
+  - {link_type: exec_parent, command_id: e1b, parent: e0, root_call_id: c0, root_ambiguous: true, root_candidates: [c0, c1]}
+  - {link_type: write_event, path: out/state.dat, writer_id: e1b, writer_under: false}
+expect:
+  call_structure:
+    c0: {call_class: act, class_reason: background, shape_class: s0, program_class: p0, program_key: serve.sh}
+    c1: {shape_class: s1, program_class: p1, program_key: run.sh}
+  reruns:
+    - {key_type: shape, class_id: s1, prev_call_id: c1, call_id: c2, calls_between: 0, act_calls_between: 0, writes_between_under: 0, writes_between_over: 1, gap_observed: true, unchanged_under: false, unchanged_over: true}
+    - {key_type: program, class_id: p1, prev_call_id: c1, call_id: c2, writes_between_over: 1}
+  reruns_exact: true
+  file_classes:
+    out/state.dat: {file_class: data, class_rule: FC8, extension: .dat}
+  structure:
+    bases.writes_between: fallback
+    M2.2.reruns_after_success_under: 1
+    M2.2.reruns_after_success_unchanged_under: 0
+    M2.2.reruns_after_success_unchanged_over: 1
+    M4.2.changed_by_class: {data: 1}
+    M4.2.changed_by_class_and_role_over: {data: {nested_exec: 1}}
+    M4.2.changed_by_class_and_role_under: {}
+    M4.2.shell_written_by_class_over: {data: 1}
+    M4.2.shell_written_by_class_under: {}

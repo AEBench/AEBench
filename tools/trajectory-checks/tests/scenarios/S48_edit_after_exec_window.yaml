@@ -1,0 +1,15 @@
+name: S48_edit_after_exec_window
+description: An edit call 1 s after an exec that reports the same path ended falls inside the exec's observation window, so the exec's event is possibly the edit (§6.6 rule 5; decision D33).
+calls:
+  - {call_id: c1, t_start: 10, t_end: 11, command: "sed -i s/a/b/ config.yaml"}
+  - {call_id: c2, tool_type: edit, raw_name: Edit, t_start: 11.5, t_end: 12, paths: [/repo/config.yaml]}
+execs:
+  - {command_id: e1, t_start: 10.2, t_end: 10.5, command: "sed -i s/a/b/ config.yaml", snapshot: {modified: [config.yaml]}}
+baseline: {files: {config.yaml: {}}}
+final_diff: {modified: [config.yaml], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: write_event, writer_id: e1, possibly_edit_call: c2, writer_under: false, t_end: 10.5}
+    - {link_type: write_event, writer_id: c2, possibly_edit_call: null, writer_under: true}
+  paths:
+    - {path: config.yaml, final_writer: w1, final_writer_under: true}

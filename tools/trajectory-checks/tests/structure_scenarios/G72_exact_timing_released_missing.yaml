@@ -1,0 +1,20 @@
+name: G72_exact_timing_released_missing
+description: >
+  Bug A9, reading S6 (critic cycle 1): exact_timing implies released_at as
+  well as ended_at. One complete exec has ended_at but no released_at, so
+  PRE8 warns once and the gap basis falls back.
+rules: [PRE8, RR5]
+run: {capabilities: {exact_timing: true}}
+calls:
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh 3, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9, released_at: 10.2, ended_at: 11.8}
+  - {command_id: e2, call: c2, t_start: 30.1, t_end: 31.9, ended_at: 31.7}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, gap_observed: true}
+  structure:
+    bases.gap: fallback
+  warnings:
+    - "capability exact_timing true but released_at missing on 1 records"

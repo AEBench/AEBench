@@ -1,0 +1,30 @@
+name: F18_env_observed
+description: Names added by programs are observed only; each shell is compared with its parent, unrooted ones with the baseline.
+rules: [ENV2, ENV3, ENV5]
+calls:
+  - {call_id: c1, command: make, t_start: 10}
+execs:
+  - {command_id: e1, command: make, t_start: 10.1, duration_s: 10}
+  - {command_id: e2, command: "sh -c a", t_start: 11, duration_s: 5}
+  - {command_id: e3, command: "sh -c b", t_start: 12, duration_s: 1}
+  - {command_id: e4, command: ./bg, t_start: 50, duration_s: 1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: exec_parent, command_id: e2, parent: e1, root_call_id: c1}
+  - {link_type: exec_parent, command_id: e3, parent: e2, root_call_id: c1}
+env_keys:
+  e1: [HOME, PATH]
+  e2: [HOME, PATH, MAKELEVEL, MAKEFLAGS, OLDPWD, _]
+  e3: [HOME, PATH, MAKELEVEL, MAKEFLAGS, SHLVL, PWD]
+  e4: [HOME, PATH, FOO]
+expect:
+  call_facts:
+    c1: {env_assigned: [], env_confirmed: []}
+  exec_facts:
+    e2: {env_added: [MAKEFLAGS, MAKELEVEL]}
+    e3: {env_added: []}
+    e4: {env_added: [FOO], disposition: unrooted}
+  facts:
+    M5.2.names_observed: [FOO, MAKEFLAGS, MAKELEVEL]
+    M5.2.env_names_observed: 3
+    M5.2.env_names_assigned_over: 0

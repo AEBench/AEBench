@@ -1,0 +1,13 @@
+name: S34_failed_edit
+description: An edit call the log reports as failed (e.g. search string not found) -> no write event (§6.6 rule 4).
+calls:
+  - {call_id: c1, tool_type: edit, raw_name: Edit, t_start: 100, t_end: 101, paths: ["/repo/a.py"], log_ok: false}
+execs: []
+baseline: {files: {a.py: {}}}
+final_diff: {modified: [], deleted: [], mode_changed: []}
+expect:
+  links: []
+  links_absent:
+    - {link_type: write_event}
+  coverage:
+    counts.write_events.edit_call: 0

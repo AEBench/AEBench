@@ -1,0 +1,30 @@
+name: P21_overlapping_roots
+description: >
+  Two overlapping exec events from two roots, both create; layer 1's
+  final writer is not certain, but both writers are commands, so the
+  label is; both roots are in writer_roots.
+rules: [LWR4, CON13, CNT6]
+capabilities: {final_content: true}
+coverage: {rates.snapshot_scope: workspace, rates.untracked_visible: true}
+calls:
+  - {call_id: c1, command: ./a.sh, t_start: 10, t_end: 21}
+  - {call_id: c2, command: ./b.sh, t_start: 15, t_end: 26}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 20, snapshot: {scope: workspace, created: [out/r.bin]}}
+  - {command_id: e2, call: c2, t_start: 15.1, t_end: 25, snapshot: {scope: workspace, created: [out/r.bin]}}
+links:
+  - {link_type: write_event, path: out/r.bin, writer_id: e1, op: create, scope: workspace}
+  - {link_type: write_event, path: out/r.bin, writer_id: e2, op: create, scope: workspace}
+paths:
+  - {path: out/r.bin, tracked: false, final_state: untracked, final_writer_under: false}
+baseline: {files: {src/main.py: {sha256: mm}}}
+final_files:
+  - {path: out/r.bin, status: A, sha256: rr}
+oracle_inputs:
+  - {path: out/r.bin, at_baseline: false}
+expect:
+  input_states:
+    out/r.bin: {state_under: command_written, states_over: [command_written], final_writer: w1, final_writer_root: c2, final_writer_under: false, writer_roots: [{event_id: w0, writer_type: exec, root_call_id: c1, root_under: true}, {event_id: w1, writer_type: exec, root_call_id: c2, root_under: true}]}
+  counts:
+    M3.2.final_writer_roots_under: []
+    M3.2.agent_written_under: 1

@@ -1,0 +1,26 @@
+name: G59_no_trace
+description: >
+  A run with a log but no trace: the log-only counts (M2.1, M2.3) and the
+  per-item rows are computed; layer 2's trace-derived labels fail, so M2.2
+  is null; every predecessor's outcome is unknown and uncertain.
+rules: [PRE1, PRE4, RR2, REP1, REP3]
+coverage:
+  inputs.trace: false
+calls:
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh, t_start: 20, t_end: 22}
+expect:
+  call_structure:
+    c1: {call_class: act, shape_class: s0}
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, prev_outcome: unknown, prev_match_under: false, identical: true}
+    - {key_type: program, prev_call_id: c1, call_id: c2}
+  reruns_exact: true
+  structure:
+    preconditions.C1_under: fails
+    preconditions.log: holds
+    M2.1.repeat_max_act: 2
+    M2.3.program_reruns: 1
+    M2.2.shape_reruns: null
+  warnings: [precondition C1_under, precondition C6, precondition untracked_visible, baseline_by_class, precondition final_content]
+  warnings_exact: true

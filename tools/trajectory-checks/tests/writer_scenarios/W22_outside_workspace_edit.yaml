@@ -1,0 +1,23 @@
+id: W22
+title: An input outside the workspace written by an edit call
+rules: [VIS1, VIS2]
+calls:
+  - {call_id: c1, seq: 0, tool_type: write, paths: [/tmp/cfg.json],
+     t_start: 20.0}
+links:
+  - {link_type: write_event, event_id: w0, path: /tmp/cfg.json, op: create,
+     in_workspace: false, writer_id: c1}
+paths:
+  - {path: /tmp/cfg.json, in_workspace: false, tracked: false, events: [w0],
+     final_writer: w0, final_state: untracked}
+oracle_inputs:
+  - {input_id: i0, path: /tmp/cfg.json}
+input_states:
+  - {input_id: i0, observable: false, states_over: [edit_written]}
+expect:
+  last_writers:
+    - {input_id: i0, in_workspace: false, visible: false, last_writer: w0,
+       last_writer_type: edit_call, last_writer_under: false,
+       not_under: [invisible]}
+  input_rewrites:
+    - {input_id: i0, visible: false, rewrites_over: 0}

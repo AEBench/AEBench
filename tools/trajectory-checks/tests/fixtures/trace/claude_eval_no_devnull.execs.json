@@ -1,0 +1,25 @@
+[
+  {
+    "argv0": "/bin/bash",
+    "command": "for d in /proc/[0-9]*; do if grep -qa app-tester \"$d/cmdline\" 2>/dev/null; then echo \"RUNNING: $(basename $d): $(tr '\\0' ' ' < $d/cmdline)\"; fi; done; echo \"done scan\"",
+    "command_id": "b05a8bcd01564d18a6b2c2ddbdd36e63",
+    "command_norm": "for d in /proc/[0-9]*; do if grep -qa app-tester \"$d/cmdline\" 2>/dev/null; then echo \"RUNNING: $(basename $d): $(tr '\\0' ' ' < $d/cmdline)\"; fi; done; echo \"done scan\"",
+    "complete": true,
+    "cwd": "/repo/tester",
+    "duration_s": 0.284,
+    "exit_code": 0,
+    "noise": null,
+    "pid": 376590,
+    "seq": 0,
+    "signal": null,
+    "snapshot": {
+      "skip_reason": "workspace exceeds 20000 files",
+      "status": "skipped"
+    },
+    "stderr_bytes": 0,
+    "stdout_bytes": 826,
+    "t_end": 1791827360.39986,
+    "t_start": 1791827360.11586,
+    "wrapper": "claude_eval"
+  }
+]

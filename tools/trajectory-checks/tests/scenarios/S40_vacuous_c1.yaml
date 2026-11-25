@@ -1,0 +1,19 @@
+name: S40_vacuous_c1
+description: No eligible shell call (the only call is running at stop) while the trace is present; C1_under holds vacuously, with no warning (§7.2; decision D30).
+run: {t_end: 1000}
+calls:
+  - {call_id: c1, t_start: 990, t_end: 999, command: "./serve.sh"}
+execs:
+  - {command_id: p1, t_start: 1, command: "echo AEBENCH_SHIM_PROBE_OK", noise: shim_probe}
+baseline: {files: {}}
+final_diff: {modified: [], deleted: [], mode_changed: []}
+expect:
+  dispositions:
+    c1: {disposition: unmatched, reason: running_at_stop}
+  coverage:
+    rates.call_match_rate_under: null
+    preconditions.C1_under: vacuous
+    preconditions.C2_under: vacuous
+    preconditions.C6: vacuous
+    preconditions.C7_under: vacuous
+    warnings: []

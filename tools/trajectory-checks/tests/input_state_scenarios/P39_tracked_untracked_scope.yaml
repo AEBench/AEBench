@@ -1,0 +1,23 @@
+name: P39_tracked_untracked_scope
+description: >
+  Snapshot scope tracked+untracked watches untracked paths: an untracked
+  input created by one exec is observable and certainly command-written.
+rules: [EVD6]
+capabilities: {final_content: true}
+coverage: {rates.snapshot_scope: tracked+untracked}
+calls:
+  - {call_id: c1, command: ./gen.sh, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2, snapshot: {scope: tracked+untracked, created: [out/new.csv]}}
+links:
+  - {link_type: write_event, path: out/new.csv, writer_id: e1, op: create, scope: tracked+untracked}
+paths:
+  - {path: out/new.csv, tracked: false, final_state: untracked}
+baseline: {files: {src/main.py: {sha256: mm}}}
+final_files:
+  - {path: out/new.csv, status: A, sha256: nn}
+oracle_inputs:
+  - {path: out/new.csv, at_baseline: false}
+expect:
+  input_states:
+    out/new.csv: {observable: true, states_under: [command_written], states_over: [command_written], unseen_writer_possible: false}

@@ -1,0 +1,30 @@
+name: OS04_created_match_visible
+description: >
+  Capability untracked_visible: a run-created file matching the pattern
+  becomes a pattern_match row listed by it; a deleted path is not
+  matched; pattern matches are complete (basis exact), no warning.
+rules: [OI5, OI7, OI8]
+run: {capabilities: {untracked_visible: true}}
+baseline: {files: {results/a.csv: {sha256: aa}, results/old.csv: {sha256: oo}}}
+paths:
+  - {path: results/b.csv}
+  - {path: results/old.csv, final_state: deleted}
+  - {path: notes/c.csv}
+null_manifest:
+  - {check_id: per_run, method: glob, path: /repo/results, glob_pattern: "*.csv", glob_matches: [results/a.csv], exists: true, exists_before: true}
+  - {check_id: per_run, path: /repo/results/a.csv, exists: true, sha256: aa, exists_before: true, sha256_before: aa, tracked_before: true}
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {input_id: i0, path: results, pattern: "*.csv", match_type: pattern}
+    - {input_id: i1, path: results/a.csv, match_type: literal, listed_by: [i0], access_types: [list, read]}
+    - {input_id: i2, path: results/b.csv, pattern: null, match_type: pattern_match, in_under: false, listed_by: [i0], access_types: [list], checks: [per_run], phases: [experiment_runs], source_type: null_agent, in_workspace: true, input_scope: workspace, at_baseline: false, baseline_sha256: null, tracked_at_baseline: null, null_sha256: null, oracle_writes: null, oracle_writes_basis: null, grading_exists: null, grading_sha256: null, grading_mtime_ns: null}
+  oracle_inputs_exact: true
+  absent: [results/old.csv, notes/c.csv]
+  block:
+    bases.pattern_matches: exact
+    M3.1.pattern_matches_complete: true
+    M3.1.inputs_under: 1
+    M3.1.inputs_over: 2
+  warnings_exact: true

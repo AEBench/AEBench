@@ -1,0 +1,32 @@
+id: H47b
+title: Without stdio a shared process group and a parent text without a pipe give no members
+rules: [CH5]
+run:
+  capabilities: {read_tracing: true, parent_links: true}
+calls:
+  - {call_id: c1, command: bash run.sh, t_start: 9.0}
+execs:
+  - {command_id: e1, command: bash run.sh, t_start: 10.0, duration_s: 20.0,
+     reads: [], root_command_id: e1, depth: 0, pgid: 5}
+  - {command_id: e2, command: ./gen.sh, t_start: 11.0, duration_s: 5.0,
+     reads: [], parent_command_id: e1, root_command_id: e1, depth: 1,
+     pgid: 7}
+  - {command_id: e3, command: ./agg.sh, t_start: 11.0, duration_s: 6.0,
+     reads: [], parent_command_id: e1, root_command_id: e1, depth: 1,
+     pgid: 7}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: exec_parent, command_id: e2, parent: e1, root_call_id: c1}
+  - {link_type: exec_parent, command_id: e3, parent: e1, root_call_id: c1}
+  - {link_type: write_event, path: out/r.txt, writer_id: e3}
+oracle_inputs:
+  - {path: out/r.txt}
+declared:
+  invocations:
+    - {invocation_key: gen.sh, text: ./gen.sh}
+    - {invocation_key: agg.sh, text: ./agg.sh}
+expect:
+  bases: {pipes: fallback, nesting: exact}
+  arg_checks:
+    - {command_id: e2, invocation: 0, option: null,
+       in_scope: {chain_under: [], chain_over: []}}

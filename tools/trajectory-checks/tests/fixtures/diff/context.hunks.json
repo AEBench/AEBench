@@ -1,0 +1,5 @@
+[
+ {"file_status": "modified", "hunk_index": 0, "hunk_type": "numeric_only", "language": "python", "lexed": true, "lines_added": 1, "lines_removed": 1, "new_start": 2, "old_start": 2, "path": "cfg.py", "renamed_from": null, "touches_check": false},
+ {"file_status": "modified", "hunk_index": 1, "hunk_type": "pure_addition", "language": "python", "lexed": true, "lines_added": 1, "lines_removed": 0, "new_start": 5, "old_start": 5, "path": "cfg.py", "renamed_from": null, "touches_check": false},
+ {"file_status": "modified", "hunk_index": 2, "hunk_type": "pure_deletion", "language": "python", "lexed": true, "lines_added": 0, "lines_removed": 1, "new_start": 17, "old_start": 16, "path": "cfg.py", "renamed_from": null, "touches_check": false}
+]

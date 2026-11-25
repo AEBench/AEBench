@@ -1,0 +1,34 @@
+id: W61
+title: Under exact timing, an incomplete exec without ended_at falls back
+rules: [LW4, PRE6]
+run:
+  capabilities: {exact_timing: true}
+calls:
+  - {call_id: c1, seq: 0, command: ./long.sh, t_start: 9.5, t_end: 31.0}
+  - {call_id: c2, seq: 1, command: ./gen.sh, t_start: 49.5, t_end: 51.0}
+execs:
+  - {command_id: e1, command: ./long.sh, t_start: 10.0, duration_s: 20.0,
+     complete: false, exit_code: null}
+  - {command_id: e2, command: ./gen.sh, t_start: 50.0, duration_s: 1.0,
+     released_at: 50.05, ended_at: 51.0, snapshot_after_s: 0.1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+  - {link_type: write_event, event_id: w0, path: out/log.txt, writer_id: e1}
+  - {link_type: write_event, event_id: w1, path: out/r.json, writer_id: e2}
+paths:
+  - {path: out/log.txt, events: [w0], final_writer: w0}
+  - {path: out/r.json, events: [w1], final_writer: w1}
+oracle_inputs:
+  - {input_id: i0, path: out/r.json}
+  - {input_id: i1, path: out/log.txt}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+  - {input_id: i1, states_over: [command_written], grading_exists: true,
+     content_source: final_diff}
+expect:
+  bases: {window: exact}
+  last_writers:
+    - {input_id: i0, window_lo: 50.05, window_hi: 51.1}
+    - {input_id: i1, window_lo: 10.0, window_hi: 32.0}

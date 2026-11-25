@@ -1,0 +1,20 @@
+name: P29_log_missing
+description: >
+  The agent log is missing: rows are still written, but every M3.2 key is
+  null (CON6 and S2 cannot be checked), with one warning.
+rules: [PRE2]
+coverage: {inputs.log: false}
+baseline: {files: {out/r.json: {sha256: aa}}}
+final_diff: {}
+oracle_inputs:
+  - {path: out/r.json, at_baseline: true, baseline_sha256: aa}
+expect:
+  input_states:
+    out/r.json: {content_cmp: equal}
+  counts:
+    preconditions.log: fails
+    preconditions.oracle_inputs: holds
+    M3.2.oracle_inputs: null
+    M3.2.by_state_over: null
+  warnings: [precondition log failed]
+  warnings_exact: true

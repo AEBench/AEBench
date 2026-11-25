@@ -1,0 +1,33 @@
+name: G77_writes_out_of_order
+description: >
+  RR5 (critic cycle 2, test gap 7): four exec write events of another
+  certain root, listed out of time order (ends 20, 50, 5, 25). Only those
+  ending in the gap (11.9, 30.1] count: the writes at 20 and 25, so both
+  write counts are 2 and the rerun is changed in both forms.
+rules: [RR5, RR6]
+calls:
+  - {call_id: c0, command: ./serve.sh &, t_start: 1, t_end: 2}
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh 3, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e0, call: c0, t_start: 1.1, t_end: 1.5}
+  - {command_id: w5, command: sync_worker, t_start: 4.0, t_end: 5.0}
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: w20, command: sync_worker, t_start: 19.0, t_end: 20.0}
+  - {command_id: w25, command: sync_worker, t_start: 24.0, t_end: 25.0}
+  - {command_id: e2, call: c2, t_start: 30.1, t_end: 31.9}
+  - {command_id: w50, command: sync_worker, t_start: 49.0, t_end: 50.0}
+links:
+  - {link_type: exec_parent, command_id: w5, parent: e0, root_call_id: c0}
+  - {link_type: exec_parent, command_id: w20, parent: e0, root_call_id: c0}
+  - {link_type: exec_parent, command_id: w25, parent: e0, root_call_id: c0}
+  - {link_type: exec_parent, command_id: w50, parent: e0, root_call_id: c0}
+  - {link_type: write_event, path: out/a.dat, writer_id: w20, writer_under: true}
+  - {link_type: write_event, path: out/b.dat, writer_id: w50, writer_under: true}
+  - {link_type: write_event, path: out/c.dat, writer_id: w5, writer_under: true}
+  - {link_type: write_event, path: out/d.dat, writer_id: w25, writer_under: true}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, writes_between_under: 2, writes_between_over: 2, gap_observed: true, unchanged_under: false, unchanged_over: false}
+    - {key_type: program, prev_call_id: c1, call_id: c2, writes_between_under: 2, writes_between_over: 2}
+  reruns_exact: true

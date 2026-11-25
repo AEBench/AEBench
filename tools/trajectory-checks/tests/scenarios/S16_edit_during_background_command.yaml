@@ -1,0 +1,23 @@
+name: S16_edit_during_background_command
+description: An edit call while a background command runs whose snapshot reports the same file -> edit event kept, the command's event marked possibly_edit_call and out of the under-approximation (§6.6 rule 5; decisions R4, R5).
+calls:
+  - {call_id: cb, t_start: 100, t_end: 100.5, command: "./gen.sh", background: true}
+  - {call_id: ce, tool_type: edit, raw_name: Edit, t_start: 150, t_end: 151, paths: ["/repo/out.txt"]}
+execs:
+  - {command_id: eb, t_start: 100.2, t_end: 200, command: "./gen.sh", snapshot: {modified: [out.txt]}}
+baseline: {files: {out.txt: {}}}
+final_diff: {modified: [out.txt], deleted: [], mode_changed: []}
+expect:
+  links:
+    # Order (t_end, ...): the edit at 150 is w0, the command's report (t_end 200) is w1.
+    - {link_type: write_event, event_id: w0, path: out.txt, writer_type: edit_call, writer_id: ce, t_start: 150.0, t_end: 150.0, root_call_id: ce, root_ambiguous: false, possibly_edit_call: null, writer_under: true}
+    - {link_type: write_event, event_id: w1, path: out.txt, writer_type: exec, writer_id: eb, t_start: 100.2, t_end: 200.0, root_call_id: cb, root_ambiguous: false, possibly_edit_call: ce, writer_under: false, op: modify, scope: tracked, source: snapshot}
+  links_exact: true
+  paths:
+    # R4: the possibly_edit_call event cannot be the final writer while another event exists.
+    # AMBIGUOUS: final_writer_under. §6.6 makes it false when the final writer "overlaps at its end with another event of a different root"; w0 (t 150) lies inside w1 [100.2, 200] of root cb. R5 exempts this pair from rule 6 only. Expected here: true, on the reading that the pair explained by possibly_edit_call is one write, not two owners.
+    - {path: out.txt, events: [w0, w1], final_writer: w0, final_writer_under: true, final_state: changed}
+  coverage:
+    rates.edit_at_risk_rate: 1.0
+    counts.edit_calls_during_exec: 1
+    counts.events_possibly_edit_call: 1

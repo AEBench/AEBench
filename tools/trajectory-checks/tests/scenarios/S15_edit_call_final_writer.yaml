@@ -1,0 +1,24 @@
+name: S15_edit_call_final_writer
+description: A successful edit-tool call between two commands, file in the final diff -> one edit event, final writer = the edit call, final_writer_under true (§6.6 rule 4).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "cat config.yaml"}
+  - {call_id: c2, tool_type: edit, raw_name: Edit, t_start: 110, t_end: 111, paths: ["/repo/config.yaml"]}
+  - {call_id: c3, t_start: 120, t_end: 121, command: "ls"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 100.4, command: "cat config.yaml"}
+  - {command_id: e3, t_start: 120.2, t_end: 120.3, command: "ls"}
+baseline: {files: {config.yaml: {}}}
+final_diff: {modified: [config.yaml], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: write_event, event_id: w0, path: config.yaml, in_workspace: true, op: modify, scope: null, writer_type: edit_call, writer_id: c2, t_start: 110.0, t_end: 110.0, root_call_id: c2, root_ambiguous: false, root_candidates: [], depth_rule: none, possibly_edit_call: null, overlaps_sibling: false, source: edit_call, writer_under: true}
+  links_exact: true
+  paths:
+    - {path: config.yaml, in_workspace: true, tracked: true, events: [w0], final_writer: w0, final_writer_under: true, final_state: changed, unattributed_candidates: []}
+  coverage:
+    rates.edit_at_risk_rate: 0.0
+    rates.final_diff_attributed_rate_under: 1.0
+    rates.final_diff_attributed_rate_over: 1.0
+    counts.edit_calls: 1
+    counts.write_events.edit_call: 1
+    counts.write_events.exec: 0

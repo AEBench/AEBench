@@ -1,0 +1,35 @@
+name: OS23b_fallback_void_commit
+description: >
+  OS22 with equal images and a null run graded on another commit: the
+  fallback is void (every oracle_writes null) and M3.5 fails, but M3.1 is
+  computed (graded source: OI9 is not applied to its rows).
+rules: [OI9, OI10]
+run: {capabilities: {oracle_reads: true}}
+baseline: {files: {data/a.csv: {sha256: aa}, data/b.csv: {sha256: bb}}}
+graded_manifest:
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: a2, mtime_ns: 7}
+  - {check_id: read_b, path: /repo/data/b.csv, exists: true, sha256: b1}
+  - {check_id: stat_c, method: path_exists, path: /tmp/c.log, exists: true}
+null_manifest:
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: a9, exists_before: true, sha256_before: aa, tracked_before: true}
+  - {check_id: read_b, path: /repo/data/b.csv, exists: true, sha256: bb, exists_before: true, sha256_before: bb, tracked_before: true}
+  - {check_id: stat_c, method: path_exists, path: /tmp/c.log, exists: true, exists_before: false}
+final_files:
+  - {path: data/a.csv, status: M, sha256: a1}
+  - {path: data/b.csv, status: M, sha256: b1}
+null_score: {phases: {experiment_runs: success}, commit: c1}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs:
+    - {path: data/a.csv, oracle_writes: null, oracle_writes_basis: null, at_baseline: true}
+    - {path: data/b.csv, oracle_writes: null, oracle_writes_basis: null}
+    - {path: /tmp/c.log, oracle_writes: null, oracle_writes_basis: null, at_baseline: null}
+  oracle_inputs_exact: true
+  block:
+    preconditions.null_commit: fails
+    preconditions.oracle_inputs: holds
+    M3.1.source_type: graded
+    M3.1.inputs_under: 3
+    M3.5.null_score: null
+  warnings: [precondition null_commit failed]
+  warnings_exact: true

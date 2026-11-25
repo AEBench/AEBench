@@ -1,0 +1,38 @@
+[
+  {
+    "actor": "main",
+    "background": null,
+    "call_id": "call_01_wlkhZEgelA6Sn3AS5lZF7235",
+    "command": null,
+    "command_norm": null,
+    "edit_content": false,
+    "family": "deepseek",
+    "log_exit_code": null,
+    "log_ok": true,
+    "paths": [],
+    "raw_name": "job_output",
+    "seq": 0,
+    "t_end": 1793693976.0,
+    "t_precision_s": 1.0,
+    "t_start": 1793693976.0,
+    "tool_type": "wait"
+  },
+  {
+    "actor": "main",
+    "background": null,
+    "call_id": "call_00_rw8m3fMC5us30SiVrZQM4627",
+    "command": null,
+    "command_norm": null,
+    "edit_content": false,
+    "family": "deepseek",
+    "log_exit_code": null,
+    "log_ok": true,
+    "paths": [],
+    "raw_name": "job_kill",
+    "seq": 1,
+    "t_end": 1793694267.0,
+    "t_precision_s": 1.0,
+    "t_start": 1793694267.0,
+    "tool_type": "control"
+  }
+]

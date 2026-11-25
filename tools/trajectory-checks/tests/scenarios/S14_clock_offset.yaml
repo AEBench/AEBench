@@ -1,0 +1,16 @@
+name: S14_clock_offset
+description: As S02 with every record 0.8 s later -> the same matches (§6.4 window).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "make test"}
+  - {call_id: c2, t_start: 101, t_end: 102, command: "make test"}
+  - {call_id: c3, t_start: 102, t_end: 103, command: "make test"}
+execs:
+  - {command_id: e1, t_start: 100.9, t_end: 101.4, command: "make test"}
+  - {command_id: e2, t_start: 101.9, t_end: 102.4, command: "make test"}
+  - {command_id: e3, t_start: 102.9, t_end: 103.4, command: "make test"}
+expect:
+  links:
+    - {link_type: call_exec, call_id: c1, command_id: e1, rule: exact, dt_s: 0.9}
+    - {link_type: call_exec, call_id: c2, command_id: e2, rule: exact, dt_s: 0.9}
+    - {link_type: call_exec, call_id: c3, command_id: e3, rule: exact, dt_s: 0.9}
+  links_exact: true

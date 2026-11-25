@@ -1,0 +1,23 @@
+name: G17_interleaved_classes
+description: >
+  Spec RS16. Interleaved A B A B: class ids by first member, one edge per
+  class and key type, rerun ids with shape edges first and each key type
+  in seq order.
+rules: [RR1, RR5, KEY5, OUTF1]
+calls:
+  - {call_id: c1, command: ./a.sh --n 1, t_start: 10}
+  - {call_id: c2, command: ./b.sh --n 2, t_start: 20}
+  - {call_id: c3, command: ./a.sh --n 1, t_start: 30}
+  - {call_id: c4, command: ./b.sh --n 2, t_start: 40}
+expect:
+  call_structure:
+    c1: {exact_class: x0, shape_class: s0, program_class: p0}
+    c2: {exact_class: x1, shape_class: s1, program_class: p1}
+    c3: {exact_class: x0, shape_class: s0, program_class: p0, shape_index: 2, prev_shape_call: c1}
+    c4: {exact_class: x1, shape_class: s1, program_class: p1, program_index: 2, prev_program_call: c2}
+  reruns:
+    - {rerun_id: r0, key_type: shape, class_id: s0, prev_call_id: c1, call_id: c3, prev_seq: 0, seq: 2, calls_between: 1, act_calls_between: 1}
+    - {rerun_id: r1, key_type: shape, class_id: s1, prev_call_id: c2, call_id: c4, prev_seq: 1, seq: 3, calls_between: 1, act_calls_between: 1}
+    - {rerun_id: r2, key_type: program, class_id: p0, prev_call_id: c1, call_id: c3}
+    - {rerun_id: r3, key_type: program, class_id: p1, prev_call_id: c2, call_id: c4}
+  reruns_exact: true

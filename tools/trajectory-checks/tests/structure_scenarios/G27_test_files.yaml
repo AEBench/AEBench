@@ -1,0 +1,24 @@
+name: G27_test_files
+description: >
+  Spec FS03. Code files under a test folder (any case) or with a test name
+  are test; a data file under tests/ is data, not test.
+rules: [FC4, FC10, CLS1]
+calls:
+  - {call_id: c1, command: ./update.sh, t_start: 10, t_end: 20}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 19.9}
+links:
+  - {link_type: write_event, path: tests/x.py, writer_id: e1}
+  - {link_type: write_event, path: src/x_test.go, writer_id: e1}
+  - {link_type: write_event, path: test_x.py, writer_id: e1}
+  - {link_type: write_event, path: pkg/Tests/helper.py, writer_id: e1}
+  - {link_type: write_event, path: tests/x.csv, writer_id: e1}
+expect:
+  file_classes:
+    tests/x.py: {file_class: test, class_rule: FC4}
+    src/x_test.go: {file_class: test, class_rule: FC4}
+    test_x.py: {file_class: test, class_rule: FC4}
+    pkg/Tests/helper.py: {file_class: test, class_rule: FC4}
+    tests/x.csv: {file_class: data, class_rule: FC10}
+  structure:
+    M4.2.changed_by_class: {test: 4, data: 1}

@@ -1,0 +1,29 @@
+name: F07_c1_fails
+description: C1 under below threshold voids the trace-derived blocks; M1.2, M4.1 and M4.4 stay; per-item rows are still written.
+rules: [PRE1, PRE4]
+calls:
+  - {call_id: c1, command: "touch a.txt", t_start: 10}
+execs:
+  - {command_id: e1, command: "touch a.txt", t_start: 10.1, snapshot: {modified: [a.txt]}}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, path: a.txt, writer_id: e1}
+coverage:
+  rates.call_match_rate_under: 0.5
+expect:
+  call_facts:
+    c1: {outcome: ok, writes_under: {create: 0, delete: 0, mode: 0, modify: 1}}
+  facts:
+    preconditions.C1_under: fails
+    M1.1.command_time_under_s: null
+    M1.3.nonzero_exits_under: null
+    M1.4.depth_max_over: null
+    M5.2.env_names_assigned_over: null
+    M6.1.network_execs_over: null
+    M1.2.root_shapes: 1
+    M4.1.files_changed: 1
+    M4.1.changed_by_final_writer_under: {edit_call: 0, nested_exec: 0, root_exec: 1}
+    M4.4.outside_workspace_writes: 0
+  warnings:
+    - "precondition C1_under >= 0.9 failed (0.50): M1.1, M1.3, M1.4, M5.2, M6.1 null"
+    - "input env_keys missing: M5.2 null"

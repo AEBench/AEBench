@@ -1,0 +1,48 @@
+id: H21
+title: Three hops through a binary built from a source an edit call changed
+rules: [RD4, CH3, FA4, D24]
+run:
+  capabilities: {read_tracing: true}
+calls:
+  - {call_id: c0, tool_type: edit, t_start: 5.0}
+execs:
+  - {command_id: e1, command: make sim, t_start: 10.0, duration_s: 50.0,
+     reads: [/repo/src/sim.c]}
+  - {command_id: e2, command: build/sim --out data/raw.csv, t_start: 100.0,
+     duration_s: 100.0, reads: [/repo/build/sim]}
+  - {command_id: e3, command: python3 agg.py, t_start: 300.0, duration_s: 5.0,
+     reads: [/repo/data/raw.csv, /repo/agg.py]}
+dispositions:
+  e1: {disposition: matched_root, root_under: true}
+  e2: {disposition: matched_root, root_under: true}
+  e3: {disposition: matched_root, root_under: true}
+links:
+  - {link_type: write_event, path: src/sim.c, writer_id: c0}
+  - {link_type: write_event, path: build/sim, op: create, writer_id: e1}
+  - {link_type: write_event, path: data/raw.csv, op: create, writer_id: e2}
+  - {link_type: write_event, path: out/r.json, op: create, writer_id: e3}
+paths:
+  - {path: build/sim, tracked: false}
+  - {path: data/raw.csv, tracked: false}
+  - {path: out/r.json, tracked: false}
+classes: {build/sim: other, src/sim.c: code}
+baseline_files: [agg.py]
+oracle_inputs:
+  - {path: out/r.json}
+declared:
+  invocations:
+    - {invocation_key: "make:sim", text: make sim}
+    - {invocation_key: agg.py, text: python3 agg.py}
+expect:
+  hop_reads:
+    - {input_id: i0, reader_node: w2, read_path: build/sim, version: w1,
+       code_read: true, code_rule: program, must: true, state: derived}
+    - {input_id: i0, reader_node: w1, read_path: src/sim.c, version: w0,
+       code_read: true, code_rule: class, must: true, state: edit_tool,
+       hop: 3}
+  chain_nodes:
+    - {input_id: i0, node_id: w1, code_state: changed, build_node: true}
+    - {input_id: i0, node_id: w0, hop: 4, writer_type: edit_call,
+       writer_id: c0, t_start: 5.0, t_end: 5.0, t_end_over: 5.0}
+  faithfulness:
+    - {input_id: i0, clauses: {built: violated}, faithful: violated}

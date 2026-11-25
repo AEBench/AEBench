@@ -1,0 +1,25 @@
+name: OS06_null_commit_differs
+description: >
+  The null run graded commit c1; the run's commit is c0, known only from
+  run_meta.txt (run_commit). null_commit fails: M3.1 (null-agent source)
+  and M3.5 are void, with one warning.
+rules: [OI9]
+run: {commit: null}
+run_commit: c0
+null_manifest:
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: aa, exists_before: true, sha256_before: aa, tracked_before: true}
+null_score: {phases: {experiment_runs: success}, commit: c1}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs: []
+  oracle_inputs_exact: true
+  absent: [data/a.csv]
+  block:
+    preconditions.null_commit: fails
+    M3.1.source_type: null
+    M3.1.inputs_under: null
+    M3.1.phases_complete: null
+    M3.1.null_commit: null
+    M3.5.null_score: null
+    M3.5.score_gain: null
+  warnings: [precondition null_commit failed]

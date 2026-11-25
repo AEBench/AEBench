@@ -1,0 +1,3 @@
+[
+  {"decl_id": "d0", "invocation_key": "tools/run.py", "options": {"--iters": {"value": "3", "value_type": "int"}}, "source_type": "readme", "source_path": "README.md", "line": 2, "block_id": "README.md:1", "position": 0, "cwd": ".", "text": "python3 tools/run.py --iters 3"}
+]

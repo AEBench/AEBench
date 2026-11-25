@@ -1,0 +1,27 @@
+name: P04_command_wrote_tracked
+description: A tracked input changed by one monitored command; label and root certain.
+rules: [EVD3, EVD5, LWR4, CON5, CON6, CON9]
+calls:
+  - {call_id: c1, command: ./make_results.sh, t_start: 10}
+execs:
+  - {command_id: e1, command: ./make_results.sh, t_start: 10.2, duration_s: 4, snapshot: {modified: [out/r.json]}}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, event_id: w0, path: out/r.json, writer_id: e1, op: modify}
+paths:
+  - {path: out/r.json, events: [w0], final_writer: w0, final_writer_under: true, final_state: changed}
+baseline: {files: {out/r.json: {sha256: aa}}}
+final_diff: {modified: [out/r.json], deleted: [], mode_changed: []}
+oracle_inputs:
+  - {path: out/r.json, phases: [experiment_runs], checks: [c], access_types: [read], at_baseline: true, baseline_sha256: aa, oracle_writes: false}
+expect:
+  input_states:
+    out/r.json: {state_under: command_written, states_under: [command_written], states_over: [command_written], content_cmp: differs, grading_exists: true, final_writer: w0, final_writer_type: exec, final_writer_id: e1, final_writer_root: c1, final_writer_under: true, events: [w0], edit_events: [], writer_roots: [{event_id: w0, writer_type: exec, root_call_id: c1, root_under: true}], unseen_writer_possible: false}
+  counts:
+    M3.2.by_state_under.command_written: 1
+    M3.2.agent_written_under: 1
+    M3.2.command_written_under: 1
+    M3.2.created_by_agent_under: 0
+    M3.2.written_unseen_under: 0
+    M3.2.written_unseen_over: 0
+    M3.2.final_writer_roots_under: [c1]

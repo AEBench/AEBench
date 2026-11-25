@@ -1,0 +1,7 @@
+[
+  {"decl_id": "d0", "invocation_key": "tool.sh", "options": {"--k": {"value": "3", "value_type": "int"}}, "source_type": "readme", "source_path": "README.md", "line": 4, "block_id": "README.md:3", "position": 0, "cwd": ".", "text": "./tool.sh --k 3"},
+  {"decl_id": "d1", "invocation_key": "tool.sh", "options": {"--k": {"value": "4", "value_type": "int"}}, "source_type": "readme", "source_path": "README.md", "line": 4, "block_id": "README.md:3", "position": 1, "cwd": ".", "text": "./tool.sh --k 4"},
+  {"decl_id": "d2", "invocation_key": "plain.sh", "options": {"pos:1": {"value": "1", "value_type": "int"}}, "source_type": "readme", "source_path": "README.md", "line": 12, "block_id": "README.md:11", "position": 0, "cwd": ".", "text": "./plain.sh 1"},
+  {"decl_id": "d3", "invocation_key": "sink.sh", "options": {}, "source_type": "readme", "source_path": "README.md", "line": 12, "block_id": "README.md:11", "position": 1, "cwd": ".", "text": "./sink.sh"},
+  {"decl_id": "d4", "invocation_key": "prompted.sh", "options": {"--long": {"value": "7", "value_type": "int"}}, "source_type": "readme", "source_path": "README.md", "line": 20, "block_id": "README.md:19", "position": 0, "cwd": ".", "text": "./prompted.sh --long 7"}
+]

@@ -1,0 +1,21 @@
+name: G70_gap_unknown_overlapping_calls
+description: >
+  Reading S4 (critic cycle 1, closes a corner D45 left open): the previous
+  call's root exec ends after the next call starts, so the gap (low, high]
+  is empty with low >= high. The gap is unknown, not vacuously observed:
+  gap_observed and unchanged_under are false.
+rules: [RR5, RR6]
+calls:
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh 3, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 50.0}
+  - {command_id: e2, call: c2, t_start: 30.1, t_end: 31.9}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, calls_between: 0, act_calls_between: 0, edit_calls_between: 0, gap_observed: false, unchanged_under: false}
+    - {key_type: program, prev_call_id: c1, call_id: c2, gap_observed: false, unchanged_under: false}
+  reruns_exact: true
+  structure:
+    M2.2.reruns_after_success_under: 1
+    M2.2.reruns_after_success_unchanged_under: 0

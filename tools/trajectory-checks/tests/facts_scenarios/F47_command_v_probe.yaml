@@ -1,0 +1,24 @@
+name: F47_command_v_probe
+description: A probe for download tools with command -v is a lookup, not a download; the download that follows is one (B5, T1).
+rules: [SHP8, NET1, NET3]
+calls:
+  - {call_id: c1, command: "command -v curl; command -v wget", t_start: 10}
+  - {call_id: c2, command: "curl -sO https://h.org/f", t_start: 20}
+execs:
+  - {command_id: e1, command: "command -v curl; command -v wget", t_start: 10.1}
+  - {command_id: e2, command: "curl -sO https://h.org/f", t_start: 20.1, duration_s: 2}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+expect:
+  call_facts:
+    c1: {programs: [], network_types_under: [], network_types_over: []}
+    c2: {programs: [curl], network_types_under: [download]}
+  exec_facts:
+    e1: {network_types: []}
+    e2: {network_types: [download]}
+  facts:
+    M6.1.network_execs_under: 1
+    M6.1.network_execs_over: 1
+    M6.1.network_calls_under: 1
+    M6.1.network_execs_by_type_over: {download: 1, install: 0}

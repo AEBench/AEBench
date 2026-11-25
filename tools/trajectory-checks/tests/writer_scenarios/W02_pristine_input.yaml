@@ -1,0 +1,29 @@
+id: W02
+title: Tracked input with no paths.jsonl row (pristine)
+rules: [LW2, LW9]
+calls:
+  - {call_id: c1, seq: 0, command: ls, t_start: 10.0}
+execs:
+  - {command_id: e1, command: ls, t_start: 10.1, duration_s: 0.1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+oracle_inputs:
+  - {input_id: i0, path: data/input.csv}
+input_states:
+  - {input_id: i0, tracked: true, baseline_sha256: aa, grading_exists: true,
+     content_source: final_diff, state_under: pristine, states_over: [pristine]}
+expect:
+  last_writers:
+    - {input_id: i0, last_writer: null, last_writer_type: none,
+       last_writer_role: null, last_writer_op: null, last_writer_candidates: [],
+       window_lo: null, window_hi: null, later_writer_risk: [],
+       root_candidates: [], root_candidates_complete: true,
+       state_conflict: false, exists_at_read: true, writer_root_certain: null,
+       last_writer_under: true, not_under: []}
+  input_rewrites:
+    - {input_id: i0, members: [], pairs: [], delete_roots: [],
+       rewrites_over: 0, rewrites_under: 0}
+  metrics:
+    M3.3: {inputs_not_written_over: 1, inputs_not_written_under: 1,
+           inputs_written_over: 0, writer_duration_min_s_over: null,
+           writer_calls_over: 0}

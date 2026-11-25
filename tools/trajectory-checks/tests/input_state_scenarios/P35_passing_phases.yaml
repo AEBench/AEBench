@@ -1,0 +1,26 @@
+name: P35_passing_phases
+description: >
+  Two passing phases whose every input has baseline content; §0 says the
+  second phase's inputs are incomplete, so only the first counts under
+  (both count over).
+rules: [PHS1, PHS2, PHS3]
+calls:
+  - {call_id: c1, command: make, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.2}
+baseline: {files: {cfg/a.yaml: {sha256: aa}, data/b.csv: {sha256: bb}}}
+final_diff: {}
+oracle_inputs:
+  - {path: cfg/a.yaml, at_baseline: true, baseline_sha256: aa, phases: [env_setup]}
+  - {path: data/b.csv, at_baseline: true, baseline_sha256: bb, phases: [experiment_runs]}
+oracle_inputs_block:
+  M3.1.phases_complete: {env_setup: true, experiment_runs: false}
+phase_status: {env_setup: success, experiment_runs: success, artifact_build: failure}
+expect:
+  counts:
+    M3.2.passing_phases: 2
+    M3.2.passing_phases_baseline_content_under: 1
+    M3.2.passing_phases_baseline_content_over: 2
+    M3.2.phases.env_setup: {status: success, inputs: 1, inputs_complete: true, baseline_content_all_under: true, baseline_content_all_over: true, agent_written_any_under: false, agent_written_any_over: false}
+    M3.2.phases.experiment_runs: {status: success, inputs: 1, inputs_complete: false, baseline_content_all_under: false, baseline_content_all_over: true, agent_written_any_under: false, agent_written_any_over: false}
+    M3.2.phases.artifact_build: {status: failure, inputs: 0, inputs_complete: null, baseline_content_all_under: null, baseline_content_all_over: null, agent_written_any_under: null, agent_written_any_over: null}

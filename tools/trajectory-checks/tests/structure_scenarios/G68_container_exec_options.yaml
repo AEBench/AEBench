@@ -1,0 +1,33 @@
+name: G68_container_exec_options
+description: >
+  Corpus pattern (critic cycle 1, A1): container exec calls with
+  value-taking options. The value of -w, -e (docker, podman) and -n
+  (kubectl) is not the container, so the program key is the program's,
+  never the container's, the two containers' runs share one program class,
+  and a tail under -w is an observe poll.
+rules: [OBS3, KEY3, RR1]
+calls:
+  - {call_id: c1, command: docker exec -w /work box-a ./main.sh, t_start: 10, t_end: 12}
+  - {call_id: c2, command: docker exec -w /work box-a tail -5 out.log, t_start: 15, t_end: 16}
+  - {call_id: c3, command: docker exec -e MODE=full box-b ./main.sh, t_start: 20, t_end: 22}
+  - {call_id: c4, command: kubectl exec -n lab pod-a -- ./main.sh, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e2, call: c2, t_start: 15.1, t_end: 15.9}
+  - {command_id: e3, call: c3, t_start: 20.1, t_end: 21.9}
+  - {command_id: e4, call: c4, t_start: 30.1, t_end: 31.9}
+expect:
+  call_structure:
+    c1: {call_class: act, class_reason: program, program_key: main.sh, program_class: p0}
+    c2: {call_class: observe, class_reason: observe, program_key: tail out.log}
+    c3: {call_class: act, program_key: main.sh, program_class: p0, prev_program_call: c1}
+    c4: {call_class: act, program_key: main.sh, program_class: p0, prev_program_call: c3}
+  reruns:
+    - {key_type: program, class_id: p0, prev_call_id: c1, call_id: c3, calls_between: 1, act_calls_between: 0}
+    - {key_type: program, class_id: p0, prev_call_id: c3, call_id: c4}
+  reruns_exact: true
+  structure:
+    M2.1.act_calls: 3
+    M2.1.observe_calls: 1
+    M2.1.program_classes_act: 1
+    M2.1.program_repeat_max_act: 3

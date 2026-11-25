@@ -1,0 +1,19 @@
+name: S44_missing_inputs_fail
+description: No final diff and every snapshot skipped; C7_under and C6 fail because their inputs are missing, with warnings (§7.2; decisions D30, R9).
+calls:
+  - {call_id: c1, t_start: 10, t_end: 20, command: "make"}
+execs:
+  - {command_id: e1, t_start: 10.2, t_end: 19, command: "make", snapshot: {status: skipped, scope: null, skip_reason: "workspace exceeds 20000 files"}}
+baseline: {files: {}}
+expect:
+  coverage:
+    rates.listed_path_rate: null
+    rates.final_diff_attributed_rate_under: null
+    preconditions.C1_under: holds
+    preconditions.C2_under: holds
+    preconditions.C6: fails
+    preconditions.C7_under: fails
+    warnings:
+      - "precondition C7_under >= 0.9 failed (null): M4.1, M4.2 null"
+      - "precondition C6 = 1 failed (null): M4.1, M4.2 null"
+      - "snapshot_time_coverage 0.00 < 0.8"

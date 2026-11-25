@@ -1,0 +1,23 @@
+name: S18a_overlap_same_root
+description: Two overlapping shells of one call (make -j style) both report a file -> one root, no root ambiguity; the later shell starts inside the earlier, so it nests under it and the depth rule keeps only its event (§6.5, §6.6 rules 3 and 6).
+# AMBIGUOUS: §2.2 S18(a) expects two events with overlaps_sibling = true. Under §6.5 (innermost = latest-starting containing exec) any exec running when another starts becomes its ancestor, so two overlapping execs of one root are always in one parent chain, and rule 3 then folds the ancestor's report into the descendant. overlaps_sibling = true seems reachable only through reparenting (open point 21). Expected here: what rules 3 and 6 give.
+calls:
+  - {call_id: c1, t_start: 100, t_end: 110, command: "make -j2"}
+execs:
+  - {command_id: e1, t_start: 100.1, t_end: 109.9, command: "make -j2"}
+  - {command_id: s1, t_start: 101, t_end: 105, command: "cc -c a.c"}
+  - {command_id: s3, t_start: 102, t_end: 107, command: "ar rcs lib.a a.o", snapshot: {modified: [lib.a]}}
+  - {command_id: s2, t_start: 106, t_end: 108, command: "ranlib lib.a", snapshot: {modified: [lib.a]}}
+baseline: {files: {lib.a: {}}}
+final_diff: {modified: [lib.a], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: exec_parent, command_id: s1, parent: e1, root_call_id: c1, root_ambiguous: false}
+    - {link_type: exec_parent, command_id: s3, parent: s1, root_call_id: c1, root_ambiguous: false}
+    - {link_type: exec_parent, command_id: s2, parent: s3, root_call_id: c1, root_ambiguous: false}
+    - {link_type: write_event, event_id: w0, path: lib.a, writer_id: s2, depth_rule: parent_may_also_write, overlaps_sibling: false, root_ambiguous: false, writer_under: true}
+  links_exact: true
+  paths:
+    - {path: lib.a, events: [w0], final_writer: w0, final_writer_under: true}
+  coverage:
+    rates.root_ambiguous_rate: 0.0

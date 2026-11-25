@@ -1,0 +1,19 @@
+name: F44_case_poll_loop
+description: A poll loop over /proc with a case statement; no case pattern is a program, so the poll reads as observation (B1).
+rules: [SHP8, NET1]
+calls:
+  - {call_id: c1, command: "for i in $(seq 1 30); do ls /proc/*/comm | while read f; do c=$(cat \"$f\"); case \"$c\" in *dotnet*|*Dafny*|z3*) echo busy;; esac; done; sleep 10; done", t_start: 10}
+  - {call_id: c2, command: "case $x in\n a|b) curl u ;;\n *) ls ;;\nesac", t_start: 400}
+execs:
+  - {command_id: e1, command: "for i in $(seq 1 30); do ls /proc/*/comm | while read f; do c=$(cat \"$f\"); case \"$c\" in *dotnet*|*Dafny*|z3*) echo busy;; esac; done; sleep 10; done", t_start: 10.1, duration_s: 300}
+  - {command_id: e2, command: "case $x in\n a|b) curl u ;;\n *) ls ;;\nesac", t_start: 400.1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: call_exec, call_id: c2, command_id: e2}
+expect:
+  call_facts:
+    c1: {programs: [seq, ls, read, cat, echo, sleep]}
+    c2: {programs: [curl, ls], network_types_under: [download]}
+  exec_facts:
+    e1: {network_types: []}
+    e2: {network_types: [download]}

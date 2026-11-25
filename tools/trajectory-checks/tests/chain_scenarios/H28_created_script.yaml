@@ -1,0 +1,45 @@
+id: H28
+title: The writer runs a script an edit call created in the workspace
+rules: [FA3, FA5]
+run:
+  capabilities: {read_tracing: true}
+calls:
+  - {call_id: c0, tool_type: write, t_start: 5.0}
+execs:
+  - {command_id: e1, command: ./bench.sh, t_start: 10.0, duration_s: 20.0,
+     reads: [/repo/bench.sh]}
+  - {command_id: e2, command: python3 tools/new.py, t_start: 40.0,
+     duration_s: 5.0, reads: [/repo/tools/new.py, /repo/out/raw.csv]}
+dispositions:
+  e1: {disposition: matched_root, root_under: true}
+  e2: {disposition: matched_root, root_under: true}
+links:
+  - {link_type: write_event, path: tools/new.py, op: create, writer_id: c0}
+  - {link_type: write_event, path: out/raw.csv, op: create, writer_id: e1}
+  - {link_type: write_event, path: out/r.json, op: create, writer_id: e2}
+paths:
+  - {path: tools/new.py, tracked: false}
+  - {path: out/raw.csv, tracked: false}
+  - {path: out/r.json, tracked: false}
+baseline_files: [bench.sh]
+oracle_inputs:
+  - {path: out/r.json}
+declared:
+  invocations:
+    - {invocation_key: bench.sh, text: ./bench.sh}
+runs:
+  - expect:
+      chain_nodes:
+        - {input_id: i0, node_id: w2, code_state: changed, must: true}
+        - {input_id: i0, node_id: w1, hop: 2, must: true}
+      faithfulness:
+        - {input_id: i0, witness: "e1:0",
+           clauses: {derived: holds, built: violated, unmodified: violated},
+           faithful: violated}
+  - declared:
+      invocations:
+        - {invocation_key: tools/run.py, text: python3 tools/run.py}
+    expect:
+      faithfulness:
+        - {input_id: i0, witness: null,
+           clauses: {derived: violated}, faithful: violated}

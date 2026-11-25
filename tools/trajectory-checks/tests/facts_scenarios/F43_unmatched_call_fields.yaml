@@ -1,0 +1,32 @@
+name: F43_unmatched_call_fields
+description: An unmatched call has outcome unknown and every nullable exec field null; counts, write tallies and type lists keep their zero values (S5).
+rules: [OUT3, NST1, WRT2, NET2, ENV4, TIM2]
+calls:
+  - {call_id: c1, command: "A=1 make", t_start: 10}
+expect:
+  call_facts:
+    c1:
+      command_id: null
+      match_rule: null
+      match_under: false
+      t_start: null
+      t_end: null
+      duration_s: null
+      complete: null
+      span_under_s: null
+      span_over_s: null
+      exit_code: null
+      signal: null
+      outcome: unknown
+      exit_signal: null
+      depth_max_over: null
+      depth_max_under: null
+      descendants_under: 0
+      descendants_over: 0
+      writes_under: {create: 0, delete: 0, mode: 0, modify: 0}
+      writes_over: {create: 0, delete: 0, mode: 0, modify: 0}
+      network_types_under: []
+      network_types_over: []
+      env_assigned: [A]
+      env_confirmed: null
+      command_shape: A=N make

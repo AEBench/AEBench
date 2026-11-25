@@ -1,0 +1,19 @@
+name: G64_running_at_stop_predecessor
+description: >
+  A call whose root exec was still running at the stop (no exit code, no
+  signal) is rerun: its outcome is unknown, so the rerun counts as after
+  an unknown outcome and in neither the failure nor the success buckets.
+rules: [RR2, REP2]
+calls:
+  - {call_id: c1, command: ./serve.sh, t_start: 10, t_end: 11}
+  - {call_id: c2, command: ./serve.sh, t_start: 500, t_end: 501}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, duration_s: 5, complete: false, exit_code: null, snapshot: {status: absent, scope: null}}
+  - {command_id: e2, call: c2, t_start: 500.1, t_end: 500.9}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, prev_outcome: unknown, prev_match_under: true}
+  structure:
+    M2.2.reruns_after_unknown: 1
+    M2.2.reruns_after_failure_over: 0
+    M2.2.reruns_after_success_over: 0

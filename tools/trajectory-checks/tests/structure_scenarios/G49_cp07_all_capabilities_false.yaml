@@ -1,0 +1,24 @@
+name: G49_cp07_all_capabilities_false
+description: >
+  Spec CP07, false half. The same records with every capability false and
+  every new field null: every basis is fallback.
+rules: [PRE8, RR5, RR6]
+calls:
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 12}
+  - {call_id: c2, command: ./run.sh 3, t_start: 20, t_end: 22}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e2, call: c2, t_start: 20.1, t_end: 21.9}
+links:
+  - {link_type: write_event, path: src/a.py, writer_id: e1}
+expect:
+  file_classes:
+    src/a.py: {file_class: code, binary_content: null}
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c2, untracked_writes_between: null, unchanged_under: true}
+  structure:
+    capabilities: {parent_links: false, start_events: false, exact_timing: false, content_hashes: false, untracked_visible: false, read_tracing: false, final_content: false, oracle_reads: false, egress_log: false, stdio: false}
+    bases: {writes_between: fallback, gap: fallback, unchanged_under: fallback}
+    preconditions.final_content: fails
+  warnings: [precondition untracked_visible, baseline_by_class, precondition final_content]
+  warnings_exact: true

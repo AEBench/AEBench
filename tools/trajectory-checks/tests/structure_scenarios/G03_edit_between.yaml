@@ -1,0 +1,28 @@
+name: G03_edit_between
+description: >
+  Spec RS03. A rerun after success with a successful edit-tool write in
+  between is changed in both versions; the edit call is not a shell call.
+rules: [RR5, RR6, REP2, CLS1]
+calls:
+  - {call_id: c1, command: ./run.sh 3, t_start: 10, t_end: 12}
+  - {call_id: c2, tool_type: edit, paths: [/repo/src/a.py], t_start: 15}
+  - {call_id: c3, command: ./run.sh 3, t_start: 20, t_end: 22}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+  - {command_id: e3, call: c3, t_start: 20.1, t_end: 21.9}
+links:
+  - {link_type: write_event, path: src/a.py, writer_id: c2}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c3, prev_seq: 0, seq: 2, calls_between: 0, act_calls_between: 0, edit_calls_between: 1, writes_between_over: 0, unchanged_under: false, unchanged_over: false}
+  file_classes:
+    src/a.py: {file_class: code, class_rule: FC5, extension: .py}
+  structure:
+    M2.2.reruns_after_success_under: 1
+    M2.2.reruns_after_success_unchanged_under: 0
+    M2.2.reruns_after_success_unchanged_over: 0
+    M4.2.changed_by_class: {code: 1}
+    M4.2.changed_by_class_and_role_under: {code: {edit_call: 1}}
+    M4.2.changed_by_class_and_role_over: {code: {edit_call: 1}}
+    M4.2.shell_written_by_class_under: {}
+    M4.2.shell_written_by_class_over: {}

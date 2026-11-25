@@ -1,0 +1,23 @@
+name: P06_edit_then_command
+description: >
+  An edit, then a command rewrites the file; layer 1's final writer is the
+  command: command_written, with the edit kept in edit_events.
+rules: [EVD5, CON6, CON9, CNT5]
+calls:
+  - {call_id: c1, tool_type: edit, paths: [/repo/cfg/p.yaml], t_start: 10}
+  - {call_id: c2, command: ./gen.sh, t_start: 20}
+execs:
+  - {command_id: e2, call: c2, t_start: 20.1, snapshot: {modified: [cfg/p.yaml]}}
+links:
+  - {link_type: write_event, path: cfg/p.yaml, writer_id: c1}
+  - {link_type: write_event, path: cfg/p.yaml, writer_id: e2}
+baseline: {files: {cfg/p.yaml: {sha256: aa}}}
+final_diff: {modified: [cfg/p.yaml]}
+oracle_inputs:
+  - {path: cfg/p.yaml, at_baseline: true, baseline_sha256: aa}
+expect:
+  input_states:
+    cfg/p.yaml: {state_under: command_written, states_over: [command_written], events: [w0, w1], edit_events: [w0], final_writer: w1, final_writer_root: c2}
+  counts:
+    M3.2.ever_edit_written: 1
+    M3.2.edit_written_over: 0

@@ -1,0 +1,15 @@
+name: S21_truncated_snapshot
+description: A truncated snapshot lists 3 of 250 created paths -> paths_unlisted = 247, listed_path_rate 0.012, no path invented (§6.6, §7.1 C6).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 130, command: "tar xf deps.tar"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 129, command: "tar xf deps.tar", snapshot: {status: truncated, scope: workspace, created: [deps/a, deps/b, deps/c], totals: {created: 250, modified: 0, deleted: 0}}}
+expect:
+  links:
+    - {link_type: write_event, path: deps/a, op: create, writer_id: e1, scope: workspace}
+    - {link_type: write_event, path: deps/b, op: create, writer_id: e1}
+    - {link_type: write_event, path: deps/c, op: create, writer_id: e1}
+  links_exact: true
+  coverage:
+    counts.paths_unlisted: 247
+    rates.listed_path_rate: 0.012

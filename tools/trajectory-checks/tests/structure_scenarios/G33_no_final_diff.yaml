@@ -1,0 +1,33 @@
+name: G33_no_final_diff
+description: >
+  Spec FS08. No final diff (inputs.final_diff false), so final_diff fails
+  and layer 2's C6 fails too: the keys counted over the final diff are
+  null with one warning for final_diff; C6, C7_under and final_content add
+  none, since their keys are already void.
+rules: [PRE3, PRE4]
+calls:
+  - {call_id: c1, command: ./fix.sh 3, t_start: 10, t_end: 12}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11.9}
+links:
+  - {link_type: write_event, path: src/a.py, writer_id: e1}
+paths:
+  - {path: src/a.py, final_state: null}
+coverage:
+  inputs.final_diff: false
+facts:
+  preconditions.C6: fails
+expect:
+  file_classes:
+    src/a.py: {file_class: code, class_rule: FC5}
+  structure:
+    preconditions.final_diff: fails
+    preconditions.C6: fails
+    M4.2.changed_by_class: null
+    M4.2.mode_only_by_class: null
+    M4.2.reverted_by_class: null
+    M4.2.changed_by_class_and_role_under: null
+    M4.2.shell_written_by_class_over: null
+    M4.2.binary_changed_by_class: null
+  warnings: [mode_only_by_class, precondition untracked_visible, baseline_by_class]
+  warnings_exact: true

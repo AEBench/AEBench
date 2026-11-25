@@ -1,0 +1,20 @@
+name: G26_extensionless_no_baseline
+description: >
+  Spec FS02, third case, and FS10's second half. Without a baseline the
+  execute bit is unknown, so an extensionless file is other with no mode
+  source, and baseline_by_class is null with one warning.
+rules: [FC11, PRE3, CLS4]
+calls:
+  - {call_id: c1, command: ./update.sh, t_start: 10, t_end: 20}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 19.9}
+links:
+  - {link_type: write_event, path: bin/run_all, writer_id: e1}
+expect:
+  file_classes:
+    bin/run_all: {file_class: other, class_rule: FC11, extension: "", mode_source: null}
+  structure:
+    preconditions.tracked_files: fails
+    M4.2.baseline_by_class: null
+    M4.2.changed_by_class: {other: 1}
+  warnings: [baseline_by_class]

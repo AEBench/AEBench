@@ -1,0 +1,28 @@
+name: F32_depth_exact
+description: With parent_links, three overlapping sibling shells have the broker's depth 1, although J2's containment chain nests them.
+rules: [NST2, NST3, CAP1]
+run: {capabilities: {parent_links: true}}
+calls:
+  - {call_id: c1, command: "make -j3", t_start: 0}
+execs:
+  - {command_id: e1, command: "make -j3", t_start: 0.1, duration_s: 10, depth: 0}
+  - {command_id: e2, command: "sh -c a", t_start: 1, duration_s: 8, depth: 1}
+  - {command_id: e3, command: "sh -c b", t_start: 2, duration_s: 6, depth: 1}
+  - {command_id: e4, command: "sh -c c", t_start: 3, duration_s: 4, depth: 1}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: exec_parent, command_id: e2, parent: e1, root_call_id: c1}
+  - {link_type: exec_parent, command_id: e3, parent: e2, root_call_id: c1}
+  - {link_type: exec_parent, command_id: e4, parent: e3, root_call_id: c1}
+expect:
+  call_facts:
+    c1: {descendants_over: 3, depth_max_over: 1, depth_max_under: 1}
+  exec_facts:
+    e1: {depth: 0}
+    e2: {depth: 1}
+    e3: {depth: 1}
+    e4: {depth: 1}
+  facts:
+    bases.depth: exact
+    M1.4.depth_max_under: 1
+    M1.4.depth_max_over: 1

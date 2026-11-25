@@ -1,0 +1,44 @@
+id: H44
+title: Four runs of one artifact; one has no M1.5
+rules: [AGG1, AGG4]
+oracle_inputs:
+  - {path: out/r.json}
+declared:
+  invocations:
+    - {invocation_key: tool.sh, text: ./tool.sh}
+dispositions: {e1: {disposition: matched_root, root_under: true}}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+runs:
+  - run: {run_key: art__claude__1}
+    execs:
+      - {command_id: e1, command: ./tool.sh, t_start: 0.0, duration_s: 10.0}
+    expect:
+      metrics:
+        M1.5: {chain_time_over_s: 10.0}
+  - run: {run_key: art__claude__2}
+    execs:
+      - {command_id: e1, command: ./tool.sh, t_start: 0.0, duration_s: 100.0}
+    expect:
+      metrics:
+        M1.5: {chain_time_over_s: 100.0}
+  - run: {run_key: art__claude__3}
+    execs:
+      - {command_id: e1, command: ./tool.sh, t_start: 0.0,
+         duration_s: 1000.0}
+    expect:
+      metrics:
+        M1.5: {chain_time_over_s: 1000.0}
+  - run: {run_key: art__claude__4}
+    coverage:
+      rates.call_match_rate_under: 0.5
+    execs:
+      - {command_id: e1, command: ./tool.sh, t_start: 0.0, duration_s: 50.0}
+    expect:
+      metrics_null: [M1.5]
+expect:
+  summary:
+    - {group_type: artifact_family, group: art__claude, runs: 4,
+       M1.5.chain_time_over_s_n: 3, M1.5.chain_time_over_s_median: 100.0,
+       M1.5.chain_time_over_s_p90: 1000.0, M1.5.chain_time_under_s_n: 3}
+    - {group_type: all, group: all, runs: 4, M1.5.chain_time_over_s_n: 3}

@@ -1,0 +1,22 @@
+id: H12
+title: Too few calls matched; C1_under fails
+rules: [PRE1, PRE2]
+coverage:
+  rates.call_match_rate_under: 0.85
+execs:
+  - {command_id: e1, command: "./tool.sh --k 5", t_start: 10.0, duration_s: 5.0}
+dispositions: {e1: {disposition: matched_root, root_under: true}}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e1}
+oracle_inputs:
+  - {path: out/r.json}
+declared:
+  invocations:
+    - {invocation_key: tool.sh, text: "./tool.sh --k 3",
+       options: {--k: {value: "3", value_type: int}}}
+expect:
+  preconditions: {C1_under: fails}
+  metrics_null: [M5.1, M1.5]
+  row_counts: {arg_checks: 1, faithfulness: 1}
+  arg_checks:
+    - {command_id: e1, invocation: 0, option: --k, comparison: above}

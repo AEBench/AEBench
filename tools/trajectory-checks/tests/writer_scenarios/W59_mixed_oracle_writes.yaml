@@ -1,0 +1,40 @@
+id: W59
+title: One input with an exact oracle_writes, one with a fallback value
+rules: [PRE6, LW12]
+run:
+  capabilities: {oracle_reads: true, final_content: true}
+  final_diff_content: monitor/final.diff
+calls:
+  - {call_id: c1, seq: 0, command: ./gen.sh, t_start: 9.5, t_end: 11.0}
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 10.0, duration_s: 1.0}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, event_id: w0, path: out/a.json, writer_id: e1}
+  - {link_type: write_event, event_id: w1, path: out/b.json, op: create,
+     writer_id: e1}
+paths:
+  - {path: out/a.json, events: [w0], final_writer: w0}
+  - {path: out/b.json, tracked: false, events: [w1], final_writer: w1,
+     final_state: untracked}
+final_diff: ""
+final_files:
+  - {path: out/a.json, status: M, sha256: aa}
+oracle_inputs:
+  - {input_id: i0, path: out/a.json, source_type: graded, grading_exists: true,
+     grading_sha256: aa, oracle_writes: false, oracle_writes_basis: exact}
+  - {input_id: i1, path: out/b.json, source_type: graded, grading_exists: true,
+     grading_sha256: bb, oracle_writes: true, oracle_writes_basis: fallback}
+input_states:
+  - {input_id: i0, states_over: [command_written], grading_exists: true,
+     content_source: grading_read, grading_sha256: aa}
+  - {input_id: i1, states_over: [command_written, oracle_written],
+     grading_exists: true, content_source: grading_read, grading_sha256: bb}
+expect:
+  bases: {oracle_writes: mixed, read_version: exact}
+  last_writers:
+    - {input_id: i0, oracle_writes: false, oracle_writes_basis: exact,
+       read_version: agent_final, last_writer_under: true, not_under: []}
+    - {input_id: i1, oracle_writes: true, oracle_writes_basis: fallback,
+       read_version: unverified, last_writer_under: false,
+       not_under: [unverified_oracle_written]}

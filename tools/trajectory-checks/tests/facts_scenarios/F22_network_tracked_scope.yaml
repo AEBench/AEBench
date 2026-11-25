@@ -1,0 +1,24 @@
+name: F22_network_tracked_scope
+description: In tracked scope created files are invisible; the created-file counts are null, per-path flags are still written.
+rules: [NET4, PRE5, WRT5]
+calls:
+  - {call_id: c1, command: "curl -o a.bin u", t_start: 10}
+execs:
+  - {command_id: e1, command: "curl -o a.bin u", t_start: 10.1, duration_s: 2, snapshot: {created: [a.bin]}}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: write_event, path: a.bin, writer_id: e1, op: create}
+paths:
+  - {path: a.bin, tracked: false, final_state: untracked}
+expect:
+  path_facts:
+    a.bin: {network_created_under: true, network_created_over: true}
+  facts:
+    preconditions.untracked_visible: fails
+    M6.1.network_files_created_under: null
+    M6.1.network_files_created_over: null
+    M4.1.created_by_final_writer_under: null
+    M4.1.created_by_final_writer_over: null
+    M6.1.network_execs_over: 1
+  warnings:
+    - "precondition untracked_visible failed: M4.1 created_by_final_writer_*, M6.1 network_files_created_* null"

@@ -1,0 +1,17 @@
+name: S43_vacuous_c7
+description: The final diff is present and lists no file, while a command created an untracked file; C7_under holds vacuously, C6 holds (§7.2; decision D30).
+calls:
+  - {call_id: c1, t_start: 10, t_end: 11, command: "echo hi > notes.txt"}
+execs:
+  - {command_id: e1, t_start: 10.2, t_end: 10.3, command: "echo hi > notes.txt", snapshot: {scope: workspace, created: [notes.txt]}}
+baseline: {files: {}}
+final_diff: {modified: [], deleted: [], mode_changed: []}
+expect:
+  paths:
+    - {path: notes.txt, final_state: untracked, final_writer: w0}
+  coverage:
+    rates.final_diff_attributed_rate_under: null
+    rates.listed_path_rate: 1.0
+    preconditions.C6: holds
+    preconditions.C7_under: vacuous
+    warnings: []

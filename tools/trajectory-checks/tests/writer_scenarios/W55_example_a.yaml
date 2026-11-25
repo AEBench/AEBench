@@ -1,0 +1,74 @@
+id: W55
+title: Example A of the spec, an output regenerated four times
+description: >
+  The agent deletes the graded file, runs the experiment, which fails
+  after writing a partial file, reruns it unchanged, reruns it with a
+  smaller size, writes a new script outside the workspace with the edit
+  tool, and regenerates the graded file with that script.
+rules: [LW1, LW2, LW3, LW4, LW5, LW6, LW13, LW14, LW16, RW1, RW2, RW3, RW4,
+        RW5, RW6]
+run: {t_start: 0.0, t_end: 1000.0, workspace_root: /repo, trace_ok: true}
+calls:
+  - {call_id: c0, seq: 1, tool_type: shell, command: rm -f out/summary.csv, t_start: 50.0, t_end: 51.0}
+  - {call_id: c1, seq: 3, tool_type: shell, command: ./run_exp.sh --size 1000, t_start: 100.0, t_end: 160.0}
+  - {call_id: c2, seq: 5, tool_type: shell, command: ./run_exp.sh --size 1000, t_start: 200.0, t_end: 300.0}
+  - {call_id: c3, seq: 7, tool_type: shell, command: ./run_exp.sh --size 100, t_start: 400.0, t_end: 420.0}
+  - {call_id: c4, seq: 8, tool_type: write, paths: [/tmp/subset.py], t_start: 430.0, t_end: 430.0}
+  - {call_id: c5, seq: 9, tool_type: shell, command: python3 /tmp/subset.py --out out/summary.csv, t_start: 440.0, t_end: 441.0}
+execs:
+  - {command_id: e0, seq: 0, command: rm -f out/summary.csv, t_start: 50.2, duration_s: 0.01}
+  - {command_id: e1, seq: 1, command: ./run_exp.sh --size 1000, t_start: 100.2, duration_s: 59.5, exit_code: 1}
+  - {command_id: e2, seq: 2, command: ./run_exp.sh --size 1000, t_start: 200.3, duration_s: 99.0}
+  - {command_id: e3, seq: 3, command: ./run_exp.sh --size 100, t_start: 400.2, duration_s: 19.6}
+  - {command_id: e5, seq: 4, command: python3 /tmp/subset.py --out out/summary.csv, t_start: 440.1, duration_s: 0.4}
+links:
+  - {link_type: call_exec, call_id: c0, command_id: e0, rule: exact}
+  - {link_type: call_exec, call_id: c1, command_id: e1, rule: exact}
+  - {link_type: call_exec, call_id: c2, command_id: e2, rule: exact}
+  - {link_type: call_exec, call_id: c3, command_id: e3, rule: exact}
+  - {link_type: call_exec, call_id: c5, command_id: e5, rule: exact}
+  - {link_type: write_event, event_id: w0, path: out/summary.csv, op: delete, writer_type: exec, writer_id: e0, t_start: 50.2, t_end: 50.21, root_call_id: c0}
+  - {link_type: write_event, event_id: w1, path: out/summary.csv, op: create, writer_type: exec, writer_id: e1, t_start: 100.2, t_end: 159.7, root_call_id: c1}
+  - {link_type: write_event, event_id: w2, path: out/summary.csv, op: modify, writer_type: exec, writer_id: e2, t_start: 200.3, t_end: 299.3, root_call_id: c2}
+  - {link_type: write_event, event_id: w3, path: out/summary.csv, op: modify, writer_type: exec, writer_id: e3, t_start: 400.2, t_end: 419.8, root_call_id: c3}
+  - {link_type: write_event, event_id: w4, path: /tmp/subset.py, in_workspace: false, op: create, scope: null, source: edit_call, writer_type: edit_call, writer_id: c4, t_start: 430.0, t_end: 430.0, root_call_id: c4}
+  - {link_type: write_event, event_id: w5, path: out/summary.csv, op: modify, writer_type: exec, writer_id: e5, t_start: 440.1, t_end: 440.5, root_call_id: c5}
+paths:
+  - {path: out/summary.csv, tracked: true, events: [w0, w1, w2, w3, w5], final_writer: w5, final_writer_under: true, final_state: changed}
+  - {path: /tmp/subset.py, in_workspace: false, tracked: false, events: [w4], final_writer: w4, final_writer_under: true, final_state: untracked}
+call_facts:
+  - {call_id: c1, command_id: e1, outcome: failed, command_shape: run_exp.sh --size N, numeric_args: ["1000"], arg_count: 3, duration_s: 59.5, span_under_s: 59.5, span_over_s: 59.5}
+  - {call_id: c2, command_id: e2, outcome: ok, command_shape: run_exp.sh --size N, numeric_args: ["1000"], arg_count: 3, duration_s: 99.0, span_under_s: 99.0, span_over_s: 99.0}
+  - {call_id: c3, command_id: e3, outcome: ok, command_shape: run_exp.sh --size N, numeric_args: ["100"], arg_count: 3, duration_s: 19.6, span_under_s: 19.6, span_over_s: 19.6}
+  - {call_id: c5, command_id: e5, outcome: ok, command_shape: python3 subset.py --out summary.csv, numeric_args: [], arg_count: 4, duration_s: 0.4, span_under_s: 0.4, span_over_s: 0.4}
+exec_facts:
+  - {command_id: e5, depth: 0, outcome: ok, root_call_id: c5}
+oracle_inputs:
+  - {input_id: i0, path: out/summary.csv, pattern: null, match_type: literal, in_under: true,
+     in_workspace: true, input_scope: workspace, listed_by: [], source_type: null_agent}
+call_structure:
+  - {call_id: c0, program_key: rm}
+  - {call_id: c1, program_key: run_exp.sh}
+  - {call_id: c2, program_key: run_exp.sh}
+  - {call_id: c3, program_key: run_exp.sh}
+  - {call_id: c5, program_key: subset.py}
+input_states:
+  - {input_id: i0, path: out/summary.csv, input_type: file, tracked: true,
+     state_under: command_written, states_over: [command_written],
+     grading_exists: true, content_source: final_diff,
+     final_writer: w5, final_writer_type: exec, final_writer_id: e5, final_writer_root: c5,
+     final_writer_under: true, observable: true, blind_execs: [], unmonitored_calls: [],
+     detached_execs: [], unseen_writer_possible: false, model_conflict: false,
+     late_write: false}
+expect:
+  last_writers:
+    - {"differs_causes": null, "exists_at_read": true, "exists_source": "final_diff", "hash_confirms_writer": null, "in_under": true, "in_workspace": true, "input_id": "i0", "input_type": "file", "last_writer": "w5", "last_writer_candidates": ["w5"], "last_writer_op": "modify", "last_writer_role": "root_exec", "last_writer_type": "exec", "last_writer_under": true, "later_writer_risk": [], "member_input_ids": [], "mtime_candidates": null, "not_under": [], "oracle_writes": null, "oracle_writes_basis": null, "path": "out/summary.csv", "pattern": null, "read_version": "unverified", "root_candidates": ["c5"], "root_candidates_complete": true, "root_duration_s": 0.4, "root_span_over_s": 0.4, "root_span_under_s": 0.4, "state_conflict": false, "state_under": "command_written", "unattributed_candidates": [], "visible": true, "window_hi": 442.5, "window_lo": 440.1, "writer_call_id": "c5", "writer_call_seq": 9, "writer_command_id": "e5", "writer_depth": 0, "writer_duration_s": 0.4, "writer_named_changed": ["/tmp/subset.py"], "writer_named_written": ["/tmp/subset.py"], "writer_outcome": "ok", "writer_root_certain": true}
+  input_rewrites:
+    - {"delete_roots": ["c0"], "input_id": "i0", "members": [{"arg_count": 3, "call_id": "c1", "command_shape": "run_exp.sh --size N", "events": ["w1"], "first_lo": 100.2, "last_hi": 161.7, "member_type": "shell", "numeric_args": ["1000"], "outcome": "failed", "rerun_key": "run_exp.sh", "seq": 3, "under": true}, {"arg_count": 3, "call_id": "c2", "command_shape": "run_exp.sh --size N", "events": ["w2"], "first_lo": 200.3, "last_hi": 301.3, "member_type": "shell", "numeric_args": ["1000"], "outcome": "ok", "rerun_key": "run_exp.sh", "seq": 5, "under": true}, {"arg_count": 3, "call_id": "c3", "command_shape": "run_exp.sh --size N", "events": ["w3"], "first_lo": 400.2, "last_hi": 421.8, "member_type": "shell", "numeric_args": ["100"], "outcome": "ok", "rerun_key": "run_exp.sh", "seq": 7, "under": true}, {"arg_count": 4, "call_id": "c5", "command_shape": "python3 subset.py --out summary.csv", "events": ["w5"], "first_lo": 440.1, "last_hi": 442.5, "member_type": "shell", "numeric_args": [], "outcome": "ok", "rerun_key": "subset.py", "seq": 9, "under": true}], "pairs": [{"after": "failed", "args_changed": false, "call_id": "c2", "prev_call_id": "c1", "same_key": true, "shape_changed": false, "under": true, "writer_switched": false}, {"after": "ok", "args_changed": true, "call_id": "c3", "prev_call_id": "c2", "same_key": true, "shape_changed": false, "under": true, "writer_switched": false}, {"after": "ok", "args_changed": false, "call_id": "c5", "prev_call_id": "c3", "same_key": false, "shape_changed": true, "under": true, "writer_switched": true}], "path": "out/summary.csv", "rewrites_over": 3, "rewrites_under": 3, "visible": true}
+  metrics:
+    M2.4: {"args_changed_over": 1, "args_changed_under": 1, "inputs_rewritten_over": 1, "inputs_rewritten_under": 1, "inputs_with_delete_roots": 1, "rewrites_after_failure_over": 1, "rewrites_after_failure_under": 1, "rewrites_after_ok_over": 2, "rewrites_after_ok_under": 2, "rewrites_after_other_over": 0, "rewrites_after_other_under": 0, "rewrites_max_over": 3, "rewrites_max_under": 3, "rewrites_total_over": 3, "rewrites_total_under": 3, "writer_switches_over": 1, "writer_switches_under": 1}
+    M3.3: {inputs: 1, inputs_written_over: 1, inputs_written_under: 1,
+           writer_calls_over: 1, writer_duration_max_s_over: 0.4,
+           root_span_max_s_under: 0.4, inputs_writer_code_changed_over: 1,
+           inputs_writer_code_changed_under: 1,
+           inputs_root_candidates_incomplete: 0}

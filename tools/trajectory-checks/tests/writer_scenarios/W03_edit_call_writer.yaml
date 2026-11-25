@@ -1,0 +1,32 @@
+id: W03
+title: Input written only by an edit call
+rules: [LW4, LW13]
+calls:
+  - {call_id: c1, seq: 0, tool_type: edit, paths: [out/notes.txt], t_start: 20.0}
+links:
+  - {link_type: write_event, event_id: w0, path: out/notes.txt, op: modify,
+     writer_id: c1}
+paths:
+  - {path: out/notes.txt, events: [w0], final_writer: w0}
+oracle_inputs:
+  - {input_id: i0, path: out/notes.txt}
+input_states:
+  - {input_id: i0, state_under: edit_written, states_over: [edit_written],
+     grading_exists: true, content_source: final_diff}
+expect:
+  last_writers:
+    - {input_id: i0, last_writer: w0, last_writer_type: edit_call,
+       last_writer_role: edit_call, writer_call_id: c1, writer_call_seq: 0,
+       writer_command_id: null, writer_duration_s: null, writer_depth: null,
+       writer_outcome: null, root_duration_s: null, root_span_under_s: null,
+       root_span_over_s: null, window_lo: 19.0, window_hi: 21.0,
+       writer_root_certain: true, writer_named_written: [],
+       writer_named_changed: [], root_candidates: [c1],
+       last_writer_under: true}
+  metrics:
+    M3.3:
+      last_writer_by_role_over: {edit_call: 1, nested_exec: 0, root_exec: 0}
+      last_writer_by_role_under: {edit_call: 1, nested_exec: 0, root_exec: 0}
+      writer_duration_min_s_over: null
+      writer_duration_max_s_over: null
+      writer_calls_under: 1

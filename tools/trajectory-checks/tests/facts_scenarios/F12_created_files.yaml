@@ -1,0 +1,30 @@
+name: F12_created_files
+description: Created untracked files in workspace scope, by final-writer role, under and over.
+rules: [WRT5, WRT2]
+calls:
+  - {call_id: c1, command: ./make_data.sh, t_start: 10}
+execs:
+  - {command_id: e1, command: ./make_data.sh, t_start: 10.1, duration_s: 5, snapshot: {scope: workspace, created: [new.csv]}}
+  - {command_id: e2, command: "dd of=tmp.bin", t_start: 11, duration_s: 1, snapshot: {scope: workspace, created: [tmp.bin]}}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: exec_parent, command_id: e2, parent: e1, root_call_id: c1}
+  - {link_type: write_event, path: new.csv, writer_id: e1, op: create, scope: workspace}
+  - {link_type: write_event, path: tmp.bin, writer_id: e2, op: create, scope: workspace, writer_under: false}
+paths:
+  - {path: new.csv, tracked: false, final_state: untracked}
+  - {path: tmp.bin, tracked: false, final_state: untracked, final_writer_under: false}
+coverage:
+  rates.untracked_visible: true
+  rates.snapshot_scope: workspace
+expect:
+  call_facts:
+    c1: {writes_under: {create: 1, delete: 0, mode: 0, modify: 0}, writes_over: {create: 2, delete: 0, mode: 0, modify: 0}}
+  path_facts:
+    new.csv: {created: true, final_writer_role: root_exec}
+    tmp.bin: {created: true, final_writer_role: nested_exec}
+  facts:
+    preconditions.untracked_visible: holds
+    M4.1.files_changed: 0
+    M4.1.created_by_final_writer_under: {edit_call: 0, nested_exec: 0, root_exec: 1}
+    M4.1.created_by_final_writer_over: {edit_call: 0, nested_exec: 1, root_exec: 1}

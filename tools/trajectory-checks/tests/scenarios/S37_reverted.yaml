@@ -1,0 +1,17 @@
+name: S37_reverted
+description: A tracked file modified, then restored to identical content -> final_state reverted, counted by C8 (§6.6 per-path rule 3).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "sed -i s/x/y/ a.txt"}
+  - {call_id: c2, t_start: 200, t_end: 201, command: "git checkout a.txt"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 100.4, command: "sed -i s/x/y/ a.txt", snapshot: {modified: [a.txt]}}
+  - {command_id: e2, t_start: 200.2, t_end: 200.4, command: "git checkout a.txt", snapshot: {modified: [a.txt]}}
+baseline: {files: {a.txt: {}}}
+final_diff: {modified: [], deleted: [], mode_changed: []}
+expect:
+  paths:
+    - {path: a.txt, tracked: true, events: [w0, w1], final_writer: w1, final_state: reverted}
+  coverage:
+    rates.reverted_changes: 1
+    counts.final_diff_files: 0
+    rates.final_diff_attributed_rate_under: null

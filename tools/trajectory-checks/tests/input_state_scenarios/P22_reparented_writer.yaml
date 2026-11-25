@@ -1,0 +1,26 @@
+name: P22_reparented_writer
+description: >
+  A nested exec writes the input; its J2 link is reparenting, so its root
+  is not certain and the exec is detached (fallback form). The detached
+  worker may write after the final diff, so M_r does not read the final
+  diff (D73): only CON5 (an event) narrows states_over.
+rules: [LWR4, EVD8, CNT4]
+calls:
+  - {call_id: c1, command: ./launch.sh, t_start: 10}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 11}
+  - {command_id: e2, command: worker, t_start: 50, t_end: 51, snapshot: {modified: [out/r.json]}}
+links:
+  - {link_type: exec_parent, command_id: e2, parent: null, root_call_id: c1, rule: reparenting}
+  - {link_type: write_event, path: out/r.json, writer_id: e2, writer_under: false}
+baseline: {files: {out/r.json: {sha256: aa}}}
+final_diff: {modified: [out/r.json]}
+oracle_inputs:
+  - {path: out/r.json, at_baseline: true, baseline_sha256: aa}
+expect:
+  input_states:
+    out/r.json: {state_under: command_written, states_over: [rewritten_identical, command_written, deleted], final_writer: w0, final_writer_id: e2, final_writer_root: c1, final_writer_under: false, writer_roots: [{event_id: w0, writer_type: exec, root_call_id: c1, root_under: false}], detached_execs: [e2], unseen_writer_possible: true}
+  counts:
+    M3.2.final_writer_roots_under: []
+    M3.2.written_unseen_under: 0
+    M3.2.written_unseen_over: 1

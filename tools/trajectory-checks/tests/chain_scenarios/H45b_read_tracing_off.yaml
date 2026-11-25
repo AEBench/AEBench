@@ -1,0 +1,23 @@
+id: H45b
+title: Without read tracing the chains are the read-free ones
+rules: [RD1, CH7]
+execs:
+  - {command_id: e1, command: ./gen.sh, t_start: 10.0, duration_s: 5.0}
+  - {command_id: e2, command: python3 agg.py, t_start: 20.0, duration_s: 5.0}
+dispositions:
+  e1: {disposition: matched_root, root_under: true}
+  e2: {disposition: matched_root, root_under: true}
+links:
+  - {link_type: write_event, path: data/x.csv, writer_id: e1}
+  - {link_type: write_event, path: out/r.json, writer_id: e2}
+oracle_inputs:
+  - {path: out/r.json}
+expect:
+  bases: {chain: fallback}
+  preconditions: {reads: fails}
+  metrics_null: [M3.4]
+  faithfulness:
+    - {input_id: i0, mode: read_free}
+  chain_nodes:
+    - {input_id: i0, node_id: w0, hop: 2, must: false}
+  row_counts: {hop_reads: 0}

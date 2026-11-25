@@ -1,0 +1,23 @@
+name: P14_untracked_write_tool
+description: >
+  An untracked input written by a Write tool in tracked scope, with no
+  grading read: the edit is always visible (ever_edit_written), the label
+  is not.
+rules: [CON6, EVD6]
+calls:
+  - {call_id: c1, tool_type: write, paths: [/repo/out/notes.md], t_start: 10}
+links:
+  - {link_type: write_event, path: out/notes.md, writer_id: c1, op: create}
+paths:
+  - {path: out/notes.md, tracked: false, final_state: untracked}
+baseline: {files: {src/main.py: {sha256: mm}}}
+final_diff: {}
+oracle_inputs:
+  - {path: out/notes.md, at_baseline: false}
+expect:
+  input_states:
+    out/notes.md: {observable: false, states_under: [edit_written, command_written, missing], states_over: [edit_written, command_written, missing], under_reason: no_content_evidence, final_writer_type: edit_call, edit_events: [w0]}
+  counts:
+    M3.2.ever_edit_written: 1
+    M3.2.edit_written_under: 0
+    M3.2.edit_written_over: 1

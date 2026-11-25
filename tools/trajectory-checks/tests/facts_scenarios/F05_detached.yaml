@@ -1,0 +1,29 @@
+name: F05_detached
+description: A detached run; its shells are reparented, so they count only in the over-approximation.
+rules: [TIM2, NST1, NST2, NST3, NST4]
+calls:
+  - {call_id: c1, command: "nohup ./run.sh &", t_start: 10}
+execs:
+  - {command_id: e1, command: "nohup ./run.sh &", t_start: 10.1, duration_s: 0.1}
+  - {command_id: e2, command: ./run.sh, t_start: 20, duration_s: 100}
+  - {command_id: e3, command: sort x, t_start: 50, duration_s: 2}
+links:
+  - {link_type: call_exec, call_id: c1, command_id: e1}
+  - {link_type: exec_parent, command_id: e2, parent: null, root_call_id: c1, rule: reparenting}
+  - {link_type: exec_parent, command_id: e3, parent: e2, root_call_id: c1}
+expect:
+  call_facts:
+    c1: {span_under_s: 0.1, span_over_s: 109.9, descendants_under: 0, descendants_over: 2, depth_max_over: 2}
+  exec_facts:
+    e2: {depth: 1, root_call_id: c1, root_under: false}
+    e3: {depth: 2, root_call_id: c1, root_under: false}
+  facts:
+    M1.1.command_time_under_s: 100.1
+    M1.1.longest_span_under_s: 0.1
+    M1.1.longest_span_over_s: 109.9
+    M1.4.roots_with_descendants_under: 0
+    M1.4.roots_with_descendants_over: 1
+    M1.4.descendants_total_over: 2
+    M1.4.descendants_max_under: 0
+    M1.4.descendants_max_over: 2
+    M1.4.depth_max_over: 2

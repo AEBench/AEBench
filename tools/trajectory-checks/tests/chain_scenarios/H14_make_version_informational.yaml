@@ -1,0 +1,25 @@
+id: H14
+title: make --version before the writer is informational
+rules: [KEY6]
+execs:
+  - {command_id: e1, command: "make --version", t_start: 5.0, duration_s: 1.0}
+  - {command_id: e2, command: make, t_start: 10.0, duration_s: 5.0}
+dispositions:
+  e1: {disposition: matched_root, root_under: true}
+  e2: {disposition: matched_root, root_under: true}
+links:
+  - {link_type: write_event, path: out/r.json, writer_id: e2}
+oracle_inputs:
+  - {path: out/r.json}
+declared:
+  invocations:
+    - {invocation_key: "make:", text: make}
+expect:
+  row_counts: {arg_checks: 1}
+  arg_checks:
+    - {command_id: e2, invocation: 0, option: null, comparison: no_options,
+       conforms: holds}
+  absent:
+    arg_checks: [{command_id: e1, invocation: 0, option: null}]
+  faithfulness:
+    - {input_id: i0, witness: "e2:0"}

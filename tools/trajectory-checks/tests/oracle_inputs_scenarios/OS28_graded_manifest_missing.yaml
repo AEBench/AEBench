@@ -1,0 +1,20 @@
+name: OS28_graded_manifest_missing
+description: >
+  Capability oracle_reads holds but no graded records were passed (the
+  file could not be read): the oracle_inputs precondition fails and the
+  null-agent manifest passed alongside gives no row.
+rules: [OI1]
+run: {capabilities: {oracle_reads: true}}
+null_manifest:
+  - {check_id: read_a, path: /repo/data/a.csv, exists: true, sha256: aa, exists_before: true, sha256_before: aa, tracked_before: true}
+null_score: {phases: {experiment_runs: success}}
+run_score: {phases: {experiment_runs: success}}
+expect:
+  oracle_inputs: []
+  oracle_inputs_exact: true
+  absent: [data/a.csv]
+  block:
+    preconditions.oracle_inputs: fails
+    M3.1.inputs_under: null
+    M3.1.source_type: null
+  warnings: [input oracle_inputs missing]

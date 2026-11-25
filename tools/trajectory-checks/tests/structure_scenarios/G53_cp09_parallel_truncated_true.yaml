@@ -1,0 +1,18 @@
+name: G53_cp09_parallel_truncated_true
+description: >
+  Spec CP09, true half, truncated variant. The parallel act call's
+  snapshot is truncated (with its MC-05 lists): still not complete, so
+  unchanged_under stays false.
+rules: [RR6]
+run: {capabilities: {untracked_visible: true}}
+calls:
+  - {call_id: c1, command: ./run.sh, t_start: 10, t_end: 20.2}
+  - {call_id: c2, command: ./prep.sh, t_start: 10.5, t_end: 12.5}
+  - {call_id: c3, command: ./run.sh, t_start: 30, t_end: 32}
+execs:
+  - {command_id: e1, call: c1, t_start: 10.1, t_end: 20.0, snapshot: {created_untracked: [], modified_untracked: [], deleted_untracked: []}}
+  - {command_id: e2, call: c2, t_start: 10.6, t_end: 12.0, snapshot: {status: truncated, created_untracked: [], modified_untracked: [], deleted_untracked: []}}
+  - {command_id: e3, call: c3, t_start: 30.1, t_end: 31.9, snapshot: {created_untracked: [], modified_untracked: [], deleted_untracked: []}}
+expect:
+  reruns:
+    - {key_type: shape, prev_call_id: c1, call_id: c3, act_calls_between: 1, untracked_writes_between: 0, gap_observed: true, unchanged_under: false, unchanged_over: true}

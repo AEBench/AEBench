@@ -1,0 +1,20 @@
+name: P44_sources_disagree_lower_pair
+description: >
+  A graded stat read (existence only, no hash): the grading read gives no
+  comparison, final_files says the content equals the baseline's and the
+  final diff says modified. Sources 2 and 3 disagree with each other,
+  not with the highest one; EVD4 compares every pair of covering
+  sources (A5, D60), so the strict model is refuted.
+rules: [EVD4, CON12]
+capabilities: {oracle_reads: true, final_content: true}
+baseline: {files: {f: {sha256: b}}}
+final_diff: {modified: [f]}
+final_files:
+  - {path: f, status: M, sha256: b}
+oracle_inputs:
+  - {path: f, source_type: graded, at_baseline: true, baseline_sha256: b, grading_exists: true, grading_sha256: null, oracle_writes: null, oracle_writes_basis: null}
+expect:
+  input_states:
+    f: {content_source: grading_read, grading_exists: true, content_cmp: null, content_sources_disagree: true, states_under: [], model_conflict: true, under_reason: model_conflict}
+  counts:
+    M3.2.model_conflicts: 1
