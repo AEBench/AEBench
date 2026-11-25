@@ -4,7 +4,7 @@ import json
 import os
 import re
 import shutil
-from collections.abc import Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
@@ -56,13 +56,13 @@ def export_trace_site(run_dir: Path, output_dir: Path) -> Path:
 	case_result = _read_json(run_dir / CASE_RESULT)
 	secrets = _environment_secrets()
 	trace_format = _trace_format(run_result)
-	parser = {
-		"claude_code": parse_claude_trace,
-		"codex": parse_codex_trace,
-		"dsh": parse_dsh_trace,
-		"zcode": parse_zcode_trace,
-	}.get(trace_format, parse_raw_trace)
-	events, usage = parser(run_dir / RUNNER_LOG, secrets=secrets)
+	reader = trace_reader(trace_format)
+	log_path = run_dir / RUNNER_LOG
+	events, usage = (
+		_parse_with(reader, log_path, secrets)
+		if reader is not None
+		else parse_raw_trace(log_path, secrets=secrets)
+	)
 	record = _build_record(
 		run_dir,
 		run_result,
@@ -103,17 +103,19 @@ def split_trace_line(raw_line: str) -> tuple[str | None, str, dict[str, Any] | N
 def parse_codex_trace(
 	path: Path, *, secrets: Mapping[str, str] | None = None
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
-	if not path.is_file():
-		raise ValueError(f"runner log does not exist: {path}")
+	return _parse_with(read_codex_events, path, secrets)
 
-	secret_values = secrets or {}
-	events: list[dict[str, Any]] = []
-	usage: dict[str, int] = {}
+
+def read_codex_events(
+	lines: Iterable[str],
+	secrets: Mapping[str, str],
+	usage: dict[str, int],
+	*,
+	started: bool = False,
+) -> Iterator[dict[str, Any]]:
+	"""Yields Codex items as they complete, and as they start if ``started`` is set."""
 	session_id: str | None = None
-
-	for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-		if not raw_line.strip():
-			continue
+	for raw_line in lines:
 		timestamp, _, payload = split_trace_line(raw_line)
 		if payload is None:
 			continue
@@ -121,37 +123,33 @@ def parse_codex_trace(
 		event_type = str(payload.get("type", "unknown"))
 		if event_type == "thread.started":
 			session_id = str(payload.get("thread_id") or "default")
-			events.append(_codex_event(payload, timestamp, session_id, secret_values))
-			continue
-		if event_type == "item.completed":
-			events.append(_codex_event(payload, timestamp, session_id or "default", secret_values))
-			continue
-		if event_type == "turn.completed":
-			raw_usage = payload.get("usage")
-			if isinstance(raw_usage, dict):
-				usage = {
+			yield _codex_event(payload, timestamp, session_id, secrets)
+		elif event_type == "item.completed" or (started and event_type == "item.started"):
+			yield _codex_event(payload, timestamp, session_id or "default", secrets)
+		elif event_type == "turn.completed" and isinstance(payload.get("usage"), dict):
+			usage.clear()
+			usage.update(
+				{
 					str(key): int(value)
-					for key, value in raw_usage.items()
+					for key, value in payload["usage"].items()
 					if key in {"input_tokens", "output_tokens"} and isinstance(value, int)
 				}
-	return events, usage
+			)
 
 
 def parse_claude_trace(
 	path: Path, *, secrets: Mapping[str, str] | None = None
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
-	if not path.is_file():
-		raise ValueError(f"runner log does not exist: {path}")
+	return _parse_with(read_claude_events, path, secrets)
 
-	secret_values = secrets or {}
-	events: list[dict[str, Any]] = []
-	usage: dict[str, int] = {}
+
+def read_claude_events(
+	lines: Iterable[str], secrets: Mapping[str, str], usage: dict[str, int]
+) -> Iterator[dict[str, Any]]:
 	session_indexes: dict[str, int] = {}
 	task_types: dict[tuple[str, str], str] = {}
 
-	for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-		if not raw_line.strip():
-			continue
+	for raw_line in lines:
 		timestamp, _, payload = split_trace_line(raw_line)
 		if payload is None:
 			continue
@@ -169,7 +167,7 @@ def parse_claude_trace(
 			str(event_timestamp) if event_timestamp else None,
 			session_id,
 			session_idx,
-			secret_values,
+			secrets,
 		)
 		if event_type == "system":
 			task_id = payload.get("task_id")
@@ -182,7 +180,7 @@ def parse_claude_trace(
 					task_type = task_types.get(task_key)
 			if isinstance(task_type, str):
 				event["task_type"] = task_type
-		events.append(event)
+		yield event
 		if event_type == "assistant":
 			message = payload.get("message")
 			raw_usage = message.get("usage") if isinstance(message, dict) else None
@@ -190,8 +188,6 @@ def parse_claude_trace(
 				for key, value in raw_usage.items():
 					if isinstance(value, int):
 						usage[str(key)] = usage.get(str(key), 0) + value
-
-	return events, usage
 
 
 def _claude_event(
@@ -270,17 +266,17 @@ def _codex_event(
 def parse_dsh_trace(
 	path: Path, *, secrets: Mapping[str, str] | None = None
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
-	"""Reads DSH's --json events into the message blocks the viewer renders."""
-	if not path.is_file():
-		raise ValueError(f"runner log does not exist: {path}")
+	return _parse_with(read_dsh_events, path, secrets)
 
-	secret_values = secrets or {}
-	events: list[dict[str, Any]] = []
-	usage: dict[str, int] = {}
+
+def read_dsh_events(
+	lines: Iterable[str], secrets: Mapping[str, str], usage: dict[str, int]
+) -> Iterator[dict[str, Any]]:
+	"""Reads DSH's --json events into the message blocks the viewer renders."""
 	session_id = "default"
 	turns = 0
 	stop_reason: str | None = None
-	for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+	for raw_line in lines:
 		timestamp, _, payload = split_trace_line(raw_line)
 		if payload is None:
 			continue
@@ -295,14 +291,13 @@ def parse_dsh_trace(
 					usage[name] = usage.get(name, 0) + value
 		if isinstance(reason := payload.get("reason"), dict) and reason.get("kind"):
 			stop_reason = str(reason["kind"])
-		event = _dsh_event(payload, timestamp, session_id, secret_values)
+		event = _dsh_event(payload, timestamp, session_id, secrets)
 		if event is None:
 			continue
 		if event["type"] == "result":
 			event["num_turns"] = turns
 			event["stop_reason"] = event.get("stop_reason") or stop_reason
-		events.append(event)
-	return events, usage
+		yield event
 
 
 def _usage_key(key: str) -> str:
@@ -382,17 +377,19 @@ def _dsh_event(
 def parse_zcode_trace(
 	path: Path, *, secrets: Mapping[str, str] | None = None
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
+	return _parse_with(read_zcode_events, path, secrets)
+
+
+def read_zcode_events(
+	lines: Iterable[str], secrets: Mapping[str, str], usage: dict[str, int]
+) -> Iterator[dict[str, Any]]:
 	"""Reads ZCode's stream-json events into the message blocks the viewer renders.
 
 	ZCode streams each reply in small deltas; they are joined into one block per
 	reasoning or text run of each reply.
 	"""
-	if not path.is_file():
-		raise ValueError(f"runner log does not exist: {path}")
-
-	secret_values = secrets or {}
-	events: list[dict[str, Any]] = []
-	usage: dict[str, int] = {}
+	# Events made from the current line, yielded once it is read.
+	out: list[dict[str, Any]] = []
 	# Reply id -> (delta kind, joined parts, timestamp of the first part).
 	pending: dict[str, tuple[str, list[str], str | None]] = {}
 	replies: set[str] = set()
@@ -400,7 +397,9 @@ def parse_zcode_trace(
 	stop_reason: str | None = None
 
 	def emit(event_type: str, timestamp: str | None, **fields: Any) -> None:
-		events.append(
+		if event_type == "result":
+			fields["num_turns"] = len(replies)
+		out.append(
 			{
 				"type": event_type,
 				"ts": timestamp,
@@ -415,7 +414,7 @@ def parse_zcode_trace(
 		if reply not in pending:
 			return
 		kind, parts, timestamp = pending.pop(reply)
-		text = _redact("".join(parts), secret_values)
+		text = _redact("".join(parts), secrets)
 		if not text.strip():
 			return
 		block = (
@@ -425,10 +424,11 @@ def parse_zcode_trace(
 		)
 		emit("assistant", timestamp, blocks=[block])
 
-	for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+	def read(raw_line: str) -> None:
+		nonlocal session_id, stop_reason
 		timestamp, _, payload = split_trace_line(raw_line)
 		if payload is None:
-			continue
+			return
 		if session_id is None:
 			session_id = str(payload.get("sessionId") or "default")
 			emit("system", timestamp, subtype="init", raw={"session_id": session_id})
@@ -446,7 +446,7 @@ def parse_zcode_trace(
 				pending.setdefault(reply, (kind, [], timestamp))[1].append(
 					str(body.get("delta") or "")
 				)
-				continue
+				return
 			flush(reply)
 			if kind == "tool_call":
 				arguments = body.get("input")
@@ -456,16 +456,16 @@ def parse_zcode_trace(
 					"type": "tool_use",
 					"id": body.get("toolCallId"),
 					"name": body.get("toolName"),
-					"input": _redact_value(arguments, secret_values),
+					"input": _redact_value(arguments, secrets),
 				}
 				emit("assistant", timestamp, blocks=[block])
-			continue
+			return
 
 		for reply in list(pending):
 			flush(reply)
 		if event_type == "tool.updated":
 			if kind not in {"result", "error"}:
-				continue
+				return
 			result = _as_dict(body.get("result"))
 			content = result.get("content", "")
 			if not isinstance(content, str):
@@ -477,7 +477,7 @@ def parse_zcode_trace(
 			block = {
 				"type": "tool_result",
 				"tool_use_id": body.get("toolCallId"),
-				"content": _redact(content, secret_values),
+				"content": _redact(content, secrets),
 				"is_error": kind == "error" or result.get("success") is False,
 			}
 			emit("user", timestamp, blocks=[block])
@@ -493,21 +493,47 @@ def parse_zcode_trace(
 			emit(
 				"result",
 				timestamp,
-				result_text=_redact(str(error.get("message") or ""), secret_values),
+				result_text=_redact(str(error.get("message") or ""), secrets),
 				stop_reason=str(error.get("code") or "error"),
 			)
 		elif event_type == "result":
 			# The closing summary line; its usage repeats what the turns reported.
-			text = _redact(str(payload.get("response") or ""), secret_values)
+			text = _redact(str(payload.get("response") or ""), secrets)
 			emit("result", timestamp, result_text=text, stop_reason=stop_reason)
 		elif event_type not in _ZCODE_PROGRESS_EVENTS:
-			emit("system", timestamp, subtype=event_type, raw=_redact_value(payload, secret_values))
+			emit("system", timestamp, subtype=event_type, raw=_redact_value(payload, secrets))
+
+	for raw_line in lines:
+		read(raw_line)
+		yield from out
+		out.clear()
 	for reply in list(pending):
 		flush(reply)
-	for event in events:
-		if event["type"] == "result":
-			event["num_turns"] = len(replies)
-	return events, usage
+	yield from out
+
+
+TraceReader = Callable[[Iterable[str], Mapping[str, str], dict[str, int]], Iterator[dict[str, Any]]]
+
+
+def trace_reader(trace_format: str) -> TraceReader | None:
+	"""Returns the line-by-line reader for a trace format, or None for raw logs."""
+	readers: dict[str, TraceReader] = {
+		"claude_code": read_claude_events,
+		"codex": read_codex_events,
+		"dsh": read_dsh_events,
+		"zcode": read_zcode_events,
+	}
+	return readers.get(trace_format)
+
+
+def _parse_with(
+	reader: TraceReader, path: Path, secrets: Mapping[str, str] | None
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+	if not path.is_file():
+		raise ValueError(f"runner log does not exist: {path}")
+	usage: dict[str, int] = {}
+	lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+	return list(reader(lines, secrets or {}, usage)), usage
 
 
 def _as_dict(value: Any) -> dict[str, Any]:

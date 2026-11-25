@@ -45,6 +45,7 @@ py-modules = [
   "project_config",
   "prompting",
   "run_control",
+  "shell",
   "settings",
   "sources",
   "task_loader",

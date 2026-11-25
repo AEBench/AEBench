@@ -84,6 +84,14 @@ def _build_parser() -> argparse.ArgumentParser:
 	trace_serve.add_argument("site_dir")
 	trace_serve.add_argument("--host", default="127.0.0.1")
 	trace_serve.add_argument("--port", type=int, default=8000)
+	trace_follow = trace_sub.add_parser(
+		"follow", help="Print a run's agent events as they happen (default: the newest run)."
+	)
+	trace_follow.add_argument("run_dir", nargs="?")
+
+	sub.add_parser(
+		"shell", help="Open AEBench in tmux: the agent's live trace, output, and a prompt."
+	)
 
 	audit_p = sub.add_parser("audit-trace", help="Audit an aeshell commands.jsonl trace.")
 	audit_p.add_argument("trace_path")
@@ -192,6 +200,7 @@ def cli_main(argv: list[str] | None = None) -> int:
 			"runtime": _handle_runtime,
 			"agent": _handle_agent,
 			"trace": _handle_trace,
+			"shell": _open_shell,
 			"audit-trace": _audit_trace,
 		}[args.command](args)
 	except KeyboardInterrupt:
@@ -268,8 +277,23 @@ def _handle_trace(args: argparse.Namespace) -> int:
 
 		serve_trace_site(Path(args.site_dir), host=args.host, port=args.port)
 		return 0
-	print("usage: aebench trace {export,serve}", file=sys.stderr)
+	if trace_command == "follow":
+		from trace_viewer import follow_latest, follow_trace
+
+		if args.run_dir is not None:
+			follow_trace(Path(args.run_dir))
+			return 0
+		state = _build_context().project_state
+		follow_latest(state.config.resolve_case_runs_dir(state.root))
+		return 0
+	print("usage: aebench trace {export,serve,follow}", file=sys.stderr)
 	return 1
+
+
+def _open_shell(_args: argparse.Namespace) -> int:
+	import shell
+
+	return shell.launch_shell(Path("~/.cache/aebench/shell").expanduser())
 
 
 def _init_workspace(args: argparse.Namespace) -> int:
