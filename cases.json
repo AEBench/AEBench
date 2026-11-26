@@ -76,6 +76,9 @@
     "osdi25_basilisk": {
       "path": "cases/osdi25_basilisk"
     },
+    "osdi25_paralegal": {
+      "path": "cases/osdi25_paralegal"
+    },
     "sosp23_acto": {
       "path": "cases/sosp23_acto"
     },
