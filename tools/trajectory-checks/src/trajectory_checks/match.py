@@ -201,6 +201,8 @@ _LINK_FIELDS = (
     *("depth_rule", "possibly_edit_call"),
 )
 _FLAGS = ("matched", "match_under", "snapshot_ok", "root_under")
+# Snapshot scopes in which new untracked files are seen.
+UNTRACKED_SCOPES = ("workspace", "tracked+untracked")
 _DIFF_KEYS = ("modified", "deleted", "mode_changed")
 _OPS = (("create", "created"), ("modify", "modified"), ("delete", "deleted"))
 _STATES = (
@@ -931,7 +933,7 @@ def _measure(
         "snapshot_time_coverage": _rate(snap_span, span),
         "snapshot_count_coverage": _rate(statuses["ok"], len(live)),
         "snapshot_scope": scope,
-        "untracked_visible": scope == "workspace" if scope else None,
+        "untracked_visible": scope in UNTRACKED_SCOPES if scope else None,
         "listed_path_rate": _rate(listed, totals),
         "final_diff_attributed_rate_under": _rate(
             sum(1 for p in diff_rows if p["final_writer_under"]), len(diff_rows)
