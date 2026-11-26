@@ -1,0 +1,22 @@
+name: S55b_traced_write_by_parent_too
+description: The parent's own traced write of the path the nested exec also wrote (MC-26) -> the parent's event is not folded into the child's, since the recorder saw the parent write it itself; two events, the parent's last (§6.6 rule 3).
+run: {capabilities: {read_tracing: true}}
+calls:
+  - {call_id: c1, t_start: 100, t_end: 110, command: "./build.sh"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 109.8, command: "./build.sh", reads: [],
+     snapshot: {modified: [out/r.json]},
+     traced_writes: [{path: /repo/out/r.json, t: 108.0, event_type: close_write}]}
+  - {command_id: n1, t_start: 101, t_end: 102, command: "python3 gen.py", reads: [],
+     traced_writes: [{path: /repo/out/r.json, t: 101.5, event_type: close_write}]}
+baseline: {files: {out/r.json: {}}}
+final_diff: {modified: [out/r.json], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: write_event, event_id: w0, path: out/r.json, writer_id: n1, op: modify, depth_rule: none, source: traced}
+    - {link_type: write_event, event_id: w1, path: out/r.json, writer_id: e1, op: modify, depth_rule: none, source: both}
+  links_exact: true
+  paths:
+    - {path: out/r.json, events: [w0, w1], final_writer: w1, final_state: changed}
+  coverage:
+    counts.write_events_traced: 2

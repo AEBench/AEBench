@@ -72,3 +72,9 @@ otherwise copies `claude_eval_skipped.jsonl` (the `claude_eval` wrapper, the
 | `bbbb…2` `cc -c src/a.c` | A nested record whose end line comes before its start line in the file; `parent_link = live`; `released_at` from `t_start`; a `kind` read event and a `close_write` (not a read) |
 | `cccc…3` `python3 train.py` | `end_reason = broker_shutdown` (`flushed_at_stop`), `complete = false`, no `ended_at`; `parent_link = adopted` |
 | `dddd…4` `sleep 600` | A start event with no end record (`start_only`) |
+
+`claude_new_format.execs.json` also pins `traced_writes` (MC-26, added
+2026-11-26): the `close_write` and `moved_to` events of
+`file_events/claude_new_format.jsonl` with a `command_id`, as `{path, t,
+event_type}` in time order; `[]` for the records with none. The input
+files are unchanged.

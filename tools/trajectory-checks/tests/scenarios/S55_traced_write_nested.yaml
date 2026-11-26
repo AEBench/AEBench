@@ -1,0 +1,22 @@
+name: S55_traced_write_nested
+description: A nested exec's traced write (MC-26) and its parent's snapshot report of the same path -> one event, attributed to the nested exec, which the recorder names exactly (§6.6 rule 3, deepest wins).
+run: {capabilities: {read_tracing: true}}
+calls:
+  - {call_id: c1, t_start: 100, t_end: 110, command: "./build.sh"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 109.8, command: "./build.sh", reads: [], traced_writes: [],
+     snapshot: {modified: [out/r.json]}}
+  - {command_id: n1, t_start: 101, t_end: 102, command: "python3 gen.py", reads: [],
+     traced_writes: [{path: /repo/out/r.json, t: 101.5, event_type: close_write}]}
+baseline: {files: {out/r.json: {}}}
+final_diff: {modified: [out/r.json], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: exec_parent, command_id: n1, parent: e1, root_call_id: c1}
+    - {link_type: write_event, event_id: w0, path: out/r.json, in_workspace: true, op: modify, writer_type: exec, writer_id: n1, t_start: 101.0, t_end: 102.0, root_call_id: c1, depth_rule: parent_may_also_write, source: traced, writer_under: true}
+  links_exact: true
+  paths:
+    - {path: out/r.json, events: [w0], final_writer: w0, final_writer_under: true, final_state: changed}
+  coverage:
+    counts.write_events.exec: 1
+    counts.write_events_traced: 1

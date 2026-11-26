@@ -110,6 +110,7 @@ class Exec(typing.TypedDict):
     snapshot_before_s: float | None
     snapshot_after_s: float | None
     reads: list[str] | None  # MC-14
+    traced_writes: list[dict] | None  # MC-26: {path, t, event_type}
     orphans: list[dict] | None  # MC-01: {pid, comm} left running
     stdio: list[str | None] | None  # targets of fds 0, 1, 2
 
@@ -224,6 +225,8 @@ _LINK_KEYS = (
 )
 # MC-14 event types that write; every other event type reads (spec §5.6).
 WRITE_EVENT_TYPES = frozenset({"close_write", "moved_from", "moved_to"})
+# The write event types that put content at their path (MC-26).
+TRACED_WRITE_TYPES = frozenset({"close_write", "moved_to"})
 _EDIT_KEYS = ("old_string", "new_string", "content", "edits")
 
 
@@ -843,6 +846,46 @@ def read_events(
     return reads, unattributed
 
 
+def traced_writes(path: pathlib.Path) -> dict[str, list[dict]]:
+    """The writes of MC-14's file_events.jsonl per command (MC-26).
+
+    Every `close_write` or `moved_to` event with a `command_id` and a
+    path; header lines and writes without a command are skipped. The op
+    is left to J3, which knows the baseline and the other writes.
+
+    Args:
+        path: The file.
+
+    Returns:
+        {command_id: [{path, t, event_type}]}, each list in time order
+        (an event without a time last), then by path.
+    """
+    found: dict[str, list[dict]] = {}
+    with path.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            try:
+                event = _obj(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+            event_type = event.get("event_type", event.get("kind"))
+            cid, name, t = (event.get(k) for k in ("command_id", "path", "t"))
+            if cid is None or name is None:
+                continue
+            if event_type not in TRACED_WRITE_TYPES:
+                continue
+            number = isinstance(t, (int, float)) and not isinstance(t, bool)
+            found.setdefault(str(cid), []).append(
+                {
+                    "path": str(name),
+                    "t": float(t) if number else None,
+                    "event_type": event_type,
+                }
+            )
+    for writes in found.values():
+        writes.sort(key=lambda w: (w["t"] is None, w["t"] or 0.0, w["path"]))
+    return found
+
+
 def _exec(record: dict, family: str) -> Exec | None:
     """One trace line to an Exec, or None without a start time."""
     monitors = _obj(record.get("monitors"))
@@ -886,6 +929,7 @@ def _exec(record: dict, family: str) -> Exec | None:
         snapshot_before_s=_seconds(timing.get("snapshot_before_ms")),
         snapshot_after_s=_seconds(timing.get("snapshot_after_ms")),
         reads=None,
+        traced_writes=None,
         orphans=record["orphans"]
         if isinstance(record.get("orphans"), list)
         else None,
@@ -909,7 +953,7 @@ def load_execs(
         trace_path: The monitor trace.
         family: The agent family, which selects the wrappers and noise.
         file_events: MC-14's file_events.jsonl, or None; when given, every
-            exec's reads is a list.
+            exec's reads and traced_writes are lists.
         warnings: When given, the trace's layout warnings are appended.
         counts: When given, start_lines is set to the number of MC-04
             start lines, superseded ones included.
@@ -954,10 +998,14 @@ def load_execs(
         counts["start_lines"] = started
     ended = {e["command_id"] for e in execs}
     execs += [e for cid, e in starts.items() if cid not in ended]
-    reads = read_events(pathlib.Path(file_events))[0] if file_events else None
+    events = pathlib.Path(file_events) if file_events else None
+    reads = read_events(events)[0] if events else None
+    writes = traced_writes(events) if events else None
     execs.sort(key=lambda e: (e["t_start"], e["command_id"]))
     for seq, record in enumerate(execs):
         record["seq"] = seq
         if reads is not None:
             record["reads"] = reads.get(record["command_id"], [])
+        if writes is not None:
+            record["traced_writes"] = writes.get(record["command_id"], [])
     return execs

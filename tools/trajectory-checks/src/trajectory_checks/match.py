@@ -89,7 +89,7 @@ class WriteEvent(typing.TypedDict):
     depth_rule: str  # none, parent_may_also_write
     possibly_edit_call: str | None
     overlaps_sibling: bool
-    source: str  # snapshot, edit_call
+    source: str  # snapshot, traced, both, edit_call
     writer_under: bool
 
 
@@ -198,7 +198,7 @@ _LINK_DISPOSITION = types.MappingProxyType(
 # The link fields coverage counts by value.
 _LINK_FIELDS = (
     *("link_type", "rule", "root_ambiguous", "writer_type", "in_workspace"),
-    *("depth_rule", "possibly_edit_call"),
+    *("depth_rule", "possibly_edit_call", "source"),
 )
 _FLAGS = ("matched", "match_under", "snapshot_ok", "root_under")
 # Snapshot scopes in which new untracked files are seen.
@@ -580,7 +580,12 @@ def _write_events(
     """J3: write events by rules 1 to 8, in event order (spec §6.6).
 
     An exec event has the exec's measured interval (decision D32); the
-    overlap tests of rules 5 and 6 use observation windows (D33).
+    overlap tests of rules 5 and 6 use observation windows (D33). An
+    exec's writes from file_events.jsonl (`traced_writes`, MC-26) are exec
+    events too, inside or outside the workspace: one that its snapshot
+    also lists is the same event (`source` both), one it does not is a
+    `traced` event with no scope. A traced write is the writer's own, so
+    it is never folded into a descendant's by rule 3.
 
     Args:
         calls: All calls.
@@ -601,21 +606,36 @@ def _write_events(
     candidates = {k["command_id"]: k["root_candidates"] for k in nest_links}
     mode_only = diff["mode_changed"] - diff["modified"]
     reports: dict[str, list[dict]] = {}
+    traced: list[tuple[dict, float]] = []  # (traced-only event, its time)
     for record in execs:
         cid, snap = record["command_id"], record["snapshot"]
         span = record["t_start"], record["t_end"]  # measured (D32)
         writer = (snap["scope"], "exec", cid, *span)
+        mine: dict[str, dict] = {}
         for op, key in _OPS:
             # MC-05: untracked files are reported in their own lists.
             for raw in [*snap[key], *(snap[f"{key}_untracked"] or ())]:
                 path, inside = relative_path(raw, root)
                 op_type = "mode" if op == "modify" and path in mode_only else op
-                reports.setdefault(path, []).append(
-                    _event(path, inside, op_type, *writer)
-                )
+                event = _event(path, inside, op_type, *writer)
+                mine.setdefault(path, event)
+                reports.setdefault(path, []).append(event)
+        for write in record.get("traced_writes") or ():  # MC-26
+            path, inside = relative_path(write["path"], root)
+            if path in mine:  # one write seen by both sources
+                if mine[path]["source"] == "snapshot":
+                    mine[path]["source"] = "both"
+                continue
+            event = _event(path, inside, "create", None, "exec", cid, *span)
+            event["source"], mine[path] = "traced", event
+            t = write["t"] if write["t"] is not None else span[0]
+            traced.append((event, t))
+            reports.setdefault(path, []).append(event)
     events: list[dict] = []
     for found in reports.values():  # rule 3: deepest wins
-        ids = {e["writer_id"] for e in found}
+        # Only a snapshot-only report folds: a traced write is the
+        # writer's own, never a descendant's change seen by its snapshot.
+        ids = {e["writer_id"] for e in found if e["source"] == "snapshot"}
         folded: set[str] = set()
         for event in found:
             up = parent_of.get(event["writer_id"])
@@ -624,7 +644,11 @@ def _write_events(
                     folded.add(up)
                     event["depth_rule"] = "parent_may_also_write"
                 up = parent_of.get(up)
-        events += [e for e in found if e["writer_id"] not in folded]
+        events += [
+            e
+            for e in found
+            if e["writer_id"] not in folded or e["source"] != "snapshot"
+        ]
     for call in calls:  # rule 4
         t, edit_type, cid = call["t_start"], call["tool_type"], call["call_id"]
         if (
@@ -643,6 +667,16 @@ def _write_events(
             events.append(
                 _event(path, inside, op, None, "edit_call", cid, t, t)
             )
+    # MC-26: a traced-only write creates its path unless the path is in
+    # the baseline or another event of it starts before the write.
+    when = {id(e): t for e, t in traced}
+    starts = collections.defaultdict(list)
+    for event in events:
+        starts[event["path"]].append(when.get(id(event), event["t_start"]))
+    for event, t in traced:
+        path = event["path"]
+        earlier = any(x < t for x in starts[path])
+        event["op"] = "modify" if path in tracked or earlier else "create"
     by_path: dict[str, list[dict]] = {}
     for event in events:
         wid = event["writer_id"]
@@ -899,6 +933,8 @@ def _measure(
             w: writes["writer_type", w] for w in ("exec", "edit_call")
         },
         "write_events_outside_workspace": writes["in_workspace", False],
+        "write_events_traced": writes["source", "traced"]
+        + writes["source", "both"],
         "events_parent_may_also_write": writes[
             "depth_rule", "parent_may_also_write"
         ],
