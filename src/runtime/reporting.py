@@ -19,7 +19,7 @@ from constants import (
 	TOOL_OUTPUT_DIRNAME,
 	TRANSCRIPT_BASENAME,
 )
-from models import CaseRunResult, PromptBundle, RunResult, RuntimeInfo
+from models import CaseRunResult, FileEventsInfo, PromptBundle, RunResult, RuntimeInfo
 from utils import safe_name
 
 
@@ -207,10 +207,19 @@ def write_task_report(report_path: Path, result: RunResult, agent_summary: str) 
 				f"- Index: `{snapshots.index_path}`",
 			]
 		)
+	events = result.command_monitor.file_events if result.command_monitor else None
+	if events is not None:
+		lines.extend(["", "## File Events", "", f"- {file_events_status(events)}"])
 	if result.error:
 		lines.extend(["", "## Error", "", result.error])
 	lines.extend(["", "## Agent Summary", "", agent_summary])
 	report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def file_events_status(info: FileEventsInfo) -> str:
+	if info.status == "recorded":
+		return f"recorded `{info.events}` events (`{info.lost}` lost) in `{info.path}`"
+	return f"{info.status}" + (f": {info.reason}" if info.reason else "")
 
 
 def write_benchmark_outputs(
