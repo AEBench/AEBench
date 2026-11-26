@@ -6,13 +6,15 @@
 // process start (ns since boot). Paths come last, so a tab inside one is kept.
 // The container pid is read at pid-namespace level 1 (one level below the host).
 
-// A file is closed: written (f_mode has FMODE_WRITE) or only read.
-fentry:filp_close /cgroup == $1/
+// A file is opened, for writing (f_mode has FMODE_WRITE) or only for reading.
+// Opens, not closes: files still open when a process exits never reach filp_close.
+// FMODE_BACKING (0x2000000): overlayfs's own open of the file beneath, a duplicate.
+fentry:security_file_open /cgroup == $1 && !(args.file->f_mode & 0x2000000)/
 {
-	$f = args->filp;
+	$f = args.file;
 	$task = curtask->group_leader;
 	printf("%s\t%llu\t%d\t%d\t%llu\t%s\n",
-		($f->f_mode & 2) ? "close_write" : "close_nowrite",
+		($f->f_mode & 2) ? "open_write" : "open_read",
 		nsecs, pid, $task->thread_pid->numbers[1].nr, $task->start_boottime,
 		path($f->f_path));
 }
@@ -23,14 +25,14 @@ tracepoint:sched:sched_process_exec /cgroup == $1/
 	$task = curtask->group_leader;
 	printf("open_exec\t%llu\t%d\t%d\t%llu\t%s\n",
 		nsecs, pid, $task->thread_pid->numbers[1].nr, $task->start_boottime,
-		str(args->filename));
+		str(args.filename));
 }
 
 // A new process (not a thread) starts: its parent at fork time, then the child.
-fentry:wake_up_new_task /cgroup == $1 && args->p->pid == args->p->tgid/
+fentry:wake_up_new_task /cgroup == $1 && args.p->pid == args.p->tgid/
 {
 	$parent = curtask->group_leader;
-	$child = args->p;
+	$child = args.p;
 	printf("fork\t%llu\t%d\t%d\t%llu\t%d\t%d\t%llu\n",
 		nsecs, pid, $parent->thread_pid->numbers[1].nr, $parent->start_boottime,
 		$child->tgid, $child->thread_pid->numbers[1].nr, $child->start_boottime);

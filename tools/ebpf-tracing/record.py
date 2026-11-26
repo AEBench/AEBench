@@ -3,9 +3,10 @@
 
 Usage: record.py <container> <raw.tsv>
 
-Runs file_events.bt as root (sudo -n) on the container's cgroup until
-SIGINT or SIGTERM. The first line of the output pairs the wall clock with
-the monotonic clock bpftrace stamps events with.
+Runs file_events.bt in the recorder image (see Dockerfile), a privileged
+container next to the traced one, filtered to the traced container's cgroup,
+until SIGINT or SIGTERM. The first line of the output pairs the wall clock
+with the monotonic clock bpftrace stamps events with.
 """
 
 import argparse
@@ -15,7 +16,7 @@ import sys
 import time
 from pathlib import Path
 
-SCRIPT = Path(__file__).with_name("file_events.bt")
+IMAGE = "aebench-ebpf-recorder"
 CGROUP_ROOT = Path("/sys/fs/cgroup")
 
 
@@ -44,7 +45,13 @@ def clock_header() -> str:
 
 
 def command(cgroup: int) -> list[str]:
-	return ["sudo", "-n", "bpftrace", str(SCRIPT), str(cgroup)]
+	"""docker run of the recorder; tracefs is mounted for the tracepoints."""
+	return [
+		*("docker", "run", "--rm", "--name", f"aebench-ebpf-{cgroup}"),
+		*("--privileged", "--pid=host"),
+		*("-v", "/sys/kernel/tracing:/sys/kernel/tracing"),
+		*(IMAGE, str(cgroup)),
+	]
 
 
 def record(name: str, out: Path) -> int:

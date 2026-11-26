@@ -16,7 +16,10 @@ from pathlib import Path
 
 # The kernel's /proc/<pid>/stat start time is start_boottime in USER_HZ ticks.
 NS_PER_TICK = 10_000_000
-FILE_KINDS = ("close_write", "close_nowrite", "open_exec")
+# Raw kinds, and the event_type each is written as; the reader of file_events.jsonl
+# counts close_write (and moves) as writes and every other type as a read.
+EVENT_TYPES = {"open_write": "close_write", "open_read": "access", "open_exec": "open_exec"}
+FILE_KINDS = tuple(EVENT_TYPES)
 SKIPPED_PREFIXES = ("/proc/", "/sys/", "/dev/")
 
 Process = tuple[int, int]
@@ -90,7 +93,8 @@ def link(raw: Iterable[str], records: Iterable[dict]) -> Iterator[dict]:
 	yield {"recorder": "bpftrace", "lost": lost, "events": len(events)}
 	kept = set()
 	for kind, mono, host_pid, nspid, start, path in (f for f in events if f[0] != "fork"):
-		if not path.startswith("/") or path.startswith(SKIPPED_PREFIXES):
+		# Container pid 0: a host-side helper in the cgroup, such as runc for docker exec.
+		if nspid == "0" or not path.startswith("/") or path.startswith(SKIPPED_PREFIXES):
 			continue
 		proc = process(nspid, start)
 		cid = command_of(proc)
@@ -101,7 +105,7 @@ def link(raw: Iterable[str], records: Iterable[dict]) -> Iterator[dict]:
 		t = None if clock is None else (clock[0] + int(mono) - clock[1]) / 1e9
 		yield {
 			"t": t,
-			"event_type": kind,
+			"event_type": EVENT_TYPES[kind],
 			"path": path,
 			"command_id": cid,
 			"pid": proc[0],
