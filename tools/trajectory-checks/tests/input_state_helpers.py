@@ -702,7 +702,7 @@ def validate(scenario: Mapping[str, Any], stem: str) -> list[str]:
             problems.append(f"§0 row {row['path']}: listed_by")
     coverage = scenario["linked"]["coverage"]
     if coverage["rates"]["untracked_visible"] and (
-        coverage["rates"]["snapshot_scope"] != "workspace"
+        coverage["rates"]["snapshot_scope"] not in match.UNTRACKED_SCOPES
     ):
-        problems.append("rates.untracked_visible without workspace scope")
+        problems.append("rates.untracked_visible without an untracked scope")
     return problems
