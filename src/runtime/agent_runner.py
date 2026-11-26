@@ -66,8 +66,8 @@ TOOL_HOOK_SETTINGS_ENV = "AEBENCH_TOOL_HOOK_SETTINGS"
 RUNTIME_TOOL_HOOKS_DIR = "/run/aebench-hooks"
 # The hook gives up (and stops the agent) before the harness would kill it,
 # which for Claude Code would let the tool run unsnapshotted.
-_HOOK_CLIENT_TIMEOUT_SECONDS = 90
-_HOOK_TIMEOUT_SECONDS = 120
+_HOOK_CLIENT_TIMEOUT_SECONDS = 300
+_HOOK_TIMEOUT_SECONDS = 330
 
 
 def install_workdir_snapshot_hook(
@@ -108,7 +108,15 @@ def install_workdir_snapshot_hook(
 				{
 					"matcher": "*",
 					"hooks": [
-						{"type": "command", "command": hook, "timeout": _HOOK_TIMEOUT_SECONDS}
+						{
+							"type": "command",
+							"command": hook,
+							"timeout": _HOOK_TIMEOUT_SECONDS,
+							# Block the tool call if the hook cannot start, crashes or times
+							# out (by default Claude Code lets it run). Claude Code >= 2.1.295;
+							# older versions ignore the key.
+							"onFailure": "block",
+						}
 					],
 				}
 			]

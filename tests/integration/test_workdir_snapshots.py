@@ -199,6 +199,7 @@ def test_the_hook_is_installed_as_a_pre_tool_use_hook_on_every_tool(tmp_path: Pa
 	assert group["matcher"] == "*"
 	[hook] = group["hooks"]
 	assert hook["type"] == "command"
+	assert hook["onFailure"] == "block"
 	assert hook["command"].startswith(
 		f"python3 /run/aebench-hooks/{WORKDIR_SNAPSHOT_HOOK} /run/aebench/command.sock "
 	)

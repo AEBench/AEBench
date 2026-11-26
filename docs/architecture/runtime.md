@@ -95,7 +95,7 @@ workspace = btrfs subvolume <btrfs root>/ae_workspace_<case>_<rand>/workspace
                                     agent_id, agent_type}  (agent_* only in subagents)
        <- frame 6 WORKDIR_SNAPSHOT_DONE {ok, seq, snapshot, error}
   -> BrokerProcess.stop() sends SIGTERM; the broker takes the final snapshot
-     (kind "final"), then exits (status 3 if it failed; SIGKILL after 60s)
+     (kind "final"), then exits (status 3 if it failed; SIGKILL after 330s)
 ```
 
 - The snapshot request shares the shim's socket; the broker dispatches each
@@ -112,7 +112,10 @@ workspace = btrfs subvolume <btrfs root>/ae_workspace_<case>_<rand>/workspace
 - The hook blocks the tool until its snapshot exists, and fails closed: when
   the broker is unreachable or the snapshot fails, it denies the call and
   returns `continue: false`, which ends the session. The case runner then
-  records the failed snapshots as the run's error.
+  records the failed snapshots as the run's error. If the hook itself cannot
+  start, crashes or times out, `onFailure: "block"` in its settings blocks the
+  tool call (Claude Code 2.1.295 or later; older versions ignore it and let
+  the call run).
 - Snapshots use the btrfs ioctls directly (`runtime/btrfs.py`), unprivileged.
 - Only calls Claude makes are snapshotted: a `make -j` tool call gets one
   snapshot, not one per shell `make` starts. Processes the agent leaves running

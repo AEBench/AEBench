@@ -106,12 +106,12 @@ WORKDIR_SNAPSHOT_DONE_FRAME = 7
 WORKDIR_SNAPSHOTS_BASENAME = "workdir_snapshots.jsonl"
 _EXIT_FINAL_SNAPSHOT_FAILED = 3
 _FRAME_HEADER = struct.Struct(">IB")
-_SNAPSHOT_REQUEST_TIMEOUT_SECONDS = 60.0
+_SNAPSHOT_REQUEST_TIMEOUT_SECONDS = 300.0
 
 _SOCKET_BACKLOG = 128
 # The broker takes the final workdir snapshot after SIGTERM; a snapshot under
 # heavy writes can take a while, and one that never finishes ends in SIGKILL.
-_BROKER_STOP_TIMEOUT_SECONDS = 60.0
+_BROKER_STOP_TIMEOUT_SECONDS = 330.0
 _SHIM_INSTALL_TIMEOUT_SECONDS = 60.0
 _PROBE_TIMEOUT_SECONDS = 30.0
 _PROBE_RECORD_TIMEOUT_SECONDS = 10.0
@@ -487,12 +487,16 @@ def capture_final_workspace(
 		return None
 
 	present, omitted = _final_paths(workspace)
+	before = recorded.get("files") or {}
+	# Unchanged since the baseline, even if its bytes differ from the commit's
+	# (git converts line endings on checkout); git keeps the commit's version.
+	changed = [rel for rel in present if not _unchanged(workspace / rel, before.get(rel))]
 	with tempfile.TemporaryDirectory(prefix="aebench-final-") as scratch:
 		git = _GitCall(Path(scratch), workspace, objects)
 		git("read-tree", commit)
 		baseline = {os.fsdecode(item) for item in git("ls-files", "-z").split(b"\0") if item}
 		# Present files are staged; baseline files gone from the workspace are removed.
-		staged = sorted(set(present) | (baseline - set(present) - set(omitted)))
+		staged = sorted(set(changed) | (baseline - set(present) - set(omitted)))
 		if staged:
 			git(
 				"add",
@@ -511,7 +515,6 @@ def capture_final_workspace(
 	diff_path.write_bytes(diff)
 
 	entries = _diff_entries(workspace, names)
-	before = recorded.get("files") or {}
 	for rel, reason in sorted(omitted.items()):
 		state = _file_state(workspace / rel)
 		if state is None or (rel in before and before[rel].get("sha256") == state["sha256"]):
@@ -596,6 +599,18 @@ class _GitCall:
 		if result.returncode != 0:
 			raise RuntimeError(f"git {args[0]} failed: {os.fsdecode(result.stderr).strip()}")
 		return result.stdout
+
+
+def _unchanged(path: Path, baseline: Mapping[str, object] | None) -> bool:
+	"""Whether a tracked file still has its baseline content."""
+	if baseline is None:
+		return False
+	state = _file_state(path)
+	return (
+		state is not None
+		and state["sha256"] == baseline.get("sha256")
+		and state["symlink"] == baseline.get("symlink")
+	)
 
 
 def _is_secret(rel: str) -> bool:

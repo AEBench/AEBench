@@ -447,7 +447,7 @@ class FileSnapshot(Monitor):
 			}
 		else:
 			# Untracked paths go only in the *_untracked lists, so created,
-			# modified and deleted keep meaning tracked files, as the checker reads them.
+			# modified and deleted keep listing tracked files only.
 			result = {"scope": "tracked+untracked"}
 			lists = {}
 			changes = {"created": created, "modified": modified, "deleted": deleted}

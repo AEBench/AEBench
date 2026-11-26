@@ -19,7 +19,7 @@ import struct
 import sys
 
 SOCKET_PATH = "/run/aebench/command.sock"
-TIMEOUT_SECONDS = 60.0
+TIMEOUT_SECONDS = 300.0
 # The broker's frame types (shim/src/monitor.py).
 WORKDIR_SNAPSHOT = 6
 WORKDIR_SNAPSHOT_DONE = 7

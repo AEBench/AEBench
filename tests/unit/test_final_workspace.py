@@ -97,6 +97,33 @@ def test_the_final_diff_reproduces_the_listed_hashes_on_a_clean_checkout(tmp_pat
 			assert entry["sha256"] == _digest(repo / path)
 
 
+def test_a_file_git_checks_out_with_other_line_endings_counts_as_unchanged(
+	tmp_path: Path,
+) -> None:
+	# Git stores these files with LF but checks them out with CRLF, so the
+	# bytes differ from the commit's although nobody changed them.
+	repo = tmp_path / "workspace"
+	repo.mkdir()
+	(repo / ".gitattributes").write_text("* text=auto\n", encoding="utf-8")
+	(repo / "build.csproj").write_bytes(b"<Project>\r\n</Project>\r\n")
+	(repo / "kept.csproj").write_bytes(b"<Project>\r\n</Project>\r\n")
+	(repo / "run.sh").write_text("echo run\n", encoding="utf-8")
+	_git(repo, "init", "-q")
+	_git(repo, "add", ".")
+	_git(repo, "commit", "-q", "-m", "artifact")
+	trace = tmp_path / "trace"
+	trace.mkdir()
+	write_tracked_files(repo, trace)
+
+	(repo / "run.sh").write_text("echo changed\n", encoding="utf-8")
+	(repo / "build.csproj").write_bytes(b'<Project Sdk="x">\r\n</Project>\r\n')
+	capture_final_workspace(repo, trace)
+
+	assert set(_entries(trace)) == {"run.sh", "build.csproj"}
+	diff = (trace / FINAL_DIFF_BASENAME).read_text(encoding="utf-8")
+	assert "kept.csproj" not in diff
+
+
 def test_the_workspace_repository_is_left_untouched(tmp_path: Path) -> None:
 	repo, trace = _workspace(tmp_path)
 	(repo / "run.sh").write_text("echo faked\n", encoding="utf-8")
