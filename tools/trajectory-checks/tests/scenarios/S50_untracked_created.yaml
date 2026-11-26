@@ -14,3 +14,6 @@ expect:
   paths:
     - {path: sloc.csv, events: [w0, w2], final_writer: w2, final_writer_under: true, final_state: untracked}
     - {path: tmp.log, events: [w1, w3], final_writer: w3, final_writer_under: true, final_state: untracked}
+  coverage:
+    rates.snapshot_scope: tracked+untracked
+    rates.untracked_visible: true
