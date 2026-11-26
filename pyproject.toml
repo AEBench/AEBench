@@ -59,6 +59,8 @@ py-modules = [
 runtime = [
   "agent_support/entry.sh",
   "agent_support/timestamp_lines.py",
+  "ebpf_recorder/Dockerfile",
+  "ebpf_recorder/file_events.bt",
   "shim/src/monitor.py",
 ]
 "runtime.builtin_agents" = ["**/*"]

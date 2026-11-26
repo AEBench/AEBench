@@ -21,6 +21,7 @@ from models import (
 	CaseRunResult,
 	CaseStatus,
 	CommandMonitorInfo,
+	FileEventsInfo,
 	OracleFailureMode,
 	OracleResult,
 	OracleStatus,
@@ -51,6 +52,7 @@ from .agent_runner import (
 from .agents import AgentDefinition, load_agent
 from .backend import BenchRuntime, get_runtime
 from .cases import task_from_case
+from .file_events import LOG_BASENAME, RAW_BASENAME, FileEventsRecorder
 from .monitoring import (
 	COMMAND_SOCKET_BASENAME,
 	REAL_SHELL_PATH,
@@ -111,6 +113,8 @@ class _CaseRunner:
 		self.session: RunSession | None = None
 		self.monitor: BrokerProcess | None = None
 		self.monitor_info: CommandMonitorInfo | None = None
+		self.file_events: FileEventsRecorder | None = None
+		self.file_events_info: FileEventsInfo | None = None
 		self.task_context = ""
 
 		self.error: str | None = None
@@ -326,10 +330,12 @@ class _CaseRunner:
 			check_agent_requirements(self.agent_definition, self.runtime)
 			if self.monitor is not None:
 				install_shim(self.runtime)
+				self._start_file_events()
 				# Verifies monitoring before starting the agent; a broken shell shim,
 				# socket mount, or permission setup could otherwise go unnoticed,
 				# leaving the run with an empty trace.
 				verify_monitoring(self.runtime, self.monitor)
+				self._check_file_events()
 				if self.workdir_snapshots:
 					# Snapshot 0: the workspace before the agent touches it. Also proves
 					# the broker can snapshot before any agent time is spent.
@@ -609,6 +615,64 @@ class _CaseRunner:
 			self._record_error(f"{type(exc).__name__} tearing down command monitoring: {exc}")
 		finally:
 			self._monitor_cleanup_done = True
+		self._finish_file_events()
+
+	def _start_file_events(self) -> None:
+		"""Starts the eBPF file recorder on the agent's container; never fails the run."""
+		monitor = self.monitor
+		if monitor is None:
+			return
+		if not self.options.file_events:
+			self.file_events_info = FileEventsInfo(status="disabled")
+			return
+		container = getattr(self.runtime, "container_id", None)
+		if container is None:
+			self._file_events_unavailable("the runtime has no Docker container")
+			return
+		recorder = FileEventsRecorder(
+			monitor.trace_dir / RAW_BASENAME,
+			log_path=monitor.trace_dir / LOG_BASENAME,
+			build_log=self.paths.infra_log_path,
+		)
+		# Set first, so an interrupt during start still stops the container.
+		self.file_events = recorder
+		try:
+			recorder.start(container)
+		except Exception as exc:
+			self.file_events = None
+			try:
+				recorder.stop()
+			except Exception:
+				logger.warning("failed to stop the eBPF file recorder", exc_info=True)
+			self._file_events_unavailable(f"{type(exc).__name__}: {exc}")
+
+	def _file_events_unavailable(self, reason: str) -> None:
+		logger.warning("not recording file events: %s", reason)
+		self.file_events_info = FileEventsInfo(status="unavailable", reason=reason)
+
+	def _check_file_events(self) -> None:
+		# The monitoring probe ran a shell, so its exec should be recorded.
+		if self.file_events is not None and not self.file_events.saw_exec():
+			logger.warning("the eBPF file recorder saw no exec of the monitoring probe")
+
+	def _finish_file_events(self) -> None:
+		"""Stops the recorder and links its events, after the broker wrote commands.jsonl."""
+		recorder, self.file_events = self.file_events, None
+		if recorder is not None and self.monitor is not None:
+			try:
+				recorder.stop()
+				self.file_events_info = recorder.link(self.monitor.trace_path)
+			except Exception as exc:
+				logger.warning("recording file events failed", exc_info=True)
+				self.file_events_info = FileEventsInfo(
+					status="failed",
+					reason=f"{type(exc).__name__}: {exc}",
+					raw_path=str(recorder.raw_path),
+				)
+		if self.monitor_info is not None and self.file_events_info is not None:
+			self.monitor_info = self.monitor_info.model_copy(
+				update={"file_events": self.file_events_info}
+			)
 
 	def _check_tracked_files(self) -> None:
 		"""Compares the artifact's tracked files with their pre- agent run version."""
@@ -673,6 +737,7 @@ class _CaseRunner:
 					handle.write("\n" + traceback.format_exc())
 			finally:
 				self._monitor_cleanup_done = True
+		self._finish_file_events()
 
 		if not self._agent_support_cleanup_done and self.agent_support_dir is not None:
 			try:

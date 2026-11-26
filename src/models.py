@@ -329,6 +329,19 @@ class RuntimeInfo(_Model):
 	workspace_in_snapshot: bool = False
 
 
+class FileEventsInfo(_Model):
+	"""The eBPF recorder of the container's file, exec and fork events."""
+
+	# disabled: --no-file-events; unavailable: it could not start; failed: it broke later.
+	status: Literal["recorded", "unavailable", "failed", "disabled"]
+	reason: str | None = None
+	raw_path: str | None = None
+	# file_events.jsonl: the events linked to the commands of commands.jsonl.
+	path: str | None = None
+	events: int = 0
+	lost: int = 0
+
+
 class TrackedFilesCheck(_Model):
 	diff_path: str
 	tracked: int
@@ -366,6 +379,7 @@ class CommandMonitorInfo(_Model):
 	tracked_files: TrackedFilesCheck | None = None
 	system_files: SystemFilesCheck | None = None
 	workdir_snapshots: WorkdirSnapshotsInfo | None = None
+	file_events: FileEventsInfo | None = None
 
 
 class RunResult(_Model):
@@ -429,6 +443,8 @@ class RunOptions(_Model):
 	monitor_socket_root: str | None = None
 	# Snapshot the workspace (btrfs) before every agent tool call; case monitor only.
 	workdir_snapshots: bool = False
+	# Record file events with eBPF in monitored Docker runs.
+	file_events: bool = True
 	trajectory_audit: bool = False
 	oracle_fail_fast: bool = False
 

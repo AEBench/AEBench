@@ -178,6 +178,15 @@ def _add_monitor_options(parser: argparse.ArgumentParser) -> None:
 			"and the snapshots are kept there after the run."
 		),
 	)
+	parser.add_argument(
+		"--no-file-events",
+		dest="file_events",
+		action="store_false",
+		help=(
+			"Do not record the container's file, exec and fork events with eBPF "
+			"(file_events.jsonl in the monitor directory)."
+		),
+	)
 
 
 def cli_main(argv: list[str] | None = None) -> int:
@@ -321,6 +330,10 @@ def _case_run(args: argparse.Namespace) -> int:
 				f"{system.python_startup_count} Python startup hooks, {system.etc_count} in /etc "
 				f"({system.diff_path})"
 			)
+		if monitor.file_events is not None:
+			from runtime.reporting import file_events_status
+
+			print(f"File events: {file_events_status(monitor.file_events)}")
 		if monitor.workdir_snapshots is not None:
 			snapshots = monitor.workdir_snapshots
 			print(
@@ -539,6 +552,7 @@ def _run_options(args: argparse.Namespace) -> RunOptions:
 		monitor_commands=bool(getattr(args, "monitor_commands", False)) or trajectory_audit,
 		monitor_socket_root=getattr(args, "socket_dir", None),
 		workdir_snapshots=bool(getattr(args, "workdir_snapshots", False)),
+		file_events=bool(getattr(args, "file_events", True)),
 		trajectory_audit=trajectory_audit,
 		oracle_fail_fast=bool(getattr(args, "oracle_fail_fast", False)),
 	)
