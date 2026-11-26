@@ -1,292 +1,155 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
 
 from evaluator.oracles.bases import CaseOracleExperimentRunsBase
-from evaluator.oracles.checks import ListSimilarityCheck, PathCheck, PathKind, SimilarityMetric
-from evaluator.oracles.oracle_checks_runtime import OraclePath, RuntimeCheckExecutor, RuntimePath
+from evaluator.oracles.checks import PathKind
+from evaluator.oracles.oracle_checks_runtime import (
+	OraclePath,
+	RuntimeCheckExecutor,
+	RuntimePath,
+	run_check_process_capture,
+)
 from evaluator.oracles.reporting import BaseCheck, CheckResult
 
-_START_ERROR_SIMILARITY = 0.90
-_END_ERROR_SIMILARITY = 0.50
+from .common import TARGETS
 
 
-def _load_results_json(path: OraclePath, *, executor: RuntimeCheckExecutor) -> dict[str, Any]:
-	"""Load and validate a Herbie results.json file."""
-	text = executor.read_file_text(path)
-	data = json.loads(text)
-	if not isinstance(data, dict) or "tests" not in data:
-		raise ValueError("results.json must be an object with a 'tests' array")
-	if not isinstance(data["tests"], list):
-		raise ValueError("'tests' must be a list")
-	return data
+def _point(core: dict) -> tuple[float, float]:
+	"""Read measured time and error, rejecting incomplete or invalid measurements."""
+	time, error = core["time"], core["err"]
+	if any(type(value) not in (int, float) or not math.isfinite(value) for value in (time, error)):
+		raise ValueError("time and error must be finite numbers")
+	# FPCore defaults to binary64 when the precision annotation is omitted.
+	bits = {"binary32": 32, "binary64": 64, None: 64}[core["prec"]]
+	if time <= 0 or not 0 <= error <= bits:
+		raise ValueError("time must be positive and error must fit the output precision")
+	return time, bits - error
 
 
-def _discover_herbie_report(
-	repo_root: Path, *, executor: RuntimeCheckExecutor
-) -> tuple[OraclePath, OraclePath] | None:
-	"""Find the best Herbie report directory under the workspace root."""
-	best: tuple[int, OraclePath, OraclePath] | None = None
-	for results_path in executor.glob(repo_root, "*/results.json"):
-		report_dir = results_path.parent
-		if report_dir.name.startswith("."):
-			continue
-
-		html_path: OraclePath | None = None
-		for html_name in ("report.html", "index.html"):
-			candidate_html = RuntimePath.from_parts((report_dir / html_name).as_posix())
-			if executor.path_is_file(candidate_html):
-				html_path = candidate_html
-				break
-		if html_path is None:
-			continue
-
-		try:
-			runtime_results_path = RuntimePath.from_parts(results_path.as_posix())
-			data = _load_results_json(runtime_results_path, executor=executor)
-		except (OSError, json.JSONDecodeError, ValueError):
-			continue
-
-		tests = data["tests"]
-		if not tests:
-			continue
-
-		if best is None or len(tests) > best[0]:
-			best = (len(tests), html_path, runtime_results_path)
-
-	if best is None:
-		return None
-	return best[1], best[2]
+def _beats(candidate: tuple[float, float], baseline: tuple[float, float]) -> bool:
+	return candidate[0] < baseline[0] and candidate[1] >= baseline[1]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ResultsJSONStructureCheck(BaseCheck):
-	"""Fail if results.json is missing or has invalid structure."""
-
-	results_path: OraclePath
+class ChassisResultsCheck(BaseCheck):
+	reference_path: OraclePath
 
 	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
 		try:
-			data = _load_results_json(self.results_path, executor=executor)
-		except (OSError, json.JSONDecodeError, ValueError) as exc:
-			return CheckResult.failure(f"cannot read or parse {self.results_path}: {exc}")
-
-		tests = data["tests"]
-		if not tests:
-			return CheckResult.failure("results.json contains no tests")
-
-		required_fields = {"start", "end", "status", "time", "name"}
-		for i, test in enumerate(tests):
-			if not isinstance(test, dict):
-				return CheckResult.failure(f"tests[{i}] is not an object")
-			missing = required_fields - test.keys()
-			if missing:
-				return CheckResult.failure(
-					f"tests[{i}] ({test.get('name', '?')}) missing fields: {sorted(missing)}"
+			architecture = run_check_process_capture(
+				cmd=("uname", "-m"), cwd=None, env=None, timeout_seconds=30, executor=executor
+			)
+			if architecture.returncode != 0 or architecture.timed_out:
+				raise ValueError("cannot determine the evaluation machine architecture")
+			targets = set(TARGETS)
+			if architecture.stdout.strip() in ("aarch64", "arm64"):
+				targets.remove("avx")
+			reference = json.loads(executor.read_file_text(self.reference_path))
+			wins = dict.fromkeys(sorted(targets), 0)
+			clang_wins = 0
+			for suite, expected_names in reference.items():
+				path = RuntimePath.from_parts(
+					"reports", "platforms", "output", f"{suite}-1", "results.json"
 				)
-
+				report = json.loads(executor.read_file_text(path))
+				if not isinstance(report, dict) or not targets <= report.keys():
+					raise ValueError(f"{suite}: missing target reports")
+				for target in sorted(targets):
+					improve = report[target]["improve"]
+					compare = report[target]["compare"]["baseline"]
+					if (
+						improve["platform"] != target
+						or compare["platform"] != target
+						or improve["seed"] != 1
+						or compare["seed"] != 1
+						or improve["time_unit"] != "ms"
+					):
+						raise ValueError(f"{suite}/{target}: wrong target, seed, or time unit")
+					for data in (improve, compare):
+						rows = data["cores"]
+						if not isinstance(rows, list) or len(rows) != len(expected_names):
+							raise ValueError(f"{suite}/{target}: incomplete benchmark coverage")
+						if {row["input_core"]["name"] for row in rows} != set(expected_names):
+							raise ValueError(f"{suite}/{target}: unexpected benchmark names")
+					for row in improve["cores"]:
+						if row["input_core"]["time"] is not None:
+							_point(row["input_core"])
+							if not row["platform_cores"]:
+								raise ValueError(
+									f"{suite}/{target}: measured input has no output candidates"
+								)
+							for core in row["platform_cores"]:
+								_point(core["platform_core"])
+					for row in compare["cores"]:
+						# The artifact omits measurements for unsupported or unsamplable inputs.
+						candidates = [_point(core) for core in row["platform_cores"]]
+						for core in row["supported_cores"]:
+							if core["time"] is not None and core["err"] is not None:
+								_point(core)
+						baselines = [
+							_point(core)
+							for core in row["desugared_cores"]
+							if core["time"] is not None and core["err"] is not None
+						]
+						wins[target] += any(_beats(c, b) for c in candidates for b in baselines)
+					if target == "c":
+						configs = improve["extra"]
+						expected_flags = {
+							(opt,) + fast
+							for opt in ("-O0", "-O1", "-O2", "-O3", "-Os", "-Oz")
+							for fast in ((), ("-ffast-math",))
+						}
+						if (
+							len(configs) != 12
+							or {tuple(flags) for flags, _, _ in configs} != expected_flags
+						):
+							raise ValueError(f"{suite}: expected all 12 Clang configurations")
+						measured = [
+							row for row in improve["cores"] if row["input_core"]["time"] is not None
+						]
+						for _, times, errors in configs:
+							if len(times) != len(measured) or len(errors) != len(measured):
+								raise ValueError(f"{suite}: incomplete Clang measurements")
+							for row, time, error in zip(measured, times, errors):
+								baseline = _point(dict(row["input_core"], time=time, err=error))
+								clang_wins += any(
+									_beats(_point(core["platform_core"]), baseline)
+									for core in row["platform_cores"]
+								)
+			# shortcut: check per-benchmark wins, add aggregate Pareto scoring after hardware calibration.
+			if not all(wins.values()) or not clang_wins:
+				raise ValueError(
+					f"no measured speedup at equal or better accuracy: Herbie={wins}, Clang={clang_wins}"
+				)
+		except (OSError, RuntimeError, ValueError, KeyError, TypeError, OverflowError) as exc:
+			return CheckResult.failure(f"invalid Chassis evaluation: {exc}")
 		return CheckResult.success(
-			message=f"results.json has {len(tests)} tests with valid structure"
+			f"81 benchmarks on {len(targets)} targets; Herbie wins={wins}; Clang wins={clang_wins}"
 		)
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class HerbieNoRegressionCheck(BaseCheck):
-	"""Fail if any test has end > start (accuracy regression)."""
-
-	results_path: OraclePath
-
-	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
-		try:
-			data = _load_results_json(self.results_path, executor=executor)
-		except (OSError, json.JSONDecodeError, ValueError) as exc:
-			return CheckResult.failure(f"cannot load results: {exc}")
-
-		violations: list[str] = []
-		for test in data["tests"]:
-			start = test.get("start")
-			end = test.get("end")
-			if not isinstance(start, (int, float)) or not isinstance(end, (int, float)):
-				continue
-			if end > start:
-				violations.append(f"{test.get('name', '?')}: end={end:.4f} > start={start:.4f}")
-
-		if violations:
-			detail = "\n".join(f"- {v}" for v in violations[:10])
-			more = f"\n... ({len(violations) - 10} more)" if len(violations) > 10 else ""
-			return CheckResult.failure(
-				f"{len(violations)} test(s) regressed (end > start):\n{detail}{more}"
-			)
-
-		return CheckResult.success(
-			message=f"all {len(data['tests'])} tests satisfy end <= start"
-		)
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class BenchmarkCountCheck(BaseCheck):
-	"""Fail if the results have fewer tests than the reference."""
-
-	results_path: OraclePath
-	reference_path: OraclePath
-
-	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
-		try:
-			results = _load_results_json(self.results_path, executor=executor)
-			reference = _load_results_json(self.reference_path, executor=executor)
-		except (OSError, json.JSONDecodeError, ValueError) as exc:
-			return CheckResult.failure(f"cannot load results: {exc}")
-
-		actual = len(results["tests"])
-		expected = len(reference["tests"])
-
-		if actual < expected:
-			return CheckResult.failure(
-				f"results have {actual} tests, reference has {expected}"
-			)
-
-		return CheckResult.success(
-			message=f"results have {actual} tests (reference: {expected})"
-		)
-
-
-def _extract_values(
-	results_path: OraclePath,
-	reference_path: OraclePath,
-	field: str,
-	*,
-	executor: RuntimeCheckExecutor,
-) -> tuple[list[float], list[float]]:
-	results = _load_results_json(results_path, executor=executor)
-	reference = _load_results_json(reference_path, executor=executor)
-
-	ref_by_name: dict[str, float] = {}
-	for test in reference["tests"]:
-		name = test.get("name", "")
-		value = test.get(field)
-		if isinstance(value, (int, float)) and name:
-			ref_by_name[name] = float(value)
-
-	observed: list[float] = []
-	ref_values: list[float] = []
-	for test in results["tests"]:
-		name = test.get("name", "")
-		value = test.get(field)
-		if name in ref_by_name and isinstance(value, (int, float)):
-			observed.append(float(value))
-			ref_values.append(ref_by_name[name])
-
-	return observed, ref_values
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class HerbieValueSimilarityCheck(BaseCheck):
-	"""Pearson similarity of a numeric field against reference."""
-
-	results_path: OraclePath
-	reference_path: OraclePath
-	field: str
-	threshold: float
-
-	def check(self, executor: RuntimeCheckExecutor) -> CheckResult:
-		try:
-			observed, reference = _extract_values(
-				self.results_path,
-				self.reference_path,
-				self.field,
-				executor=executor,
-			)
-		except (OSError, json.JSONDecodeError, ValueError) as exc:
-			return CheckResult.failure(f"cannot extract {self.field}: {exc}")
-
-		if len(observed) < 2:
-			return CheckResult.failure(
-				f"too few matching tests for {self.field} correlation "
-				f"(found {len(observed)}, need at least 2)"
-			)
-
-		delegated = ListSimilarityCheck(
-			name=self.name,
-			optional=self.optional,
-			observed=observed,
-			reference=reference,
-			metric=SimilarityMetric.PEARSON,
-			min_similarity=self.threshold,
-		)
-		return delegated.check(executor)
 
 
 class OracleExperimentRuns(CaseOracleExperimentRunsBase):
 	def requirements(self) -> Sequence[BaseCheck]:
-		repo_root = self._workspace_dir
-		report = _discover_herbie_report(repo_root, executor=self.executor)
-		reference_path = self.ref_path("results.ref.json")
-
-		checks: list[BaseCheck] = []
-
-		if report is None:
-			checks.append(
-				PathCheck(
-					name="results_json",
-					path=repo_root / "graphs" / "results.json",
+		return (
+			ChassisResultsCheck(
+				name="chassis_target_comparisons",
+				reference_path=self.ref_path("benchmarks.ref.json"),
+			),
+			*(
+				self.path_check(
+					name=figure,
+					path=self.runtime_path("reports", "platforms", "output", figure),
 					kind=PathKind.FILE,
 				)
-			)
-			return tuple(checks)
-
-		html_path, results_path = report
-		checks.append(
-			PathCheck(
-				name="herbie_report_html",
-				path=html_path,
-				kind=PathKind.FILE,
-			)
+				for figure in (
+					"c-pareto.png",
+					"baseline-pareto.png",
+					"baseline-pareto2.png",
+					"cost-vs-time.png",
+				)
+			),
 		)
-
-		checks.append(
-			ResultsJSONStructureCheck(
-				name="results_json_structure",
-				results_path=results_path,
-			)
-		)
-
-		checks.append(
-			HerbieNoRegressionCheck(
-				name="no_accuracy_regression",
-				results_path=results_path,
-			)
-		)
-
-		checks.append(
-			BenchmarkCountCheck(
-				name="benchmark_count",
-				results_path=results_path,
-				reference_path=reference_path,
-			)
-		)
-
-		checks.append(
-			HerbieValueSimilarityCheck(
-				name="start_error_correlation",
-				results_path=results_path,
-				reference_path=reference_path,
-				field="start",
-				threshold=_START_ERROR_SIMILARITY,
-			)
-		)
-
-		checks.append(
-			HerbieValueSimilarityCheck(
-				name="end_error_correlation",
-				results_path=results_path,
-				reference_path=reference_path,
-				field="end",
-				threshold=_END_ERROR_SIMILARITY,
-			)
-		)
-
-		return tuple(checks)
