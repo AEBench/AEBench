@@ -48,6 +48,7 @@
     "stdout_bytes": 12,
     "t_end": 1795168805.1,
     "t_start": 1795168800.1,
+    "traced_writes": [{"event_type": "moved_to", "path": "/tmp/ws/project/out/new.csv", "t": 1795168804.0}],
     "wrapper": "claude_eval"
   },
   {
@@ -98,6 +99,7 @@
     "stdout_bytes": 0,
     "t_end": 1795168803.0,
     "t_start": 1795168801.0,
+    "traced_writes": [{"event_type": "close_write", "path": "/tmp/ws/project/src/a.o", "t": 1795168802.0}],
     "wrapper": null
   },
   {
@@ -146,6 +148,7 @@
     "stdout_bytes": 0,
     "t_end": 1795168920.0,
     "t_start": 1795168860.0,
+    "traced_writes": [],
     "wrapper": null
   },
   {
@@ -194,6 +197,7 @@
     "stdout_bytes": null,
     "t_end": 1795168920.0,
     "t_start": 1795168920.0,
+    "traced_writes": [],
     "wrapper": null
   }
 ]

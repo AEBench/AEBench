@@ -1,0 +1,23 @@
+name: S57_traced_write_ops
+description: The op of a traced-only write (MC-26) -> create for a path neither tracked at baseline nor written earlier in the run, modify for a tracked path or a later write; a moved_to is a write, and two rows of one exec and path give one event (§6.6 rule 2).
+run: {capabilities: {read_tracing: true}}
+calls:
+  - {call_id: c1, t_start: 100, t_end: 101, command: "python3 a.py"}
+  - {call_id: c2, t_start: 200, t_end: 201, command: "python3 b.py"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 100.8, command: "python3 a.py", reads: [],
+     traced_writes: [{path: /tmp/cache.bin, t: 100.3, event_type: close_write},
+                     {path: /repo/data/in.csv, t: 100.4, event_type: close_write},
+                     {path: /tmp/cache.bin, t: 100.5, event_type: moved_to}]}
+  - {command_id: e2, t_start: 200.2, t_end: 200.8, command: "python3 b.py", reads: [],
+     traced_writes: [{path: /tmp/cache.bin, t: 200.3, event_type: moved_to}]}
+baseline: {files: {data/in.csv: {}}}
+expect:
+  links:
+    - {link_type: write_event, path: /tmp/cache.bin, writer_id: e1, op: create, in_workspace: false, source: traced}
+    - {link_type: write_event, path: data/in.csv, writer_id: e1, op: modify, in_workspace: true, source: traced}
+    - {link_type: write_event, path: /tmp/cache.bin, writer_id: e2, op: modify, in_workspace: false, source: traced}
+  links_exact: true
+  coverage:
+    counts.write_events_outside_workspace: 2
+    counts.write_events_traced: 3

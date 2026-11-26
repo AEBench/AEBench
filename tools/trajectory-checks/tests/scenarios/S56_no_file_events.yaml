@@ -1,0 +1,19 @@
+name: S56_no_file_events
+description: Without file_events.jsonl (traced_writes null) J3 is unchanged -> a nested snapshot report folds its parent's, every event has source snapshot, and no event is traced (§6.6 rules 2 and 3).
+calls:
+  - {call_id: c1, t_start: 100, t_end: 110, command: "./build.sh"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 109.8, command: "./build.sh", snapshot: {modified: [out/r.json]}}
+  - {command_id: n1, t_start: 101, t_end: 102, command: "python3 gen.py", snapshot: {modified: [out/r.json]}}
+baseline: {files: {out/r.json: {}}}
+final_diff: {modified: [out/r.json], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: write_event, event_id: w0, path: out/r.json, op: modify, scope: tracked, writer_id: n1, depth_rule: parent_may_also_write, source: snapshot}
+  links_exact: true
+  paths:
+    - {path: out/r.json, events: [w0], final_writer: w0, final_writer_under: true, final_state: changed}
+  coverage:
+    counts.write_events.exec: 1
+    counts.write_events_outside_workspace: 0
+    counts.write_events_traced: 0

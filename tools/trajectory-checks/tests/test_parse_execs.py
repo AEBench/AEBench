@@ -218,6 +218,80 @@ def test_no_file_events_gives_reads_none() -> None:
     assert [r["reads"] for r in records] == [None] * 4
 
 
+def test_no_file_events_gives_traced_writes_none() -> None:
+    """Without file_events.jsonl, traced_writes is None (not recorded)."""
+    records = parse.load_execs(NEW_FORMAT, "claude")
+    assert [r["traced_writes"] for r in records] == [None] * 4
+
+
+def test_traced_writes_from_recorder_rows(tmp_path: pathlib.Path) -> None:
+    """MC-26: the eBPF recorder's writes become traced_writes per command.
+
+    The header line has no path and is skipped; close_write and moved_to
+    rows with a command_id are writes, in time order; access and
+    open_exec rows stay reads; a write without a command_id is neither a
+    traced write nor an unattributed read.
+    """
+    first, second = "a" * 31 + "1", "b" * 31 + "2"
+    rows = [
+        {"recorder": "bpftrace", "lost": 0, "events": 5},
+        {
+            "t": 9.0,
+            "event_type": "close_write",
+            "path": "/repo/b.log",
+            "command_id": first,
+            "pid": 7,
+            "host_pid": 70,
+        },
+        {
+            "t": 3.0,
+            "event_type": "close_write",
+            "path": "/home/agent/x.log",
+            "command_id": first,
+            "pid": 7,
+            "host_pid": 70,
+        },
+        {
+            "t": 4.0,
+            "event_type": "access",
+            "path": "/home/agent/x.log",
+            "command_id": second,
+            "pid": 8,
+            "host_pid": 80,
+        },
+        {
+            "t": 5.0,
+            "event_type": "open_exec",
+            "path": "/usr/bin/cp",
+            "command_id": second,
+            "pid": 8,
+            "host_pid": 80,
+        },
+        {
+            "t": 6.0,
+            "event_type": "close_write",
+            "path": "/tmp/orphan",
+            "command_id": None,
+            "pid": 9,
+            "host_pid": 90,
+        },
+    ]
+    events = tmp_path / "file_events.jsonl"
+    events.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    by_id = {
+        r["command_id"]: r
+        for r in parse.load_execs(NEW_FORMAT, "claude", events)
+    }
+    assert by_id[first]["traced_writes"] == [
+        {"path": "/home/agent/x.log", "t": 3.0, "event_type": "close_write"},
+        {"path": "/repo/b.log", "t": 9.0, "event_type": "close_write"},
+    ]
+    assert by_id[second]["traced_writes"] == []
+    assert by_id[second]["reads"] == ["/home/agent/x.log", "/usr/bin/cp"]
+    assert by_id[first]["reads"] == []
+    assert parse.read_events(events)[1] == []
+
+
 def _timing_at_root(raw: dict) -> dict:
     """The record with MC-10's released_at and ended_at at its root."""
     record = json.loads(json.dumps(raw))

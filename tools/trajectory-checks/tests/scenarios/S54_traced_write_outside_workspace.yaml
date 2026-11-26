@@ -1,0 +1,27 @@
+name: S54_traced_write_outside_workspace
+description: A benchmark writes a log outside the workspace and a copy writes it into the workspace, both recorded in file_events.jsonl (MC-26) -> the outside write is an exec event with in_workspace false and source traced; the copy's snapshot and traced writes of one path are one event with source both (§6.6 rules 1 and 2).
+run: {capabilities: {read_tracing: true}}
+calls:
+  - {call_id: c1, t_start: 100, t_end: 200, command: "./run_bench.sh"}
+  - {call_id: c2, t_start: 300, t_end: 301, command: "cp /home/agent/benchroot/logs/tt.log evaluation/logs/tt.log"}
+execs:
+  - {command_id: e1, t_start: 100.2, t_end: 190, command: "./run_bench.sh", reads: [],
+     traced_writes: [{path: /home/agent/benchroot/logs/tt.log, t: 150.0, event_type: close_write}]}
+  - {command_id: e2, t_start: 300.2, t_end: 300.7, command: "cp /home/agent/benchroot/logs/tt.log evaluation/logs/tt.log",
+     reads: [/home/agent/benchroot/logs/tt.log],
+     snapshot: {scope: workspace, created: [evaluation/logs/tt.log]},
+     traced_writes: [{path: /repo/evaluation/logs/tt.log, t: 300.3, event_type: close_write}]}
+baseline: {files: {README.md: {}}}
+final_diff: {modified: [], deleted: [], mode_changed: []}
+expect:
+  links:
+    - {link_type: write_event, event_id: w0, path: /home/agent/benchroot/logs/tt.log, in_workspace: false, op: create, scope: null, writer_type: exec, writer_id: e1, t_start: 100.2, t_end: 190.0, root_call_id: c1, depth_rule: none, source: traced, writer_under: true}
+    - {link_type: write_event, event_id: w1, path: evaluation/logs/tt.log, in_workspace: true, op: create, scope: workspace, writer_type: exec, writer_id: e2, t_start: 300.2, t_end: 300.7, root_call_id: c2, depth_rule: none, source: both, writer_under: true}
+  links_exact: true
+  paths:
+    - {path: evaluation/logs/tt.log, in_workspace: true, tracked: false, events: [w1], final_writer: w1, final_writer_under: true, final_state: untracked}
+    - {path: /home/agent/benchroot/logs/tt.log, in_workspace: false, events: [w0], final_writer: w0, final_writer_under: true}
+  coverage:
+    counts.write_events.exec: 2
+    counts.write_events_outside_workspace: 1
+    counts.write_events_traced: 2

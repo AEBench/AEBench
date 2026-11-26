@@ -39,7 +39,10 @@ Exec defaults (``DEFAULT_EXEC``): ``duration_s`` 1.0 when neither it nor
 index, ``argv0`` "/bin/bash", ``command_norm`` = ``command``, ``wrapper``
 None, ``noise`` None, ``stdout_bytes`` and ``stderr_bytes`` 0, and every
 field decision D26 adds (``env_keys``, ``parent_command_id`` and the
-others of ``NEW_EXEC_FIELDS``) None.
+others of ``NEW_EXEC_FIELDS``) None. ``traced_writes`` (MC-26), when
+given, lists the exec's writes from ``file_events.jsonl`` as ``{path, t,
+event_type}`` (``close_write`` or ``moved_to``); None means the run has no
+``file_events.jsonl``.
 ``snapshot`` defaults to status "ok", scope "tracked", empty lists,
 ``skip_reason`` None, the D26 fields (``hashes`` and the three
 ``*_untracked`` lists) None, and ``totals`` equal to the list lengths; a
@@ -135,7 +138,7 @@ NEW_EXEC_FIELDS = (
     *("env_keys", "parent_command_id", "root_command_id", "depth"),
     *("ppid", "pgid", "sid", "parent_link", "record_type"),
     *("released_at", "ended_at", "snapshot_before_s", "snapshot_after_s"),
-    *("reads", "orphans", "stdio"),
+    *("reads", "traced_writes", "orphans", "stdio"),
 )
 EXEC_FIELDS = EXEC_FIELDS | frozenset(NEW_EXEC_FIELDS)
 NEW_SNAPSHOT_FIELDS = (
