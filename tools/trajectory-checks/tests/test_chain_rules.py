@@ -46,7 +46,7 @@ def _by_id() -> dict[str, pathlib.Path]:
 
 
 def test_scenarios_exist() -> None:
-    """Exactly the scenarios H01 to H44, H45a to H52b and H53 to H76."""
+    """Exactly the scenarios H01 to H44, H45a to H52b and H53 to H78."""
     ids = [helpers.scenario_id(path) for path in SCENARIOS]
     assert sorted(ids) == sorted(helpers.SPEC_IDS)
     assert len(ids) == len(set(ids))

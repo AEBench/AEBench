@@ -93,7 +93,7 @@ RULE_IDS = (*SECTION6_RULES, "ARG6", "TM4", "D24")
 SPEC_IDS = (
     *(f"H{n:02d}" for n in range(1, 45)),
     *(f"H{n}{h}" for n in range(45, 53) for h in "ab"),
-    *(f"H{n:02d}" for n in range(53, 77)),
+    *(f"H{n:02d}" for n in range(53, 79)),
 )
 # §2.2.3's capability pairs: (capability, bases key, true id, false id,
 # the rule both halves cite).
