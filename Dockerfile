@@ -28,6 +28,7 @@ WORKDIR /opt/artevalbench
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
+    bpftrace \
     build-essential \
     ca-certificates \
     curl \
