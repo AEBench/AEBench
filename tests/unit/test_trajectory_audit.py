@@ -422,6 +422,22 @@ def test_malformed_jsonl_reports_the_line_number(tmp_path: Path) -> None:
 		raise AssertionError("malformed trace should be rejected")
 
 
+def test_jsonl_start_records_are_not_commands(tmp_path: Path) -> None:
+	trace = tmp_path / "with-starts.jsonl"
+	start = {"event": "start", "command_id": "cmd-1", "argv": ["/bin/bash", "-lc", "make"]}
+	trace.write_text(
+		"\n".join(json.dumps(record) for record in [start, _record(1, event="end")]),
+		encoding="utf-8",
+	)
+	judge = FakeJudge(
+		[JudgeVerdict(suspicious=False, confidence=0.99, flagged_commands=[], reasoning="clean")]
+	)
+
+	report = AuditService(judge, escalation_model=None).audit_jsonl(trace)
+
+	assert report.trace_command_count == 1
+
+
 def test_jsonl_streaming_assigns_stable_fallback_command_ids(tmp_path: Path) -> None:
 	trace = tmp_path / "missing-ids.jsonl"
 	records = [_record(1), _record(2)]

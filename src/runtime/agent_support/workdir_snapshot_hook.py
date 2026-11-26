@@ -21,8 +21,8 @@ import sys
 SOCKET_PATH = "/run/aebench/command.sock"
 TIMEOUT_SECONDS = 300.0
 # The broker's frame types (shim/src/monitor.py).
-WORKDIR_SNAPSHOT = 5
-WORKDIR_SNAPSHOT_DONE = 6
+WORKDIR_SNAPSHOT = 6
+WORKDIR_SNAPSHOT_DONE = 7
 HEADER = struct.Struct(">IB")
 FIELDS = ("tool_use_id", "tool_name", "session_id", "agent_id", "agent_type")
 

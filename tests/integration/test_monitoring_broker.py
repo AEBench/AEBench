@@ -6,16 +6,21 @@ so this exercises the supervisor and the broker exactly as a run would.
 
 from __future__ import annotations
 
+import hashlib
+import importlib.util
 import json
 import os
+import shutil
 import socket
 import struct
 import time
+from datetime import datetime
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
-from runtime.monitoring import BrokerProcess
+from runtime.monitoring import BROKER_SCRIPT, BrokerProcess, write_tracked_files
 
 pytestmark = pytest.mark.sanity
 
@@ -24,6 +29,7 @@ _COMMAND_INFO = 0
 _STDOUT = 1
 _END = 3
 _DECISION = 4
+_STARTED = 5
 
 
 def _frame(kind: int, payload: bytes) -> bytes:
@@ -39,12 +45,29 @@ def _wait_for(predicate: object, *, timeout: float = 10.0) -> bool:
 	return False
 
 
-def _run_one_command(socket_path: Path, argv: list[str]) -> None:
-	"""Plays one command through the protocol the way the shim does."""
+def _run_one_command(
+	socket_path: Path,
+	argv: list[str],
+	*,
+	info: dict[str, object] | None = None,
+	stdout: bytes = b"hello\n",
+	end: dict[str, object] | None = None,
+) -> dict[str, object]:
+	"""Plays one command through the protocol the way the shim does.
+
+	Returns:
+		The decision the broker sent.
+	"""
 	client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 	client.connect(str(socket_path))
 	try:
-		info = {"argv": argv, "cwd": "/repo", "pid": os.getpid(), "env_keys": ["PATH"]}
+		info = {
+			"argv": argv,
+			"cwd": "/repo",
+			"pid": os.getpid(),
+			"env_keys": ["PATH"],
+			**(info or {}),
+		}
 		client.sendall(_frame(_COMMAND_INFO, json.dumps(info).encode("utf-8")))
 
 		header = client.recv(_HEADER.size)
@@ -53,10 +76,26 @@ def _run_one_command(socket_path: Path, argv: list[str]) -> None:
 		assert kind == _DECISION
 		assert decision["allow"] is True
 
-		client.sendall(_frame(_STDOUT, b"hello\n"))
-		client.sendall(_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8")))
+		if stdout:
+			client.sendall(_frame(_STDOUT, stdout))
+		end = {"exit_code": 0, "signal": None, **(end or {})}
+		client.sendall(_frame(_END, json.dumps(end).encode("utf-8")))
 	finally:
 		client.close()
+	return decision
+
+
+def _lines(broker: BrokerProcess) -> list[dict[str, object]]:
+	"""Returns every line of the trace, start records included, in the order written."""
+	if not broker.trace_path.exists():
+		return []
+	lines = broker.trace_path.read_text(encoding="utf-8").splitlines()
+	return [json.loads(line) for line in lines]
+
+
+def _records(broker: BrokerProcess) -> list[dict[str, object]]:
+	"""Returns the end record of each command, in the order written."""
+	return [record for record in _lines(broker) if record.get("event") != "start"]
 
 
 @pytest.fixture(name="broker")
@@ -139,7 +178,7 @@ def test_a_command_is_recorded_with_its_output(broker: BrokerProcess) -> None:
 	_run_one_command(socket_path, argv)
 
 	assert _wait_for(lambda: broker.command_count() == 1)
-	record = json.loads(broker.trace_path.read_text(encoding="utf-8").splitlines()[0])
+	(record,) = _records(broker)
 	assert record["argv"] == argv
 	assert record["exit_code"] == 0
 	assert record["complete"] is True
@@ -147,6 +186,397 @@ def test_a_command_is_recorded_with_its_output(broker: BrokerProcess) -> None:
 	assert record["monitors"]["timing"]["duration_ms"] >= 0
 	captured = broker.trace_dir / record["stdout"]["path"]
 	assert captured.read_bytes() == b"hello\n"
+
+
+def test_a_tty_stream_is_recorded_as_skipped(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+
+	_run_one_command(
+		socket_path,
+		["/bin/bash", "-c", "ls"],
+		info={"stdout_tty": True, "stderr_tty": False},
+		stdout=b"",
+	)
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	(record,) = _records(broker)
+	assert record["stdout"]["capture"] == "skipped_tty"
+	assert record["stderr"]["capture"] == "none"
+
+
+def test_records_carry_no_schema_version(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+
+	_run_one_command(socket_path, ["/bin/bash", "-c", "ls"])
+	_open_command(socket_path, {"argv": ["/bin/bash", "-c", "sleep"], "pid": 100}).close()
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	assert all("schema_version" not in record for record in _records(broker))
+
+
+def test_the_stdio_targets_are_recorded(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	stdio = ["/dev/null", "/repo/log", "pipe:[42]"]
+
+	_run_one_command(socket_path, ["/bin/bash", "./run.sh"], info={"stdio": stdio})
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	(record,) = _records(broker)
+	assert record["stdio"] == stdio
+
+
+def test_release_and_end_times_are_recorded(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+
+	_run_one_command(socket_path, ["/bin/bash", "-c", "ls"], info={"t_info": 1700000000.5})
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	(record,) = _records(broker)
+	timing = record["monitors"]["timing"]
+	released = datetime.fromisoformat(timing["released_at"])
+	ended = datetime.fromisoformat(timing["ended_at"])
+	assert released <= ended
+	assert "released_at" not in record
+	assert "ended_at" not in record
+	assert record["shim_clock"]["info"] == 1700000000.5
+
+
+def test_timing_runs_from_release_to_end(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+
+	client = _open_command(socket_path, {"argv": ["/bin/bash", "-c", "sleep"], "pid": 100})
+	time.sleep(0.2)
+	client.sendall(_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8")))
+	client.close()
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	(record,) = _records(broker)
+	timing = record["monitors"]["timing"]
+	released = datetime.fromisoformat(timing["released_at"])
+	ended = datetime.fromisoformat(timing["ended_at"])
+	assert timing["started_at"] == timing["released_at"]
+	assert timing["duration_ms"] >= 200
+	assert abs(timing["duration_ms"] - (ended - released).total_seconds() * 1000) <= 2
+	assert isinstance(timing["snapshot_before_ms"], int) and timing["snapshot_before_ms"] >= 0
+	assert isinstance(timing["snapshot_after_ms"], int) and timing["snapshot_after_ms"] >= 0
+
+
+def test_a_record_without_an_end_is_timed_to_the_disconnect(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+
+	client = _open_command(socket_path, {"argv": ["/bin/bash", "-c", "sleep"], "pid": 100})
+	time.sleep(0.2)
+	client.close()
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	(record,) = _records(broker)
+	timing = record["monitors"]["timing"]
+	released = datetime.fromisoformat(timing["released_at"])
+	ended = datetime.fromisoformat(timing["ended_at"])
+	assert record["complete"] is False
+	assert record["end_reason"] == "disconnect"
+	assert timing["started_at"] == timing["released_at"]
+	assert timing["duration_ms"] >= 200
+	assert abs(timing["duration_ms"] - (ended - released).total_seconds() * 1000) <= 2
+	assert isinstance(timing["snapshot_after_ms"], int)
+
+
+def test_a_record_with_an_end_frame_says_so(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+
+	_run_one_command(socket_path, ["/bin/bash", "-c", "ls"])
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	(record,) = _records(broker)
+	assert record["complete"] is True
+	assert record["end_reason"] == "end_frame"
+
+
+def _open_command(socket_path: Path, info: dict[str, object]) -> socket.socket:
+	"""Starts a command and returns its connection, still open."""
+	client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+	client.connect(str(socket_path))
+	info = {"cwd": "/repo", "env_keys": [], **info}
+	client.sendall(_frame(_COMMAND_INFO, json.dumps(info).encode("utf-8")))
+	length, _kind = _HEADER.unpack(client.recv(_HEADER.size))
+	client.recv(length)
+	return client
+
+
+def _record_for(broker: BrokerProcess, argv: list[str]) -> dict[str, object]:
+	(record,) = [record for record in _records(broker) if record["argv"] == argv]
+	return record
+
+
+def test_a_nested_shell_is_linked_to_the_open_command_above_it(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	outer_argv = ["/bin/bash", "-c", "make"]
+	inner_argv = ["/bin/bash", "-c", "cc -c a.c"]
+
+	outer = _open_command(
+		socket_path, {"argv": outer_argv, "pid": 100, "start_ticks": 5, "ancestry": []}
+	)
+	ancestry = [
+		{"pid": 300, "start_ticks": 9, "comm": "make"},
+		{"pid": 200, "start_ticks": 7, "comm": "bash"},
+		{"pid": 100, "start_ticks": 5, "comm": "aeshell"},
+	]
+	_run_one_command(
+		socket_path, inner_argv, info={"pid": 400, "start_ticks": 11, "ancestry": ancestry}
+	)
+	outer.sendall(_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8")))
+	outer.close()
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	parent = _record_for(broker, outer_argv)
+	child = _record_for(broker, inner_argv)
+	assert parent["parent_command_id"] is None
+	assert parent["parent_link"] == "none"
+	assert parent["depth"] == 0
+	assert child["parent_command_id"] == parent["command_id"]
+	assert child["root_command_id"] == parent["command_id"]
+	assert child["parent_link"] == "live"
+	assert child["depth"] == 1
+
+
+def test_a_reused_pid_is_not_taken_for_a_finished_parent(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	first_argv = ["/bin/bash", "-c", "first"]
+	later_argv = ["/bin/bash", "-c", "later"]
+
+	_run_one_command(socket_path, first_argv, info={"pid": 100, "start_ticks": 5, "ancestry": []})
+	_run_one_command(
+		socket_path,
+		later_argv,
+		info={
+			"pid": 400,
+			"start_ticks": 20,
+			"ancestry": [{"pid": 100, "start_ticks": 19, "comm": "x"}],
+		},
+	)
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	assert _record_for(broker, later_argv)["parent_command_id"] is None
+
+
+def test_a_shell_started_after_its_parent_finished_is_linked_as_closed(
+	broker: BrokerProcess,
+) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	first_argv = ["/bin/bash", "-c", "first"]
+	later_argv = ["/bin/bash", "-c", "later"]
+
+	_run_one_command(socket_path, first_argv, info={"pid": 100, "start_ticks": 5, "ancestry": []})
+	assert _wait_for(lambda: broker.command_count() == 1)
+	_run_one_command(
+		socket_path,
+		later_argv,
+		info={
+			"pid": 400,
+			"start_ticks": 20,
+			"ancestry": [{"pid": 100, "start_ticks": 5, "comm": "aeshell"}],
+		},
+	)
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	later = _record_for(broker, later_argv)
+	assert later["parent_command_id"] == _record_for(broker, first_argv)["command_id"]
+	assert later["parent_link"] == "closed"
+
+
+def test_a_shell_under_a_killed_shim_links_through_the_real_shell(
+	broker: BrokerProcess,
+) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	outer_argv = ["/bin/bash", "-c", "./experiment.sh"]
+	inner_argv = ["/bin/bash", "-c", "python3 eval.py"]
+
+	outer = _open_command(
+		socket_path, {"argv": outer_argv, "pid": 100, "start_ticks": 5, "ancestry": []}
+	)
+	started = {"child_pid": 200, "child_start_ticks": 7, "t_spawn": 1700000000.0}
+	outer.sendall(_frame(_STARTED, json.dumps(started).encode("utf-8")))
+	# Killed before it could send `end`, as `kill -9` would do.
+	outer.close()
+	assert _wait_for(lambda: broker.command_count() == 1)
+
+	_run_one_command(
+		socket_path,
+		inner_argv,
+		info={
+			"pid": 400,
+			"start_ticks": 9,
+			"ancestry": [{"pid": 200, "start_ticks": 7, "comm": "bash"}],
+		},
+	)
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	parent = _record_for(broker, outer_argv)
+	assert parent["child_pid"] == 200
+	assert parent["child_start_ticks"] == 7
+	assert parent["shim_clock"]["spawn"] == 1700000000.0
+	child = _record_for(broker, inner_argv)
+	assert child["parent_command_id"] == parent["command_id"]
+	assert child["parent_link"] == "closed"
+
+
+def test_a_shell_started_by_an_orphan_is_linked_as_adopted(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	launch_argv = ["/bin/bash", "-c", "nohup ./run.sh > log 2>&1 &"]
+	later_argv = ["/bin/bash", "-c", "python3 eval.py"]
+	orphans = [{"pid": 500, "start_ticks": 3, "comm": "run.sh"}]
+
+	decision = _run_one_command(
+		socket_path,
+		launch_argv,
+		info={"pid": 100, "start_ticks": 1, "ancestry": []},
+		end={"orphans": orphans},
+	)
+	assert decision["subreaper"] is True
+	assert _wait_for(lambda: broker.command_count() == 1)
+	_run_one_command(
+		socket_path,
+		later_argv,
+		info={
+			"pid": 600,
+			"start_ticks": 8,
+			"ancestry": [{"pid": 500, "start_ticks": 3, "comm": "run.sh"}],
+		},
+	)
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	launch = _record_for(broker, launch_argv)
+	assert launch["orphans"] == orphans
+	later = _record_for(broker, later_argv)
+	assert later["parent_command_id"] == launch["command_id"]
+	assert later["parent_link"] == "adopted"
+
+
+def test_an_orphaned_shim_keeps_its_own_command(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	launch_argv = ["/bin/bash", "-c", "nohup bash -c ./run.sh &"]
+	detached_argv = ["/bin/bash", "-c", "./run.sh"]
+	inner_argv = ["/bin/bash", "-c", "python3 eval.py"]
+
+	launch = _open_command(
+		socket_path, {"argv": launch_argv, "pid": 100, "start_ticks": 1, "ancestry": []}
+	)
+	_run_one_command(
+		socket_path,
+		detached_argv,
+		info={
+			"pid": 500,
+			"start_ticks": 3,
+			"ancestry": [{"pid": 100, "start_ticks": 1, "comm": "aeshell"}],
+		},
+	)
+	orphans = [{"pid": 500, "start_ticks": 3, "comm": "aeshell"}]
+	end = {"exit_code": 0, "signal": None, "orphans": orphans}
+	launch.sendall(_frame(_END, json.dumps(end).encode("utf-8")))
+	launch.close()
+	assert _wait_for(lambda: broker.command_count() == 2)
+	_run_one_command(
+		socket_path,
+		inner_argv,
+		info={
+			"pid": 600,
+			"start_ticks": 8,
+			"ancestry": [{"pid": 500, "start_ticks": 3, "comm": "aeshell"}],
+		},
+	)
+
+	assert _wait_for(lambda: broker.command_count() == 3)
+	inner = _record_for(broker, inner_argv)
+	detached = _record_for(broker, detached_argv)
+	assert inner["parent_command_id"] == detached["command_id"]
+	assert inner["depth"] == 2
+	# The detached shim stays the launch's own orphan, linked to its command.
+	(orphan,) = _record_for(broker, launch_argv)["orphans"]
+	assert orphan == {**orphans[0], "command_id": detached["command_id"]}
+
+
+def test_an_orphan_that_is_a_recorded_child_links_to_its_command(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	launch_argv = ["/bin/bash", "-c", "(bash ./bench.sh > driver.log 2>&1 &); sleep 90"]
+	bench_argv = ["/bin/bash", "./bench.sh"]
+
+	launch = _open_command(
+		socket_path, {"argv": launch_argv, "pid": 100, "start_ticks": 1, "ancestry": []}
+	)
+	bench = _open_command(socket_path, {"argv": bench_argv, "pid": 500, "start_ticks": 3})
+	started = {"child_pid": 501, "child_start_ticks": 4, "t_spawn": 1700000000.0}
+	bench.sendall(_frame(_STARTED, json.dumps(started).encode("utf-8")))
+	# Nothing answers `started`, so give the broker a moment to read it.
+	time.sleep(0.2)
+	orphans = [{"pid": 501, "start_ticks": 4, "comm": "bash"}]
+	end = {"exit_code": 0, "signal": None, "orphans": orphans}
+	launch.sendall(_frame(_END, json.dumps(end).encode("utf-8")))
+	launch.close()
+	assert _wait_for(lambda: broker.command_count() == 1)
+	bench.close()
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	bench_id = _record_for(broker, bench_argv)["command_id"]
+	(orphan,) = _record_for(broker, launch_argv)["orphans"]
+	assert orphan == {**orphans[0], "command_id": bench_id}
+
+
+def test_an_orphan_listed_by_two_commands_is_marked_inherited(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	verify_argv = ["/bin/bash", "-c", "./verify.sh"]
+	dafny_argv = ["/bin/bash", "-c", "dafny verify a.dfy"]
+	z3 = {"pid": 700, "start_ticks": 12, "comm": "z3"}
+
+	verify = _open_command(
+		socket_path, {"argv": verify_argv, "pid": 100, "start_ticks": 1, "ancestry": []}
+	)
+	_run_one_command(
+		socket_path,
+		dafny_argv,
+		info={
+			"pid": 300,
+			"start_ticks": 4,
+			"ancestry": [{"pid": 100, "start_ticks": 1, "comm": "aeshell"}],
+		},
+		end={"orphans": [z3]},
+	)
+	assert _wait_for(lambda: broker.command_count() == 1)
+	end = {"exit_code": 0, "signal": None, "orphans": [z3]}
+	verify.sendall(_frame(_END, json.dumps(end).encode("utf-8")))
+	verify.close()
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	dafny = _record_for(broker, dafny_argv)
+	assert dafny["orphans"] == [z3]
+	(inherited,) = _record_for(broker, verify_argv)["orphans"]
+	assert inherited == {**z3, "inherited_from": dafny["command_id"]}
+
+
+def test_a_record_without_ancestry_leaves_its_links_unknown(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+
+	_run_one_command(socket_path, ["/bin/bash", "-c", "ls"])
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	(record,) = _records(broker)
+	assert record["parent_link"] is None
+	assert record["root_command_id"] is None
 
 
 def test_concurrent_shells_each_get_a_record(broker: BrokerProcess) -> None:
@@ -203,9 +633,29 @@ def test_an_interrupted_shell_still_leaves_a_record(broker: BrokerProcess) -> No
 	client.close()
 
 	assert _wait_for(lambda: broker.command_count() == 1)
-	record = json.loads(broker.trace_path.read_text(encoding="utf-8").splitlines()[0])
+	(record,) = _records(broker)
 	assert record["complete"] is False
 	assert record["exit_code"] is None
+
+
+def test_a_record_without_an_end_has_the_same_keys(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	ended_argv = ["/bin/bash", "-c", "ls"]
+	killed_argv = ["/bin/bash", "-c", "sleep"]
+
+	_run_one_command(socket_path, ended_argv)
+	_open_command(socket_path, {"argv": killed_argv, "pid": 100}).close()
+
+	assert _wait_for(lambda: broker.command_count() == 2)
+	ended = _record_for(broker, ended_argv)
+	killed = _record_for(broker, killed_argv)
+	assert set(killed) == set(ended)
+	assert set(killed["shim_clock"]) == set(ended["shim_clock"])
+	assert killed["orphans"] is None
+	assert killed["child_pid"] is None
+	assert killed["child_start_ticks"] is None
+	assert killed["shim_clock"]["exit"] is None
 
 
 def test_a_command_that_edits_a_tracked_file_is_attributed_the_change(tmp_path: Path) -> None:
@@ -242,11 +692,13 @@ def test_a_command_that_edits_a_tracked_file_is_attributed_the_change(tmp_path: 
 			client.close()
 
 		assert _wait_for(lambda: broker.command_count() == 1)
-		record = json.loads(broker.trace_path.read_text(encoding="utf-8").splitlines()[0])
+		(record,) = _records(broker)
 		snapshot = record["monitors"]["file_snapshot"]
-		assert snapshot["scope"] == "tracked"
+		assert snapshot["scope"] == "tracked+untracked"
 		assert snapshot["modified"] == ["run.sh"]
 		assert snapshot["deleted"] == ["plot.py"]
+		assert snapshot["created"] == []
+		assert snapshot["created_untracked"] == ["build.log"]
 	finally:
 		broker.stop()
 
@@ -286,7 +738,7 @@ def test_a_same_size_rewrite_with_a_restored_mtime_is_still_attributed(tmp_path:
 			client.close()
 
 		assert _wait_for(lambda: broker.command_count() == 1)
-		record = json.loads(broker.trace_path.read_text(encoding="utf-8").splitlines()[0])
+		(record,) = _records(broker)
 		assert record["monitors"]["file_snapshot"]["modified"] == ["aggregate.py"]
 	finally:
 		broker.stop()
@@ -314,3 +766,339 @@ def test_stopping_releases_the_socket_and_keeps_the_trace(tmp_path: Path) -> Non
 	assert not socket_dir.exists()
 	assert broker.trace_path.is_file()
 	assert broker.command_count() == 1
+
+
+def _snapshots_around(
+	tmp_path: Path, files: dict[str, bytes], commands: list[object]
+) -> list[dict[str, object]]:
+	"""Runs each of `commands` as one shell's command over a workspace holding `files`."""
+	workspace = tmp_path / "workspace"
+	workspace.mkdir()
+	for rel, data in files.items():
+		(workspace / rel).parent.mkdir(parents=True, exist_ok=True)
+		(workspace / rel).write_bytes(data)
+	broker = BrokerProcess(
+		trace_dir=tmp_path / "trace",
+		workspace_dir=workspace,
+		socket_root=tmp_path / "sockets",
+	)
+	broker.start()
+	try:
+		assert broker.socket_path is not None
+		for count, command in enumerate(commands, start=1):
+			client = _open_command(broker.socket_path, {"argv": ["/bin/bash", "-c", "x"], "pid": 1})
+			try:
+				assert callable(command)
+				command(workspace)
+				client.sendall(
+					_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8"))
+				)
+			finally:
+				client.close()
+			assert _wait_for(lambda count=count: broker.command_count() == count)
+		snapshots = []
+		for record in _records(broker):
+			monitors = record["monitors"]
+			assert isinstance(monitors, dict)
+			snapshots.append(monitors["file_snapshot"])
+		return snapshots
+	finally:
+		broker.stop()
+
+
+def _snapshot_around(tmp_path: Path, files: dict[str, bytes], command: object) -> dict[str, object]:
+	"""Runs `command` as one shell's command over a workspace holding `files`."""
+	(snapshot,) = _snapshots_around(tmp_path, files, [command])
+	return snapshot
+
+
+def test_trace_meta_is_written_at_start(broker: BrokerProcess) -> None:
+	meta = json.loads((broker.trace_dir / "trace_meta.json").read_text(encoding="utf-8"))
+	assert meta == {"run_token": broker.trace_dir.name, "start_events": True}
+
+
+def _start_command(socket_path: Path, argv: list[str]) -> socket.socket:
+	"""Opens a command and sends its `started` frame, as the shim does after the spawn."""
+	client = _open_command(
+		socket_path,
+		{
+			"argv": argv,
+			"pid": 100,
+			"ppid": 90,
+			"pgid": 100,
+			"sid": 90,
+			"start_ticks": 5,
+			"ancestry": [],
+		},
+	)
+	started = {"child_pid": 101, "child_start_ticks": 6, "t_spawn": 1700000000.0}
+	client.sendall(_frame(_STARTED, json.dumps(started).encode("utf-8")))
+	return client
+
+
+def test_a_command_writes_a_start_record_then_an_end_record(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	argv = ["/bin/bash", "-c", "make"]
+
+	client = _start_command(socket_path, argv)
+	try:
+		assert _wait_for(lambda: len(_lines(broker)) == 1)
+		(start,) = _lines(broker)
+		client.sendall(_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8")))
+	finally:
+		client.close()
+
+	assert _wait_for(lambda: broker.command_count() == 1)
+	first, end = _lines(broker)
+	assert first == start
+	assert start["event"] == "start"
+	assert start["command_id"] == end["command_id"]
+	assert start["run_id"] == end["run_id"]
+	assert start["argv"] == argv
+	assert start["cwd"] == "/repo"
+	assert (start["pid"], start["ppid"], start["pgid"], start["sid"]) == (100, 90, 100, 90)
+	assert start["start_ticks"] == 5
+	assert (start["child_pid"], start["child_start_ticks"]) == (101, 6)
+	assert start["parent_command_id"] is None
+	assert start["root_command_id"] == start["command_id"]
+	assert start["depth"] == 0
+	assert start["parent_link"] == "none"
+	assert start["ancestry"] == []
+	timing = end["monitors"]["timing"]
+	assert start["monitors"] == {
+		"timing": {"started_at": timing["started_at"], "released_at": timing["released_at"]}
+	}
+	assert end["event"] == "end"
+	assert end["complete"] is True
+	assert end["end_reason"] == "end_frame"
+
+
+def test_a_running_command_is_flushed_when_the_broker_stops(broker: BrokerProcess) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+	process = broker._process
+	assert process is not None
+
+	client = _start_command(socket_path, ["/bin/bash", "-c", "./experiment.sh"])
+	try:
+		client.sendall(_frame(_STDOUT, b"epoch 1\n"))
+		assert _wait_for(lambda: len(_lines(broker)) == 1)
+		time.sleep(0.1)
+
+		began = time.monotonic()
+		broker.stop()
+		elapsed = time.monotonic() - began
+	finally:
+		client.close()
+
+	assert elapsed < 5.0
+	# SIGTERM, handled, not SIGKILL.
+	assert process.returncode == 0
+	start, end = _lines(broker)
+	assert start["event"] == "start"
+	assert end["event"] == "end"
+	assert end["command_id"] == start["command_id"]
+	assert end["complete"] is False
+	assert end["end_reason"] == "broker_shutdown"
+	assert end["exit_code"] is None
+	assert end["stdout"]["bytes_received"] == len(b"epoch 1\n")
+	monitors = end["monitors"]
+	assert monitors["file_snapshot"] == {"skipped": "broker_shutdown"}
+	timing = monitors["timing"]
+	released = datetime.fromisoformat(timing["released_at"])
+	ended = datetime.fromisoformat(timing["ended_at"])
+	assert released <= ended
+	assert timing["duration_ms"] >= 100
+	assert broker.command_count() == 1
+	assert broker.in_flight_count() == 1
+
+
+def test_a_command_that_ends_just_before_the_stop_is_written_once(
+	broker: BrokerProcess,
+) -> None:
+	socket_path = broker.socket_path
+	assert socket_path is not None
+
+	client = _start_command(socket_path, ["/bin/bash", "-c", "ls"])
+	try:
+		client.sendall(_frame(_END, json.dumps({"exit_code": 0, "signal": None}).encode("utf-8")))
+		time.sleep(0.05)
+		broker.stop()
+	finally:
+		client.close()
+
+	(record,) = _records(broker)
+	assert record["end_reason"] == "end_frame"
+	assert record["complete"] is True
+	assert broker.in_flight_count() == 0
+
+
+def test_a_new_untracked_file_is_listed_as_created_untracked(tmp_path: Path) -> None:
+	def command(workspace: Path) -> None:
+		(workspace / "out").mkdir()
+		(workspace / "out" / "new.csv").write_text("a,b\n", encoding="utf-8")
+
+	snapshot = _snapshot_around(tmp_path, {"run.sh": b"echo\n"}, command)
+
+	assert snapshot["created_untracked"] == ["out/new.csv"]
+	assert snapshot["modified_untracked"] == []
+	assert snapshot["deleted_untracked"] == []
+	assert snapshot["created"] == []
+	assert snapshot["collapsed_untracked"] == []
+	assert snapshot["untracked_skipped"] is None
+
+
+def test_a_copy_is_hashed_with_its_source_content(tmp_path: Path) -> None:
+	def command(workspace: Path) -> None:
+		(workspace / "b").write_bytes((workspace / "a").read_bytes())
+
+	snapshot = _snapshot_around(tmp_path, {"a": b"measured\n"}, command)
+
+	assert snapshot["created_untracked"] == ["b"]
+	assert snapshot["hashes"] == {"b": hashlib.sha256(b"measured\n").hexdigest()}
+	assert snapshot["hash_skipped"] == {}
+
+
+def test_a_modified_tracked_file_is_hashed(tmp_path: Path) -> None:
+	def command(workspace: Path) -> None:
+		(workspace / "a").write_bytes(b"faked\n")
+
+	snapshot = _snapshot_around(tmp_path, {"a": b"measured\n"}, command)
+
+	assert snapshot["modified"] == ["a"]
+	assert snapshot["hashes"] == {"a": hashlib.sha256(b"faked\n").hexdigest()}
+
+
+def test_an_over_cap_file_gets_no_hash(tmp_path: Path) -> None:
+	def command(workspace: Path) -> None:
+		# Sparse, so the test writes no 64 MB.
+		with (workspace / "big.bin").open("wb") as handle:
+			handle.truncate(64 * 1024 * 1024 + 1)
+
+	snapshot = _snapshot_around(tmp_path, {"a": b"a\n"}, command)
+
+	assert snapshot["hashes"] == {"big.bin": None}
+	assert snapshot["hash_skipped"] == {"big.bin": "over_cap"}
+
+
+def test_a_symlink_is_hashed_by_its_target_text_and_not_followed(tmp_path: Path) -> None:
+	outside = tmp_path / "secret.txt"
+	outside.write_text("outside the workspace\n", encoding="utf-8")
+
+	def command(workspace: Path) -> None:
+		os.symlink(str(outside), workspace / "link")
+
+	snapshot = _snapshot_around(tmp_path, {"a": b"a\n"}, command)
+
+	assert snapshot["created_untracked"] == ["link"]
+	hashes = snapshot["hashes"]
+	assert isinstance(hashes, dict)
+	assert hashes["link"] == hashlib.sha256(os.fsencode(str(outside))).hexdigest()
+	assert hashes["link"] != hashlib.sha256(outside.read_bytes()).hexdigest()
+
+
+def _unpack(root: Path, count: int) -> None:
+	"""Writes `count` small files under `root`, spread over a few subfolders."""
+	for index in range(count):
+		folder = root / f"d{index % 7}"
+		folder.mkdir(parents=True, exist_ok=True)
+		(folder / f"f{index}.c").write_bytes(b"x\n")
+
+
+def test_a_big_new_untracked_folder_is_summarised(tmp_path: Path) -> None:
+	def unpack(workspace: Path) -> None:
+		_unpack(workspace / "data" / "traces", 2100)
+		(workspace / "evaluation" / "logs").mkdir(parents=True)
+		(workspace / "evaluation" / "logs" / "a.log").write_bytes(b"ok\n")
+
+	def touch(workspace: Path) -> None:
+		(workspace / "b.txt").write_bytes(b"b\n")
+
+	unpacked, later = _snapshots_around(tmp_path, {"run.sh": b"echo\n"}, [unpack, touch])
+
+	assert unpacked["collapsed_untracked"] == [
+		{"dir": "data", "files": 2100, "created": 2100, "modified": 0, "deleted": 0}
+	]
+	assert unpacked["created_untracked"] == ["evaluation/logs/a.log"]
+	assert unpacked["total_created_untracked"] == 1
+	assert unpacked["hashes"] == {"evaluation/logs/a.log": hashlib.sha256(b"ok\n").hexdigest()}
+	assert unpacked["sizes"] == {"evaluation/logs/a.log": 3}
+	assert unpacked["truncated"] is False
+	assert unpacked["untracked_skipped"] is None
+
+	assert later["created_untracked"] == ["b.txt"]
+	assert later["collapsed_untracked"] == []
+
+
+def test_deleting_a_big_untracked_folder_is_summarised(tmp_path: Path) -> None:
+	def unpack(workspace: Path) -> None:
+		_unpack(workspace / "data" / "traces", 2100)
+
+	def remove(workspace: Path) -> None:
+		shutil.rmtree(workspace / "data")
+		(workspace / "gone.txt").write_bytes(b"x\n")
+
+	_, removed = _snapshots_around(tmp_path, {"run.sh": b"echo\n"}, [unpack, remove])
+
+	# The folder is gone from the after picture, so the before count decides.
+	assert removed["collapsed_untracked"] == [
+		{"dir": "data", "files": 0, "created": 0, "modified": 0, "deleted": 2100}
+	]
+	assert removed["deleted_untracked"] == []
+	assert removed["created_untracked"] == ["gone.txt"]
+	assert removed["truncated"] is False
+	assert removed["untracked_skipped"] is None
+
+
+def test_a_folder_holding_a_tracked_file_is_never_summarised(tmp_path: Path) -> None:
+	def unpack(workspace: Path) -> None:
+		_unpack(workspace / "lib", 2100)
+
+	snapshot = _snapshot_around(tmp_path, {"lib/keep.c": b"keep\n"}, unpack)
+
+	assert snapshot["collapsed_untracked"] == []
+	assert snapshot["total_created_untracked"] == 2100
+	created = snapshot["created_untracked"]
+	assert isinstance(created, list)
+	assert len(created) == 100
+	assert all(name.startswith("lib/") for name in created)
+	assert snapshot["truncated"] is True
+
+
+def _load_monitor() -> ModuleType:
+	spec = importlib.util.spec_from_file_location("aeshell_monitor", BROKER_SCRIPT)
+	assert spec is not None and spec.loader is not None
+	module = importlib.util.module_from_spec(spec)
+	spec.loader.exec_module(module)
+	return module
+
+
+def test_a_too_large_untracked_walk_keeps_the_tracked_changes(
+	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+	monitor = _load_monitor()
+	monkeypatch.setattr(monitor, "MAX_UNTRACKED_FILES", 50)
+	workspace = tmp_path / "workspace"
+	workspace.mkdir()
+	(workspace / "run.sh").write_bytes(b"echo\n")
+	trace = tmp_path / "trace"
+	trace.mkdir()
+	snapshot = monitor.FileSnapshot(workspace, write_tracked_files(workspace, trace))
+	ctx = monitor.CommandContext({}, str(trace), "run")
+
+	snapshot.before_command(ctx)
+	(workspace / "run.sh").write_bytes(b"echo faked\n")
+	_unpack(workspace / "out", 60)
+	result = snapshot.after_command(ctx)
+
+	assert "skipped" not in result
+	assert result["scope"] == "tracked+untracked"
+	assert result["modified"] == ["run.sh"]
+	assert result["total_modified"] == 1
+	assert result["hashes"] == {"run.sh": hashlib.sha256(b"echo faked\n").hexdigest()}
+	for op in ("created", "modified", "deleted"):
+		assert result[f"{op}_untracked"] is None
+		assert result[f"total_{op}_untracked"] is None
+	assert result["collapsed_untracked"] is None
+	assert result["untracked_skipped"] == "workspace exceeds 50 untracked files"

@@ -35,6 +35,7 @@ from models import (
 from prompting import build_prompt_bundle
 from sources import prepare_workspace
 from task_loader import compose_task_text, read_instruction_text
+from trace_viewer.exporter import environment_secrets
 from trajectory_audit.judge import OpenAIResponsesJudge
 from trajectory_audit.service import AuditService
 from utils import safe_name
@@ -48,7 +49,7 @@ from .agent_runner import (
 	prepare_agent_support_dir,
 	run_agent,
 )
-from .agents import AgentDefinition, load_agent
+from .agents import AgentConfigError, AgentDefinition, load_agent, resolve_secrets
 from .backend import BenchRuntime, get_runtime
 from .cases import task_from_case
 from .monitoring import (
@@ -57,6 +58,7 @@ from .monitoring import (
 	RUNTIME_SOCKET_DIR,
 	BrokerProcess,
 	WorkdirSnapshotTarget,
+	capture_final_workspace,
 	check_system_files,
 	check_tracked_files,
 	install_shim,
@@ -121,6 +123,7 @@ class _CaseRunner:
 		self._monitor_cleanup_done = False
 		self._tracked_files_checked = False
 		self._system_files_checked = False
+		self._final_workspace_captured = False
 
 	def prepare_case(self) -> None:
 		self.case_root = self.case_dir.expanduser().resolve()
@@ -390,6 +393,7 @@ class _CaseRunner:
 			# Stopping the runtime ensures the agent can no longer modify them.
 			self._check_tracked_files()
 			self._check_system_files()
+			self._capture_final_workspace()
 
 			if (
 				self.task.runtime.mode == RuntimeMode.DOCKER
@@ -487,6 +491,7 @@ class _CaseRunner:
 		# The container is removed after a failed, timed out or interrupted agent
 		# run, but the workspace remains on the host until cleanup_workspace().
 		self._check_tracked_files()
+		self._capture_final_workspace()
 
 		if self.interrupted is not None:
 			if self.options.cleanup_workspace and self.workspace_root is not None:
@@ -593,6 +598,7 @@ class _CaseRunner:
 				run_token=monitor.trace_dir.name,
 				trace_path=str(monitor.trace_path),
 				command_count=monitor.command_count(),
+				in_flight_at_stop=monitor.in_flight_count(),
 				workdir_snapshots=snapshots,
 			)
 			if snapshots is not None:
@@ -638,6 +644,33 @@ class _CaseRunner:
 			return
 		if check is not None and self.monitor_info is not None:
 			self.monitor_info = self.monitor_info.model_copy(update={"system_files": check})
+
+	def _capture_final_workspace(self) -> None:
+		"""Saves the workspace the agent left, as a diff and an archive, before the oracle runs."""
+		monitor = self.monitor
+		if monitor is None or self.workspace is None or self._final_workspace_captured:
+			return
+		self._final_workspace_captured = True
+		try:
+			captured = capture_final_workspace(
+				self.workspace, monitor.trace_dir, self._agent_secrets()
+			)
+		except Exception:
+			logger.warning("failed to capture the final workspace", exc_info=True)
+			return
+		if captured is not None and self.monitor_info is not None:
+			self.monitor_info = self.monitor_info.model_copy(update={"final_content": captured})
+
+	def _agent_secrets(self) -> dict[str, str]:
+		"""The trace viewer's host secrets plus those the agent declares, by name."""
+		secrets = environment_secrets()
+		try:
+			declared = resolve_secrets(self.agent_definition)
+		except AgentConfigError:
+			declared = {}
+		# As short values would redact unrelated text, the viewer's 8-character floor applies.
+		secrets.update({name: value for name, value in declared.items() if len(value) >= 8})
+		return secrets
 
 	def _record_error(self, message: str) -> None:
 		self.error = f"{self.error}; {message}" if self.error else message

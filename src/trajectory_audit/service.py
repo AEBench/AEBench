@@ -136,6 +136,9 @@ class AuditService:
 					) from exc
 				if not isinstance(value, dict):
 					raise ValueError(f"trace line {line_number} is not a JSON object")
+				# A start record is followed by its command's end record.
+				if value.get("event") == "start":
+					continue
 				commands.append(normalize_record(value, len(commands)))
 		return self._audit_commands(commands, task_context=task_context)
 

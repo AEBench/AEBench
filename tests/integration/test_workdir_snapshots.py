@@ -27,7 +27,12 @@ from runtime.agent_runner import (
 	install_workdir_snapshot_hook,
 )
 from runtime.agents import AgentConfig, AgentDefinition, ToolHookFormat
-from runtime.monitoring import BrokerProcess, WorkdirSnapshotTarget
+from runtime.monitoring import (
+	WORKDIR_SNAPSHOT_DONE_FRAME,
+	WORKDIR_SNAPSHOT_FRAME,
+	BrokerProcess,
+	WorkdirSnapshotTarget,
+)
 from runtime.workspace import SNAPSHOTS_DIRNAME, create_workspace
 
 pytestmark = pytest.mark.sanity
@@ -41,7 +46,7 @@ def _request(socket_path: Path, payload: dict[str, object]) -> tuple[int, dict[s
 	with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
 		client.settimeout(10)
 		client.connect(str(socket_path))
-		client.sendall(_HEADER.pack(len(body), 5) + body)
+		client.sendall(_HEADER.pack(len(body), WORKDIR_SNAPSHOT_FRAME) + body)
 		length, kind = _HEADER.unpack(client.recv(_HEADER.size))
 		return kind, json.loads(client.recv(length))
 
@@ -95,7 +100,7 @@ def test_a_broker_without_snapshots_refuses_snapshot_requests(tmp_path: Path) ->
 	finally:
 		broker.stop()
 
-	assert kind == 6
+	assert kind == WORKDIR_SNAPSHOT_DONE_FRAME
 	assert reply["ok"] is False
 	assert "not enabled" in str(reply["error"])
 	# Not a shell session, so no command record either.
@@ -113,7 +118,7 @@ def test_a_failed_snapshot_is_indexed_answered_and_reported(
 		{"kind": "tool", "tool_use_id": "toolu_1", "tool_name": "Read"},
 	)
 
-	assert kind == 6
+	assert kind == WORKDIR_SNAPSHOT_DONE_FRAME
 	assert reply["ok"] is False
 	assert reply["seq"] == 0
 	[entry] = _index(broker)

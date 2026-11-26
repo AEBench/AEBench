@@ -153,6 +153,11 @@ def write_task_report(report_path: Path, result: RunResult, agent_summary: str) 
 		f"- Agent reasoning effort: `{result.agent.reasoning_effort or 'default'}`",
 		f"- Agent exit code: `{result.agent.exit_code}`",
 		f"- Agent messages: `{result.agent.message_count}`",
+		*(
+			[f"- Commands running at monitor stop: `{result.command_monitor.in_flight_at_stop}`"]
+			if result.command_monitor
+			else []
+		),
 	]
 	tracked = result.command_monitor.tracked_files if result.command_monitor else None
 	if tracked is not None:
@@ -167,6 +172,11 @@ def write_task_report(report_path: Path, result: RunResult, agent_summary: str) 
 				f"- Mode changed: `{tracked.mode_changed_count}`",
 				f"- Diff: `{tracked.diff_path}`",
 			]
+		)
+	final = result.command_monitor.final_content if result.command_monitor else None
+	if final is not None:
+		lines.append(
+			f"- Final diff: `{final.diff_path}` (`{final.files}` files, `{final.omitted}` omitted)"
 		)
 	system = result.command_monitor.system_files if result.command_monitor else None
 	if system is not None:

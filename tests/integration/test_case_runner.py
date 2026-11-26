@@ -459,6 +459,9 @@ def test_monitored_case_orders_the_broker_and_shim(
 		def workdir_snapshots_info(self) -> None:
 			return None
 
+		def in_flight_count(self) -> int:
+			return 2
+
 	runtime = FakeDockerRuntime()
 	monkeypatch.setattr("runtime.case_runner.get_runtime", lambda *_a, **_k: runtime)
 	monkeypatch.setattr("runtime.case_runner.prepare_agent_runtime", lambda _r: None)
@@ -469,6 +472,10 @@ def test_monitored_case_orders_the_broker_and_shim(
 	monkeypatch.setattr(
 		"runtime.case_runner.verify_monitoring",
 		lambda _runtime, _broker: events.append("shim-probe"),
+	)
+	monkeypatch.setattr(
+		"runtime.case_runner.capture_final_workspace",
+		lambda *_a: events.append("final-workspace"),
 	)
 
 	captured: dict[str, Any] = {}
@@ -524,6 +531,8 @@ def test_monitored_case_orders_the_broker_and_shim(
 		"agent",
 		"broker-stop",
 		"container-stop",
+		# After the agent's container stops, before the oracle can write.
+		"final-workspace",
 		"snapshot",
 		"oracle",
 		"audit",
@@ -535,6 +544,8 @@ def test_monitored_case_orders_the_broker_and_shim(
 	monitor = result.runtime_result.command_monitor
 	assert monitor is not None
 	assert monitor.command_count == 7
+	# Commands still running when the broker stopped, flushed from the trace.
+	assert monitor.in_flight_at_stop == 2
 	# The trace lives in a per-case store keyed by a token, not in the run dir.
 	trace_dir = Path(monitor.trace_path).parent
 	assert trace_dir.parent.name == "monitor"
