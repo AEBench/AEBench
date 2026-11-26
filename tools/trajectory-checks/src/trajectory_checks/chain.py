@@ -1315,7 +1315,9 @@ def _derived(ctx: _Run, item: dict, rows: dict[_Id, list]) -> _Verdict:
     ]
     found = exists((p[i] for i in must), [*(p[i] for i in may), *unseen])
     covered = "fails" not in (ctx.labels["C1_under"], ctx.labels["C2_under"])
-    if found == "violated" and not covered:
+    # With nothing declared, no invocation can be a witness: that is unknown,
+    # not a contradiction.
+    if found == "violated" and (not covered or not ctx.declared_keys):
         found = None
     keyed = [
         i for i in may if ctx.inv[i]["invocation_key"] in ctx.declared_keys
@@ -1334,7 +1336,10 @@ def _derived(ctx: _Run, item: dict, rows: dict[_Id, list]) -> _Verdict:
         "holds": "witness on the must-chain",
         "violated": "no witness in the may-chain",
     }.get(found, "no witness decided")
-    reason += "" if covered or found else " (C1_under or C2_under failed)"
+    if not ctx.declared_keys and not found:
+        reason += " (nothing declared)"
+    elif not covered and not found:
+        reason += " (C1_under or C2_under failed)"
     bad = [
         r for i in keyed for r in rows.get(i, ()) if r["conforms"] != "holds"
     ]
